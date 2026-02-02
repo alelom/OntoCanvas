@@ -47,6 +47,21 @@ g = Graph()
 g.parse("ontology/aec_drawing_ontology.ttl", format="turtle")
 ```
 
+## Visualizer
+
+Generate and open an interactive graph visualization (similar to WebVOWL):
+
+```bash
+uv run python Visualizer/convert_to_html_view.py
+```
+
+Then open `Visualizer/visualizer.html` in a browser. The visualizer supports:
+
+- **Labellable filter**: Show all nodes, only labellable, or only non-labellable
+- **Edge type**: Filter by relationship type (e.g. subClassOf)
+- **Node color by**: Color nodes by labellable status (green=labellable, red=non-labellable) or default
+- **Reset / Fit**: Reset zoom or fit graph to screen
+
 ## Open Questions (from diagram)
 
 - Q1: Definition of "Layout"?

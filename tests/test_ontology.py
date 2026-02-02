@@ -6,7 +6,8 @@ import pytest
 from rdflib import Graph, Literal, Namespace, OWL, RDF, RDFS
 
 # Path to ontology relative to project root
-ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "ontology" / "aec_drawing_ontology.ttl"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ONTOLOGY_PATH = PROJECT_ROOT / "ontology" / "aec_drawing_ontology.ttl"
 NS = Namespace("http://example.org/aec-drawing-ontology#")
 
 
@@ -91,3 +92,32 @@ class TestLabellableRoot:
         g = load_ontology()
         subclasses = list(g.objects(NS.FacadeSystem, RDFS.subClassOf))
         assert NS.DrawingElement in subclasses
+
+
+class TestOntologyExport:
+    """Tests for the ontology export/visualizer script."""
+
+    def test_export_generates_html(self) -> None:
+        """Export script generates visualizer HTML file."""
+        from Visualizer.convert_to_html_view import load_and_export, generate_html
+
+        nodes, edges = load_and_export()
+        html = generate_html(nodes, edges)
+
+        assert len(nodes) > 0, "Should export nodes"
+        assert len(edges) > 0, "Should export edges"
+        assert "vis-network" in html, "HTML should include vis-network"
+        assert "labellable" in html.lower(), "HTML should include labellable filter"
+
+    def test_export_nodes_include_labellable_root(self) -> None:
+        """Exported nodes include labellableRoot attribute."""
+        from Visualizer.convert_to_html_view import load_and_export
+
+        nodes, _ = load_and_export()
+        facade_cladding = next((n for n in nodes if n["id"] == "FacadeCladding"), None)
+        assert facade_cladding is not None
+        assert facade_cladding["labellableRoot"] is True
+
+        note = next((n for n in nodes if n["id"] == "Note"), None)
+        assert note is not None
+        assert note["labellableRoot"] is False
