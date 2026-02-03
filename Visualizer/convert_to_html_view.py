@@ -139,6 +139,18 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         #controls button:hover {{ background: #eee; }}
         #network {{ flex: 1; min-height: 400px; }}
         #info {{ padding: 8px 16px; font-size: 12px; color: #666; background: #fafafa; }}
+        #searchWrap {{ position: relative; display: inline-block; }}
+        #searchAutocomplete {{
+            position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px;
+            max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid #ccc;
+            border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;
+            display: none;
+        }}
+        #searchAutocomplete.visible {{ display: block; }}
+        #searchAutocomplete .suggestion {{ padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #eee; }}
+        #searchAutocomplete .suggestion:last-child {{ border-bottom: none; }}
+        #searchAutocomplete .suggestion:hover, #searchAutocomplete .suggestion.highlight {{ background: #e8f4fc; }}
+        #searchAutocomplete .suggestion .hint {{ font-size: 11px; color: #888; margin-left: 6px; }}
     </style>
 </head>
 <body>
@@ -168,6 +180,16 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             <strong>Wrap text:</strong>
             <input type="number" id="wrapChars" min="1" max="50" value="10" style="width: 50px;">
             <span style="font-size: 11px;">chars</span>
+        </div>
+        <div>
+            <strong>Search:</strong>
+            <div id="searchWrap">
+                <input type="text" id="searchQuery" placeholder="Node or relationship..." autocomplete="off" style="width: 180px; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc;">
+                <div id="searchAutocomplete"></div>
+            </div>
+            <label style="font-size: 11px; margin-left: 4px;">
+                <input type="checkbox" id="searchIncludeNeighbors" checked> Include neighbors
+            </label>
         </div>
         <details id="edgeStylesMenu" style="margin-left: 8px;">
             <summary style="cursor: pointer; font-weight: bold;">Edge styles</summary>
@@ -353,20 +375,107 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             return positions;
         }}
 
+        function getSearchSuggestions(query) {{
+            if (!query || query.length < 1) return [];
+            const q = query.toLowerCase();
+            const seen = new Set();
+            const suggestions = [];
+            const edgeTypes = [...getEdgeTypes()];
+            edgeTypes.forEach(type => {{
+                if (type.toLowerCase().includes(q) && !seen.has(type)) {{
+                    seen.add(type);
+                    suggestions.push({{ value: type, label: type, hint: 'relationship' }});
+                }}
+            }});
+            rawData.nodes.forEach(n => {{
+                const label = (n.label || '').toLowerCase();
+                const id = (n.id || '').toLowerCase();
+                if ((label.includes(q) || id.includes(q)) && !seen.has(n.label || n.id)) {{
+                    seen.add(n.label || n.id);
+                    suggestions.push({{ value: n.label || n.id, label: n.label || n.id, hint: 'node' }});
+                }}
+            }});
+            return suggestions.slice(0, 12);
+        }}
+
+        function updateSearchAutocomplete() {{
+            const input = document.getElementById('searchQuery');
+            const list = document.getElementById('searchAutocomplete');
+            const query = (input.value || '').trim();
+            const suggestions = getSearchSuggestions(query);
+            list.innerHTML = '';
+            list.classList.remove('visible');
+            list.dataset.highlight = '-1';
+            if (suggestions.length === 0) return;
+            suggestions.forEach((s, i) => {{
+                const div = document.createElement('div');
+                div.className = 'suggestion';
+                div.dataset.value = s.value;
+                div.innerHTML = s.label + '<span class="hint">(' + s.hint + ')</span>';
+                div.addEventListener('click', () => {{
+                    input.value = s.value;
+                    list.classList.remove('visible');
+                    applyFilter();
+                }});
+                list.appendChild(div);
+            }});
+            list.classList.add('visible');
+        }}
+
+        function matchesSearch(node, edge, query) {{
+            if (!query || query.trim() === '') return true;
+            const q = query.trim().toLowerCase();
+            if (node) {{
+                const matchLabel = (node.label || '').toLowerCase().includes(q);
+                const matchId = (node.id || '').toLowerCase().includes(q);
+                if (matchLabel || matchId) return true;
+            }}
+            if (edge) {{
+                if ((edge.type || '').toLowerCase().includes(q)) return true;
+            }}
+            return false;
+        }}
+
         function buildNetworkData(filter) {{
             const labellableFilter = filter.labellable;
-            const nodeIds = new Set();
-            const filteredNodes = rawData.nodes.filter(n => {{
+            const searchQuery = (filter.searchQuery || '').trim();
+            const includeNeighbors = filter.includeNeighbors !== false;
+            let filteredNodes = rawData.nodes.filter(n => {{
                 if (labellableFilter === 'all') return true;
                 if (labellableFilter === 'true') return n.labellableRoot === true;
                 if (labellableFilter === 'false') return n.labellableRoot === false;
                 return true;
             }});
-            filteredNodes.forEach(n => nodeIds.add(n.id));
+            let nodeIds = new Set(filteredNodes.map(n => n.id));
+            let filteredEdges = rawData.edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to));
+
+            if (searchQuery) {{
+                const matchingNodeIds = new Set();
+                filteredNodes.forEach(n => {{
+                    if (matchesSearch(n, null, searchQuery)) matchingNodeIds.add(n.id);
+                }});
+                filteredEdges.forEach(e => {{
+                    if (matchesSearch(null, e, searchQuery)) {{
+                        matchingNodeIds.add(e.from);
+                        matchingNodeIds.add(e.to);
+                    }}
+                }});
+                let searchMatchNodeIds = new Set(matchingNodeIds);
+                if (includeNeighbors) {{
+                    filteredEdges.forEach(e => {{
+                        if (matchingNodeIds.has(e.from) || matchingNodeIds.has(e.to)) {{
+                            searchMatchNodeIds.add(e.from);
+                            searchMatchNodeIds.add(e.to);
+                        }}
+                    }});
+                }}
+                filteredNodes = filteredNodes.filter(n => searchMatchNodeIds.has(n.id));
+                nodeIds = new Set(filteredNodes.map(n => n.id));
+                filteredEdges = rawData.edges.filter(e => nodeIds.has(e.from) && nodeIds.has(e.to));
+            }}
 
             const edgeStyleConfig = filter.edgeStyleConfig || getEdgeStyleConfig();
-            const filteredEdges = rawData.edges.filter(e => {{
-                if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) return false;
+            filteredEdges = filteredEdges.filter(e => {{
                 const style = edgeStyleConfig[e.type];
                 return !style || style.show !== false;
             }});
@@ -408,7 +517,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', wrapChars: 10, layoutMode: 'weighted' }};
+        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', wrapChars: 10, layoutMode: 'weighted', searchQuery: '', includeNeighbors: true }};
 
         function getNetworkOptions(layoutMode) {{
             const base = {{
@@ -448,10 +557,14 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         function applyFilter() {{
             const layoutMode = document.getElementById('layoutMode').value;
             const wrapChars = parseInt(document.getElementById('wrapChars').value, 10) || 10;
+            const searchEl = document.getElementById('searchQuery');
+            const neighborsEl = document.getElementById('searchIncludeNeighbors');
             currentFilter = {{
                 labellable: document.querySelector('input[name="labellable"]:checked').value,
                 colorBy: document.getElementById('colorBy').value,
                 wrapChars: wrapChars,
+                searchQuery: searchEl ? searchEl.value : '',
+                includeNeighbors: neighborsEl ? neighborsEl.checked : true,
                 edgeStyleConfig: getEdgeStyleConfig(),
                 layoutMode: layoutMode
             }};
@@ -492,6 +605,48 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         document.getElementById('layoutMode').addEventListener('change', applyFilter);
         document.getElementById('wrapChars').addEventListener('input', applyFilter);
         document.getElementById('wrapChars').addEventListener('change', applyFilter);
+        (function initSearchAutocomplete() {{
+            const input = document.getElementById('searchQuery');
+            const list = document.getElementById('searchAutocomplete');
+            let debounceTimer;
+            input.addEventListener('input', () => {{
+                applyFilter();
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(updateSearchAutocomplete, 150);
+            }});
+            input.addEventListener('focus', () => {{
+                if (input.value.trim()) updateSearchAutocomplete();
+            }});
+            input.addEventListener('keydown', (e) => {{
+                const items = list.querySelectorAll('.suggestion');
+                let idx = parseInt(list.dataset.highlight || '-1', 10);
+                if (e.key === 'ArrowDown') {{
+                    e.preventDefault();
+                    idx = Math.min(idx + 1, items.length - 1);
+                    list.dataset.highlight = idx;
+                    items.forEach((el, i) => el.classList.toggle('highlight', i === idx));
+                    if (idx >= 0 && items[idx]) items[idx].scrollIntoView({{ block: 'nearest' }});
+                }} else if (e.key === 'ArrowUp') {{
+                    e.preventDefault();
+                    idx = Math.max(idx - 1, -1);
+                    list.dataset.highlight = idx;
+                    items.forEach((el, i) => el.classList.toggle('highlight', i === idx));
+                }} else if (e.key === 'Enter' && idx >= 0 && items[idx]) {{
+                    e.preventDefault();
+                    input.value = items[idx].dataset.value;
+                    list.classList.remove('visible');
+                    applyFilter();
+                }} else if (e.key === 'Escape') {{
+                    list.classList.remove('visible');
+                }}
+            }});
+            document.addEventListener('click', (e) => {{
+                if (!input.contains(e.target) && !list.contains(e.target)) {{
+                    list.classList.remove('visible');
+                }}
+            }});
+        }})();
+        document.getElementById('searchIncludeNeighbors').addEventListener('change', applyFilter);
         document.getElementById('reset').addEventListener('click', () => network?.moveTo({{ scale: 1 }}));
         document.getElementById('fit').addEventListener('click', () => network?.fit());
 
