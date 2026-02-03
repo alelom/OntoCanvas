@@ -244,6 +244,41 @@
             return positions;
         }
 
+        function resolveOverlaps(positions, nodes, padding) {
+            const getSize = (n) => ({
+                halfW: Math.max(25, (n.label || '').length * 3.5),
+                halfH: 14
+            });
+            const idToNode = {};
+            nodes.forEach(n => { idToNode[n.id] = n; });
+            const ids = Object.keys(positions);
+            const pad = padding || 6;
+            for (let iter = 0; iter < 100; iter++) {
+                let moved = false;
+                for (let i = 0; i < ids.length; i++) {
+                    for (let j = i + 1; j < ids.length; j++) {
+                        const a = ids[i], b = ids[j];
+                        const pa = positions[a], pb = positions[b];
+                        const sa = getSize(idToNode[a] || { label: '' });
+                        const sb = getSize(idToNode[b] || { label: '' });
+                        const dx = pb.x - pa.x;
+                        const minDistX = sa.halfW + sb.halfW + pad;
+                        const minDistY = sa.halfH + sb.halfH + pad;
+                        const distX = Math.abs(dx);
+                        const distY = Math.abs(pb.y - pa.y);
+                        if (distX < minDistX && distY < minDistY) {
+                            const overlapX = minDistX - distX;
+                            const shiftX = (dx >= 0 ? 1 : -1) * overlapX / 2;
+                            pa.x -= shiftX;
+                            pb.x += shiftX;
+                            moved = true;
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+        }
+
         function buildNetworkData(filter) {
             const labellableFilter = filter.labellable;
             const nodeIds = new Set();
@@ -268,6 +303,7 @@
             let nodePositions = {};
             if (layoutMode === 'weighted') {
                 nodePositions = computeWeightedLayout(nodeIds, filteredEdges, spacing);
+                resolveOverlaps(nodePositions, filteredNodes, spacing * 0.04);
             }
 
             const nodes = filteredNodes.map(n => {
