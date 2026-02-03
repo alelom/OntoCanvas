@@ -168,7 +168,8 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         <div>
             <strong>Layout:</strong>
             <select id="layoutMode">
-                <option value="freeform">Freeform (force-directed)</option>
+                <option value="weighted">Weighted (leaves sink, roots rise)</option>
+                <option value="force">Force-directed</option>
                 <option value="hierarchical">Hierarchical</option>
             </select>
         </div>
@@ -215,6 +216,68 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             return COLORS.unknown;
         }}
 
+        function computeWeightedLayout(nodeIds, edges, spacing) {{
+            const hierarchyEdges = edges.filter(e =>
+                (e.type === 'subClassOf' || e.type === 'contains') && nodeIds.has(e.from) && nodeIds.has(e.to)
+            );
+            const children = {{}};
+            const parents = {{}};
+            hierarchyEdges.forEach(e => {{
+                (children[e.from] = children[e.from] || []).push(e.to);
+                (parents[e.to] = parents[e.to] || []).push(e.from);
+            }});
+            const roots = [...nodeIds].filter(id => !parents[id] || parents[id].length === 0);
+            const depth = {{}};
+            roots.forEach(id => depth[id] = 0);
+            const queue = [...roots];
+            const seen = new Set(roots);
+            while (queue.length) {{
+                const id = queue.shift();
+                (children[id] || []).forEach(cid => {{
+                    if (!seen.has(cid)) {{
+                        seen.add(cid);
+                        depth[cid] = (depth[id] || 0) + 1;
+                        queue.push(cid);
+                    }} else {{
+                        depth[cid] = Math.min(depth[cid] ?? 999, (depth[id] || 0) + 1);
+                    }}
+                }});
+            }}
+            const unreached = [...nodeIds].filter(id => depth[id] === undefined);
+            unreached.forEach(id => {{ depth[id] = 0; roots.push(id); }});
+
+            const subtreeWidth = (id) => {{
+                const ch = (children[id] || []).filter(c => nodeIds.has(c));
+                if (ch.length === 0) return spacing * 0.8;
+                return Math.max(spacing * 0.8, ch.reduce((sum, c) => sum + subtreeWidth(c), 0) + (ch.length - 1) * spacing * 0.5);
+            }};
+
+            const positions = {{}};
+            const layoutSubtree = (id, left, top) => {{
+                const ch = (children[id] || []).filter(c => nodeIds.has(c));
+                if (ch.length === 0) {{
+                    positions[id] = {{ x: left, y: top }};
+                    return {{ left, width: spacing * 0.8 }};
+                }}
+                let x = left;
+                ch.forEach(c => {{
+                    const r = layoutSubtree(c, x, top + spacing);
+                    x = r.left + r.width + spacing * 0.5;
+                }});
+                const totalW = x - left - spacing * 0.5;
+                positions[id] = {{ x: left + totalW / 2, y: top }};
+                return {{ left, width: totalW }};
+            }};
+
+            let xOffset = 0;
+            roots.forEach(root => {{
+                const r = layoutSubtree(root, xOffset, 0);
+                xOffset = r.left + r.width + spacing * 1.2;
+            }});
+
+            return positions;
+        }}
+
         function buildNetworkData(filter) {{
             const labellableFilter = filter.labellable;
             const nodeIds = new Set();
@@ -233,14 +296,25 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
             const spacing = filter.spacing || 220;
             const showEdgeLabels = filter.showEdgeLabels || false;
+            const layoutMode = filter.layoutMode || 'weighted';
 
-            const nodes = filteredNodes.map(n => ({{
-                id: n.id,
-                label: n.label,
-                labellableRoot: n.labellableRoot,
-                color: {{ background: getNodeColor(n, filter.colorBy), border: '#2c3e50' }},
-                font: {{ size: 14 }}
-            }}));
+            let nodePositions = {{}};
+            if (layoutMode === 'weighted') {{
+                nodePositions = computeWeightedLayout(nodeIds, filteredEdges, spacing);
+            }}
+
+            const nodes = filteredNodes.map(n => {{
+                const pos = nodePositions[n.id];
+                const node = {{
+                    id: n.id,
+                    label: n.label,
+                    labellableRoot: n.labellableRoot,
+                    color: {{ background: getNodeColor(n, filter.colorBy), border: '#2c3e50' }},
+                    font: {{ size: 14 }}
+                }};
+                if (pos) {{ node.x = pos.x; node.y = pos.y; }}
+                return node;
+            }});
 
             const edges = filteredEdges.map(e => ({{
                 from: e.from,
@@ -255,14 +329,16 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = {{ labellable: 'all', edgeType: 'all', colorBy: 'labellable', spacing: 220, showEdgeLabels: false, layoutMode: 'freeform' }};
+        let currentFilter = {{ labellable: 'all', edgeType: 'all', colorBy: 'labellable', spacing: 220, showEdgeLabels: false, layoutMode: 'weighted' }};
 
         function getNetworkOptions(spacing, layoutMode) {{
             const base = {{
                 nodes: {{ shape: 'box', margin: 10 }},
                 edges: {{ smooth: {{ type: 'cubicBezier' }}, arrows: 'to' }}
             }};
-            if (layoutMode === 'freeform') {{
+            if (layoutMode === 'weighted') {{
+                base.physics = {{ enabled: false }};
+            }} else if (layoutMode === 'force') {{
                 base.physics = {{
                     enabled: true,
                     barnesHut: {{
@@ -306,12 +382,12 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             if (network) {{
                 network.setData(data);
                 network.setOptions(options);
-                if (layoutMode === 'freeform') {{
+                if (layoutMode === 'force') {{
                     network.once('stabilizationIterationsDone', () => network.fit());
                 }}
             }} else {{
                 network = new vis.Network(container, data, options);
-                if (layoutMode === 'freeform') {{
+                if (layoutMode === 'force') {{
                     network.once('stabilizationIterationsDone', () => network.fit());
                 }}
                 network.on('click', params => {{
