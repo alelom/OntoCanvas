@@ -297,8 +297,8 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             const unreached = [...nodeIds].filter(id => depth[id] === undefined);
             unreached.forEach(id => {{ depth[id] = 0; roots.push(id); }});
 
-            const childGap = spacing * 0.4;
-            const leafWidth = spacing * 0.7;
+            const childGap = spacing * 0.15;
+            const leafWidth = spacing * 0.4;
             const subtreeWidth = (id) => {{
                 const ch = (children[id] || []).filter(c => nodeIds.has(c));
                 if (ch.length === 0) return leafWidth;
@@ -327,7 +327,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             let xOffset = 0;
             roots.forEach(root => {{
                 const r = layoutSubtree(root, xOffset, 0);
-                xOffset = r.left + r.width + spacing * 0.8;
+                xOffset = r.left + r.width + spacing * 0.2;
             }});
 
             return positions;
