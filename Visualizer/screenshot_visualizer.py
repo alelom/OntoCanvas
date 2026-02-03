@@ -15,7 +15,12 @@ def main() -> None:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1400, "height": 900})
         page.goto(url, wait_until="networkidle")
-        page.wait_for_timeout(800)  # Allow vis-network to render and fit
+        # Wait for graph to render (node count > 0)
+        page.wait_for_function(
+            "document.getElementById('nodeCount')?.textContent !== '0'",
+            timeout=10000,
+        )
+        page.wait_for_timeout(500)  # Allow fit() to complete
         page.screenshot(path=OUTPUT_PNG, full_page=True)
         browser.close()
     print(f"Screenshot saved to {OUTPUT_PNG}")

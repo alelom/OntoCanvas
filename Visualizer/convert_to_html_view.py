@@ -182,6 +182,14 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             <span style="font-size: 11px;">chars</span>
         </div>
         <div>
+            <strong>Font size:</strong>
+            <span style="font-size: 11px;">Min</span>
+            <input type="number" id="minFontSize" min="8" max="96" value="20" style="width: 45px;">
+            <span style="font-size: 11px;">Max</span>
+            <input type="number" id="maxFontSize" min="8" max="96" value="60" style="width: 45px;">
+            <span style="font-size: 11px;">px (leaf→root)</span>
+        </div>
+        <div>
             <strong>Search:</strong>
             <div id="searchWrap">
                 <input type="text" id="searchQuery" placeholder="Node or relationship..." autocomplete="off" style="width: 180px; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc;">
@@ -213,7 +221,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const COLORS = {{
             labellable: '#2ecc71',
-            nonLabellable: '#e74c3c',
+            nonLabellable: '#b8b8b8',
             unknown: '#95a5a6',
             default: '#3498db'
         }};
@@ -301,6 +309,45 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             if (lr === true) return COLORS.labellable;
             if (lr === false) return COLORS.nonLabellable;
             return COLORS.unknown;
+        }}
+
+        function computeNodeDepths(nodeIds, edges) {{
+            const hierarchyEdges = edges.filter(e =>
+                (e.type === 'subClassOf' || e.type === 'contains') && nodeIds.has(e.from) && nodeIds.has(e.to)
+            );
+            const children = {{}};
+            const parents = {{}};
+            const seenPairs = new Set();
+            hierarchyEdges.forEach(e => {{
+                const key = e.from + '->' + e.to;
+                if (seenPairs.has(key)) return;
+                const reverseKey = e.to + '->' + e.from;
+                if (seenPairs.has(reverseKey)) return;
+                seenPairs.add(key);
+                (children[e.from] = children[e.from] || []).push(e.to);
+                (parents[e.to] = parents[e.to] || []).push(e.from);
+            }});
+            const roots = [...nodeIds].filter(id => !parents[id] || parents[id].length === 0);
+            const depth = {{}};
+            roots.forEach(id => depth[id] = 0);
+            const queue = [...roots];
+            const seen = new Set(roots);
+            while (queue.length) {{
+                const id = queue.shift();
+                (children[id] || []).filter(c => nodeIds.has(c)).forEach(cid => {{
+                    if (!seen.has(cid)) {{
+                        seen.add(cid);
+                        depth[cid] = (depth[id] || 0) + 1;
+                        queue.push(cid);
+                    }} else {{
+                        depth[cid] = Math.min(depth[cid] ?? 999, (depth[id] || 0) + 1);
+                    }}
+                }});
+            }};
+            const unreached = [...nodeIds].filter(id => depth[id] === undefined);
+            unreached.forEach(id => {{ depth[id] = 0; }});
+            const maxDepth = Math.max(0, ...Object.values(depth));
+            return {{ depth, maxDepth }};
         }}
 
         function computeWeightedLayout(nodeIds, edges, spacing) {{
@@ -482,6 +529,9 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
             const layoutMode = filter.layoutMode || 'weighted';
             const wrapChars = filter.wrapChars ?? 10;
+            const minFontSize = Math.max(8, Math.min(96, filter.minFontSize ?? 20));
+            const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 60));
+            const {{ depth, maxDepth }} = computeNodeDepths(nodeIds, filteredEdges);
 
             let nodePositions = {{}};
             if (layoutMode === 'weighted') {{
@@ -490,12 +540,16 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
             const nodes = filteredNodes.map(n => {{
                 const pos = nodePositions[n.id];
+                const d = depth[n.id] ?? 0;
+                const fontSize = maxDepth > 0
+                    ? Math.round(minFontSize + (maxFontSize - minFontSize) * (maxDepth - d) / maxDepth)
+                    : maxFontSize;
                 const node = {{
                     id: n.id,
                     label: wrapText(n.label, wrapChars),
                     labellableRoot: n.labellableRoot,
                     color: {{ background: getNodeColor(n, filter.colorBy), border: '#2c3e50' }},
-                    font: {{ size: 14 }}
+                    font: {{ size: fontSize, color: '#2c3e50' }}
                 }};
                 if (pos) {{ node.x = pos.x; node.y = pos.y; }}
                 return node;
@@ -517,11 +571,11 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', wrapChars: 10, layoutMode: 'weighted', searchQuery: '', includeNeighbors: true }};
+        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', wrapChars: 10, minFontSize: 20, maxFontSize: 60, layoutMode: 'weighted', searchQuery: '', includeNeighbors: true }};
 
         function getNetworkOptions(layoutMode) {{
             const base = {{
-                nodes: {{ shape: 'box', margin: 10 }},
+                nodes: {{ shape: 'box', margin: 10, font: {{ size: 20, color: '#2c3e50' }} }},
                 edges: {{ smooth: {{ type: 'cubicBezier' }}, arrows: 'to' }}
             }};
             if (layoutMode === 'weighted') {{
@@ -557,12 +611,16 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         function applyFilter() {{
             const layoutMode = document.getElementById('layoutMode').value;
             const wrapChars = parseInt(document.getElementById('wrapChars').value, 10) || 10;
+            const minFontSize = parseInt(document.getElementById('minFontSize').value, 10) || 20;
+            const maxFontSize = parseInt(document.getElementById('maxFontSize').value, 10) || 60;
             const searchEl = document.getElementById('searchQuery');
             const neighborsEl = document.getElementById('searchIncludeNeighbors');
             currentFilter = {{
                 labellable: document.querySelector('input[name="labellable"]:checked').value,
                 colorBy: document.getElementById('colorBy').value,
                 wrapChars: wrapChars,
+                minFontSize: minFontSize,
+                maxFontSize: maxFontSize,
                 searchQuery: searchEl ? searchEl.value : '',
                 includeNeighbors: neighborsEl ? neighborsEl.checked : true,
                 edgeStyleConfig: getEdgeStyleConfig(),
@@ -605,6 +663,10 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         document.getElementById('layoutMode').addEventListener('change', applyFilter);
         document.getElementById('wrapChars').addEventListener('input', applyFilter);
         document.getElementById('wrapChars').addEventListener('change', applyFilter);
+        document.getElementById('minFontSize').addEventListener('input', applyFilter);
+        document.getElementById('minFontSize').addEventListener('change', applyFilter);
+        document.getElementById('maxFontSize').addEventListener('input', applyFilter);
+        document.getElementById('maxFontSize').addEventListener('change', applyFilter);
         (function initSearchAutocomplete() {{
             const input = document.getElementById('searchQuery');
             const list = document.getElementById('searchAutocomplete');
