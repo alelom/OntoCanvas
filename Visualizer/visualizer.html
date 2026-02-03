@@ -49,9 +49,9 @@
             </select>
         </div>
         <div>
-            <strong>Spacing:</strong>
-            <input type="range" id="spacing" min="80" max="500" value="220" step="20">
-            <span id="spacingValue">220</span>
+            <strong>Wrap text:</strong>
+            <input type="number" id="wrapChars" min="1" max="50" value="10" style="width: 50px;">
+            <span style="font-size: 11px;">chars</span>
         </div>
         <details id="edgeStylesMenu" style="margin-left: 8px;">
             <summary style="cursor: pointer; font-weight: bold;">Edge styles</summary>
@@ -86,6 +86,26 @@
             partOf: '#e67e22'
         };
         const DEFAULT_COLOR = '#95a5a6';
+        const SPACING = 220;
+
+        function wrapText(text, maxChars) {
+            if (!text || maxChars <= 0) return text;
+            const words = String(text).split(/\s+/);
+            const lines = [];
+            let current = '';
+            words.forEach(word => {
+                if (current.length === 0) {
+                    current = word;
+                } else if (current.length + 1 + word.length <= maxChars) {
+                    current += ' ' + word;
+                } else {
+                    lines.push(current);
+                    current = word;
+                }
+            });
+            if (current) lines.push(current);
+            return lines.join('\n');
+        }
 
         function getEdgeTypes() {
             const types = new Set();
@@ -235,19 +255,19 @@
                 return !style || style.show !== false;
             });
 
-            const spacing = filter.spacing || 220;
             const layoutMode = filter.layoutMode || 'weighted';
+            const wrapChars = filter.wrapChars ?? 10;
 
             let nodePositions = {};
             if (layoutMode === 'weighted') {
-                nodePositions = computeWeightedLayout(nodeIds, filteredEdges, spacing);
+                nodePositions = computeWeightedLayout(nodeIds, filteredEdges, SPACING);
             }
 
             const nodes = filteredNodes.map(n => {
                 const pos = nodePositions[n.id];
                 const node = {
                     id: n.id,
-                    label: n.label,
+                    label: wrapText(n.label, wrapChars),
                     labellableRoot: n.labellableRoot,
                     color: { background: getNodeColor(n, filter.colorBy), border: '#2c3e50' },
                     font: { size: 14 }
@@ -272,9 +292,9 @@
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = { labellable: 'all', colorBy: 'labellable', spacing: 220, layoutMode: 'weighted' };
+        let currentFilter = { labellable: 'all', colorBy: 'labellable', wrapChars: 10, layoutMode: 'weighted' };
 
-        function getNetworkOptions(spacing, layoutMode) {
+        function getNetworkOptions(layoutMode) {
             const base = {
                 nodes: { shape: 'box', margin: 10 },
                 edges: { smooth: { type: 'cubicBezier' }, arrows: 'to' }
@@ -287,7 +307,7 @@
                     barnesHut: {
                         gravitationalConstant: -2000,
                         centralGravity: 0.3,
-                        springLength: spacing,
+                        springLength: SPACING,
                         springConstant: 0.04,
                         damping: 0.09,
                         avoidOverlap: 0.1
@@ -300,9 +320,9 @@
                     hierarchical: {
                         direction: 'UD',
                         sortMethod: 'directed',
-                        nodeSpacing: spacing * 0.6,
-                        levelSeparation: spacing * 0.8,
-                        treeSpacing: spacing
+                        nodeSpacing: SPACING * 0.6,
+                        levelSeparation: SPACING * 0.8,
+                        treeSpacing: SPACING
                     }
                 };
             }
@@ -310,17 +330,17 @@
         }
 
         function applyFilter() {
-            const spacing = parseInt(document.getElementById('spacing').value, 10);
             const layoutMode = document.getElementById('layoutMode').value;
+            const wrapChars = parseInt(document.getElementById('wrapChars').value, 10) || 10;
             currentFilter = {
                 labellable: document.querySelector('input[name="labellable"]:checked').value,
                 colorBy: document.getElementById('colorBy').value,
-                spacing: spacing,
+                wrapChars: wrapChars,
                 edgeStyleConfig: getEdgeStyleConfig(),
                 layoutMode: layoutMode
             };
             const data = buildNetworkData(currentFilter);
-            const options = getNetworkOptions(spacing, layoutMode);
+            const options = getNetworkOptions(layoutMode);
             if (network) {
                 network.setData(data);
                 network.setOptions(options);
@@ -354,10 +374,8 @@
         });
         document.getElementById('colorBy').addEventListener('change', applyFilter);
         document.getElementById('layoutMode').addEventListener('change', applyFilter);
-        document.getElementById('spacing').addEventListener('input', function() {
-            document.getElementById('spacingValue').textContent = this.value;
-            applyFilter();
-        });
+        document.getElementById('wrapChars').addEventListener('input', applyFilter);
+        document.getElementById('wrapChars').addEventListener('change', applyFilter);
         document.getElementById('reset').addEventListener('click', () => network?.moveTo({ scale: 1 }));
         document.getElementById('fit').addEventListener('click', () => network?.fit());
 
