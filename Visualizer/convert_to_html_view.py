@@ -169,6 +169,11 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             <input type="range" id="spacing" min="80" max="500" value="220" step="20">
             <span id="spacingValue">220</span>
         </div>
+        <div>
+            <strong>Horizontal compactness:</strong>
+            <input type="range" id="hCompact" min="15" max="100" value="30" step="5">
+            <span id="hCompactValue">30</span>%
+        </div>
         <details id="edgeStylesMenu" style="margin-left: 8px;">
             <summary style="cursor: pointer; font-weight: bold;">Edge styles</summary>
             <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
@@ -261,7 +266,8 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             return COLORS.unknown;
         }}
 
-        function computeWeightedLayout(nodeIds, edges, spacing) {{
+        function computeWeightedLayout(nodeIds, edges, spacing, hCompact) {{
+            const h = (hCompact !== undefined ? hCompact : 30) / 100;
             const hierarchyEdges = edges.filter(e =>
                 (e.type === 'subClassOf' || e.type === 'contains') && nodeIds.has(e.from) && nodeIds.has(e.to)
             );
@@ -293,8 +299,8 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
             const subtreeWidth = (id) => {{
                 const ch = (children[id] || []).filter(c => nodeIds.has(c));
-                if (ch.length === 0) return spacing * 0.8;
-                return Math.max(spacing * 0.8, ch.reduce((sum, c) => sum + subtreeWidth(c), 0) + (ch.length - 1) * spacing * 0.5);
+                if (ch.length === 0) return spacing * 0.8 * h;
+                return Math.max(spacing * 0.8 * h, ch.reduce((sum, c) => sum + subtreeWidth(c), 0) + (ch.length - 1) * spacing * 0.5 * h);
             }};
 
             const positions = {{}};
@@ -302,14 +308,14 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
                 const ch = (children[id] || []).filter(c => nodeIds.has(c));
                 if (ch.length === 0) {{
                     positions[id] = {{ x: left, y: top }};
-                    return {{ left, width: spacing * 0.8 }};
+                    return {{ left, width: spacing * 0.8 * h }};
                 }}
                 let x = left;
                 ch.forEach(c => {{
                     const r = layoutSubtree(c, x, top + spacing);
-                    x = r.left + r.width + spacing * 0.5;
+                    x = r.left + r.width + spacing * 0.5 * h;
                 }});
-                const totalW = x - left - spacing * 0.5;
+                const totalW = x - left - spacing * 0.5 * h;
                 positions[id] = {{ x: left + totalW / 2, y: top }};
                 return {{ left, width: totalW }};
             }};
@@ -317,7 +323,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             let xOffset = 0;
             roots.forEach(root => {{
                 const r = layoutSubtree(root, xOffset, 0);
-                xOffset = r.left + r.width + spacing * 1.2;
+                xOffset = r.left + r.width + spacing * 1.2 * h;
             }});
 
             return positions;
@@ -344,9 +350,10 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             const spacing = filter.spacing || 220;
             const layoutMode = filter.layoutMode || 'weighted';
 
+            const hCompact = filter.hCompact !== undefined ? filter.hCompact : 30;
             let nodePositions = {{}};
             if (layoutMode === 'weighted') {{
-                nodePositions = computeWeightedLayout(nodeIds, filteredEdges, spacing);
+                nodePositions = computeWeightedLayout(nodeIds, filteredEdges, spacing, hCompact);
             }}
 
             const nodes = filteredNodes.map(n => {{
@@ -378,7 +385,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', spacing: 220, layoutMode: 'weighted' }};
+        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', spacing: 220, hCompact: 45, layoutMode: 'weighted' }};
 
         function getNetworkOptions(spacing, layoutMode) {{
             const base = {{
@@ -417,11 +424,13 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         function applyFilter() {{
             const spacing = parseInt(document.getElementById('spacing').value, 10);
+            const hCompact = parseInt(document.getElementById('hCompact').value, 10);
             const layoutMode = document.getElementById('layoutMode').value;
             currentFilter = {{
                 labellable: document.querySelector('input[name="labellable"]:checked').value,
                 colorBy: document.getElementById('colorBy').value,
                 spacing: spacing,
+                hCompact: hCompact,
                 edgeStyleConfig: getEdgeStyleConfig(),
                 layoutMode: layoutMode
             }};
@@ -458,6 +467,10 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         document.getElementById('layoutMode').addEventListener('change', applyFilter);
         document.getElementById('spacing').addEventListener('input', function() {{
             document.getElementById('spacingValue').textContent = this.value;
+            applyFilter();
+        }});
+        document.getElementById('hCompact').addEventListener('input', function() {{
+            document.getElementById('hCompactValue').textContent = this.value;
             applyFilter();
         }});
         document.getElementById('reset').addEventListener('click', () => network?.moveTo({{ scale: 1 }}));
