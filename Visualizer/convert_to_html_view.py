@@ -150,15 +150,6 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             <label><input type="radio" name="labellable" value="false"> Non-labellable only</label>
         </div>
         <div>
-            <strong>Edge type:</strong>
-            <select id="edgeFilter">
-                <option value="all">All</option>
-                <option value="subClassOf">subClassOf only</option>
-                <option value="contains">contains only</option>
-                <option value="partOf">partOf only</option>
-            </select>
-        </div>
-        <div>
             <strong>Node color by:</strong>
             <select id="colorBy">
                 <option value="labellable">Labellable status</option>
@@ -178,7 +169,10 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             <input type="range" id="spacing" min="80" max="500" value="220" step="20">
             <span id="spacingValue">220</span>
         </div>
-        <label><input type="checkbox" id="showEdgeLabels"> Show edge labels</label>
+        <details id="edgeStylesMenu" style="margin-left: 8px;">
+            <summary style="cursor: pointer; font-weight: bold;">Edge styles</summary>
+            <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+        </details>
         <button id="reset">Reset view</button>
         <button id="fit">Fit to screen</button>
     </div>
@@ -202,11 +196,62 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             default: '#3498db'
         }};
 
-        const EDGE_COLORS = {{
+        const DEFAULT_EDGE_COLORS = {{
             subClassOf: '#3498db',
             contains: '#27ae60',
             partOf: '#e67e22'
         }};
+        const DEFAULT_COLOR = '#95a5a6';
+
+        function getEdgeTypes() {{
+            const types = new Set();
+            rawData.edges.forEach(e => types.add(e.type));
+            return [...types].sort();
+        }}
+
+        function initEdgeStylesMenu() {{
+            const container = document.getElementById('edgeStylesContent');
+            container.innerHTML = '';
+            getEdgeTypes().forEach(type => {{
+                const color = DEFAULT_EDGE_COLORS[type] || DEFAULT_COLOR;
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
+                row.innerHTML = `
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
+                        <input type="checkbox" class="edge-show-cb" data-type="${{type}}" checked>
+                        <span>Show</span>
+                    </label>
+                    <span style="font-weight: bold; font-size: 14px; min-width: 100px;">${{type}}</span>
+                    <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
+                        <input type="checkbox" class="edge-label-cb" data-type="${{type}}">
+                        <span>Label</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 11px;">Color:</span>
+                        <input type="color" class="edge-color-picker" data-type="${{type}}" value="${{color}}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
+                    </label>
+                `;
+                container.appendChild(row);
+            }});
+            container.querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker').forEach(el => {{
+                el.addEventListener('change', applyFilter);
+            }});
+        }}
+
+        function getEdgeStyleConfig() {{
+            const config = {{}};
+            getEdgeTypes().forEach(type => {{
+                const showCb = document.querySelector('.edge-show-cb[data-type="' + type + '"]');
+                const labelCb = document.querySelector('.edge-label-cb[data-type="' + type + '"]');
+                const colorEl = document.querySelector('.edge-color-picker[data-type="' + type + '"]');
+                config[type] = {{
+                    show: showCb ? showCb.checked : true,
+                    showLabel: labelCb ? labelCb.checked : false,
+                    color: colorEl ? colorEl.value : (DEFAULT_EDGE_COLORS[type] || DEFAULT_COLOR)
+                }};
+            }});
+            return config;
+        }}
 
         function getNodeColor(node, colorBy) {{
             if (colorBy === 'default') return COLORS.default;
@@ -289,13 +334,14 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             }});
             filteredNodes.forEach(n => nodeIds.add(n.id));
 
+            const edgeStyleConfig = filter.edgeStyleConfig || getEdgeStyleConfig();
             const filteredEdges = rawData.edges.filter(e => {{
-                if (filter.edgeType !== 'all' && e.type !== filter.edgeType) return false;
-                return nodeIds.has(e.from) && nodeIds.has(e.to);
+                if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) return false;
+                const style = edgeStyleConfig[e.type];
+                return !style || style.show !== false;
             }});
 
             const spacing = filter.spacing || 220;
-            const showEdgeLabels = filter.showEdgeLabels || false;
             const layoutMode = filter.layoutMode || 'weighted';
 
             let nodePositions = {{}};
@@ -316,20 +362,23 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
                 return node;
             }});
 
-            const edges = filteredEdges.map(e => ({{
-                from: e.from,
-                to: e.to,
-                arrows: 'to',
-                label: showEdgeLabels ? e.type : '',
-                color: {{ color: EDGE_COLORS[e.type] || '#95a5a6', highlight: EDGE_COLORS[e.type] || '#95a5a6' }}
-            }}));
+            const edges = filteredEdges.map(e => {{
+                const style = edgeStyleConfig[e.type] || {{ showLabel: false, color: DEFAULT_COLOR }};
+                return {{
+                    from: e.from,
+                    to: e.to,
+                    arrows: 'to',
+                    label: style.showLabel ? e.type : '',
+                    color: {{ color: style.color, highlight: style.color }}
+                }};
+            }});
 
             return {{ nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }};
         }}
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = {{ labellable: 'all', edgeType: 'all', colorBy: 'labellable', spacing: 220, showEdgeLabels: false, layoutMode: 'weighted' }};
+        let currentFilter = {{ labellable: 'all', colorBy: 'labellable', spacing: 220, layoutMode: 'weighted' }};
 
         function getNetworkOptions(spacing, layoutMode) {{
             const base = {{
@@ -371,10 +420,9 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             const layoutMode = document.getElementById('layoutMode').value;
             currentFilter = {{
                 labellable: document.querySelector('input[name="labellable"]:checked').value,
-                edgeType: document.getElementById('edgeFilter').value,
                 colorBy: document.getElementById('colorBy').value,
                 spacing: spacing,
-                showEdgeLabels: document.getElementById('showEdgeLabels').checked,
+                edgeStyleConfig: getEdgeStyleConfig(),
                 layoutMode: layoutMode
             }};
             const data = buildNetworkData(currentFilter);
@@ -406,10 +454,8 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         document.querySelectorAll('input[name="labellable"]').forEach(r => {{
             r.addEventListener('change', applyFilter);
         }});
-        document.getElementById('edgeFilter').addEventListener('change', applyFilter);
         document.getElementById('colorBy').addEventListener('change', applyFilter);
         document.getElementById('layoutMode').addEventListener('change', applyFilter);
-        document.getElementById('showEdgeLabels').addEventListener('change', applyFilter);
         document.getElementById('spacing').addEventListener('input', function() {{
             document.getElementById('spacingValue').textContent = this.value;
             applyFilter();
@@ -417,6 +463,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         document.getElementById('reset').addEventListener('click', () => network?.moveTo({{ scale: 1 }}));
         document.getElementById('fit').addEventListener('click', () => network?.fit());
 
+        initEdgeStylesMenu();
         applyFilter();
     </script>
 </body>
