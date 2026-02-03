@@ -181,8 +181,10 @@
             const unreached = [...nodeIds].filter(id => depth[id] === undefined);
             unreached.forEach(id => { depth[id] = 0; roots.push(id); });
 
-            const childGap = spacing * 0.15;
-            const leafWidth = spacing * 0.4;
+            const childGap = spacing * 0.12;
+            const leafWidth = spacing * 0.3;
+            const levelSep = spacing * 0.6;
+            const maxParentChildDist = spacing * 0.85;
             const subtreeWidth = (id) => {
                 const ch = (children[id] || []).filter(c => nodeIds.has(c));
                 if (ch.length === 0) return leafWidth;
@@ -199,19 +201,44 @@
                 }
                 let x = left;
                 ch.forEach(c => {
-                    const r = layoutSubtree(c, x, top + spacing);
+                    const r = layoutSubtree(c, x, top + levelSep);
                     x = r.left + r.width + childGap;
                 });
                 const totalW = x - left - childGap;
-                const parentX = left + totalW / 2;
-                positions[id] = { x: parentX, y: top };
-                return { left, width: totalW };
+                const getBounds = (nid) => {
+                    let minX = positions[nid].x, maxX = positions[nid].x;
+                    (children[nid] || []).filter(c => nodeIds.has(c)).forEach(c => {
+                        const b = getBounds(c);
+                        minX = Math.min(minX, b.minX);
+                        maxX = Math.max(maxX, b.maxX);
+                    });
+                    return { minX, maxX };
+                };
+                const childXs = ch.map(c => positions[c].x);
+                const centroidX = childXs.reduce((a, b) => a + b, 0) / ch.length;
+                const maxChildDist = Math.max(...childXs.map(cx => Math.abs(cx - centroidX)));
+                if (maxChildDist > maxParentChildDist && ch.length > 1) {
+                    const scale = maxParentChildDist / maxChildDist;
+                    const shiftSubtree = (nid, shift) => {
+                        positions[nid].x += shift;
+                        (children[nid] || []).filter(c => nodeIds.has(c)).forEach(c => shiftSubtree(c, shift));
+                    };
+                    ch.forEach(c => {
+                        const oldX = positions[c].x;
+                        const newX = centroidX + (oldX - centroidX) * scale;
+                        shiftSubtree(c, newX - oldX);
+                    });
+                }
+                const finalCentroid = ch.reduce((sum, c) => sum + positions[c].x, 0) / ch.length;
+                positions[id] = { x: finalCentroid, y: top };
+                const bounds = getBounds(id);
+                return { left: bounds.minX, width: bounds.maxX - bounds.minX };
             };
 
             let xOffset = 0;
             roots.forEach(root => {
                 const r = layoutSubtree(root, xOffset, 0);
-                xOffset = r.left + r.width + spacing * 0.2;
+                xOffset = r.left + r.width + spacing * 0.15;
             });
 
             return positions;
