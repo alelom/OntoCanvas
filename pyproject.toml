@@ -21,5 +21,6 @@ pythonpath = ["."]
 
 [dependency-groups]
 dev = [
+    "playwright>=1.58.0",
     "pytest>=9.0.2",
 ]
