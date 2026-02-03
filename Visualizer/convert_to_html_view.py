@@ -166,15 +166,30 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             </select>
         </div>
         <div>
-            <strong>Spacing:</strong>
-            <input type="range" id="spacing" min="50" max="300" value="120" step="10">
-            <span id="spacingValue">120</span>
+            <strong>Layout:</strong>
+            <select id="layoutMode">
+                <option value="freeform">Freeform (force-directed)</option>
+                <option value="hierarchical">Hierarchical</option>
+            </select>
         </div>
+        <div>
+            <strong>Spacing:</strong>
+            <input type="range" id="spacing" min="80" max="500" value="220" step="20">
+            <span id="spacingValue">220</span>
+        </div>
+        <label><input type="checkbox" id="showEdgeLabels"> Show edge labels</label>
         <button id="reset">Reset view</button>
         <button id="fit">Fit to screen</button>
     </div>
     <div id="network"></div>
-    <div id="info">Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span></div>
+    <div id="info">
+        Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span>
+        <span style="margin-left: 24px; font-size: 11px;">
+            Edge colors: <span style="color: #3498db">●</span> subClassOf
+            <span style="color: #27ae60">●</span> contains
+            <span style="color: #e67e22">●</span> partOf
+        </span>
+    </div>
 
     <script>
         const rawData = {data_json};
@@ -186,41 +201,18 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             default: '#3498db'
         }};
 
+        const EDGE_COLORS = {{
+            subClassOf: '#3498db',
+            contains: '#27ae60',
+            partOf: '#e67e22'
+        }};
+
         function getNodeColor(node, colorBy) {{
             if (colorBy === 'default') return COLORS.default;
             const lr = node.labellableRoot;
             if (lr === true) return COLORS.labellable;
             if (lr === false) return COLORS.nonLabellable;
             return COLORS.unknown;
-        }}
-
-        function computeLevels(nodeIds, edges) {{
-            const hierarchyEdges = edges.filter(e =>
-                (e.type === 'subClassOf' || e.type === 'contains') && nodeIds.has(e.from) && nodeIds.has(e.to)
-            );
-            const children = {{}};
-            const parents = {{}};
-            hierarchyEdges.forEach(e => {{
-                (children[e.from] = children[e.from] || []).push(e.to);
-                (parents[e.to] = parents[e.to] || []).push(e.from);
-            }});
-            const levels = {{}};
-            const roots = [...nodeIds].filter(id => !parents[id] || parents[id].length === 0);
-            roots.forEach(id => levels[id] = 0);
-            const seen = new Set(roots);
-            const queue = [...roots];
-            while (queue.length) {{
-                const id = queue.shift();
-                (children[id] || []).forEach(cid => {{
-                    if (!seen.has(cid)) {{
-                        seen.add(cid);
-                        levels[cid] = (levels[id] || 0) + 1;
-                        queue.push(cid);
-                    }}
-                }});
-            }}
-            [...nodeIds].filter(id => levels[id] === undefined).forEach(id => levels[id] = 0);
-            return levels;
         }}
 
         function buildNetworkData(filter) {{
@@ -239,60 +231,23 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
                 return nodeIds.has(e.from) && nodeIds.has(e.to);
             }});
 
-            const levels = computeLevels(nodeIds, filteredEdges);
-            const hierarchyEdges = filteredEdges.filter(e =>
-                (e.type === 'subClassOf' || e.type === 'contains') && nodeIds.has(e.from) && nodeIds.has(e.to)
-            );
-            const parentOf = {{}};
-            hierarchyEdges.forEach(e => {{ parentOf[e.to] = e.from; }});
+            const spacing = filter.spacing || 220;
+            const showEdgeLabels = filter.showEdgeLabels || false;
 
-            const levelGroups = {{}};
-            [...nodeIds].forEach(id => {{
-                const l = levels[id] || 0;
-                (levelGroups[l] = levelGroups[l] || []).push(id);
-            }});
-
-            const clusterByParent = (levelIds) => {{
-                const clusters = {{}};
-                levelIds.forEach(id => {{
-                    const p = parentOf[id] || '_root';
-                    (clusters[p] = clusters[p] || []).push(id);
-                }});
-                return Object.values(clusters);
-            }};
-
-            const spacing = filter.spacing || 120;
-            const nodePositions = {{}};
-            Object.keys(levelGroups).sort((a,b) => +a - +b).forEach(level => {{
-                const levelIds = levelGroups[level];
-                const clusters = clusterByParent(levelIds);
-                let xOffset = -((clusters.length - 1) * spacing * 0.8) / 2;
-                clusters.forEach(cluster => {{
-                    cluster.forEach((id, i) => {{
-                        const x = xOffset + (i - (cluster.length - 1) / 2) * spacing * 0.5;
-                        nodePositions[id] = {{ x, y: level * spacing }};
-                    }});
-                    xOffset += (cluster.length * spacing * 0.5) + spacing * 0.6;
-                }});
-            }});
-
-            const nodes = filteredNodes.map(n => {{
-                const pos = nodePositions[n.id] || {{ x: 0, y: 0 }};
-                return {{
-                    id: n.id,
-                    label: n.label,
-                    labellableRoot: n.labellableRoot,
-                    x: pos.x, y: pos.y,
-                    color: {{ background: getNodeColor(n, filter.colorBy), border: '#2c3e50' }},
-                    font: {{ size: 14 }}
-                }};
-            }});
+            const nodes = filteredNodes.map(n => ({{
+                id: n.id,
+                label: n.label,
+                labellableRoot: n.labellableRoot,
+                color: {{ background: getNodeColor(n, filter.colorBy), border: '#2c3e50' }},
+                font: {{ size: 14 }}
+            }}));
 
             const edges = filteredEdges.map(e => ({{
                 from: e.from,
                 to: e.to,
                 arrows: 'to',
-                label: e.type
+                label: showEdgeLabels ? e.type : '',
+                color: {{ color: EDGE_COLORS[e.type] || '#95a5a6', highlight: EDGE_COLORS[e.type] || '#95a5a6' }}
             }}));
 
             return {{ nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }};
@@ -300,31 +255,65 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const container = document.getElementById('network');
         let network = null;
-        let currentFilter = {{ labellable: 'all', edgeType: 'all', colorBy: 'labellable', spacing: 120 }};
+        let currentFilter = {{ labellable: 'all', edgeType: 'all', colorBy: 'labellable', spacing: 220, showEdgeLabels: false, layoutMode: 'freeform' }};
 
-        function getNetworkOptions(spacing) {{
-            return {{
+        function getNetworkOptions(spacing, layoutMode) {{
+            const base = {{
                 nodes: {{ shape: 'box', margin: 10 }},
-                edges: {{ smooth: {{ type: 'cubicBezier' }}, arrows: 'to' }},
-                physics: {{ enabled: false }}
+                edges: {{ smooth: {{ type: 'cubicBezier' }}, arrows: 'to' }}
             }};
+            if (layoutMode === 'freeform') {{
+                base.physics = {{
+                    enabled: true,
+                    barnesHut: {{
+                        gravitationalConstant: -2000,
+                        centralGravity: 0.3,
+                        springLength: spacing,
+                        springConstant: 0.04,
+                        damping: 0.09,
+                        avoidOverlap: 0.1
+                    }},
+                    stabilization: {{ iterations: 150 }}
+                }};
+            }} else {{
+                base.physics = {{ enabled: false }};
+                base.layout = {{
+                    hierarchical: {{
+                        direction: 'UD',
+                        sortMethod: 'directed',
+                        nodeSpacing: spacing * 0.6,
+                        levelSeparation: spacing * 0.8,
+                        treeSpacing: spacing
+                    }}
+                }};
+            }}
+            return base;
         }}
 
         function applyFilter() {{
             const spacing = parseInt(document.getElementById('spacing').value, 10);
+            const layoutMode = document.getElementById('layoutMode').value;
             currentFilter = {{
                 labellable: document.querySelector('input[name="labellable"]:checked').value,
                 edgeType: document.getElementById('edgeFilter').value,
                 colorBy: document.getElementById('colorBy').value,
-                spacing: spacing
+                spacing: spacing,
+                showEdgeLabels: document.getElementById('showEdgeLabels').checked,
+                layoutMode: layoutMode
             }};
             const data = buildNetworkData(currentFilter);
+            const options = getNetworkOptions(spacing, layoutMode);
             if (network) {{
                 network.setData(data);
-                network.setOptions(getNetworkOptions(spacing));
+                network.setOptions(options);
+                if (layoutMode === 'freeform') {{
+                    network.once('stabilizationIterationsDone', () => network.fit());
+                }}
             }} else {{
-                const options = getNetworkOptions(spacing);
                 network = new vis.Network(container, data, options);
+                if (layoutMode === 'freeform') {{
+                    network.once('stabilizationIterationsDone', () => network.fit());
+                }}
                 network.on('click', params => {{
                     if (params.nodes.length) {{
                         const nodeId = params.nodes[0];
@@ -343,6 +332,8 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         }});
         document.getElementById('edgeFilter').addEventListener('change', applyFilter);
         document.getElementById('colorBy').addEventListener('change', applyFilter);
+        document.getElementById('layoutMode').addEventListener('change', applyFilter);
+        document.getElementById('showEdgeLabels').addEventListener('change', applyFilter);
         document.getElementById('spacing').addEventListener('input', function() {{
             document.getElementById('spacingValue').textContent = this.value;
             applyFilter();
