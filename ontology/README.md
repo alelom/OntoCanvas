@@ -16,7 +16,7 @@ OWL ontology derived from the first page of `250523_Ontology_schema_rev02.pdf` (
 
 ## Annotation Properties
 
-- **labellableRoot** — Boolean. When `true`, the class can be used as a label by annotators (solid contour in diagram). When `false`, non-labellable (dashed contour). Non-labellable: Note, TextualNote, Legend.
+- **labellableRoot** — Boolean. When `true`, the class can be used as a label by annotators. When `false`, non-labellable (structural/category nodes). Non-labellable: DrawingElement, FacadeSystem, FacadeComponent, LinearComponent, PointComponent, DrawingType, Metadata. Labellable: Note, TextualNote, Legend, and leaf/concrete element classes.
 
 ## Object Properties
 

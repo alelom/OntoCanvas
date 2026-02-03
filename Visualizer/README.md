@@ -11,8 +11,10 @@ uv run python Visualizer/convert_to_html_view.py
 Then open `Visualizer/visualizer.html` in a browser. Features:
 
 - **Labellable filter**: All / labellable only / non-labellable only
-- **Edge type**: Filter by relationship (e.g. subClassOf)
+- **Edge type**: Filter by relationship — subClassOf (taxonomy), contains (containment), partOf (inverse of contains)
 - **Node color by**: Labellable status (green/red) or default
+- **Layout**: Fixed hierarchical — roots (e.g. Drawing sheet) at top, leaves at bottom; same-level siblings cluster by parent
+- **Spacing**: Slider (50–300) — vertical separation between levels and horizontal spread
 - **Reset / Fit**: Zoom controls
 
 ## Running tests

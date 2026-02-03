@@ -74,59 +74,59 @@
 :DrawingSheet a owl:Class ;
     rdfs:label "Drawing sheet" ;
     rdfs:comment "Top-level container for a drawing. Contains Layout(s)." ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DrawingElement a owl:Class ;
     rdfs:label "Drawing element" ;
     rdfs:comment "Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component." ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :Layout ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Layout a owl:Class ;
     rdfs:label "Layout" ;
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content." ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :DrawingSheet ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FacadeSystem a owl:Class ;
     rdfs:label "Facade system" ;
     rdfs:comment "Facade system - part of support type; a type of drawing element" ;
     rdfs:subClassOf :DrawingElement ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FacadeComponent a owl:Class ;
     rdfs:label "Facade component" ;
     rdfs:comment "Component of a facade system; a type of drawing element" ;
     rdfs:subClassOf :DrawingElement ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PanelComponent a owl:Class ;
     rdfs:label "Panel component" ;
     rdfs:comment "Element category - panel-type facade component" ;
     rdfs:subClassOf :FacadeComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :LinearComponent a owl:Class ;
     rdfs:label "Linear component" ;
     rdfs:comment "Element category - linear facade component" ;
     rdfs:subClassOf :FacadeComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PointComponent a owl:Class ;
     rdfs:label "Point component" ;
     rdfs:comment "Element category - point-type facade component" ;
     rdfs:subClassOf :FacadeComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :StructuralComponent a owl:Class ;
     rdfs:label "Structural component" ;
     rdfs:comment "Structural component - part of support type" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SupportType a owl:Class ;
     rdfs:label "Support type" ;
     rdfs:comment "Support type - contains facade and structural systems" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # DRAWING SHEET - Metadata, Orientation, Layout (Pink/Green/Blue boxes)
@@ -136,12 +136,12 @@
     rdfs:label "Metadata" ;
     rdfs:comment "Can be standalone label - drawing metadata" ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :DrawingSheet ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Titleblock a owl:Class ;
     rdfs:label "Titleblock" ;
     rdfs:subClassOf :Metadata ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Note a owl:Class ;
     rdfs:label "Note" ;
@@ -161,99 +161,99 @@
 :RevisionTable a owl:Class ;
     rdfs:label "Revision table" ;
     rdfs:subClassOf :Metadata ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Orientation a owl:Class ;
     rdfs:label "Orientation" ;
     rdfs:comment "Can be standalone label - drawing orientation" ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :DrawingSheet ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Annotation a owl:Class ;
     rdfs:label "Annotation" ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :Layout ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DrawingType a owl:Class ;
     rdfs:label "Drawing type" ;
     rdfs:comment "Type of drawing view" ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :Layout ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Section a owl:Class ;
     rdfs:label "Section" ;
     rdfs:subClassOf :DrawingType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Elevation a owl:Class ;
     rdfs:label "Elevation" ;
     rdfs:subClassOf :DrawingType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Plan a owl:Class ;
     rdfs:label "Plan" ;
     rdfs:subClassOf :DrawingType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Perspective a owl:Class ;
     rdfs:label "Perspective" ;
     rdfs:subClassOf :DrawingType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DrawingContent a owl:Class ;
     rdfs:label "Drawing content" ;
     rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :partOf ; owl:someValuesFrom :Layout ] ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DetailLocation a owl:Class ;
     rdfs:label "Detail location" ;
     rdfs:subClassOf :DrawingContent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Typical a owl:Class ;
     rdfs:label "Typical" ;
     rdfs:subClassOf :DetailLocation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SlabEdge a owl:Class ;
     rdfs:label "Slab edge" ;
     rdfs:subClassOf :DetailLocation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Base a owl:Class ;
     rdfs:label "Base" ;
     rdfs:subClassOf :DetailLocation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Head a owl:Class ;
     rdfs:label "Head" ;
     rdfs:subClassOf :DetailLocation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SingleSystem a owl:Class ;
     rdfs:label "Single system" ;
     rdfs:subClassOf :DetailLocation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Corner a owl:Class ;
     rdfs:label "Corner" ;
     rdfs:subClassOf :DetailLocation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Interface a owl:Class ;
     rdfs:label "Interface" ;
     rdfs:subClassOf :DrawingContent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :GA a owl:Class ;
     rdfs:label "GA (General Arrangement)" ;
     rdfs:comment "General arrangement drawing" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Detail a owl:Class ;
     rdfs:label "Detail" ;
     rdfs:comment "Detail drawing" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # FACADE SYSTEM - Subtypes
@@ -262,87 +262,87 @@
 :CurtainWallSystem a owl:Class ;
     rdfs:label "Curtain wall system" ;
     rdfs:subClassOf :FacadeSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :StickCurtainWall a owl:Class ;
     rdfs:label "Stick curtain wall" ;
     rdfs:subClassOf :CurtainWallSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SemiUnitisedCurtainWall a owl:Class ;
     rdfs:label "Semi-unitised curtain wall" ;
     rdfs:subClassOf :CurtainWallSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :UnitisedCurtainWall a owl:Class ;
     rdfs:label "Unitised curtain wall" ;
     rdfs:subClassOf :CurtainWallSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PrecastSystem a owl:Class ;
     rdfs:label "Precast system" ;
     rdfs:subClassOf :FacadeSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :GRC a owl:Class ;
     rdfs:label "GRC" ;
     rdfs:subClassOf :PrecastSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :UMPC a owl:Class ;
     rdfs:label "UMPC" ;
     rdfs:subClassOf :PrecastSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :CavityWallSystem a owl:Class ;
     rdfs:label "Cavity wall system" ;
     rdfs:subClassOf :FacadeSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :RainscreenSystem a owl:Class ;
     rdfs:label "Rainscreen system" ;
     rdfs:subClassOf :FacadeSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FacingMaterial a owl:Class ;
     rdfs:label "Facing material" ;
     rdfs:comment "Can be standalone label - material used for facing" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Brick a owl:Class ;
     rdfs:label "Brick" ;
     rdfs:subClassOf :FacingMaterial ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Stone a owl:Class ;
     rdfs:label "Stone" ;
     rdfs:subClassOf :FacingMaterial ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Terracotta a owl:Class ;
     rdfs:label "Terracotta" ;
     rdfs:subClassOf :FacingMaterial ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :GlazingProperties a owl:Class ;
     rdfs:label "Glazing properties" ;
     rdfs:comment "Specific properties of glazing elements" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Laminated a owl:Class ;
     rdfs:label "Laminated" ;
     rdfs:subClassOf :GlazingProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Monolithic a owl:Class ;
     rdfs:label "Monolithic" ;
     rdfs:subClassOf :GlazingProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DoubleLaminated a owl:Class ;
     rdfs:label "Double laminated" ;
     rdfs:subClassOf :GlazingProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # FACADE COMPONENT - Panel components
@@ -351,42 +351,42 @@
 :FacadeCladding a owl:Class ;
     rdfs:label "Facade cladding" ;
     rdfs:subClassOf :PanelComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :TGU a owl:Class ;
     rdfs:label "TGU (Triple glazed unit)" ;
     rdfs:subClassOf :FacadeCladding ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DGU a owl:Class ;
     rdfs:label "DGU (Double glazed unit)" ;
     rdfs:subClassOf :FacadeCladding ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Masonry a owl:Class ;
     rdfs:label "Masonry" ;
     rdfs:subClassOf :FacadeCladding ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :ProfiledMetal a owl:Class ;
     rdfs:label "Profiled metal" ;
     rdfs:subClassOf :FacadeCladding ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SmallPanels a owl:Class ;
     rdfs:label "Small panels" ;
     rdfs:subClassOf :FacadeCladding ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PrecastConcrete a owl:Class ;
     rdfs:label "Precast concrete" ;
     rdfs:subClassOf :FacadeCladding ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :RoofCladding a owl:Class ;
     rdfs:label "Roof cladding" ;
     rdfs:subClassOf :PanelComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :TimberCassette a owl:Class ;
     rdfs:label "Timber cassette" ;
@@ -399,72 +399,72 @@
 :BackingWall a owl:Class ;
     rdfs:label "Backing wall" ;
     rdfs:subClassOf :PanelComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SFS a owl:Class ;
     rdfs:label "SFS (Steel frame system)" ;
     rdfs:subClassOf :BackingWall ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Insulation a owl:Class ;
     rdfs:label "Insulation" ;
     rdfs:subClassOf :PanelComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :MineralWool a owl:Class ;
     rdfs:label "Mineral wool" ;
     rdfs:subClassOf :Insulation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :WoodFibre a owl:Class ;
     rdfs:label "Wood fibre" ;
     rdfs:subClassOf :Insulation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :OtherInsulation a owl:Class ;
     rdfs:label "Other insulation" ;
     rdfs:subClassOf :Insulation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :VCL a owl:Class ;
     rdfs:label "VCL (Vapour control layer)" ;
     rdfs:subClassOf :Insulation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Membrane a owl:Class ;
     rdfs:label "Membrane" ;
     rdfs:subClassOf :PanelComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :BreatherMembrane a owl:Class ;
     rdfs:label "Breather membrane" ;
     rdfs:subClassOf :Membrane ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :EPDM a owl:Class ;
     rdfs:label "EPDM" ;
     rdfs:subClassOf :Membrane ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :WaterproofingMembrane a owl:Class ;
     rdfs:label "Waterproofing membrane" ;
     rdfs:subClassOf :Membrane ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Board a owl:Class ;
     rdfs:label "Board" ;
     rdfs:subClassOf :PanelComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Plasterboard a owl:Class ;
     rdfs:label "Plasterboard" ;
     rdfs:subClassOf :Board ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Cementboard a owl:Class ;
     rdfs:label "Cementboard" ;
     rdfs:subClassOf :Board ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # FACADE COMPONENT - Linear components
@@ -473,197 +473,197 @@
 :CWFrameMember a owl:Class ;
     rdfs:label "CW frame member" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Transom a owl:Class ;
     rdfs:label "Transom" ;
     rdfs:subClassOf :CWFrameMember ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Mullion a owl:Class ;
     rdfs:label "Mullion" ;
     rdfs:subClassOf :CWFrameMember ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :CWFrameMemberProperties a owl:Class ;
     rdfs:label "CW frame member properties" ;
     rdfs:comment "Specific properties of curtain wall frame members" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FrameType a owl:Class ;
     rdfs:label "Frame type" ;
     rdfs:subClassOf :CWFrameMemberProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Extruded a owl:Class ;
     rdfs:label "Extruded" ;
     rdfs:subClassOf :FrameType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :AddOn a owl:Class ;
     rdfs:label "Add-on" ;
     rdfs:subClassOf :FrameType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Fabricated a owl:Class ;
     rdfs:label "Fabricated" ;
     rdfs:subClassOf :FrameType ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :GlazingRetention a owl:Class ;
     rdfs:label "Glazing retention" ;
     rdfs:subClassOf :CWFrameMemberProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Capped a owl:Class ;
     rdfs:label "Capped" ;
     rdfs:subClassOf :GlazingRetention ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Toggle a owl:Class ;
     rdfs:label "Toggle" ;
     rdfs:subClassOf :GlazingRetention ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SSG a owl:Class ;
     rdfs:label "SSG (Structural silicone glazing)" ;
     rdfs:subClassOf :GlazingRetention ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :CWSystem a owl:Class ;
     rdfs:label "CW system" ;
     rdfs:subClassOf :CWFrameMemberProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Stick a owl:Class ;
     rdfs:label "Stick" ;
     rdfs:subClassOf :CWSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Unitised a owl:Class ;
     rdfs:label "Unitised" ;
     rdfs:subClassOf :CWSystem ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :WindowSystem a owl:Class ;
     rdfs:label "Window system" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Firestop a owl:Class ;
     rdfs:label "Firestop" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Gasket a owl:Class ;
     rdfs:label "Gasket" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :CavityBarrier a owl:Class ;
     rdfs:label "Cavity barrier" ;
     rdfs:subClassOf :Gasket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :OpenState a owl:Class ;
     rdfs:label "Open state" ;
     rdfs:subClassOf :CavityBarrier ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :ClosedState a owl:Class ;
     rdfs:label "Closed state" ;
     rdfs:subClassOf :CavityBarrier ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :HollowGasketShape a owl:Class ;
     rdfs:label "Hollow gasket shape" ;
     rdfs:subClassOf :Gasket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :OGasket a owl:Class ;
     rdfs:label "O-gasket" ;
     rdfs:subClassOf :HollowGasketShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PGasket a owl:Class ;
     rdfs:label "P-gasket" ;
     rdfs:subClassOf :HollowGasketShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SolidGasketShape a owl:Class ;
     rdfs:label "Solid gasket shape" ;
     rdfs:subClassOf :Gasket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PushIn a owl:Class ;
     rdfs:label "Push-in" ;
     rdfs:subClassOf :SolidGasketShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SlideIn a owl:Class ;
     rdfs:label "Slide-in" ;
     rdfs:subClassOf :SolidGasketShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Wedge a owl:Class ;
     rdfs:label "Wedge" ;
     rdfs:subClassOf :SolidGasketShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Flipper a owl:Class ;
     rdfs:label "Flipper" ;
     rdfs:subClassOf :Gasket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Reflvet a owl:Class ;
     rdfs:label "Reflvet" ;
     rdfs:subClassOf :Gasket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Channel a owl:Class ;
     rdfs:label "Channel" ;
     rdfs:subClassOf :Gasket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Sealant a owl:Class ;
     rdfs:label "Sealant" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Silicone a owl:Class ;
     rdfs:label "Silicone" ;
     rdfs:subClassOf :Sealant ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Louvre a owl:Class ;
     rdfs:label "Louvre" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Fin a owl:Class ;
     rdfs:label "Fin" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Capping a owl:Class ;
     rdfs:label "Capping" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FacadeSecondaryStructure a owl:Class ;
     rdfs:label "Facade secondary structure" ;
     rdfs:subClassOf :LinearComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Rail a owl:Class ;
     rdfs:label "Rail" ;
     rdfs:subClassOf :FacadeSecondaryStructure ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :ShelfAngle a owl:Class ;
     rdfs:label "Shelf angle" ;
     rdfs:subClassOf :FacadeSecondaryStructure ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # FACADE COMPONENT - Point components
@@ -672,47 +672,47 @@
 :LocalisedPenetration a owl:Class ;
     rdfs:label "Localised penetration" ;
     rdfs:subClassOf :PointComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Fixing a owl:Class ;
     rdfs:label "Fixing" ;
     rdfs:subClassOf :PointComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :WeldedBolt a owl:Class ;
     rdfs:label "Welded bolt" ;
     rdfs:subClassOf :Fixing ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :CastInChannel a owl:Class ;
     rdfs:label "Cast-in channel" ;
     rdfs:subClassOf :Fixing ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Screw a owl:Class ;
     rdfs:label "Screw" ;
     rdfs:subClassOf :Fixing ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Bracket a owl:Class ;
     rdfs:label "Bracket" ;
     rdfs:subClassOf :PointComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DeadLoadBracket a owl:Class ;
     rdfs:label "Dead load bracket" ;
     rdfs:subClassOf :Bracket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PrecastRestraintBracket a owl:Class ;
     rdfs:label "Precast restraint bracket" ;
     rdfs:subClassOf :Bracket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :HelpingHandBracket a owl:Class ;
     rdfs:label "Helping hand bracket" ;
     rdfs:subClassOf :Bracket ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # STRUCTURAL COMPONENT
@@ -721,52 +721,52 @@
 :LinearStructuralComponent a owl:Class ;
     rdfs:label "Linear structural component" ;
     rdfs:subClassOf :StructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :PanelStructuralComponent a owl:Class ;
     rdfs:label "Panel structural component" ;
     rdfs:subClassOf :StructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :StructuralMember a owl:Class ;
     rdfs:label "Structural member" ;
     rdfs:subClassOf :LinearStructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Column a owl:Class ;
     rdfs:label "Column" ;
     rdfs:subClassOf :StructuralMember ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Beam a owl:Class ;
     rdfs:label "Beam" ;
     rdfs:subClassOf :StructuralMember ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :ChordBracing a owl:Class ;
     rdfs:label "Chord/bracing" ;
     rdfs:subClassOf :StructuralMember ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Cable a owl:Class ;
     rdfs:label "Cable" ;
     rdfs:subClassOf :LinearStructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Slab a owl:Class ;
     rdfs:label "Slab" ;
     rdfs:subClassOf :PanelStructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Wall a owl:Class ;
     rdfs:label "Wall" ;
     rdfs:subClassOf :PanelStructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Upstand a owl:Class ;
     rdfs:label "Upstand" ;
     rdfs:subClassOf :PanelStructuralComponent ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 # =============================================================================
 # GENERAL PROPERTIES (Reusable attributes - Pink boxes)
@@ -775,219 +775,219 @@
 :MaterialProperties a owl:Class ;
     rdfs:label "Material properties" ;
     rdfs:comment "General property category" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Material a owl:Class ;
     rdfs:label "Material" ;
     rdfs:subClassOf :MaterialProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Concrete a owl:Class ;
     rdfs:label "Concrete" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Precast a owl:Class ;
     rdfs:label "Precast" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Clay a owl:Class ;
     rdfs:label "Clay" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Timber a owl:Class ;
     rdfs:label "Timber" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Polycarbonate a owl:Class ;
     rdfs:label "Polycarbonate" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Glass a owl:Class ;
     rdfs:label "Glass" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Metal a owl:Class ;
     rdfs:label "Metal" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Aluminium a owl:Class ;
     rdfs:label "Aluminium" ;
     rdfs:subClassOf :Material ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FunctionalProperties a owl:Class ;
     rdfs:label "Functional properties" ;
     rdfs:comment "General property category" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Function a owl:Class ;
     rdfs:label "Function" ;
     rdfs:subClassOf :FunctionalProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Thermal a owl:Class ;
     rdfs:label "Thermal" ;
     rdfs:subClassOf :Function ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Vision a owl:Class ;
     rdfs:label "Vision" ;
     rdfs:subClassOf :Function ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Waterproofing a owl:Class ;
     rdfs:label "Waterproofing" ;
     rdfs:subClassOf :Function ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Airtightness a owl:Class ;
     rdfs:label "Airtightness" ;
     rdfs:subClassOf :Function ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FireCompartmentation a owl:Class ;
     rdfs:label "Fire compartmentation" ;
     rdfs:subClassOf :Function ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Aesthetic a owl:Class ;
     rdfs:label "Aesthetic" ;
     rdfs:subClassOf :Function ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :StructuralProperties a owl:Class ;
     rdfs:label "Structural properties" ;
     rdfs:comment "General property category" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :DeadLoad a owl:Class ;
     rdfs:label "Dead load" ;
     rdfs:subClassOf :StructuralProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Restraint a owl:Class ;
     rdfs:label "Restraint" ;
     rdfs:subClassOf :StructuralProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :GeometricProperties a owl:Class ;
     rdfs:label "Geometric properties" ;
     rdfs:comment "General property category" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :FacadeShape a owl:Class ;
     rdfs:label "Facade shape" ;
     rdfs:subClassOf :GeometricProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SerratedSawtooth a owl:Class ;
     rdfs:label "Serrated/Sawtooth" ;
     rdfs:subClassOf :FacadeShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :ZigZag a owl:Class ;
     rdfs:label "Zig-zag" ;
     rdfs:subClassOf :FacadeShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Planar a owl:Class ;
     rdfs:label "Planar" ;
     rdfs:subClassOf :FacadeShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Faceted a owl:Class ;
     rdfs:label "Faceted" ;
     rdfs:subClassOf :FacadeShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Curved a owl:Class ;
     rdfs:label "Curved" ;
     rdfs:subClassOf :FacadeShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Horizontal a owl:Class ;
     rdfs:label "Horizontal" ;
     rdfs:subClassOf :Orientation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Vertical a owl:Class ;
     rdfs:label "Vertical" ;
     rdfs:subClassOf :Orientation ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SectionProperties a owl:Class ;
     rdfs:label "Section properties" ;
     rdfs:comment "General property category" ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SectionShape a owl:Class ;
     rdfs:label "Section shape" ;
     rdfs:subClassOf :SectionProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :TopHat a owl:Class ;
     rdfs:label "Top hat" ;
     rdfs:subClassOf :SectionShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :ISection a owl:Class ;
     rdfs:label "I-section" ;
     rdfs:subClassOf :SectionShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :CHS a owl:Class ;
     rdfs:label "CHS" ;
     rdfs:subClassOf :SectionShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :RHS a owl:Class ;
     rdfs:label "RHS" ;
     rdfs:subClassOf :SectionShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :SectionChannel a owl:Class ;
     rdfs:label "Channel (section)" ;
     rdfs:subClassOf :SectionShape ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :GenericShapeProperty a owl:Class ;
     rdfs:label "Generic shape property" ;
     rdfs:subClassOf :SectionProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Rectangular a owl:Class ;
     rdfs:label "Rectangular" ;
     rdfs:subClassOf :GenericShapeProperty ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Circular a owl:Class ;
     rdfs:label "Circular" ;
     rdfs:subClassOf :GenericShapeProperty ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Square a owl:Class ;
     rdfs:label "Square" ;
     rdfs:subClassOf :GenericShapeProperty ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Symmetry a owl:Class ;
     rdfs:label "Symmetry" ;
     rdfs:subClassOf :SectionProperties ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Symmetrical a owl:Class ;
     rdfs:label "Symmetrical" ;
     rdfs:subClassOf :Symmetry ;
-    :labellableRoot true .
+    :labellableRoot false .
 
 :Asymmetrical a owl:Class ;
     rdfs:label "Asymmetrical" ;
     rdfs:subClassOf :Symmetry ;
-    :labellableRoot true .
+    :labellableRoot false .

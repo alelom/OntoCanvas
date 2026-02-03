@@ -14,7 +14,9 @@ NS = Namespace("http://example.org/aec-drawing-ontology#")
 def load_ontology() -> Graph:
     """Load and parse the ontology from Turtle format."""
     g = Graph()
-    g.parse(ONTOLOGY_PATH, format="turtle")
+    # Use file object for Windows compatibility with rdflib
+    with open(ONTOLOGY_PATH, encoding="utf-8") as f:
+        g.parse(f, format="turtle")
     return g
 
 
@@ -52,30 +54,40 @@ class TestLabellableRoot:
         labellable_true = [
             s for s, o in g.subject_objects(NS.labellableRoot) if o == Literal(True)
         ]
-        assert len(labellable_true) == 172, f"Expected 172 labellable classes, got {len(labellable_true)}"
+        assert len(labellable_true) == 168, f"Expected 168 labellable classes, got {len(labellable_true)}"
 
     def test_labellable_root_false_count(self) -> None:
-        """Expected number of classes have labellableRoot false (Note, TextualNote, Legend)."""
+        """Expected number of classes have labellableRoot false (structural/category nodes)."""
         g = load_ontology()
         labellable_false = [
             s for s, o in g.subject_objects(NS.labellableRoot) if o == Literal(False)
         ]
-        assert len(labellable_false) == 3, f"Expected 3 non-labellable classes, got {len(labellable_false)}"
+        assert len(labellable_false) == 7, f"Expected 7 non-labellable classes, got {len(labellable_false)}"
 
-    def test_note_is_non_labellable(self) -> None:
-        """Note class has labellableRoot false."""
+    def test_note_is_labellable(self) -> None:
+        """Note class has labellableRoot true."""
         g = load_ontology()
-        assert (NS.Note, NS.labellableRoot, Literal(False)) in g
+        assert (NS.Note, NS.labellableRoot, Literal(True)) in g
 
-    def test_textual_note_is_non_labellable(self) -> None:
-        """TextualNote class has labellableRoot false."""
+    def test_textual_note_is_labellable(self) -> None:
+        """TextualNote class has labellableRoot true."""
         g = load_ontology()
-        assert (NS.TextualNote, NS.labellableRoot, Literal(False)) in g
+        assert (NS.TextualNote, NS.labellableRoot, Literal(True)) in g
 
-    def test_legend_is_non_labellable(self) -> None:
-        """Legend class has labellableRoot false."""
+    def test_legend_is_labellable(self) -> None:
+        """Legend class has labellableRoot true."""
         g = load_ontology()
-        assert (NS.Legend, NS.labellableRoot, Literal(False)) in g
+        assert (NS.Legend, NS.labellableRoot, Literal(True)) in g
+
+    def test_facade_system_is_non_labellable(self) -> None:
+        """FacadeSystem class has labellableRoot false."""
+        g = load_ontology()
+        assert (NS.FacadeSystem, NS.labellableRoot, Literal(False)) in g
+
+    def test_metadata_is_non_labellable(self) -> None:
+        """Metadata class has labellableRoot false."""
+        g = load_ontology()
+        assert (NS.Metadata, NS.labellableRoot, Literal(False)) in g
 
     def test_facade_cladding_is_labellable(self) -> None:
         """FacadeCladding class has labellableRoot true."""
@@ -120,4 +132,8 @@ class TestOntologyExport:
 
         note = next((n for n in nodes if n["id"] == "Note"), None)
         assert note is not None
-        assert note["labellableRoot"] is False
+        assert note["labellableRoot"] is True
+
+        metadata = next((n for n in nodes if n["id"] == "Metadata"), None)
+        assert metadata is not None
+        assert metadata["labellableRoot"] is False
