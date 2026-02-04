@@ -1,0 +1,167 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html {
+  height: 100%;
+}
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#controls {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+}
+#controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+#controls select {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+#controls button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #666;
+  background: #fff;
+  cursor: pointer;
+}
+#controls button:hover {
+  background: #eee;
+}
+#controls input[type="number"],
+#controls input[type="text"] {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+#controls button.primary {
+  background: #3498db;
+  color: #fff;
+  border-color: #2980b9;
+}
+#controls button.primary:hover {
+  background: #2980b9;
+}
+#network {
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+#info {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #666;
+  background: #fafafa;
+}
+#searchWrap {
+  position: relative;
+  display: inline-block;
+}
+#searchAutocomplete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: none;
+}
+#searchAutocomplete.visible {
+  display: block;
+}
+#searchAutocomplete .suggestion {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid #eee;
+}
+#searchAutocomplete .suggestion:last-child {
+  border-bottom: none;
+}
+#searchAutocomplete .suggestion:hover,
+#searchAutocomplete .suggestion.highlight {
+  background: #e8f4fc;
+}
+#searchAutocomplete .suggestion .hint {
+  font-size: 11px;
+  color: #888;
+  margin-left: 6px;
+}
+#fileInput {
+  display: none;
+}
+#errorMsg {
+  flex-basis: 100%;
+}
+.error {
+  color: #c0392b;
+  font-size: 12px;
+  padding: 6px 16px;
+  background: #fadbd8;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  min-width: 320px;
+}
+.modal-content h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+}
+.modal-content label {
+  display: block;
+  margin-bottom: 16px;
+}
+.modal-content #renameInput {
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 4px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}

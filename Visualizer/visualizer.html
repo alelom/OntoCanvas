@@ -57,7 +57,6 @@
             <select id="layoutMode">
                 <option value="weighted">Weighted (leaves sink, roots rise)</option>
                 <option value="force">Force-directed</option>
-                <option value="hierarchical">Hierarchical</option>
             </select>
         </div>
         <div>
@@ -227,7 +226,7 @@
                         depth[cid] = Math.min(depth[cid] ?? 999, (depth[id] || 0) + 1);
                     }
                 });
-            }
+            };
             const unreached = [...nodeIds].filter(id => depth[id] === undefined);
             unreached.forEach(id => { depth[id] = 0; });
             const maxDepth = Math.max(0, ...Object.values(depth));
@@ -479,15 +478,6 @@
                 };
             } else {
                 base.physics = { enabled: false };
-                base.layout = {
-                    hierarchical: {
-                        direction: 'UD',
-                        sortMethod: 'directed',
-                        nodeSpacing: SPACING * 0.6,
-                        levelSeparation: SPACING * 0.8,
-                        treeSpacing: SPACING
-                    }
-                };
             }
             return base;
         }
@@ -517,14 +507,14 @@
                 network.setOptions(options);
                 if (layoutMode === 'force') {
                     network.once('stabilizationIterationsDone', () => network.fit());
-                } else if (layoutMode === 'weighted' || layoutMode === 'hierarchical') {
+                } else if (layoutMode === 'weighted') {
                     setTimeout(() => network.fit({ padding: 20 }), 100);
                 }
             } else {
                 network = new vis.Network(container, data, options);
                 if (layoutMode === 'force') {
                     network.once('stabilizationIterationsDone', () => network.fit());
-                } else if (layoutMode === 'weighted' || layoutMode === 'hierarchical') {
+                } else if (layoutMode === 'weighted') {
                     setTimeout(() => network.fit({ padding: 20 }), 100);
                 }
                 network.on('click', params => {
