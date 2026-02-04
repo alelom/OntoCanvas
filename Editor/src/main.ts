@@ -16,6 +16,8 @@ import {
   getSpacing,
   computeNodeDepths,
   computeWeightedLayout,
+  estimateNodeDimensions,
+  resolveOverlaps,
   matchesSearch,
 } from './graph';
 import './style.css';
@@ -157,7 +159,34 @@ function buildNetworkData(filter: {
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
   if (layoutMode === 'weighted') {
-    nodePositions = computeWeightedLayout(nodeIds, filteredEdges, SPACING);
+    const nodeDimensions = new Map<string, { width: number; height: number }>();
+    filteredNodes.forEach((n) => {
+      const fontSize =
+        maxDepth > 0
+          ? Math.round(
+              minFontSize +
+                ((maxFontSize - minFontSize) * (maxDepth - (depth[n.id] ?? 0))) /
+                  maxDepth
+            )
+          : maxFontSize;
+      nodeDimensions.set(
+        n.id,
+        estimateNodeDimensions(n.label, wrapChars, fontSize)
+      );
+    });
+    nodePositions = computeWeightedLayout(
+      nodeIds,
+      filteredEdges,
+      SPACING,
+      nodeDimensions
+    );
+    nodePositions = resolveOverlaps(
+      nodePositions,
+      nodeIds,
+      filteredEdges,
+      nodeDimensions,
+      { minPadding: 8 }
+    );
   }
 
   const nodes = filteredNodes.map((n) => {
