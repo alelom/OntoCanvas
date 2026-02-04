@@ -672,6 +672,14 @@ function setupEventListeners(): void {
     if ((e.target as HTMLElement).id === 'renameModal') hideRenameModal();
   });
 
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
+      searchInput?.focus();
+    }
+  });
+
   const searchInput = document.getElementById('searchQuery');
   const searchList = document.getElementById('searchAutocomplete');
   if (searchInput && searchList) {
