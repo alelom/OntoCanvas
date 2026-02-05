@@ -4,6 +4,7 @@ import 'vis-network/styles/vis-network.css';
 import {
   parseTtlToGraph,
   updateLabelInStore,
+  updateLabellableInStore,
   storeToTurtle,
 } from './parser';
 import type { GraphData, GraphEdge, GraphNode } from './types';
@@ -22,13 +23,92 @@ import {
 } from './graph';
 import './style.css';
 
-// Default ontology - bundled at build time
-import defaultOntologyTtl from '../../ontology/aec_drawing_ontology.ttl?raw';
+const IDB_NAME = 'OntologyEditor';
+const IDB_STORE = 'lastFile';
+const IDB_KEY = 'handle';
+
+async function getLastFileFromIndexedDB(): Promise<{
+  handle: FileSystemFileHandle;
+  name: string;
+  pathHint?: string;
+} | null> {
+  return new Promise((resolve) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const getReq = store.get(IDB_KEY);
+      getReq.onsuccess = () => {
+        const v = getReq.result;
+        resolve(v && v.handle && v.name ? { handle: v.handle, name: v.name, pathHint: v.pathHint } : null);
+      };
+      getReq.onerror = () => resolve(null);
+    };
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+  });
+}
+
+async function saveLastFileToIndexedDB(
+  handle: FileSystemFileHandle,
+  name: string,
+  pathHint?: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      store.put({ handle, name, pathHint }, IDB_KEY);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+  });
+}
+
+function updateLoadLastOpenedButton(name: string | null, pathHint?: string): void {
+  const btn = document.getElementById('loadLastOpened') as HTMLButtonElement;
+  if (!btn) return;
+  if (name) {
+    btn.textContent = `Load last opened: ${name}`;
+    btn.title = pathHint ?? name;
+    btn.disabled = false;
+    btn.dataset.hasLast = '1';
+  } else {
+    btn.textContent = 'Load last opened: (none)';
+    btn.title = 'Select a TTL file first to enable';
+    btn.disabled = true;
+    btn.dataset.hasLast = '';
+  }
+}
 
 let rawData: GraphData = { nodes: [], edges: [] };
 let network: Network | null = null;
 let ttlStore: import('n3').Store | null = null;
 let loadedFileName: string | null = null;
+let loadedFilePath: string | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
 let overwriteFile = true;
@@ -271,11 +351,32 @@ function updateSaveButtonVisibility(): void {
   if (btn) btn.style.display = hasUnsavedChanges ? 'inline-block' : 'none';
 }
 
-function showRenameModal(nodeId: string, currentLabel: string): void {
+function updateFilePathDisplay(): void {
+  const el = document.getElementById('filePathDisplay');
+  if (!el) return;
+  if (loadedFilePath) {
+    el.textContent = `| File: ${loadedFilePath}`;
+    el.title = loadedFilePath;
+    el.style.display = '';
+  } else {
+    el.textContent = '';
+    el.title = '';
+    el.style.display = 'none';
+  }
+}
+
+function showRenameModal(
+  nodeId: string,
+  currentLabel: string,
+  labellableRoot: boolean | null
+): void {
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
+  const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
   input.value = currentLabel;
   input.dataset.nodeId = nodeId;
+  labellableCb.checked = labellableRoot === true;
+  labellableCb.indeterminate = labellableRoot === null;
   modal.style.display = 'flex';
   input.focus();
   input.select();
@@ -287,20 +388,35 @@ function hideRenameModal(): void {
 
 function confirmRename(): void {
   const input = document.getElementById('renameInput') as HTMLInputElement;
+  const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
   const nodeId = input.dataset.nodeId;
   const newLabel = input.value.trim();
   if (!nodeId || !newLabel) return;
 
   const node = rawData.nodes.find((n) => n.id === nodeId);
-  if (!node || node.label === newLabel) {
+  if (!node) {
     hideRenameModal();
     return;
   }
 
-  node.label = newLabel;
-  if (ttlStore) {
-    updateLabelInStore(ttlStore, nodeId, newLabel);
+  const labelChanged = node.label !== newLabel;
+  const newLabellable = labellableCb.checked;
+  const labellableChanged = (node.labellableRoot === true) !== newLabellable;
+
+  if (!labelChanged && !labellableChanged) {
+    hideRenameModal();
+    return;
   }
+
+  if (labelChanged) {
+    node.label = newLabel;
+    if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
+  }
+  if (labellableChanged && ttlStore) {
+    node.labellableRoot = newLabellable;
+    updateLabellableInStore(ttlStore, nodeId, newLabellable);
+  }
+
   hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   hideRenameModal();
@@ -340,8 +456,8 @@ function renderApp(): void {
     <div id="controls">
       <div>
         <strong>Load ontology:</strong>
-        <button type="button" id="loadDefault" class="primary">Load default (AEC)</button>
-        <button type="button" id="selectFile">Select TTL file...</button>
+        <button type="button" id="selectFile" class="primary">Select TTL file...</button>
+        <button type="button" id="loadLastOpened" title="Select a TTL file first" disabled>Load last opened: (none)</button>
         <input type="file" id="fileInput" accept=".ttl,.turtle" />
       </div>
       <div id="vizControls" style="display: none;">
@@ -389,7 +505,7 @@ function renderApp(): void {
         </label>
       </div>
       <details id="edgeStylesMenu" style="margin-left: 8px;">
-        <summary style="cursor: pointer; font-weight: bold;">Edge styles</summary>
+        <summary style="cursor: pointer; font-weight: bold;">Relationships</summary>
         <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
       </details>
       <button id="resetView">Reset view</button>
@@ -403,16 +519,22 @@ function renderApp(): void {
     <div id="network"></div>
     <div id="info">
       Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span>
+      <span id="filePathDisplay" style="margin-left: 24px; font-size: 11px;"></span>
       <span style="margin-left: 24px; font-size: 11px;">
         Edge colors: <span style="color: #3498db">●</span> subClassOf
         <span style="color: #27ae60">●</span> contains
         <span style="color: #e67e22">●</span> partOf
       </span>
+      <span id="selectionInfo"></span>
     </div>
     <div id="renameModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <h3>Rename node</h3>
+        <h3>Edit node</h3>
         <label>Label: <input type="text" id="renameInput" /></label>
+        <label style="display: block; margin-top: 10px;">
+          <input type="checkbox" id="renameLabellable" />
+          Labellable
+        </label>
         <div class="modal-actions">
           <button type="button" id="renameCancel">Cancel</button>
           <button type="button" id="renameConfirm" class="primary">OK</button>
@@ -425,7 +547,8 @@ function renderApp(): void {
 async function loadTtlAndRender(
   ttlString: string,
   fileName?: string,
-  handle?: FileSystemFileHandle | null
+  handle?: FileSystemFileHandle | null,
+  pathHint?: string
 ): Promise<void> {
   const errorMsg = document.getElementById('errorMsg') as HTMLElement;
   const vizControls = document.getElementById('vizControls') as HTMLElement;
@@ -437,8 +560,14 @@ async function loadTtlAndRender(
     rawData = graphData;
     ttlStore = store;
     loadedFileName = fileName ?? null;
+    loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
     hasUnsavedChanges = false;
+    updateFilePathDisplay();
+    if (handle && fileName) {
+      saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
+      updateLoadLastOpenedButton(fileName, pathHint ?? fileName);
+    }
     updateSaveButtonVisibility();
 
     vizControls.style.display = 'contents';
@@ -546,18 +675,20 @@ function applyFilter(preserveView = false): void {
     ro.observe(networkContainer);
     resizeNetwork(); // Initial size
     network.on('click', (params) => {
+      const selectionEl = document.getElementById('selectionInfo');
       if (params.nodes.length) {
         const nodeId = params.nodes[0] as string;
         const node = rawData.nodes.find((n) => n.id === nodeId);
-        const info = document.getElementById('info')!;
-        info.innerHTML = `Selected: ${node?.label ?? nodeId} | Labellable: ${node?.labellableRoot ?? 'N/A'}`;
+        if (selectionEl) selectionEl.textContent = ` | Selected: ${node?.label ?? nodeId} | Labellable: ${node?.labellableRoot ?? 'N/A'}`;
+      } else if (selectionEl) {
+        selectionEl.textContent = '';
       }
     });
     network.on('doubleClick', (params) => {
       if (params.nodes.length) {
         const nodeId = params.nodes[0] as string;
         const node = rawData.nodes.find((n) => n.id === nodeId);
-        if (node) showRenameModal(nodeId, node.label);
+        if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
       }
     });
   }
@@ -571,17 +702,35 @@ function applyFilter(preserveView = false): void {
 }
 
 function setupEventListeners(): void {
-  const loadDefault = document.getElementById('loadDefault');
   const selectFile = document.getElementById('selectFile');
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
 
-  loadDefault?.addEventListener('click', async () => {
+  const loadLastOpened = document.getElementById('loadLastOpened');
+  loadLastOpened?.addEventListener('click', async () => {
+    if (loadLastOpened.dataset.hasLast !== '1') return;
+    const stored = await getLastFileFromIndexedDB();
+    if (!stored) {
+      updateLoadLastOpenedButton(null);
+      return;
+    }
     try {
-      fileHandle = null;
-      await loadTtlAndRender(defaultOntologyTtl, 'aec_drawing_ontology.ttl', null);
+      const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
+        if (requested !== 'granted') {
+          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+          errorMsg.textContent = 'Permission to access file was denied.';
+          errorMsg.style.display = 'block';
+          return;
+        }
+      }
+      const file = await stored.handle.getFile();
+      const ttl = await file.text();
+      const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
+      await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
     } catch (err) {
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-      errorMsg.textContent = `Failed to load default: ${err instanceof Error ? err.message : String(err)}`;
+      errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
       errorMsg.style.display = 'block';
     }
   });
@@ -596,7 +745,8 @@ function setupEventListeners(): void {
           });
         const file = await handle.getFile();
         const ttl = await file.text();
-        await loadTtlAndRender(ttl, file.name, handle);
+        const pathHint = (file as File & { path?: string }).path ?? file.name;
+        await loadTtlAndRender(ttl, file.name, handle, pathHint);
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           const errorMsg = document.getElementById('errorMsg') as HTMLElement;
@@ -781,5 +931,15 @@ document.addEventListener('click', (e) => {
   }
 });
 
+async function initLastOpened(): Promise<void> {
+  const stored = await getLastFileFromIndexedDB();
+  if (stored) {
+    updateLoadLastOpenedButton(stored.name, stored.pathHint);
+  } else {
+    updateLoadLastOpenedButton(null);
+  }
+}
+
 renderApp();
 setupEventListeners();
+initLastOpened().catch(() => {});

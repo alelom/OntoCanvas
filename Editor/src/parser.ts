@@ -152,6 +152,53 @@ export function updateLabelInStore(
   return false;
 }
 
+function findLabellablePredicate(store: Store): string | null {
+  for (const q of store) {
+    if (q.predicate.value.endsWith('labellableRoot')) {
+      return q.predicate.value;
+    }
+  }
+  return null;
+}
+
+/**
+ * Update labellableRoot for a class in the store.
+ */
+export function updateLabellableInStore(
+  store: Store,
+  localName: string,
+  labellable: boolean
+): boolean {
+  const XSD = 'http://www.w3.org/2001/XMLSchema#';
+  const predUri = findLabellablePredicate(store);
+  const labellablePredicate = predUri
+    ? DataFactory.namedNode(predUri)
+    : DataFactory.namedNode('http://example.org/aec-drawing-ontology#labellableRoot');
+
+  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
+  for (const q of classQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    if (extractLocalName(subj.value) !== localName) continue;
+
+    const outQuads = store.getQuads(subj, null, null, null);
+    for (const oq of outQuads) {
+      if (oq.predicate.value.endsWith('labellableRoot')) {
+        store.removeQuad(oq);
+      }
+    }
+    const graph = store.getQuads(subj, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+    store.addQuad(
+      subj,
+      labellablePredicate,
+      DataFactory.literal(String(labellable), DataFactory.namedNode(XSD + 'boolean')),
+      graph
+    );
+    return true;
+  }
+  return false;
+}
+
 /**
  * Serialize the store to Turtle string.
  */

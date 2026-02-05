@@ -7,6 +7,7 @@ from playwright.sync_api import sync_playwright
 
 EDITOR_URL = "http://localhost:5173/"
 OUTPUT_PNG = Path(__file__).resolve().parent / "editor_screenshot.png"
+ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "ontology" / "aec_drawing_ontology.ttl"
 
 
 def main() -> None:
@@ -14,8 +15,10 @@ def main() -> None:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1400, "height": 900})
         page.goto(EDITOR_URL, wait_until="networkidle")
-        # Click Load default (AEC) to load the ontology
-        page.get_by_role("button", name="Load default (AEC)").click()
+        # Select TTL file via picker to load the ontology
+        with page.expect_file_chooser() as fc_info:
+            page.get_by_role("button", name="Select TTL file...").click()
+        fc_info.value.set_files(str(ONTOLOGY_PATH))
         # Wait for graph to render (node count > 0)
         page.wait_for_function(
             "document.getElementById('nodeCount')?.textContent !== '0'",

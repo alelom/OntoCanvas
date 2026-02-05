@@ -20,7 +20,7 @@ npm run test:watch  # Run tests in watch mode
 Tests cover load (parse), edit (label update), save (serialize), and round-trip consistency.
 - **Font size** – Min/max (leaf→root) with hierarchical scaling
 - **Search** – Filter by node label or relationship type
-- **Edge styles** – Show/hide and color by relationship type
+- **Relationships** – Show/hide and color by relationship type
 
 ## Setup
 
