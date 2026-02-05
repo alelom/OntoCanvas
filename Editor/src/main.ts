@@ -121,6 +121,7 @@ let loadedFilePath: string | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
 let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
+let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: string; to: string; id?: string } | null) => void } | null = null;
 
 type UndoableAction = { undo: () => void; redo: () => void };
 let undoStack: UndoableAction[] = [];
@@ -951,6 +952,12 @@ function setupNetworkSelectionAndNavigation(
     if (target.closest?.('.vis-manipulation')) return;
     const rect = container.getBoundingClientRect();
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const edgeAt = net.getEdgeAt(domPos);
+    if (edgeAt != null) {
+      const m = String(edgeAt).match(/^(.+)->(.+):(.+)$/);
+      if (m) showEditEdgeModal(m[1], m[2], m[3]);
+      return;
+    }
     const nodeAt = net.getNodeAt(domPos);
     if (nodeAt != null) return;
     const canvasPos = net.DOMtoCanvas(domPos);
@@ -1132,9 +1139,12 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  modal.dataset.mode = 'edit';
   modal.dataset.oldFrom = edgeFrom;
   modal.dataset.oldTo = edgeTo;
   modal.dataset.oldType = edgeType;
+  fromSel.disabled = false;
+  toSel.disabled = false;
   fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
   const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
@@ -1142,10 +1152,31 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   modal.style.display = 'flex';
 }
 
+function showAddEdgeModal(from: string, to: string, callback: (data: { from: string; to: string; id?: string } | null) => void): void {
+  const modal = document.getElementById('editEdgeModal')!;
+  const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
+  const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
+  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  modal.dataset.mode = 'add';
+  pendingAddEdgeData = { from, to, callback };
+  fromSel.disabled = true;
+  toSel.disabled = true;
+  fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${n.label}</option>`).join('');
+  toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${n.label}</option>`).join('');
+  const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
+  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === 'subClassOf' ? ' selected' : ''}>${t}</option>`).join('');
+  modal.querySelector('h3')!.textContent = 'Add edge';
+  modal.style.display = 'flex';
+}
+
 function hideEditEdgeModal(): void {
   if (pendingEditEdgeCallback) {
     pendingEditEdgeCallback(null);
     pendingEditEdgeCallback = null;
+  }
+  if (pendingAddEdgeData) {
+    pendingAddEdgeData.callback(null);
+    pendingAddEdgeData = null;
   }
   document.getElementById('editEdgeModal')!.style.display = 'none';
 }
@@ -1155,6 +1186,42 @@ function confirmEditEdge(): void {
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const mode = modal.dataset.mode;
+
+  if (mode === 'add' && pendingAddEdgeData) {
+    const { from, to, callback } = pendingAddEdgeData;
+    const newType = typeSel.value;
+    if (!ttlStore) {
+      hideEditEdgeModal();
+      return;
+    }
+    const ok = addEdgeToStore(ttlStore, from, to, newType);
+    if (!ok) {
+      alert('Failed to add edge. An edge may already exist between these nodes.');
+      hideEditEdgeModal();
+      return;
+    }
+    rawData.edges.push({ from, to, type: newType });
+    pushUndoable(
+      () => {
+        removeEdgeFromStore(ttlStore!, from, to, newType);
+        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === newType);
+        if (i >= 0) rawData.edges.splice(i, 1);
+      },
+      () => {
+        addEdgeToStore(ttlStore!, from, to, newType);
+        rawData.edges.push({ from, to, type: newType });
+      }
+    );
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
+    callback({ from, to, id: `${from}->${to}:${newType}` });
+    pendingAddEdgeData = null;
+    hideEditEdgeModal();
+    applyFilter(true);
+    return;
+  }
+
   const oldFrom = modal.dataset.oldFrom!;
   const oldTo = modal.dataset.oldTo!;
   const oldType = modal.dataset.oldType!;
@@ -1173,7 +1240,7 @@ function confirmEditEdge(): void {
   const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType);
   if (!addOk) {
     addEdgeToStore(ttlStore, oldFrom, oldTo, oldType);
-    alert(`Changing to relationship type "${newType}" is not yet supported. Only subClassOf can be added or changed.`);
+    alert('Failed to update edge.');
     hideEditEdgeModal();
     return;
   }
@@ -1594,7 +1661,7 @@ function applyFilter(preserveView = false): void {
     },
     addEdge: (
       edgeData: { from: string; to: string },
-      callback: (data: { from: string; to: string } | null) => void
+      callback: (data: { from: string; to: string; id?: string } | null) => void
     ) => {
       const from = String(edgeData.from);
       const to = String(edgeData.to);
@@ -1602,28 +1669,7 @@ function applyFilter(preserveView = false): void {
         callback(null);
         return;
       }
-      const edgeType = 'subClassOf';
-      const ok = addEdgeToStore(ttlStore, from, to, edgeType);
-      if (!ok) {
-        callback(null);
-        return;
-      }
-      rawData.edges.push({ from, to, type: edgeType });
-      pushUndoable(
-        () => {
-          removeEdgeFromStore(ttlStore!, from, to, edgeType);
-          const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === edgeType);
-          if (i >= 0) rawData.edges.splice(i, 1);
-        },
-        () => {
-          addEdgeToStore(ttlStore!, from, to, edgeType);
-          rawData.edges.push({ from, to, type: edgeType });
-        }
-      );
-      hasUnsavedChanges = true;
-      updateSaveButtonVisibility();
-      callback({ from, to });
-      applyFilter(true);
+      showAddEdgeModal(from, to, callback);
     },
     editNode: false,
     editEdge: {

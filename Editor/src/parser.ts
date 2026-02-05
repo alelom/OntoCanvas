@@ -265,10 +265,42 @@ function toClassUri(localName: string): string {
   return BASE_IRI + localName;
 }
 
+function getPropertyUri(edgeType: string): string {
+  return BASE_IRI + edgeType;
+}
+
+function findRestrictionBlank(
+  store: Store,
+  classLocalName: string,
+  propertyLocalName: string,
+  targetLocalName: string
+): import('n3').BlankNode | null {
+  const classUri = toClassUri(classLocalName);
+  const subClassQuads = store.getQuads(
+    DataFactory.namedNode(classUri),
+    DataFactory.namedNode(RDFS + 'subClassOf'),
+    null,
+    null
+  );
+  const propUri = getPropertyUri(propertyLocalName);
+  const targetUri = toClassUri(targetLocalName);
+  for (const q of subClassQuads) {
+    const obj = q.object;
+    if (obj.termType !== 'BlankNode') continue;
+    const onProp = store.getQuads(obj, DataFactory.namedNode(OWL + 'onProperty'), null, null)[0];
+    const someFrom = store.getQuads(obj, DataFactory.namedNode(OWL + 'someValuesFrom'), null, null)[0];
+    if (!onProp || !someFrom) continue;
+    const onPropObj = onProp.object as { value?: string };
+    const someFromObj = someFrom.object as { value?: string };
+    if (onPropObj?.value !== propUri || someFromObj?.value !== targetUri) continue;
+    return obj as import('n3').BlankNode;
+  }
+  return null;
+}
+
 /**
  * Update an edge in the store when reconnecting (moving arrow head or tail to a different node).
- * Supports subClassOf (direct rdfs:subClassOf quads).
- * For partOf/contains (OWL restrictions), returns false - not yet supported.
+ * Supports subClassOf (direct rdfs:subClassOf quads) and partOf/contains (OWL restrictions).
  */
 export function updateEdgeInStore(
   store: Store,
@@ -300,7 +332,8 @@ export function updateEdgeInStore(
     return true;
   }
   if (edgeType === 'partOf' || edgeType === 'contains') {
-    return false;
+    if (!removeEdgeFromStore(store, oldFrom, oldTo, edgeType)) return false;
+    return addEdgeToStore(store, newFrom, newTo, edgeType);
   }
   return false;
 }
@@ -350,7 +383,7 @@ export function removeNodeFromStore(store: Store, localName: string): boolean {
 }
 
 /**
- * Add an edge to the store. Supports subClassOf (direct quad).
+ * Add an edge to the store. Supports subClassOf (direct quad) and partOf/contains (OWL restrictions).
  */
 export function addEdgeToStore(
   store: Store,
@@ -378,11 +411,29 @@ export function addEdgeToStore(
     );
     return true;
   }
+  if (edgeType === 'partOf' || edgeType === 'contains') {
+    if (findRestrictionBlank(store, from, edgeType, to)) return false;
+    const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+    const blank = new BlankNode();
+    const fromUri = DataFactory.namedNode(toClassUri(from));
+    const propUri = DataFactory.namedNode(getPropertyUri(edgeType));
+    const toUri = DataFactory.namedNode(toClassUri(to));
+    const restrictionType = DataFactory.namedNode(OWL + 'Restriction');
+    const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
+    const onPropertyPred = DataFactory.namedNode(OWL + 'onProperty');
+    const someValuesFromPred = DataFactory.namedNode(OWL + 'someValuesFrom');
+    const rdfType = DataFactory.namedNode(RDF + 'type');
+    store.addQuad(fromUri, subClassOfPred, blank, graph);
+    store.addQuad(blank, rdfType, restrictionType, graph);
+    store.addQuad(blank, onPropertyPred, propUri, graph);
+    store.addQuad(blank, someValuesFromPred, toUri, graph);
+    return true;
+  }
   return false;
 }
 
 /**
- * Remove an edge from the store. Supports subClassOf.
+ * Remove an edge from the store. Supports subClassOf and partOf/contains (OWL restrictions).
  */
 export function removeEdgeFromStore(
   store: Store,
@@ -401,6 +452,18 @@ export function removeEdgeFromStore(
     );
     if (quads.length === 0) return false;
     for (const q of quads) store.removeQuad(q);
+    return true;
+  }
+  if (edgeType === 'partOf' || edgeType === 'contains') {
+    const blank = findRestrictionBlank(store, from, edgeType, to);
+    if (!blank) return false;
+    const fromUri = DataFactory.namedNode(toClassUri(from));
+    const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
+    for (const q of subClassOfQuads) store.removeQuad(q);
+    const blankQuads = store.getQuads(blank, null, null, null);
+    for (const q of blankQuads) store.removeQuad(q);
+    const blankAsObjQuads = store.getQuads(null, null, blank, null);
+    for (const q of blankAsObjQuads) store.removeQuad(q);
     return true;
   }
   return false;
