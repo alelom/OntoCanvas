@@ -2,6 +2,12 @@ export interface GraphNode {
   id: string;
   label: string;
   labellableRoot: boolean | null;
+  annotations?: Record<string, string | boolean | null>;
+}
+
+export interface AnnotationPropertyInfo {
+  name: string;
+  isBoolean: boolean;
 }
 
 export interface GraphEdge {

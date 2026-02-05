@@ -180,6 +180,35 @@ describe('storeToTurtle (save)', () => {
     expect(parsed.graphData.nodes.length).toBeGreaterThan(0);
     expect(parsed.graphData.edges.length).toBeGreaterThan(0);
   });
+
+  it('output includes section dividers and spacing', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const output = await storeToTurtle(store);
+
+    const divider = '#################################################################';
+    expect(output).toContain(divider);
+    expect(output).toMatch(/#\s+Annotation properties/);
+    expect(output).toMatch(/#\s+Object Properties/);
+    expect(output).toMatch(/#\s+Classes/);
+  });
+
+  it('output includes @base when using relative IRIs', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const output = await storeToTurtle(store);
+
+    expect(output).toMatch(/@base\s+<http:\/\/example\.org\/aec-drawing-ontology#>?\s*\./);
+  });
+
+  it('output does not repeat section dividers', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const output = await storeToTurtle(store);
+
+    const annotationPropsCount = (output.match(/#\s+Annotation properties/g) || []).length;
+    expect(annotationPropsCount).toBe(1);
+  });
 });
 
 describe('round-trip: load -> save -> load', () => {
@@ -277,6 +306,26 @@ describe('default vs file load consistency', () => {
 
     expect(labellableTrue.length).toBeGreaterThan(0);
     expect(labellableFalse.length).toBeGreaterThan(0);
+  });
+
+  it('detects labellableRoot as boolean annotation property (rdfs:range xsd:boolean)', async () => {
+    const ttl = loadOntologyAsString();
+    const { annotationProperties } = await parseTtlToGraph(ttl);
+
+    const labellableRoot = annotationProperties.find((ap) => ap.name === 'labellableRoot');
+    expect(labellableRoot).toBeDefined();
+    expect(labellableRoot!.isBoolean).toBe(true);
+  });
+
+  it('round-trip preserves labellableRoot as boolean (saved file re-parses correctly)', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const saved = await storeToTurtle(store);
+    const { annotationProperties } = await parseTtlToGraph(saved);
+
+    const labellableRoot = annotationProperties.find((ap) => ap.name === 'labellableRoot');
+    expect(labellableRoot).toBeDefined();
+    expect(labellableRoot!.isBoolean).toBe(true);
   });
 
   it('round-trip preserves all nodes and edges', async () => {

@@ -1,5 +1,8 @@
 import { DataFactory, Parser, Store, Writer } from 'n3';
-import type { GraphData, GraphEdge, GraphNode } from './types';
+import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo } from './types';
+
+const XSD = 'http://www.w3.org/2001/XMLSchema#';
+const XSD_BOOLEAN = XSD + 'boolean';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -18,6 +21,37 @@ function isBlankNode(term: { termType: string }): boolean {
 export interface ParseResult {
   graphData: GraphData;
   store: Store;
+  annotationProperties: AnnotationPropertyInfo[];
+}
+
+export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] {
+  const result: AnnotationPropertyInfo[] = [];
+  const seen = new Set<string>();
+  // Find all subjects with rdfs:range xsd:boolean (iterate all quads to avoid getQuads matching issues)
+  const RDFS_RANGE = RDFS + 'range';
+  const booleanRangeSubjectUris = new Set<string>();
+  for (const q of store) {
+    const predVal = (q.predicate as { value?: string; id?: string }).value ?? (q.predicate as { value?: string; id?: string }).id;
+    if (predVal !== RDFS_RANGE) continue;
+    const obj = q.object as { value?: string; id?: string };
+    const rangeVal = obj?.value ?? obj?.id;
+    if (typeof rangeVal === 'string' && (rangeVal === XSD_BOOLEAN || rangeVal.endsWith('#boolean'))) {
+      const subjUri = (q.subject as { value: string }).value ?? (q.subject as { id: string }).id;
+      if (subjUri) booleanRangeSubjectUris.add(subjUri);
+    }
+  }
+  const apQuads = store.getQuads(null, RDF + 'type', OWL + 'AnnotationProperty', null);
+  for (const q of apQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    const subjUri = (subj as { value: string }).value;
+    const name = extractLocalName(subjUri);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const isBoolean = booleanRangeSubjectUris.has(subjUri);
+    result.push({ name, isBoolean });
+  }
+  return result;
 }
 
 /**
@@ -32,6 +66,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenClasses = new Set<string>();
+  const annotationProps = getAnnotationProperties(store);
 
   const excludeNamespaces = [
     'http://www.w3.org/2002/07/owl#',
@@ -54,18 +89,26 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     const label = labelQuad?.object?.value ?? localName;
 
     let labellableRoot: boolean | null = null;
+    const annotations: Record<string, string | boolean | null> = {};
     const outQuads = store.getQuads(subj, null, null, null);
     for (const oq of outQuads) {
-      if (oq.predicate.value.endsWith('labellableRoot')) {
-        const val = oq.object.value;
+      const predName = extractLocalName(oq.predicate.value);
+      const isAnnotation = annotationProps.some((ap) => ap.name === predName);
+      if (!isAnnotation) continue;
+      const obj = oq.object;
+      const apInfo = annotationProps.find((ap) => ap.name === predName);
+      if (apInfo?.isBoolean) {
+        const val = obj.value;
         const str = String(val).toLowerCase();
-        if (val === true || str === 'true') labellableRoot = true;
-        else if (val === false || str === 'false') labellableRoot = false;
-        break;
+        const b = val === true || str === 'true' ? true : val === false || str === 'false' ? false : null;
+        annotations[predName] = b;
+        if (predName === 'labellableRoot') labellableRoot = b;
+      } else {
+        annotations[predName] = obj.value != null ? String(obj.value) : null;
       }
     }
 
-    nodes.push({ id: localName, label, labellableRoot });
+    nodes.push({ id: localName, label, labellableRoot, annotations });
   }
 
   // subClassOf edges
@@ -119,7 +162,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     }
   }
 
-  return { graphData: { nodes, edges }, store };
+  return { graphData: { nodes, edges }, store, annotationProperties: annotationProps };
 }
 
 /**
@@ -199,18 +242,99 @@ export function updateLabellableInStore(
   return false;
 }
 
+const TURTLE_PREFIXES: Record<string, string> = {
+  '': 'http://example.org/aec-drawing-ontology#',
+  owl: 'http://www.w3.org/2002/07/owl#',
+  rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  xml: 'http://www.w3.org/XML/1998/namespace',
+  xsd: 'http://www.w3.org/2001/XMLSchema#',
+  rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
+};
+
+const SECTION_DIVIDER = '#################################################################';
+const SECTION_ORDER = [
+  { type: 'Ontology', label: 'Ontology' },
+  { type: 'AnnotationProperty', label: 'Annotation properties' },
+  { type: 'ObjectProperty', label: 'Object Properties' },
+  { type: 'Class', label: 'Classes' },
+];
+
+const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
+
+function formatTurtleWithSections(raw: string): string {
+  let output = raw;
+
+  // Ensure @base is present when output uses relative IRIs (<#...>)
+  if (output.includes('<#') && !output.includes('@base')) {
+    const lastPrefixMatch = output.match(/@prefix[^\n]+\n?/g);
+    const insertAt = lastPrefixMatch
+      ? output.indexOf(lastPrefixMatch[lastPrefixMatch.length - 1]) +
+        lastPrefixMatch[lastPrefixMatch.length - 1].length
+      : 0;
+    output =
+      output.slice(0, insertAt) +
+      `@base <${BASE_IRI}> .\n` +
+      output.slice(insertAt);
+  }
+
+  const lines = output.split('\n');
+  const result: string[] = [];
+  const seenSections = new Set<string>();
+  const sectionPatterns = [
+    { type: 'Ontology', re: /(owl:Ontology|owl#Ontology|Ontology>)/ },
+    { type: 'AnnotationProperty', re: /(owl:AnnotationProperty|owl#AnnotationProperty|AnnotationProperty>)/ },
+    { type: 'ObjectProperty', re: /(owl:ObjectProperty|owl#ObjectProperty|ObjectProperty>)/ },
+    { type: 'Class', re: /(owl:Class|owl#Class|owl\/Class|Class>)/ },
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trimStart();
+    const isNewBlock = trimmed.length > 0 && !line.startsWith(' ') && !line.startsWith('\t');
+
+    if (isNewBlock) {
+      let addedSectionDivider = false;
+      for (const { type, re } of sectionPatterns) {
+        if (re.test(line)) {
+          if (!seenSections.has(type)) {
+            seenSections.add(type);
+            const config = SECTION_ORDER.find((s) => s.type === type);
+            if (config) {
+              if (result.length > 0) result.push('');
+              result.push(SECTION_DIVIDER);
+              result.push(`#    ${config.label}`);
+              result.push(SECTION_DIVIDER);
+              result.push('');
+              addedSectionDivider = true;
+            }
+          }
+          break;
+        }
+      }
+      if (!addedSectionDivider && result.length > 0 && result[result.length - 1].trim() !== '') {
+        result.push('');
+      }
+    }
+    result.push(line);
+  }
+  return result.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
 /**
- * Serialize the store to Turtle string.
+ * Serialize the store to Turtle string with section dividers and spacing.
  */
 export function storeToTurtle(store: Store): Promise<string> {
   return new Promise((resolve, reject) => {
-    const writer = new Writer();
+    const writer = new Writer({
+      prefixes: TURTLE_PREFIXES,
+      baseIRI: 'http://example.org/aec-drawing-ontology#',
+    });
     for (const q of store) {
       writer.addQuad(q);
     }
     writer.end((err: Error | null, result: string) => {
       if (err) reject(err);
-      else resolve(result);
+      else resolve(formatTurtleWithSections(result));
     });
   });
 }
