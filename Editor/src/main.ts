@@ -656,6 +656,103 @@ function buildNetworkData(filter: {
   };
 }
 
+function updateSelectionInfoDisplay(net: Network): void {
+  const selectionEl = document.getElementById('selectionInfo');
+  if (!selectionEl) return;
+  const nodeIds = net.getSelectedNodes().map(String);
+  if (nodeIds.length === 0) {
+    selectionEl.textContent = '';
+  } else if (nodeIds.length === 1) {
+    const node = rawData.nodes.find((n) => n.id === nodeIds[0]);
+    selectionEl.textContent = ` | Selected: ${node?.label ?? nodeIds[0]} | Labellable: ${node?.labellableRoot ?? 'N/A'}`;
+  } else {
+    selectionEl.textContent = ` | Selected: ${nodeIds.length} nodes`;
+  }
+}
+
+function setupNetworkSelectionAndNavigation(
+  net: Network,
+  container: HTMLElement
+): void {
+  const RIGHT_BUTTON = 2;
+  const LEFT_BUTTON = 1;
+  let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
+  let selectionBeforeClick: string[] = [];
+
+  container.oncontextmenu = () => false;
+
+  const getContainerCoords = (e: MouseEvent) => {
+    const rect = container.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const handleMouseDown = (e: MouseEvent) => {
+    if (!container.contains(e.target as Node)) return;
+    const coords = getContainerCoords(e);
+    if (e.button === RIGHT_BUTTON) {
+      const viewPos = net.getViewPosition();
+      const scale = net.getScale();
+      rightPanStart = { x: coords.x, y: coords.y, viewPos: { ...viewPos }, scale };
+    } else if (e.button === LEFT_BUTTON) {
+      selectionBeforeClick = net.getSelectedNodes().map(String);
+    }
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    const coords = getContainerCoords(e);
+    if (rightPanStart) {
+      const dx = coords.x - rightPanStart.x;
+      const dy = coords.y - rightPanStart.y;
+      const canvasDx = dx / rightPanStart.scale;
+      const canvasDy = dy / rightPanStart.scale;
+      const newViewPos = {
+        x: rightPanStart.viewPos.x - canvasDx,
+        y: rightPanStart.viewPos.y - canvasDy,
+      };
+      net.moveTo({
+        position: newViewPos,
+        scale: rightPanStart.scale,
+        animation: false,
+      });
+      rightPanStart = { ...rightPanStart, x: coords.x, y: coords.y, viewPos: newViewPos };
+    }
+  };
+
+  const handleMouseUp = (e: MouseEvent) => {
+    if (e.button === RIGHT_BUTTON) rightPanStart = null;
+  };
+
+  const handleMouseLeave = () => {
+    rightPanStart = null;
+  };
+
+  document.addEventListener('mousedown', handleMouseDown, true);
+  document.addEventListener('mousemove', handleMouseMove, true);
+  document.addEventListener('mouseup', handleMouseUp, true);
+  container.addEventListener('mouseleave', handleMouseLeave);
+
+  net.on('click', (params: { nodes: string[]; edges: string[]; event?: { srcEvent?: MouseEvent } }) => {
+    const clickedNode = params.nodes[0] as string | undefined;
+    const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
+
+    if (!clickedNode) {
+      return;
+    }
+
+    if (ctrlKey) {
+      const wasSelected = selectionBeforeClick.includes(clickedNode);
+      const newSelection = wasSelected
+        ? selectionBeforeClick.filter((id) => id !== clickedNode)
+        : [...new Set([...selectionBeforeClick, clickedNode])];
+      net.setSelection({ nodes: newSelection }, { unselectAll: false, highlightEdges: true });
+    } else {
+      const newSelection = [...new Set([...selectionBeforeClick, clickedNode])];
+      net.setSelection({ nodes: newSelection }, { unselectAll: false, highlightEdges: true });
+    }
+    updateSelectionInfoDisplay(net);
+  });
+}
+
 function getNetworkOptions(layoutMode: string): Record<string, unknown> {
   const base: Record<string, unknown> = {
     nodes: {
@@ -664,6 +761,11 @@ function getNetworkOptions(layoutMode: string): Record<string, unknown> {
       font: { size: 20, color: '#2c3e50' },
     },
     edges: { smooth: { type: 'cubicBezier' }, arrows: 'to' },
+    interaction: {
+      dragView: false,
+      dragNodes: true,
+      multiselect: true,
+    },
   };
   if (layoutMode === 'weighted') {
     base.physics = { enabled: false };
@@ -715,7 +817,13 @@ function showRenameModal(
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
   const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
+  const titleEl = modal.querySelector('h3');
+  if (titleEl) titleEl.textContent = 'Edit node';
+  modal.dataset.mode = 'single';
+  delete modal.dataset.nodeIds;
   input.value = currentLabel;
+  input.disabled = false;
+  input.style.color = '';
   input.dataset.nodeId = nodeId;
   labellableCb.checked = labellableRoot === true;
   labellableCb.indeterminate = labellableRoot === null;
@@ -724,13 +832,64 @@ function showRenameModal(
   input.select();
 }
 
+function showMultiEditModal(nodeIds: string[]): void {
+  const modal = document.getElementById('renameModal')!;
+  const input = document.getElementById('renameInput') as HTMLInputElement;
+  const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
+  modal.dataset.mode = 'multi';
+  modal.dataset.nodeIds = JSON.stringify(nodeIds);
+  delete input.dataset.nodeId;
+  input.value = 'multiple nodes selected';
+  input.disabled = true;
+  input.style.color = '#999';
+  const nodes = nodeIds.map((id) => rawData.nodes.find((n) => n.id === id)).filter(Boolean) as GraphNode[];
+  const labellableValues = nodes.map((n) => n.labellableRoot);
+  const allTrue = labellableValues.every((v) => v === true);
+  const allFalse = labellableValues.every((v) => v === false);
+  labellableCb.checked = allTrue;
+  labellableCb.indeterminate = !allTrue && !allFalse;
+  modal.style.display = 'flex';
+  labellableCb.focus();
+}
+
 function hideRenameModal(): void {
   document.getElementById('renameModal')!.style.display = 'none';
 }
 
 function confirmRename(): void {
+  const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
   const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
+  const mode = modal.dataset.mode;
+
+  if (mode === 'multi') {
+    const nodeIdsJson = modal.dataset.nodeIds;
+    if (!nodeIdsJson || !ttlStore) {
+      hideRenameModal();
+      return;
+    }
+    const nodeIds: string[] = JSON.parse(nodeIdsJson);
+    const newLabellable = labellableCb.checked;
+    let anyChanged = false;
+    for (const nodeId of nodeIds) {
+      const node = rawData.nodes.find((n) => n.id === nodeId);
+      if (node && (node.labellableRoot === true) !== newLabellable) {
+        node.labellableRoot = newLabellable;
+        if (!node.annotations) node.annotations = {};
+        node.annotations['labellableRoot'] = newLabellable;
+        updateLabellableInStore(ttlStore, nodeId, newLabellable);
+        anyChanged = true;
+      }
+    }
+    if (anyChanged) {
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+    }
+    hideRenameModal();
+    applyFilter(true);
+    return;
+  }
+
   const nodeId = input.dataset.nodeId;
   const newLabel = input.value.trim();
   if (!nodeId || !newLabel) return;
@@ -1028,21 +1187,19 @@ function applyFilter(preserveView = false): void {
     const ro = new ResizeObserver(resizeNetwork);
     ro.observe(networkContainer);
     resizeNetwork(); // Initial size
-    network.on('click', (params) => {
-      const selectionEl = document.getElementById('selectionInfo');
-      if (params.nodes.length) {
-        const nodeId = params.nodes[0] as string;
-        const node = rawData.nodes.find((n) => n.id === nodeId);
-        if (selectionEl) selectionEl.textContent = ` | Selected: ${node?.label ?? nodeId} | Labellable: ${node?.labellableRoot ?? 'N/A'}`;
-      } else if (selectionEl) {
-        selectionEl.textContent = '';
-      }
+    setupNetworkSelectionAndNavigation(network, networkContainer);
+    network.on('click', () => {
+      if (network) updateSelectionInfoDisplay(network);
     });
     network.on('doubleClick', (params) => {
-      if (params.nodes.length) {
-        const nodeId = params.nodes[0] as string;
-        const node = rawData.nodes.find((n) => n.id === nodeId);
-        if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
+      if (!network || !params.nodes.length) return;
+      const clickedNodeId = params.nodes[0] as string;
+      const selectedIds = network.getSelectedNodes().map(String);
+      if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
+        showMultiEditModal(selectedIds);
+      } else {
+        const node = rawData.nodes.find((n) => n.id === clickedNodeId);
+        if (node) showRenameModal(clickedNodeId, node.label, node.labellableRoot);
       }
     });
   }
@@ -1241,9 +1398,12 @@ function setupEventListeners(): void {
 
   document.getElementById('renameCancel')?.addEventListener('click', hideRenameModal);
   document.getElementById('renameConfirm')?.addEventListener('click', confirmRename);
-  document.getElementById('renameInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmRename();
-    if (e.key === 'Escape') hideRenameModal();
+  document.getElementById('renameModal')?.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement).closest('#renameModal') && (e.key === 'Enter' || e.key === 'Escape')) {
+      if (e.key === 'Enter') confirmRename();
+      else hideRenameModal();
+      e.preventDefault();
+    }
   });
   document.getElementById('renameModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'renameModal') hideRenameModal();
