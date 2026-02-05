@@ -3,6 +3,8 @@ export interface GraphNode {
   label: string;
   labellableRoot: boolean | null;
   annotations?: Record<string, string | boolean | null>;
+  x?: number;
+  y?: number;
 }
 
 export interface AnnotationPropertyInfo {

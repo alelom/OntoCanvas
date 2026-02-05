@@ -70,7 +70,7 @@ body {
   min-height: 0;
   overflow: hidden;
 }
-#resetView {
+#networkWrapper #resetView {
   position: absolute;
   bottom: 16px;
   right: 16px;
@@ -83,8 +83,13 @@ body {
   font-size: 13px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
-#resetView:hover {
+#networkWrapper #resetView:hover {
   background: #eee;
+}
+#undoBtn:disabled,
+#redoBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 #network {
   min-height: 0;
@@ -174,7 +179,8 @@ body {
   display: block;
   margin-bottom: 16px;
 }
-.modal-content #renameInput {
+.modal-content #renameInput,
+.modal-content #addNodeInput {
   width: 100%;
   padding: 8px 10px;
   margin-top: 4px;
@@ -186,4 +192,10 @@ body {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+.modal-actions button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #95a5a6;
+  border-color: #7f8c8d;
 }

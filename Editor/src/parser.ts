@@ -261,6 +261,151 @@ const SECTION_ORDER = [
 
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 
+function toClassUri(localName: string): string {
+  return BASE_IRI + localName;
+}
+
+/**
+ * Update an edge in the store when reconnecting (moving arrow head or tail to a different node).
+ * Supports subClassOf (direct rdfs:subClassOf quads).
+ * For partOf/contains (OWL restrictions), returns false - not yet supported.
+ */
+export function updateEdgeInStore(
+  store: Store,
+  oldFrom: string,
+  oldTo: string,
+  edgeType: string,
+  newFrom: string,
+  newTo: string
+): boolean {
+  if (edgeType === 'subClassOf') {
+    const subjUri = toClassUri(oldTo);
+    const objUri = toClassUri(oldFrom);
+    const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
+    const quads = store.getQuads(
+      DataFactory.namedNode(subjUri),
+      subClassOfPred,
+      DataFactory.namedNode(objUri),
+      null
+    );
+    if (quads.length === 0) return false;
+    const graph = quads[0].graph ?? DataFactory.defaultGraph();
+    for (const q of quads) store.removeQuad(q);
+    store.addQuad(
+      DataFactory.namedNode(toClassUri(newTo)),
+      subClassOfPred,
+      DataFactory.namedNode(toClassUri(newFrom)),
+      graph
+    );
+    return true;
+  }
+  if (edgeType === 'partOf' || edgeType === 'contains') {
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Add a new OWL class (node) to the store.
+ * Returns the new localName, or null on failure.
+ */
+export function addNodeToStore(
+  store: Store,
+  label: string,
+  localName?: string
+): string | null {
+  const existingIds = new Set<string>();
+  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
+  for (const q of classQuads) {
+    const subj = q.subject;
+    if (subj.termType === 'NamedNode') {
+      existingIds.add(extractLocalName((subj as { value: string }).value));
+    }
+  }
+  let id = localName ?? (extractLocalName(label) || 'NewClass');
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(id)) id = 'NewClass';
+  let base = id;
+  let n = 0;
+  while (existingIds.has(id)) {
+    id = `${base}${++n}`;
+  }
+  const subjUri = toClassUri(id);
+  const subject = DataFactory.namedNode(subjUri);
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || id), graph);
+  return id;
+}
+
+/**
+ * Remove a node (OWL class) from the store.
+ */
+export function removeNodeFromStore(store: Store, localName: string): boolean {
+  const subjUri = toClassUri(localName);
+  const subject = DataFactory.namedNode(subjUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  for (const q of quads) store.removeQuad(q);
+  return true;
+}
+
+/**
+ * Add an edge to the store. Supports subClassOf (direct quad).
+ */
+export function addEdgeToStore(
+  store: Store,
+  from: string,
+  to: string,
+  edgeType: string
+): boolean {
+  if (edgeType === 'subClassOf') {
+    const subjUri = toClassUri(to);
+    const objUri = toClassUri(from);
+    const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
+    const existing = store.getQuads(
+      DataFactory.namedNode(subjUri),
+      subClassOfPred,
+      DataFactory.namedNode(objUri),
+      null
+    );
+    if (existing.length > 0) return false;
+    const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+    store.addQuad(
+      DataFactory.namedNode(subjUri),
+      subClassOfPred,
+      DataFactory.namedNode(objUri),
+      graph
+    );
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Remove an edge from the store. Supports subClassOf.
+ */
+export function removeEdgeFromStore(
+  store: Store,
+  from: string,
+  to: string,
+  edgeType: string
+): boolean {
+  if (edgeType === 'subClassOf') {
+    const subjUri = toClassUri(to);
+    const objUri = toClassUri(from);
+    const quads = store.getQuads(
+      DataFactory.namedNode(subjUri),
+      DataFactory.namedNode(RDFS + 'subClassOf'),
+      DataFactory.namedNode(objUri),
+      null
+    );
+    if (quads.length === 0) return false;
+    for (const q of quads) store.removeQuad(q);
+    return true;
+  }
+  return false;
+}
+
 function formatTurtleWithSections(raw: string): string {
   let output = raw;
 

@@ -5,6 +5,11 @@ import {
   parseTtlToGraph,
   updateLabelInStore,
   updateLabellableInStore,
+  updateEdgeInStore,
+  addEdgeToStore,
+  removeEdgeFromStore,
+  addNodeToStore,
+  removeNodeFromStore,
   storeToTurtle,
 } from './parser';
 import type { GraphData, GraphEdge, GraphNode } from './types';
@@ -106,11 +111,202 @@ function updateLoadLastOpenedButton(name: string | null, pathHint?: string): voi
 let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: { name: string; isBoolean: boolean }[] = [];
 let network: Network | null = null;
+let addNodeMode = false;
+let addedFromClickHandler = false;
+let pendingAddNodePosition: { x: number; y: number } | null = null;
+let addNodeModalShowing = false;
 let ttlStore: import('n3').Store | null = null;
 let loadedFileName: string | null = null;
 let loadedFilePath: string | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
+let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
+
+type UndoableAction = { undo: () => void; redo: () => void };
+let undoStack: UndoableAction[] = [];
+let redoStack: UndoableAction[] = [];
+
+function pushUndoable(undo: () => void, redo: () => void): void {
+  redoStack = [];
+  undoStack.push({ undo, redo });
+  updateUndoRedoButtons();
+}
+
+function performUndo(): void {
+  const action = undoStack.pop();
+  if (!action) return;
+  action.undo();
+  redoStack.push(action);
+  updateUndoRedoButtons();
+  updateSaveButtonVisibility();
+  applyFilter(true);
+}
+
+function performRedo(): void {
+  const action = redoStack.pop();
+  if (!action) return;
+  action.redo();
+  undoStack.push(action);
+  updateUndoRedoButtons();
+  updateSaveButtonVisibility();
+  applyFilter(true);
+}
+
+function clearUndoRedo(): void {
+  undoStack = [];
+  redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function addNewNodeAtPosition(
+  x?: number,
+  y?: number,
+  label = 'New class'
+): { id: string; label: string; x?: number; y?: number } | null {
+  if (!ttlStore) return null;
+  const displayLabel = label.trim() || 'New class';
+  const id = addNodeToStore(ttlStore, displayLabel);
+  if (!id) return null;
+  const node: GraphNode = {
+    id,
+    label: displayLabel,
+    labellableRoot: null,
+    ...(x != null && y != null && { x, y }),
+  };
+  rawData.nodes.push(node);
+  pushUndoable(
+    () => {
+      removeNodeFromStore(ttlStore!, id);
+      const i = rawData.nodes.findIndex((n) => n.id === id);
+      if (i >= 0) rawData.nodes.splice(i, 1);
+    },
+    () => {
+      addNodeToStore(ttlStore!, displayLabel, id);
+      rawData.nodes.push(node);
+    }
+  );
+  hasUnsavedChanges = true;
+  updateSaveButtonVisibility();
+  return { id, label: displayLabel, x, y };
+}
+
+function updateUndoRedoButtons(): void {
+  const undoBtn = document.getElementById('undoBtn') as HTMLButtonElement | null;
+  const redoBtn = document.getElementById('redoBtn') as HTMLButtonElement | null;
+  if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+  if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
+function performDeleteSelection(): boolean {
+  if (!network || !ttlStore) return false;
+  const activeEl = document.activeElement as HTMLElement;
+  if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+    return false;
+  }
+  const selectedNodeIds = network.getSelectedNodes().map(String);
+  const selectedEdgeIds = network.getSelectedEdges().map(String);
+  if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) return false;
+
+  const edgesToRemove: { from: string; to: string; type: string }[] = [];
+  for (const edgeId of selectedEdgeIds) {
+    const m = edgeId.match(/^(.+)->(.+):(.+)$/);
+    if (m) edgesToRemove.push({ from: m[1], to: m[2], type: m[3] });
+  }
+
+  const nodesToRemove = selectedNodeIds.filter((id) => rawData.nodes.some((n) => n.id === id));
+  const connectedEdges = rawData.edges.filter(
+    (e) => nodesToRemove.includes(e.from) || nodesToRemove.includes(e.to)
+  );
+
+  const undoActions: Array<() => void> = [];
+  const redoActions: Array<() => void> = [];
+
+  for (const { from, to, type } of edgesToRemove) {
+    const ok = removeEdgeFromStore(ttlStore, from, to, type);
+    if (ok) {
+      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) rawData.edges.splice(idx, 1);
+      undoActions.push(() => {
+        addEdgeToStore(ttlStore!, from, to, type);
+        rawData.edges.push({ from, to, type });
+      });
+      redoActions.push(() => {
+        removeEdgeFromStore(ttlStore!, from, to, type);
+        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+        if (i >= 0) rawData.edges.splice(i, 1);
+      });
+    } else {
+      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) {
+        const edge = rawData.edges[idx];
+        rawData.edges.splice(idx, 1);
+        undoActions.push(() => rawData.edges.push(edge));
+        redoActions.push(() => {
+          const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+          if (i < 0) rawData.edges.push(edge);
+        });
+      }
+    }
+  }
+
+  for (const { from, to, type } of connectedEdges) {
+    if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
+    const ok = removeEdgeFromStore(ttlStore, from, to, type);
+    if (ok) {
+      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) rawData.edges.splice(idx, 1);
+      undoActions.push(() => {
+        addEdgeToStore(ttlStore!, from, to, type);
+        rawData.edges.push({ from, to, type });
+      });
+      redoActions.push(() => {
+        removeEdgeFromStore(ttlStore!, from, to, type);
+        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+        if (i >= 0) rawData.edges.splice(i, 1);
+      });
+    } else {
+      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) {
+        const edge = rawData.edges[idx];
+        rawData.edges.splice(idx, 1);
+        undoActions.push(() => rawData.edges.push(edge));
+        redoActions.push(() => {
+          const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+          if (i >= 0) rawData.edges.splice(i, 1);
+        });
+      }
+    }
+  }
+
+  for (const nodeId of nodesToRemove) {
+    const node = rawData.nodes.find((n) => n.id === nodeId);
+    if (!node) continue;
+    removeNodeFromStore(ttlStore, nodeId);
+    const idx = rawData.nodes.findIndex((n) => n.id === nodeId);
+    if (idx >= 0) rawData.nodes.splice(idx, 1);
+    undoActions.push(() => {
+      addNodeToStore(ttlStore!, node.label, nodeId);
+      rawData.nodes.push(node);
+    });
+    redoActions.push(() => {
+      removeNodeFromStore(ttlStore!, nodeId);
+      const i = rawData.nodes.findIndex((n) => n.id === nodeId);
+      if (i >= 0) rawData.nodes.splice(i, 1);
+    });
+  }
+
+  if (undoActions.length === 0 && redoActions.length === 0) return false;
+
+  pushUndoable(
+    () => undoActions.forEach((a) => a()),
+    () => redoActions.forEach((a) => a())
+  );
+  hasUnsavedChanges = true;
+  updateSaveButtonVisibility();
+  applyFilter(true);
+  network.unselectAll();
+  return true;
+}
 const container = document.getElementById('network')!;
 const COLORS = {
   labellable: '#2ecc71',
@@ -611,7 +807,7 @@ function buildNetworkData(filter: {
   }
 
   const nodes = filteredNodes.map((n) => {
-    const pos = nodePositions[n.id];
+    const pos = (n.x != null && n.y != null) ? { x: n.x, y: n.y } : nodePositions[n.id];
     const d = depth[n.id] ?? 0;
     const fontSize =
       maxDepth > 0
@@ -642,6 +838,7 @@ function buildNetworkData(filter: {
       color: getDefaultColor(),
     };
     return {
+      id: `${e.from}->${e.to}:${e.type}`,
       from: e.from,
       to: e.to,
       arrows: 'to',
@@ -730,6 +927,38 @@ function setupNetworkSelectionAndNavigation(
   document.addEventListener('mousemove', handleMouseMove, true);
   document.addEventListener('mouseup', handleMouseUp, true);
   container.addEventListener('mouseleave', handleMouseLeave);
+
+  const handleNativeClick = (e: MouseEvent) => {
+    if (!ttlStore || !network) return;
+    const target = e.target as HTMLElement;
+    if (target.closest?.('.vis-add')) {
+      addNodeMode = true;
+      return;
+    }
+    if (target.closest?.('.vis-manipulation') && !addNodeMode) return;
+    if (!addNodeMode) return;
+    const rect = container.getBoundingClientRect();
+    const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const nodeAt = net.getNodeAt(domPos);
+    if (nodeAt != null) return;
+    const canvasPos = net.DOMtoCanvas(domPos);
+    showAddNodeModal(canvasPos.x, canvasPos.y);
+  };
+
+  const handleNativeDblclick = (e: MouseEvent) => {
+    if (!ttlStore || !network) return;
+    const target = e.target as HTMLElement;
+    if (target.closest?.('.vis-manipulation')) return;
+    const rect = container.getBoundingClientRect();
+    const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const nodeAt = net.getNodeAt(domPos);
+    if (nodeAt != null) return;
+    const canvasPos = net.DOMtoCanvas(domPos);
+    showAddNodeModal(canvasPos.x, canvasPos.y);
+  };
+
+  container.addEventListener('click', handleNativeClick, true);
+  container.addEventListener('dblclick', handleNativeDblclick, true);
 
   net.on('click', (params: { nodes: string[]; edges: string[]; event?: { srcEvent?: MouseEvent } }) => {
     const clickedNode = params.nodes[0] as string | undefined;
@@ -856,6 +1085,123 @@ function hideRenameModal(): void {
   document.getElementById('renameModal')!.style.display = 'none';
 }
 
+function showAddNodeModal(canvasX: number, canvasY: number): void {
+  pendingAddNodePosition = { x: canvasX, y: canvasY };
+  addNodeModalShowing = true;
+  const modal = document.getElementById('addNodeModal')!;
+  const input = document.getElementById('addNodeInput') as HTMLInputElement;
+  const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
+  input.value = '';
+  okBtn.disabled = true;
+  modal.style.display = 'flex';
+  input.focus();
+}
+
+function hideAddNodeModal(): void {
+  pendingAddNodePosition = null;
+  addNodeMode = false;
+  document.getElementById('addNodeModal')!.style.display = 'none';
+}
+
+function updateAddNodeOkButton(): void {
+  const input = document.getElementById('addNodeInput') as HTMLInputElement;
+  const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
+  if (input && okBtn) {
+    okBtn.disabled = !input.value.trim();
+  }
+}
+
+function confirmAddNode(): void {
+  if (!pendingAddNodePosition) return;
+  const input = document.getElementById('addNodeInput') as HTMLInputElement;
+  const label = input?.value?.trim();
+  if (!label) return;
+  const { x, y } = pendingAddNodePosition;
+  const result = addNewNodeAtPosition(x, y, label);
+  if (result) {
+    addedFromClickHandler = true;
+    applyFilter(true);
+  }
+  hideAddNodeModal();
+}
+
+const EDGE_TYPES = ['subClassOf', 'partOf', 'contains'];
+
+function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
+  const modal = document.getElementById('editEdgeModal')!;
+  const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
+  const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
+  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  modal.dataset.oldFrom = edgeFrom;
+  modal.dataset.oldTo = edgeTo;
+  modal.dataset.oldType = edgeType;
+  fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
+  toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
+  const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
+  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${t}</option>`).join('');
+  modal.style.display = 'flex';
+}
+
+function hideEditEdgeModal(): void {
+  if (pendingEditEdgeCallback) {
+    pendingEditEdgeCallback(null);
+    pendingEditEdgeCallback = null;
+  }
+  document.getElementById('editEdgeModal')!.style.display = 'none';
+}
+
+function confirmEditEdge(): void {
+  const modal = document.getElementById('editEdgeModal')!;
+  const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
+  const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
+  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const oldFrom = modal.dataset.oldFrom!;
+  const oldTo = modal.dataset.oldTo!;
+  const oldType = modal.dataset.oldType!;
+  const newFrom = fromSel.value;
+  const newTo = toSel.value;
+  const newType = typeSel.value;
+  if (!ttlStore || (oldFrom === newFrom && oldTo === newTo && oldType === newType)) {
+    hideEditEdgeModal();
+    return;
+  }
+  const removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+  if (!removeOk) {
+    hideEditEdgeModal();
+    return;
+  }
+  const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType);
+  if (!addOk) {
+    addEdgeToStore(ttlStore, oldFrom, oldTo, oldType);
+    alert(`Changing to relationship type "${newType}" is not yet supported. Only subClassOf can be added or changed.`);
+    hideEditEdgeModal();
+    return;
+  }
+  const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+  if (idx >= 0) rawData.edges.splice(idx, 1);
+  rawData.edges.push({ from: newFrom, to: newTo, type: newType });
+  pushUndoable(
+    () => {
+      removeEdgeFromStore(ttlStore!, newFrom, newTo, newType);
+      addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType);
+      const i = rawData.edges.findIndex((e) => e.from === newFrom && e.to === newTo && e.type === newType);
+      if (i >= 0) rawData.edges.splice(i, 1);
+      rawData.edges.push({ from: oldFrom, to: oldTo, type: oldType });
+    },
+    () => {
+      removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType);
+      addEdgeToStore(ttlStore!, newFrom, newTo, newType);
+      const i = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+      if (i >= 0) rawData.edges.splice(i, 1);
+      rawData.edges.push({ from: newFrom, to: newTo, type: newType });
+    }
+  );
+  hasUnsavedChanges = true;
+  updateSaveButtonVisibility();
+  hideEditEdgeModal();
+  applyFilter(true);
+}
+
 function confirmRename(): void {
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
@@ -882,6 +1228,33 @@ function confirmRename(): void {
       }
     }
     if (anyChanged) {
+      const oldVals = nodeIds.map((id) => {
+        const n = rawData.nodes.find((x) => x.id === id);
+        return { id, labellable: n?.labellableRoot };
+      });
+      pushUndoable(
+        () => {
+          oldVals.forEach(({ id, labellable }) => {
+            const n = rawData.nodes.find((x) => x.id === id);
+            if (n && ttlStore) {
+              n.labellableRoot = labellable ?? null;
+              if (n.annotations) n.annotations['labellableRoot'] = labellable ?? null;
+              updateLabellableInStore(ttlStore, id, labellable === true);
+            }
+          });
+        },
+        () => {
+          nodeIds.forEach((id) => {
+            const n = rawData.nodes.find((x) => x.id === id);
+            if (n && ttlStore) {
+              n.labellableRoot = newLabellable;
+              if (!n.annotations) n.annotations = {};
+              n.annotations['labellableRoot'] = newLabellable;
+              updateLabellableInStore(ttlStore, id, newLabellable);
+            }
+          });
+        }
+      );
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     }
@@ -909,6 +1282,9 @@ function confirmRename(): void {
     return;
   }
 
+  const oldLabel = node.label;
+  const oldLabellable = node.labellableRoot;
+
   if (labelChanged) {
     node.label = newLabel;
     if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
@@ -920,10 +1296,37 @@ function confirmRename(): void {
     updateLabellableInStore(ttlStore, nodeId, newLabellable);
   }
 
+  pushUndoable(
+    () => {
+      if (labelChanged) {
+        node.label = oldLabel;
+        if (ttlStore) updateLabelInStore(ttlStore, nodeId, oldLabel);
+      }
+      if (labellableChanged && ttlStore) {
+        node.labellableRoot = oldLabellable;
+        if (!node.annotations) node.annotations = {};
+        node.annotations['labellableRoot'] = oldLabellable ?? null;
+        updateLabellableInStore(ttlStore, nodeId, oldLabellable === true);
+      }
+    },
+    () => {
+      if (labelChanged) {
+        node.label = newLabel;
+        if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
+      }
+      if (labellableChanged && ttlStore) {
+        node.labellableRoot = newLabellable;
+        if (!node.annotations) node.annotations = {};
+        node.annotations['labellableRoot'] = newLabellable;
+        updateLabellableInStore(ttlStore, nodeId, newLabellable);
+      }
+    }
+  );
+
   hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   hideRenameModal();
-  applyFilter(true); // preserveView = true
+  applyFilter(true);
 }
 
 async function saveTtl(): Promise<void> {
@@ -1011,6 +1414,10 @@ function renderApp(): void {
           <input type="checkbox" id="searchIncludeNeighbors" checked> Include neighbors
         </label>
       </div>
+      <span id="undoRedoGroup" style="gap: 4px; align-items: center; display: inline-flex;">
+        <button type="button" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
+        <button type="button" id="redoBtn" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+      </span>
       <span id="saveGroup" style="display: none; gap: 8px; align-items: center;">
         <button id="saveChanges" class="primary">Save changes</button>
         <span id="overwriteFileWrap">
@@ -1050,6 +1457,28 @@ function renderApp(): void {
         </div>
       </div>
     </div>
+    <div id="addNodeModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Add node</h3>
+        <label>Label: <input type="text" id="addNodeInput" placeholder="Enter node label" /></label>
+        <div class="modal-actions">
+          <button type="button" id="addNodeCancel">Cancel</button>
+          <button type="button" id="addNodeConfirm" class="primary" disabled>OK</button>
+        </div>
+      </div>
+    </div>
+    <div id="editEdgeModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Edit edge</h3>
+        <label>Relationship: <select id="editEdgeType"></select></label>
+        <label style="display: block; margin-top: 8px;">From: <select id="editEdgeFrom"></select></label>
+        <label style="display: block; margin-top: 8px;">To: <select id="editEdgeTo"></select></label>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="editEdgeCancel">Cancel</button>
+          <button type="button" id="editEdgeConfirm" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -1073,6 +1502,7 @@ async function loadTtlAndRender(
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
     hasUnsavedChanges = false;
+    clearUndoRedo();
     updateFilePathDisplay();
     if (handle && fileName) {
       saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
@@ -1145,10 +1575,86 @@ function applyFilter(preserveView = false): void {
   const data = buildNetworkData(currentFilter);
   const options = getNetworkOptions(layoutMode);
 
+  const manipulationOptions = {
+    enabled: true,
+    initiallyActive: true,
+    addNode: (
+      nodeData: { x?: number; y?: number },
+      callback: (data: { id: string; label: string; x?: number; y?: number } | null) => void
+    ) => {
+      if (addNodeModalShowing) {
+        callback(null);
+        return;
+      }
+      addedFromClickHandler = false;
+      const x = nodeData.x ?? 0;
+      const y = nodeData.y ?? 0;
+      showAddNodeModal(x, y);
+      callback(null);
+    },
+    addEdge: (
+      edgeData: { from: string; to: string },
+      callback: (data: { from: string; to: string } | null) => void
+    ) => {
+      const from = String(edgeData.from);
+      const to = String(edgeData.to);
+      if (from === to || !ttlStore) {
+        callback(null);
+        return;
+      }
+      const edgeType = 'subClassOf';
+      const ok = addEdgeToStore(ttlStore, from, to, edgeType);
+      if (!ok) {
+        callback(null);
+        return;
+      }
+      rawData.edges.push({ from, to, type: edgeType });
+      pushUndoable(
+        () => {
+          removeEdgeFromStore(ttlStore!, from, to, edgeType);
+          const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === edgeType);
+          if (i >= 0) rawData.edges.splice(i, 1);
+        },
+        () => {
+          addEdgeToStore(ttlStore!, from, to, edgeType);
+          rawData.edges.push({ from, to, type: edgeType });
+        }
+      );
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+      callback({ from, to });
+      applyFilter(true);
+    },
+    editNode: false,
+    editEdge: {
+      editWithoutDrag: (
+        edgeData: { id?: string; from: string; to: string },
+        callback: (data: { from: string; to: string } | null) => void
+      ) => {
+        const edgeId = edgeData.id ?? '';
+        const match = edgeId.match(/^(.+)->(.+):(.+)$/);
+        if (!match || !ttlStore) {
+          callback(null);
+          return;
+        }
+        const [, from, to, type] = match;
+        pendingEditEdgeCallback = callback;
+        showEditEdgeModal(from, to, type);
+      },
+    },
+    deleteNode: false,
+    deleteEdge: false,
+  };
+
   const networkContainer = document.getElementById('network')!;
   if (network) {
     network.setData(data);
-    network.setOptions({ ...options, width: '100%', height: '100%' });
+    network.setOptions({
+      ...options,
+      manipulation: manipulationOptions,
+      width: '100%',
+      height: '100%',
+    });
     const w = networkContainer.clientWidth;
     const h = networkContainer.clientHeight;
     if (w > 0 && h > 0) network.setSize(`${w}px`, `${h}px`);
@@ -1166,7 +1672,12 @@ function applyFilter(preserveView = false): void {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
   } else {
-    const opts = { ...options, width: '100%', height: '100%' };
+    const opts = {
+      ...options,
+      manipulation: manipulationOptions,
+      width: '100%',
+      height: '100%',
+    };
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
@@ -1191,8 +1702,9 @@ function applyFilter(preserveView = false): void {
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
     });
-    network.on('doubleClick', (params) => {
-      if (!network || !params.nodes.length) return;
+    network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
+      if (!network) return;
+      if (!params.nodes.length) return;
       const clickedNodeId = params.nodes[0] as string;
       const selectedIds = network.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
@@ -1309,6 +1821,20 @@ function setupEventListeners(): void {
   document
     .getElementById('searchIncludeNeighbors')
     ?.addEventListener('change', applyFilter);
+  document.getElementById('undoBtn')?.addEventListener('click', performUndo);
+  document.getElementById('redoBtn')?.addEventListener('click', performRedo);
+  document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModal);
+  document.getElementById('editEdgeConfirm')?.addEventListener('click', confirmEditEdge);
+  document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModal();
+  });
+  document.getElementById('editEdgeModal')?.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement).closest('#editEdgeModal') && (e.key === 'Enter' || e.key === 'Escape')) {
+      if (e.key === 'Enter') confirmEditEdge();
+      else hideEditEdgeModal();
+      e.preventDefault();
+    }
+  });
   document.getElementById('resetView')?.addEventListener('click', () => {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'weighted';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '10';
@@ -1409,11 +1935,41 @@ function setupEventListeners(): void {
     if ((e.target as HTMLElement).id === 'renameModal') hideRenameModal();
   });
 
+  document.getElementById('addNodeInput')?.addEventListener('input', updateAddNodeOkButton);
+  document.getElementById('addNodeCancel')?.addEventListener('click', hideAddNodeModal);
+  document.getElementById('addNodeConfirm')?.addEventListener('click', confirmAddNode);
+  document.getElementById('addNodeModal')?.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement).closest('#addNodeModal') && (e.key === 'Enter' || e.key === 'Escape')) {
+      if (e.key === 'Enter') {
+        const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
+        if (okBtn && !okBtn.disabled) confirmAddNode();
+      } else {
+        hideAddNodeModal();
+      }
+      e.preventDefault();
+    }
+  });
+  document.getElementById('addNodeModal')?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'addNodeModal') hideAddNodeModal();
+  });
+
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
       e.preventDefault();
       const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
       searchInput?.focus();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) performRedo();
+      else performUndo();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault();
+      performRedo();
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (performDeleteSelection()) e.preventDefault();
     }
   });
 
