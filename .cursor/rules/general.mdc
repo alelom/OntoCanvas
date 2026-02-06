@@ -4,12 +4,4 @@ alwaysApply: true
 
 This project uses `uv` as a package manager.
 
-Whenever a modification to the Visualizer is requested, run the screenshot visualizer script to verify that the output screenshot isn't empty:
-
-```
-uv run python screenshot_visualizer.py
-```
-
-Then verify the output screenshot Visualizer/visualizer_screenshot.png
-to make sure it's not empty (it must have some nodes and edges, not 0).
-
+Whenever a modification to the Visualizer or Editor is requested, either take a screenshot or connect to the browser MCP to verify the output.

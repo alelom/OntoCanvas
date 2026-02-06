@@ -10,6 +10,7 @@ import {
   addEdgeToStore,
   addNodeToStore,
   removeEdgeFromStore,
+  removeNodeFromStore,
 } from './parser';
 import type { GraphData } from './types';
 
@@ -225,6 +226,32 @@ describe('updateLabelInStore (edit)', () => {
       (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
     );
     expect(gone).toBeUndefined();
+  });
+
+  it('delete order: remove edges before nodes so restriction-based edges can be found', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    addEdgeToStore(store, 'Layout', 'FacadeCladding', 'contains');
+    const before = await parseTtlToGraph(await storeToTurtle(store));
+    expect(before.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains')).toBe(true);
+
+    // Wrong order: remove node first, then edge. removeEdgeFromStore fails because the
+    // restriction blank is no longer reachable from Layout's subClassOf quads.
+    removeNodeFromStore(store, 'Layout');
+    const removeEdgeFails = removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
+    expect(removeEdgeFails).toBe(false);
+
+    // Correct order: reload, remove edge first, then node. Both succeed.
+    const { store: store2 } = await parseTtlToGraph(ttl);
+    addEdgeToStore(store2, 'Layout', 'FacadeCladding', 'contains');
+    const edgeOk = removeEdgeFromStore(store2, 'Layout', 'FacadeCladding', 'contains');
+    expect(edgeOk).toBe(true);
+    const nodeOk = removeNodeFromStore(store2, 'Layout');
+    expect(nodeOk).toBe(true);
+    const after = await parseTtlToGraph(await storeToTurtle(store2));
+    expect(after.graphData.nodes.some((n) => n.id === 'FacadeCladding')).toBe(true);
+    expect(after.graphData.nodes.some((n) => n.id === 'Layout')).toBe(false);
+    expect(after.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains')).toBe(false);
   });
 });
 

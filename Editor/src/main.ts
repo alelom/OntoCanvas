@@ -394,9 +394,13 @@ function performDeleteSelection(): boolean {
     (e) => nodesToRemove.includes(e.from) || nodesToRemove.includes(e.to)
   );
 
-  const undoActions: Array<() => void> = [];
-  const redoActions: Array<() => void> = [];
+  const nodeUndoActions: Array<() => void> = [];
+  const nodeRedoActions: Array<() => void> = [];
+  const edgeUndoActions: Array<() => void> = [];
+  const edgeRedoActions: Array<() => void> = [];
 
+  // Remove edges BEFORE nodes. Restriction-based edges (contains, partOf) require the node's
+  // subClassOf quads to still exist for removeEdgeFromStore to find and remove them.
   for (const { from, to, type } of edgesToRemove) {
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
     const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
@@ -404,11 +408,11 @@ function performDeleteSelection(): boolean {
     if (ok) {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
-      undoActions.push(() => {
+      edgeUndoActions.push(() => {
         addEdgeToStore(ttlStore!, from, to, type, card);
         rawData.edges.push(edge ?? { from, to, type });
       });
-      redoActions.push(() => {
+      edgeRedoActions.push(() => {
         removeEdgeFromStore(ttlStore!, from, to, type);
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
         if (i >= 0) rawData.edges.splice(i, 1);
@@ -417,11 +421,16 @@ function performDeleteSelection(): boolean {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) {
         const edge = rawData.edges[idx];
+        const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
         rawData.edges.splice(idx, 1);
-        undoActions.push(() => rawData.edges.push(edge));
-        redoActions.push(() => {
+        edgeUndoActions.push(() => {
+          addEdgeToStore(ttlStore!, from, to, type, card);
+          rawData.edges.push(edge);
+        });
+        edgeRedoActions.push(() => {
+          removeEdgeFromStore(ttlStore!, from, to, type);
           const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-          if (i < 0) rawData.edges.push(edge);
+          if (i >= 0) rawData.edges.splice(i, 1);
         });
       }
     }
@@ -435,11 +444,11 @@ function performDeleteSelection(): boolean {
     if (ok) {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
-      undoActions.push(() => {
+      edgeUndoActions.push(() => {
         addEdgeToStore(ttlStore!, from, to, type, card);
         rawData.edges.push(edge ?? { from, to, type });
       });
-      redoActions.push(() => {
+      edgeRedoActions.push(() => {
         removeEdgeFromStore(ttlStore!, from, to, type);
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
         if (i >= 0) rawData.edges.splice(i, 1);
@@ -448,9 +457,14 @@ function performDeleteSelection(): boolean {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) {
         const edge = rawData.edges[idx];
+        const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
         rawData.edges.splice(idx, 1);
-        undoActions.push(() => rawData.edges.push(edge));
-        redoActions.push(() => {
+        edgeUndoActions.push(() => {
+          addEdgeToStore(ttlStore!, from, to, type, card);
+          rawData.edges.push(edge);
+        });
+        edgeRedoActions.push(() => {
+          removeEdgeFromStore(ttlStore!, from, to, type);
           const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
           if (i >= 0) rawData.edges.splice(i, 1);
         });
@@ -464,22 +478,36 @@ function performDeleteSelection(): boolean {
     removeNodeFromStore(ttlStore, nodeId);
     const idx = rawData.nodes.findIndex((n) => n.id === nodeId);
     if (idx >= 0) rawData.nodes.splice(idx, 1);
-    undoActions.push(() => {
+    nodeUndoActions.push(() => {
       addNodeToStore(ttlStore!, node.label, nodeId);
       rawData.nodes.push(node);
     });
-    redoActions.push(() => {
+    nodeRedoActions.push(() => {
       removeNodeFromStore(ttlStore!, nodeId);
       const i = rawData.nodes.findIndex((n) => n.id === nodeId);
       if (i >= 0) rawData.nodes.splice(i, 1);
     });
   }
 
-  if (undoActions.length === 0 && redoActions.length === 0) return false;
+  const hasActions = nodeUndoActions.length + edgeUndoActions.length > 0;
+  if (!hasActions) return false;
+
+  // Clear search so children of deleted nodes remain visible (they were shown as neighbors)
+  const searchEl = document.getElementById('searchQuery') as HTMLInputElement | null;
+  if (searchEl?.value.trim()) {
+    searchEl.value = '';
+    document.getElementById('searchAutocomplete')?.classList.remove('visible');
+  }
 
   pushUndoable(
-    () => undoActions.forEach((a) => a()),
-    () => redoActions.forEach((a) => a())
+    () => {
+      nodeUndoActions.forEach((a) => a());
+      edgeUndoActions.forEach((a) => a());
+    },
+    () => {
+      edgeRedoActions.forEach((a) => a());
+      nodeRedoActions.forEach((a) => a());
+    }
   );
   hasUnsavedChanges = true;
   updateSaveButtonVisibility();
@@ -2419,25 +2447,34 @@ function setupEventListeners(): void {
     if ((e.target as HTMLElement).id === 'addNodeModal') hideAddNodeModal();
   });
 
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-      e.preventDefault();
-      const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
-      searchInput?.focus();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-      e.preventDefault();
-      if (e.shiftKey) performRedo();
-      else performUndo();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-      e.preventDefault();
-      performRedo();
-    }
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (performDeleteSelection()) e.preventDefault();
-    }
-  });
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
+        searchInput?.focus();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) performRedo();
+        else performUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        performRedo();
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Run in capture phase so we handle Delete before search input (which would delete a character)
+        const activeEl = document.activeElement as HTMLElement;
+        if (activeEl?.id === 'searchQuery' && network?.getSelectedNodes().length) {
+          activeEl.blur();
+        }
+        if (performDeleteSelection()) e.preventDefault();
+      }
+    },
+    { capture: true }
+  );
 
   const searchInput = document.getElementById('searchQuery');
   const searchList = document.getElementById('searchAutocomplete');
@@ -2552,3 +2589,35 @@ async function initLastOpened(): Promise<void> {
 renderApp();
 setupEventListeners();
 initLastOpened().catch(() => {});
+
+// Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
+(window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
+  selectNodeByLabel: (label: string): boolean => {
+    const node = rawData.nodes.find((n) => (n.label || n.id) === label);
+    if (node && network) {
+      network.setSelection({ nodes: [node.id] });
+      return true;
+    }
+    return false;
+  },
+  performDelete: (): boolean => performDeleteSelection(),
+  performUndo: (): void => performUndo(),
+  performRedo: (): void => performRedo(),
+  getNodeIds: (): string[] => rawData.nodes.map((n) => n.id),
+  getNodeCount: (): number => rawData.nodes.length,
+  getUndoStackLength: (): number => undoStack.length,
+  /** Visible node count from the UI (what's actually rendered). Use to verify display matches rawData. */
+  getVisibleNodeCount: (): number =>
+    parseInt(document.getElementById('nodeCount')?.textContent ?? '0', 10) || 0,
+  /** Clear IndexedDB display config to test with fresh state. */
+  clearDisplayConfig: async (): Promise<void> => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('OntologyEditorDisplay', 1);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve(req.result);
+    });
+    const tx = db.transaction('config', 'readwrite');
+    tx.objectStore('config').clear();
+    db.close();
+  },
+};

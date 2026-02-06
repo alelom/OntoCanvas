@@ -1,4 +1,5 @@
 import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
+import { postProcessTurtle } from './turtlePostProcess';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo } from './types';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
@@ -282,14 +283,6 @@ const TURTLE_PREFIXES: Record<string, string> = {
   rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
 };
 
-const SECTION_DIVIDER = '#################################################################';
-const SECTION_ORDER = [
-  { type: 'Ontology', label: 'Ontology' },
-  { type: 'AnnotationProperty', label: 'Annotation properties' },
-  { type: 'ObjectProperty', label: 'Object Properties' },
-  { type: 'Class', label: 'Classes' },
-];
-
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 
 function toClassUri(localName: string): string {
@@ -525,72 +518,6 @@ export function removeEdgeFromStore(
   return true;
 }
 
-function formatTurtleWithSections(raw: string): string {
-  let output = raw;
-
-  // Preserve explicit Turtle style (N3 Writer uses 'a' and boolean shorthand)
-  output = output.replace(/ a (owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
-  output = output.replace(/ a :/g, ' rdf:type :');
-  output = output.replace(/ a </g, ' rdf:type <');
-  output = output.replace(/ false(?=[.;\s\n]|$)/g, '"false"^^xsd:boolean');
-  output = output.replace(/ true(?=[.;\s\n]|$)/g, '"true"^^xsd:boolean');
-
-  // Ensure @base is present when output uses relative IRIs (<#...>)
-  if (output.includes('<#') && !output.includes('@base')) {
-    const lastPrefixMatch = output.match(/@prefix[^\n]+\n?/g);
-    const insertAt = lastPrefixMatch
-      ? output.indexOf(lastPrefixMatch[lastPrefixMatch.length - 1]) +
-        lastPrefixMatch[lastPrefixMatch.length - 1].length
-      : 0;
-    output =
-      output.slice(0, insertAt) +
-      `@base <${BASE_IRI}> .\n` +
-      output.slice(insertAt);
-  }
-
-  const lines = output.split('\n');
-  const result: string[] = [];
-  const seenSections = new Set<string>();
-  const sectionPatterns = [
-    { type: 'Ontology', re: /(owl:Ontology|owl#Ontology|Ontology>)/ },
-    { type: 'AnnotationProperty', re: /(owl:AnnotationProperty|owl#AnnotationProperty|AnnotationProperty>)/ },
-    { type: 'ObjectProperty', re: /(owl:ObjectProperty|owl#ObjectProperty|ObjectProperty>)/ },
-    { type: 'Class', re: /(owl:Class|owl#Class|owl\/Class|Class>)/ },
-  ];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    const isNewBlock = trimmed.length > 0 && !line.startsWith(' ') && !line.startsWith('\t');
-
-    if (isNewBlock) {
-      let addedSectionDivider = false;
-      for (const { type, re } of sectionPatterns) {
-        if (re.test(line)) {
-          if (!seenSections.has(type)) {
-            seenSections.add(type);
-            const config = SECTION_ORDER.find((s) => s.type === type);
-            if (config) {
-              if (result.length > 0) result.push('');
-              result.push(SECTION_DIVIDER);
-              result.push(`#    ${config.label}`);
-              result.push(SECTION_DIVIDER);
-              result.push('');
-              addedSectionDivider = true;
-            }
-          }
-          break;
-        }
-      }
-      if (!addedSectionDivider && result.length > 0 && result[result.length - 1].trim() !== '') {
-        result.push('');
-      }
-    }
-    result.push(line);
-  }
-  return result.join('\n').replace(/\n{3,}/g, '\n\n');
-}
-
 /**
  * Serialize the store to Turtle string with section dividers and spacing.
  */
@@ -605,7 +532,7 @@ export function storeToTurtle(store: Store): Promise<string> {
     }
     writer.end((err: Error | null, result: string) => {
       if (err) reject(err);
-      else resolve(formatTurtleWithSections(result));
+      else resolve(postProcessTurtle(result));
     });
   });
 }

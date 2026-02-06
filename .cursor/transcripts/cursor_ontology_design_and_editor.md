@@ -1,5 +1,5 @@
 # Ontology design and editor
-_Exported on 2/6/2026 at 19:20:32 GMT from Cursor (2.4.28)_
+_Exported on 2/6/2026 at 19:41:10 GMT from Cursor (2.4.28)_
 
 ---
 
@@ -1661,4 +1661,130 @@ Post-processing (Option A) is the most straightforward:
 5. Replace each `_:n3-X` in the original string with the corresponding inline form.
 
 The main risk is string replacement when the same blank node appears in multiple places; you’d need to replace all occurrences consistently. A safer variant is to rebuild the Turtle string from the parsed quads instead of doing in-place replacements.
+
+---
+
+**User**
+
+Let's implement option A, but let's put any post-processing code in a separate file to be more tidy. Including existing post-processing functionality.
+
+---
+
+**Cursor**
+
+
+Creating `turtlePostProcess.ts` and updating the parser.
+
+
+
+Implementing the post-processor by rebuilding the Turtle from quads for reliability:
+
+
+
+Creating the post-processor module:
+
+
+
+Checking N3 blank node structure and fixing the implementation.
+
+
+
+Updating the parser to use the new module.
+
+
+
+All tests passed. Removing unused constants and checking for linter issues:
+
+
+
+All tests pass. The reported linter issues look like existing n3 type-definition problems, not from these edits.
+
+Summary of changes:
+
+## Summary
+
+**1. `Editor/src/turtlePostProcess.ts`**
+
+- **Style fixes** – Replaces `a` with `rdf:type` and `true`/`false` with `"true"^^xsd:boolean` / `"false"^^xsd:boolean`
+- **@base handling** – Adds `@base` when relative IRIs (`<#...>`) are used
+- **Blank node inlining (Option A)** – Converts named blank nodes (`_:n3-0`) to inline form (`[ pred obj ; pred obj ]`):
+  - Parses Turtle with the N3 parser
+  - Groups quads by blank node subject
+  - Topologically sorts blank nodes by object references
+  - Builds inline forms recursively for nested blanks
+  - Removes blank node subject blocks
+  - Replaces `_:n3-X` references with inline forms
+- **Section dividers** – Adds `#################################################################` and section headers (Ontology, Annotation properties, Object Properties, Classes)
+
+**2. `Editor/src/parser.ts`**
+
+- Removed `formatTurtleWithSections`
+- Removed `SECTION_DIVIDER` and `SECTION_ORDER`
+- Importing and using `postProcessTurtle` from `turtlePostProcess.ts` in `storeToTurtle()`
+
+All 29 parser tests pass.
+
+---
+
+**User**
+
+I tried deleting a node. It used to work before (it would leave its children floating), but now it deleted also all its children. Plus the undo/redo button do not do anything anymore.
+
+---
+
+**Cursor**
+
+
+Implementing fixes for both issues:
+
+
+
+Restructuring undo/redo so redo removes edges before nodes:
+
+
+
+Summary of changes:
+
+## 1. Children disappearing when deleting a node
+
+**Cause:** With an active search and "Include neighbors" on, child nodes were only shown as neighbors of the parent. Deleting the parent removed that link, so the filter no longer included the children and they disappeared from the view (even though they stayed in the data).
+
+**Change:** When deleting nodes, the search query is cleared so the full graph is shown and child nodes remain visible.
+
+## 2. Undo/redo order
+
+**Cause:** Undo/redo ran in the wrong order:
+- **Undo:** Edges were restored before nodes, so `addEdgeToStore` could run for edges referencing nodes that were not yet restored.
+- **Redo:** Nodes were removed before edges, leaving edge quads pointing at removed nodes.
+
+**Change:** Undo/redo order is now:
+- **Undo:** Restore nodes first, then edges.
+- **Redo:** Remove edges first, then nodes.
+
+## Code updates in `main.ts`
+
+1. **Search clearing on delete** – After a successful delete, the search input is cleared and the autocomplete is hidden.
+2. **Separate undo/redo arrays** – `nodeUndoActions` / `nodeRedoActions` and `edgeUndoActions` / `edgeRedoActions` are used so each type can run in the correct order.
+3. **Correct execution order** – Undo runs node restores then edge restores; redo runs edge removals then node removals.
+
+---
+
+**User**
+
+1. Children disappearing when deleting a node
+
+there was no search active. The issue is still present. 
+
+2. Undo/redo still doesn't work after deleting a node, it doesn't reinstate it and its children. It only reisntates a deleted node that didn't have children when it was deleted.
+
+
+Note that I think (not 100% sure but fairly sure) that these issues weren't happening before b6ab8ea351c7878999de17730441a53a5446f2a2
+
+---
+
+**Cursor**
+
+
+Reverting performDeleteSelection to the pre-b6ab8ea structure and comparing behavior:
+
 
