@@ -190,6 +190,25 @@ describe('updateLabelInStore (edit)', () => {
     );
     expect(containsEdge).toBeDefined();
   });
+
+  it('adds and removes hasFunction edge (non-partOf/contains restriction)', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const ok = addEdgeToStore(store, 'FacadeCladding', 'Function', 'hasFunction');
+    expect(ok).toBe(true);
+    const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
+    const edge = graphData.edges.find(
+      (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
+    );
+    expect(edge).toBeDefined();
+    const removeOk = removeEdgeFromStore(store, 'FacadeCladding', 'Function', 'hasFunction');
+    expect(removeOk).toBe(true);
+    const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
+    const gone = afterRemove.graphData.edges.find(
+      (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
+    );
+    expect(gone).toBeUndefined();
+  });
 });
 
 describe('storeToTurtle (save)', () => {

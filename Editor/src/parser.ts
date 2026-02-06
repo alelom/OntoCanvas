@@ -435,7 +435,8 @@ export function addEdgeToStore(
 }
 
 /**
- * Remove an edge from the store. Supports subClassOf and partOf/contains (OWL restrictions).
+ * Remove an edge from the store. Supports subClassOf (direct quads) and any restriction-backed
+ * edge type (onProperty + someValuesFrom), including partOf, contains, hasFunction, hasMaterial, etc.
  */
 export function removeEdgeFromStore(
   store: Store,
@@ -456,19 +457,17 @@ export function removeEdgeFromStore(
     for (const q of quads) store.removeQuad(q);
     return true;
   }
-  if (edgeType === 'partOf' || edgeType === 'contains') {
-    const blank = findRestrictionBlank(store, from, edgeType, to);
-    if (!blank) return false;
-    const fromUri = DataFactory.namedNode(toClassUri(from));
-    const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
-    for (const q of subClassOfQuads) store.removeQuad(q);
-    const blankQuads = store.getQuads(blank, null, null, null);
-    for (const q of blankQuads) store.removeQuad(q);
-    const blankAsObjQuads = store.getQuads(null, null, blank, null);
-    for (const q of blankAsObjQuads) store.removeQuad(q);
-    return true;
-  }
-  return false;
+  // Any non-subClassOf edge type is stored as an OWL restriction; remove by onProperty + someValuesFrom
+  const blank = findRestrictionBlank(store, from, edgeType, to);
+  if (!blank) return false;
+  const fromUri = DataFactory.namedNode(toClassUri(from));
+  const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
+  for (const q of subClassOfQuads) store.removeQuad(q);
+  const blankQuads = store.getQuads(blank, null, null, null);
+  for (const q of blankQuads) store.removeQuad(q);
+  const blankAsObjQuads = store.getQuads(null, null, blank, null);
+  for (const q of blankAsObjQuads) store.removeQuad(q);
+  return true;
 }
 
 function formatTurtleWithSections(raw: string): string {
