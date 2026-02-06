@@ -94,15 +94,22 @@ def main():
     limit: Optional[int] = None
     project_filter: Optional[str] = None
 
-    for a in args:
+    i = 0
+    while i < len(args):
+        a = args[i]
         if a.startswith("--limit="):
-            limit = int(a.split("=")[1])
-        elif a == "--limit" and args[args.index(a) + 1 :]:
-            limit = int(args[args.index(a) + 1])
+            limit = int(a.split("=", 1)[1])
+        elif a == "--limit":
+            if i + 1 < len(args):
+                limit = int(args[i + 1])
+                i += 1  # skip value
         elif a.startswith("--project="):
-            project_filter = a.split("=")[1].lower()
-        elif a == "--project" and args[args.index(a) + 1 :]:
-            project_filter = args[args.index(a) + 1].lower()
+            project_filter = a.split("=", 1)[1].lower()
+        elif a == "--project":
+            if i + 1 < len(args):
+                project_filter = args[i + 1].lower()
+                i += 1  # skip value
+        i += 1
 
     all_entries: list[PromptEntry] = []
 
