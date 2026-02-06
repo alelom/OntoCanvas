@@ -112,7 +112,6 @@ let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: { name: string; isBoolean: boolean }[] = [];
 let network: Network | null = null;
 let addNodeMode = false;
-let addedFromClickHandler = false;
 let pendingAddNodePosition: { x: number; y: number } | null = null;
 let addNodeModalShowing = false;
 let ttlStore: import('n3').Store | null = null;
@@ -308,7 +307,6 @@ function performDeleteSelection(): boolean {
   network.unselectAll();
   return true;
 }
-const container = document.getElementById('network')!;
 const COLORS = {
   labellable: '#2ecc71',
   nonLabellable: '#b8b8b8',
@@ -1138,7 +1136,6 @@ function confirmAddNode(): void {
   const { x, y } = pendingAddNodePosition;
   const result = addNewNodeAtPosition(x, y, label);
   if (result) {
-    addedFromClickHandler = true;
     applyFilter(true);
   }
   hideAddNodeModal();
@@ -1665,7 +1662,6 @@ function applyFilter(preserveView = false): void {
         callback(null);
         return;
       }
-      addedFromClickHandler = false;
       const x = nodeData.x ?? 0;
       const y = nodeData.y ?? 0;
       showAddNodeModal(x, y);
