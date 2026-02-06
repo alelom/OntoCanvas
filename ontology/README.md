@@ -20,35 +20,36 @@ OWL ontology derived from the first page of `250523_Ontology_schema_rev02.pdf` (
 
 ## Object Properties
 
-- `contains` / `partOf` — containment (inverse)
+- `contains` — containment (min cardinality 0 by default: "can contain")
 - `subsetOf` — classification / sub-typing
 - `hasProperty` — entity characterized by property
 - `hasFunction` — facade component has function
 - `hasMaterial` — facade component has material
 
-### Why OWL restrictions for partOf and contains
+### Why OWL restrictions for contains
 
-`partOf` and `contains` are **object properties**: they relate individuals to individuals, not classes to classes. In OWL, class axioms describe constraints on instances. To express "instances of Annotation are part of some Layout" at the class level, we use an **OWL restriction**:
+`contains` is an **object property**: it relates individuals to individuals. In OWL, class axioms describe constraints on instances. To express "Layout can contain Annotation" (0 or more) at the class level, we use an **OWL restriction** with qualified cardinality:
 
 ```turtle
-:Annotation rdfs:subClassOf [ rdf:type owl:Restriction ;
-                              owl:onProperty :partOf ;
-                              owl:someValuesFrom :Layout
-                            ] .
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ;
+                         owl:onProperty :contains ;
+                         owl:minQualifiedCardinality 0 ;
+                         owl:onClass :Annotation
+                       ] .
 ```
 
-This means: every instance of Annotation has at least one `partOf` link to some instance of Layout. A direct triple `(Annotation, partOf, Layout)` would not have this meaning in OWL. The restriction is the standard, minimal way to model class-level partOf/contains relationships.
+Min cardinality 0 means "can contain" (optional). Use min ≥ 1 for "must contain".
 
 ## Key Relationships (from diagram)
 
 - **DrawingSheet** contains: Layout(s), Metadata, Orientation
-- **Layout** part of DrawingSheet; contains: DrawingElement(s), Annotations, DrawingType, DrawingContent
-- **DrawingElement** part of Layout; can be: FacadeSystem or FacadeComponent
+- **Layout** contained by DrawingSheet; contains: DrawingElement(s), Annotations, DrawingType, DrawingContent
+- **DrawingElement** contained by Layout; can be: FacadeSystem or FacadeComponent
 - **Metadata** subset of: Titleblock, Note, Legend, RevisionTable
 - **DrawingType** subset of: Section, Elevation, Plan, Perspective
-- **FacadeSystem** part of SupportType; contains FacadeComponent; subclass of DrawingElement
+- **FacadeSystem** contained by SupportType; contains FacadeComponent; subclass of DrawingElement
 - **FacadeComponent** has: Function, Material; branches into PanelComponent, LinearComponent, PointComponent; subclass of DrawingElement
-- **StructuralComponent** part of SupportType
+- **StructuralComponent** contained by SupportType
 
 ## Usage
 

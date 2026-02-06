@@ -1161,7 +1161,7 @@ function confirmAddNode(): void {
   hideAddNodeModal();
 }
 
-const EDGE_TYPES = ['subClassOf', 'partOf', 'contains'];
+const EDGE_TYPES = ['subClassOf', 'contains'];
 
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
   const modal = document.getElementById('editEdgeModal')!;
@@ -1585,9 +1585,8 @@ function renderApp(): void {
       Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span>
       <span id="filePathDisplay" style="margin-left: 24px; font-size: 11px;"></span>
       <span style="margin-left: 24px; font-size: 11px;">
-        Edge colors: <span style="color: #3498db">●</span> subClassOf
+        Edge colors:         <span style="color: #3498db">●</span> subClassOf
         <span style="color: #27ae60">●</span> contains
-        <span style="color: #e67e22">●</span> partOf
       </span>
       <span id="selectionInfo"></span>
     </div>

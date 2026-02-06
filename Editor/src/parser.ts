@@ -24,7 +24,8 @@ function parseCardinalityFromRestriction(
   qualCard: import('n3').Quad | undefined,
   minCard: import('n3').Quad | undefined,
   maxCard: import('n3').Quad | undefined,
-  someValuesFrom: import('n3').Quad | undefined
+  someValuesFrom: import('n3').Quad | undefined,
+  propName?: string
 ): { minCardinality?: number | null; maxCardinality?: number | null } {
   const toInt = (q: import('n3').Quad | undefined): number | null =>
     q?.object?.value != null ? parseInt(String(q.object.value), 10) : null;
@@ -44,7 +45,7 @@ function parseCardinalityFromRestriction(
     return { minCardinality: null, maxCardinality: maxQ };
   }
   if (someValuesFrom) {
-    return { minCardinality: 1, maxCardinality: null };
+    return { minCardinality: propName === 'contains' ? 0 : 1, maxCardinality: null };
   }
   return {};
 }
@@ -181,26 +182,13 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       const propName = extractLocalName(onProperty.object.value);
 
       const cardinality = parseCardinalityFromRestriction(
-        minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom
+        minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom, propName
       );
 
-      if (propName === 'partOf') {
-        const key1 = `${subjName}->${targetName}:partOf`;
-        if (!seenPairs.has(key1)) {
-          seenPairs.add(key1);
-          edges.push({ from: subjName, to: targetName, type: 'partOf', ...cardinality });
-        }
-        const key2 = `${targetName}->${subjName}:contains`;
-        if (!seenPairs.has(key2)) {
-          seenPairs.add(key2);
-          edges.push({ from: targetName, to: subjName, type: 'contains', ...cardinality });
-        }
-      } else {
-        const key = `${subjName}->${targetName}:${propName}`;
-        if (!seenPairs.has(key)) {
-          seenPairs.add(key);
-          edges.push({ from: subjName, to: targetName, type: propName, ...cardinality });
-        }
+      const key = `${subjName}->${targetName}:${propName}`;
+      if (!seenPairs.has(key)) {
+        seenPairs.add(key);
+        edges.push({ from: subjName, to: targetName, type: propName, ...cardinality });
       }
     }
   }

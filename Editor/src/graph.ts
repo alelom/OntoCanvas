@@ -11,7 +11,6 @@ export const COLORS = {
 const DEFAULT_EDGE_COLORS: Record<string, string> = {
   subClassOf: '#3498db',
   contains: '#27ae60',
-  partOf: '#e67e22',
 };
 const DEFAULT_COLOR = '#95a5a6';
 const SPACING = 220;
@@ -52,7 +51,7 @@ export function getEdgeTypes(edges: GraphEdge[]): string[] {
   return [...types].sort();
 }
 
-/** Format edge label including cardinality when present, e.g. "contains [0..3]" or "partOf [1..*]" */
+/** Format edge label including cardinality when present, e.g. "contains [0..3]" */
 export function formatEdgeLabel(edge: GraphEdge): string {
   const min = edge.minCardinality;
   const max = edge.maxCardinality;

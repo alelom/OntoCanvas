@@ -27,10 +27,9 @@
 
 ###  http://example.org/aec-drawing-ontology#contains
 :contains rdf:type owl:ObjectProperty ;
-          owl:inverseOf :partOf ;
           rdfs:domain owl:Thing ;
           rdfs:range owl:Thing ;
-          rdfs:comment "Direct containment or has-part relationship" ;
+          rdfs:comment "Direct containment or has-part relationship. Min cardinality 0 by default (can contain)." ;
           rdfs:label "contains" .
 
 
@@ -56,14 +55,6 @@
              rdfs:range owl:Thing ;
              rdfs:comment "Entity is characterized by a property" ;
              rdfs:label "has property" .
-
-
-###  http://example.org/aec-drawing-ontology#partOf
-:partOf rdf:type owl:ObjectProperty ;
-        rdfs:domain owl:Thing ;
-        rdfs:range owl:Thing ;
-        rdfs:comment "Entity is part of another entity" ;
-        rdfs:label "part of" .
 
 
 ###  http://example.org/aec-drawing-ontology#subsetOf
@@ -108,10 +99,7 @@
 
 ###  http://example.org/aec-drawing-ontology#Annotation
 :Annotation rdf:type owl:Class ;
-            rdfs:subClassOf [ rdf:type owl:Restriction ;
-                              owl:onProperty :partOf ;
-                              owl:someValuesFrom :Layout
-                            ] ;
+            rdfs:subClassOf owl:Thing ;
             :labellableRoot "false"^^xsd:boolean ;
             rdfs:label "Annotation" .
 
@@ -368,20 +356,14 @@
 
 ###  http://example.org/aec-drawing-ontology#DrawingContent
 :DrawingContent rdf:type owl:Class ;
-                rdfs:subClassOf [ rdf:type owl:Restriction ;
-                                  owl:onProperty :partOf ;
-                                  owl:someValuesFrom :Layout
-                                ] ;
+                rdfs:subClassOf owl:Thing ;
                 :labellableRoot "false"^^xsd:boolean ;
                 rdfs:label "Drawing content" .
 
 
 ###  http://example.org/aec-drawing-ontology#DrawingElement
 :DrawingElement rdf:type owl:Class ;
-                rdfs:subClassOf [ rdf:type owl:Restriction ;
-                                  owl:onProperty :partOf ;
-                                  owl:someValuesFrom :Layout
-                                ] ;
+                rdfs:subClassOf owl:Thing ;
                 :labellableRoot "false"^^xsd:boolean ;
                 rdfs:comment "Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component." ;
                 rdfs:label "Drawing element" .
@@ -391,7 +373,18 @@
 :DrawingSheet rdf:type owl:Class ;
               rdfs:subClassOf [ rdf:type owl:Restriction ;
                                 owl:onProperty :contains ;
-                                owl:someValuesFrom :Layout
+                                owl:minQualifiedCardinality 0 ;
+                                owl:onClass :Layout
+                              ] ,
+                              [ rdf:type owl:Restriction ;
+                                owl:onProperty :contains ;
+                                owl:minQualifiedCardinality 0 ;
+                                owl:onClass :Metadata
+                              ] ,
+                              [ rdf:type owl:Restriction ;
+                                owl:onProperty :contains ;
+                                owl:minQualifiedCardinality 0 ;
+                                owl:onClass :Orientation
                               ] ;
               :labellableRoot "false"^^xsd:boolean ;
               rdfs:comment "Top-level container for a drawing. Contains Layout(s)." ;
@@ -400,10 +393,7 @@
 
 ###  http://example.org/aec-drawing-ontology#DrawingType
 :DrawingType rdf:type owl:Class ;
-             rdfs:subClassOf [ rdf:type owl:Restriction ;
-                               owl:onProperty :partOf ;
-                               owl:someValuesFrom :Layout
-                             ] ;
+             rdfs:subClassOf owl:Thing ;
              :labellableRoot "false"^^xsd:boolean ;
              rdfs:comment "Type of drawing view" ;
              rdfs:label "Drawing type" .
@@ -660,8 +650,24 @@
 ###  http://example.org/aec-drawing-ontology#Layout
 :Layout rdf:type owl:Class ;
         rdfs:subClassOf [ rdf:type owl:Restriction ;
-                          owl:onProperty :partOf ;
-                          owl:someValuesFrom :DrawingSheet
+                          owl:onProperty :contains ;
+                          owl:minQualifiedCardinality 0 ;
+                          owl:onClass :Annotation
+                        ] ,
+                        [ rdf:type owl:Restriction ;
+                          owl:onProperty :contains ;
+                          owl:minQualifiedCardinality 0 ;
+                          owl:onClass :DrawingContent
+                        ] ,
+                        [ rdf:type owl:Restriction ;
+                          owl:onProperty :contains ;
+                          owl:minQualifiedCardinality 0 ;
+                          owl:onClass :DrawingElement
+                        ] ,
+                        [ rdf:type owl:Restriction ;
+                          owl:onProperty :contains ;
+                          owl:minQualifiedCardinality 0 ;
+                          owl:onClass :DrawingType
                         ] ;
         :labellableRoot "false"^^xsd:boolean ;
         rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content." ;
@@ -734,10 +740,7 @@
 
 ###  http://example.org/aec-drawing-ontology#Metadata
 :Metadata rdf:type owl:Class ;
-          rdfs:subClassOf [ rdf:type owl:Restriction ;
-                            owl:onProperty :partOf ;
-                            owl:someValuesFrom :DrawingSheet
-                          ] ;
+          rdfs:subClassOf owl:Thing ;
           :labellableRoot "false"^^xsd:boolean ;
           rdfs:comment "Can be standalone label - drawing metadata" ;
           rdfs:label "Metadata" .
@@ -794,10 +797,7 @@
 
 ###  http://example.org/aec-drawing-ontology#Orientation
 :Orientation rdf:type owl:Class ;
-             rdfs:subClassOf [ rdf:type owl:Restriction ;
-                               owl:onProperty :partOf ;
-                               owl:someValuesFrom :DrawingSheet
-                             ] ;
+             rdfs:subClassOf owl:Thing ;
              :labellableRoot "false"^^xsd:boolean ;
              rdfs:comment "Can be standalone label - drawing orientation" ;
              rdfs:label "Orientation" .

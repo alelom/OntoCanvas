@@ -109,13 +109,11 @@ describe('parseTtlToGraph (load)', () => {
     expect(facadeToDrawing).toBeDefined();
   });
 
-  it('extracts partOf and contains edges', async () => {
+  it('extracts contains edges', async () => {
     const ttl = loadOntologyAsString();
     const { graphData } = await parseTtlToGraph(ttl);
 
-    const partOfEdges = graphData.edges.filter((e) => e.type === 'partOf');
     const containsEdges = graphData.edges.filter((e) => e.type === 'contains');
-    expect(partOfEdges.length).toBeGreaterThan(0);
     expect(containsEdges.length).toBeGreaterThan(0);
   });
 });
@@ -161,21 +159,21 @@ describe('updateLabelInStore (edit)', () => {
     expect(node!.label).toBe('Test Label');
   });
 
-  it('adds and removes partOf edge', async () => {
+  it('adds and removes contains edge', async () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
-    const ok = addEdgeToStore(store, 'FacadeCladding', 'Layout', 'partOf');
+    const ok = addEdgeToStore(store, 'Layout', 'FacadeCladding', 'contains');
     expect(ok).toBe(true);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
-    const partOfEdge = graphData.edges.find(
-      (e) => e.from === 'FacadeCladding' && e.to === 'Layout' && e.type === 'partOf'
+    const containsEdge = graphData.edges.find(
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
     );
-    expect(partOfEdge).toBeDefined();
-    const removeOk = removeEdgeFromStore(store, 'FacadeCladding', 'Layout', 'partOf');
+    expect(containsEdge).toBeDefined();
+    const removeOk = removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
     expect(removeOk).toBe(true);
     const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
     const gone = afterRemove.graphData.edges.find(
-      (e) => e.from === 'FacadeCladding' && e.to === 'Layout' && e.type === 'partOf'
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
     );
     expect(gone).toBeUndefined();
   });
@@ -183,11 +181,11 @@ describe('updateLabelInStore (edit)', () => {
   it('adds contains edge', async () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
-    const ok = addEdgeToStore(store, 'Layout', 'Annotation', 'contains');
+    const ok = addEdgeToStore(store, 'Layout', 'FacadeCladding', 'contains');
     expect(ok).toBe(true);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
     const containsEdge = graphData.edges.find(
-      (e) => e.from === 'Layout' && e.to === 'Annotation' && e.type === 'contains'
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
     );
     expect(containsEdge).toBeDefined();
   });
@@ -335,7 +333,7 @@ describe('default vs file load consistency', () => {
     const { graphData } = await parseTtlToGraph(ttl);
 
     expect(graphData.nodes.length).toBeGreaterThan(170);
-    expect(graphData.edges.length).toBeGreaterThan(163);
+    expect(graphData.edges.length).toBeGreaterThanOrEqual(163);
   });
 
   it('minimal edit preserves all other nodes and edges', async () => {

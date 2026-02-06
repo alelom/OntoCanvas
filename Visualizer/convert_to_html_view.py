@@ -76,35 +76,21 @@ def load_and_export() -> tuple[list[dict], list[dict]]:
                     "to": subj_name,
                     "type": "subClassOf",
                 })
-        # subClassOf to restriction (blank node) - extract partOf, contains, etc.
+        # subClassOf to restriction (blank node) - extract contains, hasFunction, etc.
         elif isinstance(obj, BNode):
             prop = g.value(obj, OWL.onProperty)
-            target = g.value(obj, OWL.someValuesFrom)
+            target = g.value(obj, OWL.someValuesFrom) or g.value(obj, OWL.onClass)
             if prop is not None and target is not None:
                 target_str = str(target)
                 if "aec-drawing-ontology" in target_str:
                     target_name = extract_local_name(target_str)
                     prop_name = extract_local_name(str(prop))
                     if subj_name in seen_classes and target_name in seen_classes:
-                        if prop_name == "partOf":
-                            # partOf: part -> whole (subj partOf target)
-                            edges.append({
-                                "from": subj_name,
-                                "to": target_name,
-                                "type": "partOf",
-                            })
-                            # contains: whole -> part (inverse)
-                            edges.append({
-                                "from": target_name,
-                                "to": subj_name,
-                                "type": "contains",
-                            })
-                        else:
-                            edges.append({
-                                "from": subj_name,
-                                "to": target_name,
-                                "type": prop_name,
-                            })
+                        edges.append({
+                            "from": subj_name,
+                            "to": target_name,
+                            "type": prop_name,
+                        })
 
     return nodes, edges
 
@@ -211,7 +197,6 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
         <span style="margin-left: 24px; font-size: 11px;">
             Edge colors: <span style="color: #3498db">●</span> subClassOf
             <span style="color: #27ae60">●</span> contains
-            <span style="color: #e67e22">●</span> partOf
         </span>
     </div>
 
@@ -227,8 +212,7 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
 
         const DEFAULT_EDGE_COLORS = {{
             subClassOf: '#3498db',
-            contains: '#27ae60',
-            partOf: '#e67e22'
+            contains: '#27ae60'
         }};
         const DEFAULT_COLOR = '#95a5a6';
         const SPACING = 220;
