@@ -159,10 +159,10 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     if (obj.termType === 'NamedNode') {
       const objName = extractLocalName(obj.value);
       if (!seenClasses.has(objName)) continue;
-      const key = `${objName}->${subjName}`;
+      const key = `${subjName}->${objName}`;
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
-      edges.push({ from: objName, to: subjName, type: 'subClassOf' });
+      edges.push({ from: subjName, to: objName, type: 'subClassOf' });
     } else if (isBlankNode(obj)) {
       const onProperty = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
       const someValuesFrom = store.getQuads(obj, OWL + 'someValuesFrom', null, null)[0];
@@ -345,8 +345,8 @@ export function updateEdgeInStore(
   cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
 ): boolean {
   if (edgeType === 'subClassOf') {
-    const subjUri = toClassUri(oldTo);
-    const objUri = toClassUri(oldFrom);
+    const subjUri = toClassUri(oldFrom);
+    const objUri = toClassUri(oldTo);
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
     const quads = store.getQuads(
       DataFactory.namedNode(subjUri),
@@ -358,9 +358,9 @@ export function updateEdgeInStore(
     const graph = quads[0].graph ?? DataFactory.defaultGraph();
     for (const q of quads) store.removeQuad(q);
     store.addQuad(
-      DataFactory.namedNode(toClassUri(newTo)),
-      subClassOfPred,
       DataFactory.namedNode(toClassUri(newFrom)),
+      subClassOfPred,
+      DataFactory.namedNode(toClassUri(newTo)),
       graph
     );
     return true;
@@ -429,8 +429,8 @@ export function addEdgeToStore(
   cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
 ): boolean {
   if (edgeType === 'subClassOf') {
-    const subjUri = toClassUri(to);
-    const objUri = toClassUri(from);
+    const subjUri = toClassUri(from);
+    const objUri = toClassUri(to);
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
     const existing = store.getQuads(
       DataFactory.namedNode(subjUri),
@@ -500,8 +500,8 @@ export function removeEdgeFromStore(
   edgeType: string
 ): boolean {
   if (edgeType === 'subClassOf') {
-    const subjUri = toClassUri(to);
-    const objUri = toClassUri(from);
+    const subjUri = toClassUri(from);
+    const objUri = toClassUri(to);
     const quads = store.getQuads(
       DataFactory.namedNode(subjUri),
       DataFactory.namedNode(RDFS + 'subClassOf'),

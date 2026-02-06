@@ -104,7 +104,7 @@ describe('parseTtlToGraph (load)', () => {
     expect(subClassEdges.length).toBeGreaterThan(0);
 
     const facadeToDrawing = graphData.edges.find(
-      (e) => e.from === 'DrawingElement' && e.to === 'FacadeSystem' && e.type === 'subClassOf'
+      (e) => e.from === 'FacadeSystem' && e.to === 'DrawingElement' && e.type === 'subClassOf'
     );
     expect(facadeToDrawing).toBeDefined();
   });

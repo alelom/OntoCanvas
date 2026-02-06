@@ -86,6 +86,14 @@ interface DepthResult {
   maxDepth: number;
 }
 
+/** For hierarchy layout: subClassOf goes subclass→superclass; contains goes container→contained. */
+function getParentChild(e: GraphEdge): { parent: string; child: string } {
+  if (e.type === 'subClassOf') {
+    return { parent: e.to, child: e.from };
+  }
+  return { parent: e.from, child: e.to };
+}
+
 export function computeNodeDepths(
   nodeIds: Set<string>,
   edges: GraphEdge[]
@@ -100,13 +108,14 @@ export function computeNodeDepths(
   const parents: Record<string, string[]> = {};
   const seenPairs = new Set<string>();
   hierarchyEdges.forEach((e) => {
-    const key = e.from + '->' + e.to;
+    const { parent, child } = getParentChild(e);
+    const key = parent + '->' + child;
     if (seenPairs.has(key)) return;
-    const reverseKey = e.to + '->' + e.from;
+    const reverseKey = child + '->' + parent;
     if (seenPairs.has(reverseKey)) return;
     seenPairs.add(key);
-    (children[e.from] = children[e.from] || []).push(e.to);
-    (parents[e.to] = parents[e.to] || []).push(e.from);
+    (children[parent] = children[parent] || []).push(child);
+    (parents[child] = parents[child] || []).push(parent);
   });
   const roots = [...nodeIds].filter((id) => !parents[id] || parents[id].length === 0);
   const depth: Record<string, number> = {};
@@ -151,13 +160,14 @@ export function computeWeightedLayout(
   const parents: Record<string, string[]> = {};
   const seenPairs = new Set<string>();
   hierarchyEdges.forEach((e) => {
-    const key = e.from + '->' + e.to;
+    const { parent, child } = getParentChild(e);
+    const key = parent + '->' + child;
     if (seenPairs.has(key)) return;
-    const reverseKey = e.to + '->' + e.from;
+    const reverseKey = child + '->' + parent;
     if (seenPairs.has(reverseKey)) return;
     seenPairs.add(key);
-    (children[e.from] = children[e.from] || []).push(e.to);
-    (parents[e.to] = parents[e.to] || []).push(e.from);
+    (children[parent] = children[parent] || []).push(child);
+    (parents[child] = parents[child] || []).push(parent);
   });
   const roots = [...nodeIds].filter((id) => !parents[id] || parents[id].length === 0);
   const depth: Record<string, number> = {};
@@ -270,13 +280,14 @@ function buildHierarchy(
   const parents: Record<string, string[]> = {};
   const seenPairs = new Set<string>();
   hierarchyEdges.forEach((e) => {
-    const key = e.from + '->' + e.to;
+    const { parent, child } = getParentChild(e);
+    const key = parent + '->' + child;
     if (seenPairs.has(key)) return;
-    const reverseKey = e.to + '->' + e.from;
+    const reverseKey = child + '->' + parent;
     if (seenPairs.has(reverseKey)) return;
     seenPairs.add(key);
-    (children[e.from] = children[e.from] || []).push(e.to);
-    (parents[e.to] = parents[e.to] || []).push(e.from);
+    (children[parent] = children[parent] || []).push(child);
+    (parents[child] = parents[child] || []).push(parent);
   });
   const roots = [...nodeIds].filter((id) => !parents[id] || parents[id].length === 0);
   const unreached = [...nodeIds].filter((id) => !parents[id]?.length && !roots.includes(id));
