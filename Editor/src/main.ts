@@ -994,7 +994,7 @@ function setupNetworkSelectionAndNavigation(
         : [...new Set([...selectionBeforeClick, clickedNode])];
       net.setSelection({ nodes: newSelection }, { unselectAll: false, highlightEdges: true });
     } else {
-      const newSelection = [...new Set([...selectionBeforeClick, clickedNode])];
+      const newSelection = [clickedNode];
       net.setSelection({ nodes: newSelection }, { unselectAll: false, highlightEdges: true });
     }
     updateSelectionInfoDisplay(net);
