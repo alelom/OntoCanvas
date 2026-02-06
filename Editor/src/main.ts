@@ -667,7 +667,8 @@ function shouldShowNodeByAnnotations(
     } else if (val === false) {
       if (!boolConfig.whenFalse.show) return false;
     } else if (val == null) {
-      if (!boolConfig.whenUndefined.show) return false;
+      // when null/undefined: respect whenUndefined.show if configured
+      if (boolConfig.whenUndefined && boolConfig.whenUndefined.show === false) return false;
     }
   }
   return true;
