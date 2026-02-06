@@ -8,6 +8,7 @@ import {
   storeToTurtle,
   extractLocalName,
   addEdgeToStore,
+  addNodeToStore,
   removeEdgeFromStore,
 } from './parser';
 import type { GraphData } from './types';
@@ -189,6 +190,24 @@ describe('updateLabelInStore (edit)', () => {
       (e) => e.from === 'Layout' && e.to === 'Annotation' && e.type === 'contains'
     );
     expect(containsEdge).toBeDefined();
+  });
+
+  it('adds edge with cardinality and round-trips', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    addNodeToStore(store, 'CardinalityTestContainer');
+    const ok = addEdgeToStore(store, 'CardinalityTestContainer', 'Layout', 'contains', {
+      minCardinality: 0,
+      maxCardinality: 3,
+    });
+    expect(ok).toBe(true);
+    const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
+    const containsEdge = graphData.edges.find(
+      (e) => e.from === 'CardinalityTestContainer' && e.to === 'Layout' && e.type === 'contains'
+    );
+    expect(containsEdge).toBeDefined();
+    expect(containsEdge!.minCardinality).toBe(0);
+    expect(containsEdge!.maxCardinality).toBe(3);
   });
 
   it('adds and removes hasFunction edge (non-partOf/contains restriction)', async () => {

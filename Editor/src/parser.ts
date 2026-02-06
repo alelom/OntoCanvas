@@ -18,6 +18,37 @@ function isBlankNode(term: { termType: string }): boolean {
   return term.termType === 'BlankNode';
 }
 
+function parseCardinalityFromRestriction(
+  minQual: import('n3').Quad | undefined,
+  maxQual: import('n3').Quad | undefined,
+  qualCard: import('n3').Quad | undefined,
+  minCard: import('n3').Quad | undefined,
+  maxCard: import('n3').Quad | undefined,
+  someValuesFrom: import('n3').Quad | undefined
+): { minCardinality?: number | null; maxCardinality?: number | null } {
+  const toInt = (q: import('n3').Quad | undefined): number | null =>
+    q?.object?.value != null ? parseInt(String(q.object.value), 10) : null;
+  const n = toInt(qualCard);
+  if (n !== null && !isNaN(n)) {
+    return { minCardinality: n, maxCardinality: n };
+  }
+  const minQ = toInt(minQual) ?? toInt(minCard);
+  const maxQ = toInt(maxQual) ?? toInt(maxCard);
+  if (minQ !== null && !isNaN(minQ)) {
+    if (maxQ !== null && !isNaN(maxQ)) {
+      return { minCardinality: minQ, maxCardinality: maxQ };
+    }
+    return { minCardinality: minQ, maxCardinality: null };
+  }
+  if (maxQ !== null && !isNaN(maxQ)) {
+    return { minCardinality: null, maxCardinality: maxQ };
+  }
+  if (someValuesFrom) {
+    return { minCardinality: 1, maxCardinality: null };
+  }
+  return {};
+}
+
 export interface ParseResult {
   graphData: GraphData;
   store: Store;
@@ -134,24 +165,41 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     } else if (isBlankNode(obj)) {
       const onProperty = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
       const someValuesFrom = store.getQuads(obj, OWL + 'someValuesFrom', null, null)[0];
-      if (!onProperty || !someValuesFrom) continue;
-      const target = someValuesFrom.object;
+      const onClass = store.getQuads(obj, OWL + 'onClass', null, null)[0];
+      const minQual = store.getQuads(obj, OWL + 'minQualifiedCardinality', null, null)[0];
+      const maxQual = store.getQuads(obj, OWL + 'maxQualifiedCardinality', null, null)[0];
+      const qualCard = store.getQuads(obj, OWL + 'qualifiedCardinality', null, null)[0];
+      const minCard = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
+      const maxCard = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
+
+      const targetQuad = someValuesFrom ?? onClass;
+      if (!onProperty || !targetQuad) continue;
+      const target = targetQuad.object;
       if (target.termType !== 'NamedNode') continue;
       const targetName = extractLocalName(target.value);
       if (!seenClasses.has(targetName)) continue;
       const propName = extractLocalName(onProperty.object.value);
 
+      const cardinality = parseCardinalityFromRestriction(
+        minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom
+      );
+
       if (propName === 'partOf') {
-        const key1 = `${subjName}->${targetName}`;
+        const key1 = `${subjName}->${targetName}:partOf`;
         if (!seenPairs.has(key1)) {
           seenPairs.add(key1);
-          edges.push({ from: subjName, to: targetName, type: 'partOf' });
+          edges.push({ from: subjName, to: targetName, type: 'partOf', ...cardinality });
+        }
+        const key2 = `${targetName}->${subjName}:contains`;
+        if (!seenPairs.has(key2)) {
+          seenPairs.add(key2);
+          edges.push({ from: targetName, to: subjName, type: 'contains', ...cardinality });
         }
       } else {
-        const key = `${subjName}->${targetName}`;
+        const key = `${subjName}->${targetName}:${propName}`;
         if (!seenPairs.has(key)) {
           seenPairs.add(key);
-          edges.push({ from: subjName, to: targetName, type: propName });
+          edges.push({ from: subjName, to: targetName, type: propName, ...cardinality });
         }
       }
     }
@@ -284,10 +332,12 @@ function findRestrictionBlank(
     if (obj.termType !== 'BlankNode') continue;
     const onProp = store.getQuads(obj, DataFactory.namedNode(OWL + 'onProperty'), null, null)[0];
     const someFrom = store.getQuads(obj, DataFactory.namedNode(OWL + 'someValuesFrom'), null, null)[0];
-    if (!onProp || !someFrom) continue;
+    const onCls = store.getQuads(obj, DataFactory.namedNode(OWL + 'onClass'), null, null)[0];
+    const targetQuad = someFrom ?? onCls;
+    if (!onProp || !targetQuad) continue;
     const onPropObj = onProp.object as { value?: string };
-    const someFromObj = someFrom.object as { value?: string };
-    if (onPropObj?.value !== propUri || someFromObj?.value !== targetUri) continue;
+    const targetObj = targetQuad.object as { value?: string };
+    if (onPropObj?.value !== propUri || targetObj?.value !== targetUri) continue;
     return obj as import('n3').BlankNode;
   }
   return null;
@@ -303,7 +353,8 @@ export function updateEdgeInStore(
   oldTo: string,
   edgeType: string,
   newFrom: string,
-  newTo: string
+  newTo: string,
+  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
 ): boolean {
   if (edgeType === 'subClassOf') {
     const subjUri = toClassUri(oldTo);
@@ -329,7 +380,7 @@ export function updateEdgeInStore(
   // Restriction-based edges
   if (edgeType !== 'subClassOf') {
     if (!removeEdgeFromStore(store, oldFrom, oldTo, edgeType)) return false;
-    return addEdgeToStore(store, newFrom, newTo, edgeType);
+    return addEdgeToStore(store, newFrom, newTo, edgeType, cardinality);
   }
   return false;
 }
@@ -380,12 +431,14 @@ export function removeNodeFromStore(store: Store, localName: string): boolean {
 
 /**
  * Add an edge to the store. Supports subClassOf (direct quad) and partOf/contains (OWL restrictions).
+ * Cardinality is optional; when provided, uses qualified cardinality (owl:onClass + min/maxQualifiedCardinality).
  */
 export function addEdgeToStore(
   store: Store,
   from: string,
   to: string,
-  edgeType: string
+  edgeType: string,
+  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
 ): boolean {
   if (edgeType === 'subClassOf') {
     const subjUri = toClassUri(to);
@@ -407,7 +460,7 @@ export function addEdgeToStore(
     );
     return true;
   }
-  // Any edge type other than subClassOf is stored as an OWL restriction (onProperty + someValuesFrom)
+  // Any edge type other than subClassOf is stored as an OWL restriction
   if (edgeType !== 'subClassOf') {
     if (findRestrictionBlank(store, from, edgeType, to)) return false;
     const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
@@ -418,12 +471,31 @@ export function addEdgeToStore(
     const restrictionType = DataFactory.namedNode(OWL + 'Restriction');
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
     const onPropertyPred = DataFactory.namedNode(OWL + 'onProperty');
-    const someValuesFromPred = DataFactory.namedNode(OWL + 'someValuesFrom');
     const rdfType = DataFactory.namedNode(RDF + 'type');
+
     store.addQuad(fromUri, subClassOfPred, blank, graph);
     store.addQuad(blank, rdfType, restrictionType, graph);
     store.addQuad(blank, onPropertyPred, propUri, graph);
-    store.addQuad(blank, someValuesFromPred, toUri, graph);
+
+    const min = cardinality?.minCardinality;
+    const max = cardinality?.maxCardinality;
+    const hasCardinality = min != null || max != null;
+
+    if (hasCardinality) {
+      store.addQuad(blank, DataFactory.namedNode(OWL + 'onClass'), toUri, graph);
+      if (min != null && max != null && min === max) {
+        store.addQuad(blank, DataFactory.namedNode(OWL + 'qualifiedCardinality'), DataFactory.literal(min, DataFactory.namedNode(XSD + 'nonNegativeInteger')), graph);
+      } else {
+        if (min != null) {
+          store.addQuad(blank, DataFactory.namedNode(OWL + 'minQualifiedCardinality'), DataFactory.literal(min, DataFactory.namedNode(XSD + 'nonNegativeInteger')), graph);
+        }
+        if (max != null) {
+          store.addQuad(blank, DataFactory.namedNode(OWL + 'maxQualifiedCardinality'), DataFactory.literal(max, DataFactory.namedNode(XSD + 'nonNegativeInteger')), graph);
+        }
+      }
+    } else {
+      store.addQuad(blank, DataFactory.namedNode(OWL + 'someValuesFrom'), toUri, graph);
+    }
     return true;
   }
   return false;
