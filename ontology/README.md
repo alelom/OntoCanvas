@@ -2,33 +2,9 @@
 
 OWL ontology derived from the first page of `250523_Ontology_schema_rev02.pdf` (Rev3, 06.04.23).
 
-## Structure
+## Why OWL restrictions for contains
 
-| Layer | Description |
-|-------|-------------|
-| **Drawing Sheet** | Contains Layout(s). Also contains Metadata, Orientation. |
-| **Layout** | Contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, content. |
-| **Drawing Element** | Contained by Layout. Can be a Facade system or Facade component. |
-| **Facade System** | Curtain wall, Precast, Cavity wall, Rainscreen (subclass of DrawingElement) |
-| **Facade Component** | Panel (cladding, insulation, membranes, boards), Linear (frame members, gaskets, sealants), Point (fixings, brackets) (subclass of DrawingElement) |
-| **Structural Component** | Linear (columns, beams, cables), Panel (slab, wall, upstand) |
-| **General Properties** | Material, Functional, Structural, Geometric, Section properties |
-
-## Annotation Properties
-
-- **labellableRoot** — Boolean. When `true`, the class can be used as a label by annotators. When `false`, non-labellable (structural/category nodes). Non-labellable: DrawingElement, FacadeSystem, FacadeComponent, LinearComponent, PointComponent, DrawingType, Metadata. Labellable: Note, TextualNote, Legend, and leaf/concrete element classes.
-
-## Object Properties
-
-- `contains` — containment (min cardinality 0 by default: "can contain")
-- `subsetOf` — classification / sub-typing
-- `hasProperty` — entity characterized by property
-- `hasFunction` — facade component has function
-- `hasMaterial` — facade component has material
-
-### Why OWL restrictions for contains
-
-`contains` is an **object property**: it relates individuals to individuals. In OWL, class axioms describe constraints on instances. To express "Layout can contain Annotation" (0 or more) at the class level, we use an **OWL restriction** with qualified cardinality:
+`contains` is an **object property**: it relates individuals to individuals. In OWL, class axioms describe constraints on instances. To express "Class A can contain Class B" (0 or more) at the class level, we use an **OWL restriction** with qualified cardinality:
 
 ```turtle
 :Layout rdfs:subClassOf [ rdf:type owl:Restriction ;
@@ -40,16 +16,19 @@ OWL ontology derived from the first page of `250523_Ontology_schema_rev02.pdf` (
 
 Min cardinality 0 means "can contain" (optional). Use min ≥ 1 for "must contain".
 
-## Key Relationships (from diagram)
+## Annotation properties
 
-- **DrawingSheet** contains: Layout(s), Metadata, Orientation
-- **Layout** contained by DrawingSheet; contains: DrawingElement(s), Annotations, DrawingType, DrawingContent
-- **DrawingElement** contained by Layout; can be: FacadeSystem or FacadeComponent
-- **Metadata** subset of: Titleblock, Note, Legend, RevisionTable
-- **DrawingType** subset of: Section, Elevation, Plan, Perspective
-- **FacadeSystem** contained by SupportType; contains FacadeComponent; subclass of DrawingElement
-- **FacadeComponent** has: Function, Material; branches into PanelComponent, LinearComponent, PointComponent; subclass of DrawingElement
-- **StructuralComponent** contained by SupportType
+OWL annotation properties attach metadata to classes without affecting logical reasoning. We use custom annotation properties for application-specific behaviour.
+
+**Example: labellableRoot** — A boolean we use to mark which classes can serve as labels in diagrams. When `true`, the class is shown as a solid contour (labellable); when `false`, as a dashed contour (structural/category node). This drives filtering and styling in the visualizer and editor.
+
+Other annotation properties (e.g. `rdfs:label`, `rdfs:comment`) follow standard OWL usage.
+
+## Relationship examples
+
+- **rdfs:subClassOf** — Taxonomy: e.g. `CurtainWallSystem` subClassOf `FacadeSystem`
+- **contains** — Containment: e.g. a layout can contain drawing elements (via OWL restrictions)
+- **hasFunction**, **hasMaterial** — Domain-specific: e.g. a facade component has a function or material
 
 ## Usage
 
@@ -75,11 +54,3 @@ Then open `Visualizer/visualizer.html` in a browser. The visualizer supports:
 - **Edge type**: Filter by relationship type (e.g. subClassOf)
 - **Node color by**: Color nodes by labellable status (green=labellable, red=non-labellable) or default
 - **Reset / Fit**: Reset zoom or fit graph to screen
-
-## Open Questions (from diagram)
-
-- Q1: Definition of "Layout"?
-- Q2: Section in Section?
-- Q3: Do all drawing types have a GA version? Is a Plan strictly a GA?
-- Q4: Criteria for distinguishing Notes vs Annotations?
-- Q5: Add more conditions and constraints

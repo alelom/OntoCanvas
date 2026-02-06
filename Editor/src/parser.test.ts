@@ -278,6 +278,17 @@ describe('storeToTurtle (save)', () => {
     const annotationPropsCount = (output.match(/#\s+Annotation properties/g) || []).length;
     expect(annotationPropsCount).toBe(1);
   });
+
+  it('output uses explicit rdf:type and boolean literals (preserves style)', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const output = await storeToTurtle(store);
+
+    expect(output).toMatch(/rdf:type/);
+    expect(output).not.toMatch(/\b a (owl|rdf|rdfs|xsd|xml):/);
+    expect(output).toMatch(/"false"\^\^xsd:boolean/);
+    expect(output).not.toMatch(/\blabellableRoot false[.;\s]/);
+  });
 });
 
 describe('round-trip: load -> save -> load', () => {

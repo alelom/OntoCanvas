@@ -528,6 +528,13 @@ export function removeEdgeFromStore(
 function formatTurtleWithSections(raw: string): string {
   let output = raw;
 
+  // Preserve explicit Turtle style (N3 Writer uses 'a' and boolean shorthand)
+  output = output.replace(/ a (owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
+  output = output.replace(/ a :/g, ' rdf:type :');
+  output = output.replace(/ a </g, ' rdf:type <');
+  output = output.replace(/ false(?=[.;\s\n]|$)/g, '"false"^^xsd:boolean');
+  output = output.replace(/ true(?=[.;\s\n]|$)/g, '"true"^^xsd:boolean');
+
   // Ensure @base is present when output uses relative IRIs (<#...>)
   if (output.includes('<#') && !output.includes('@base')) {
     const lastPrefixMatch = output.match(/@prefix[^\n]+\n?/g);
