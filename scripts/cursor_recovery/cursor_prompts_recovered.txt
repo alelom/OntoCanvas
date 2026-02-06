@@ -1,0 +1,2426 @@
+# Cursor prompts recovered from state.vscdb
+# Note: AI response summaries are NOT stored by Cursor and cannot be recovered.
+
+--- Prompt 1 [kg-data-processor] ---
+recover more prompts, like 100. Is it possible to also recover the final part of the response for each prompt, meaning the textual summary of the performed actions?
+
+--- Prompt 2 [kg-data-processor] ---
+Let's do 3, I just need to recover a few prompts
+
+--- Prompt 3 [kg-data-processor] ---
+can we try and recover old chat history from bakcup
+
+--- Prompt 4 [kg-data-processor] ---
+Ctrl+ I does nothing, and I can't find the composer icon anywhere
+
+--- Prompt 5 [kg-data-processor] ---
+What is the Composer, how do I use it
+
+--- Prompt 6 [kg-data-processor] ---
+is it possible to recover past chats? The previous chat disappeared.
+
+--- Prompt 7 [kg-data-processor] ---
+can you see the context of our chat "Building classification standards comparison"?
+
+Cursor crashed while executing the previous refactoring command.
+
+--- Prompt 8 [kg-data-processor] ---
+Can we tidy up and refactor a bit the Editor code, splitting it in multiple files and subfolders as needed
+
+--- Prompt 9 [kg-data-processor] ---
+okay, we will implement the canContain and mustContain and rework a bit the ontology later. Let's work a bit on the editor as I found a bug, first.
+
+The "Add edge" functionality works only for "subClassOf" relationship. If I select partOf or Contains from the drop-down, nothing happens when I click OK, and the pop up window remains open. 
+
+Similarly, editing a relationship doesn't allow to change it from "subClassOf" to anything else, the window doesn't close and nothing happens when I click OK. But if I edit a relationship from something that isn't "subClassOf" to "subClassOf", then it works.
+
+We need to ensure that even future relationship types are well supported by the editor.
+
+--- Prompt 10 [kg-data-processor] ---
+so would we lose any of our canContain / mustContain etc relationships?
+
+--- Prompt 11 [kg-data-processor] ---
+would our editor preserve cardinality information when editing an existing ttl file?
+
+--- Prompt 12 [kg-data-processor] ---
+is there a way to express cardinality of containment, e.g. mustContainNInstancesOf where N can be any integer specified in the ontology, e.g. 3.
+
+--- Prompt 13 [kg-data-processor] ---
+is there a way to create a shorthand for these restrictions? I think having them with a shorthand form called "canContain" and "mustContain" would make things easier to read.
+
+--- Prompt 14 [kg-data-processor] ---
+and how would I represent that A must contain some thing C, and only that?
+
+--- Prompt 15 [kg-data-processor] ---
+but not all things can contain another thing. How do I express the fact that A can contain some thing B, but also A must contain some thing C, and also A cannot contain any other thing in the ontology?
+
+--- Prompt 16 [kg-data-processor] ---
+would I need an extra "mustContain" relationship for full representational power?
+
+--- Prompt 17 [kg-data-processor] ---
+I don't mind about breaking changes, we're not in production yet.
+
+I wonder what's the best approach for clarity and simplicity. I will want to use the produced ontology to perform Neuranl network fine tuning and other Machine learning related tasks, as well as querying.
+
+--- Prompt 18 [kg-data-processor] ---
+Do you think we should rename the "contains" relationship to "canContain" to be more explicit on this?
+
+--- Prompt 19 [kg-data-processor] ---
+However, "contains" relationships should be intended more as "can contain", optionally, rather than "must contain", do you think the restriction should apply to it? Instead, the partOf makes sense to say that if an object of a certain class type exists that is connected with a partOf to another thing, then it must be "partOf" the other thing.
+
+--- Prompt 20 [kg-data-processor] ---
+Please inlcude the explanation about "why we use the restriction" in the readme file next to the ontology file.
+
+--- Prompt 21 [kg-data-processor] ---
+Let's implement the fix for 2).
+
+For 3), we need to discuss it further, await further instrucitons.
+
+--- Prompt 22 [kg-data-processor] ---
+Of the 3 moderate risks you list, why do we have them? Would there be a way to remove all of them?
+
+For 1), why do we have blank node IDs? They were not present in the original ontology.
+For 2), and 3) can we remove this behaviour, and keep the ontology as it was?
+
+Is it that the current N3 library is too restrictive for us? Would changing library to a more exhaustive one solve our issues?
+
+--- Prompt 23 [kg-data-processor] ---
+Is there any risk that modifying an ontology via this editor application will lose some of the ontology components?
+
+--- Prompt 24 [kg-data-processor] ---
+First, I noticed that double clicking on an edge triggers an "Add node" instead of an "Edit edge" window. We need to fix that.
+
+Then, let's try to implement the support of the persistence of the other edge types other than sub-class.
+
+--- Prompt 25 [kg-data-processor] ---
+Why cannot we persist other edges that aren't subClassOf? Isn't there a way to do it?
+
+--- Prompt 26 [kg-data-processor] ---
+Are the added, delelted or modified nodes/relationships correctly reflected in the saved ontology file on save? Has this been implemented?
+
+--- Prompt 27 [kg-data-processor] ---
+Pressing hte "Add node" button then clickin on the canvas drops a new node called "New class". I want the pop up to come up as when I double click the canvas, so I can enter a custom text. Also, doing it once works, but repeating the same procedure doesn't work (no new node is dropped).
+
+--- Prompt 28 [kg-data-processor] ---
+The double click on canvas to add a node works well. However, the "Add node" button still doesn't do anyhting after I click in teh empty space as prompted
+
+--- Prompt 29 [kg-data-processor] ---
+When the canvas is double clicked, record the position of the mouse, then make a pop up window appear in the centre of the screen. The window should have a text input to allow the inserting of the node text, and an Ok and cancel button, the OK should be greyed out if the text is empty or whitespace. Then, when OK is clicked, the node should be dropped centered on the recorded mouse coordinate. Make the same behaviour work when the "Add node" button is pressed after you click the canvas.
+
+--- Prompt 30 [kg-data-processor] ---
+same behaviour as before. Also there's no need for an additional "Add node" button on the bottom right, remove it. The double clickign on the canvas and the clicking of the top bar "Add node" button work as before, they don't work.
+
+--- Prompt 31 [kg-data-processor] ---
+The add node button prompts to click on a empty spot on the canvas to add the node, but clicking on the canvas does nothing after pressing it, resetting the top bar button to "add node". Also, double clickign on an empty spot on the canvas does nothing, instead of prompting for the addition of a new node.
+
+--- Prompt 32 [kg-data-processor] ---
+I would like an Add Node button next to (before) the Add Edge button on the top bar. I also would like the same behaviour of that button to be triggered by double clicking on an empty spot of the canvas.
+
+--- Prompt 33 [kg-data-processor] ---
+They are not clear, remove them, the same functionality shoudl be achievable when clicking the edge via the "edit edge" icon that pops up on the top bar
+
+--- Prompt 34 [kg-data-processor] ---
+What are the "Add edge", "Edit edge" and "Reconnect edge" buttons on the bottom right for?
+
+--- Prompt 35 [kg-data-processor] ---
+In the edit edge menu, make the "Relationship" input the first one.
+
+--- Prompt 36 [kg-data-processor] ---
+can we add an undo and redo mechanism?
+
+also, can the edit edge menu include the sleection of a different type of relationship?
+
+also, can we add an "add edge" feature?
+
+--- Prompt 37 [kg-data-processor] ---
+Can we add a mechanism to get arrows heads and move them from a node to another
+
+--- Prompt 38 [kg-data-processor] ---
+node deselection should happen only when clicking on an empty canvas spot or when clickign again on a node while keeping CTRL pressed, but if CTRL is not pressed, the other nodes should not be deselected
+
+--- Prompt 39 [kg-data-processor] ---
+ok, when multiple nodes are selected, double clicking on any node of the selection should open up a menu where we can modify common properties of the nodes. At the current stage, we only have the node attribute "labellableRoot" to display there. The label name should be shown as greyed out with the text saying "multiple nodes selected".
+
+--- Prompt 40 [kg-data-processor] ---
+ok, when multiple nodes are selected, double clicking on any node of the selection should open up a menu where we can modify common properties of the nodes. At the current stage, we only have the node attribute "labellableRoot" to display there.
+
+--- Prompt 41 [kg-data-processor] ---
+This window multi-select functionaltiy keeps on not working and it seems too difficult to do for you. Remove all code realted to it.
+
+Also, you had a version of the multi-node selection working while holding CTRL, but the current version doesn't work with either Shift or CTRL hold down. Go back to the CTRL version that worked.
+
+--- Prompt 42 [kg-data-processor] ---
+Now the multi select is not working with either Shift or CTRL pressed.
+
+Also, the drag window still doesn't appear.
+
+--- Prompt 43 [kg-data-processor] ---
+Still not working
+
+--- Prompt 44 [kg-data-processor] ---
+left click and drag doesn't work, no selection rectangle is created.
+
+--- Prompt 45 [kg-data-processor] ---
+Okay, let's work on selection now. 
+
+I want navigation to happen with the right mouse button instead than the left. The left mouse button should be used to select nodes. I want the possibility to select multiple nodes by keepign "shift" button pressed and clicking on one node after another.
+
+Also, I want the possibility of doing a drag-selection-window by initiating it by clicking on an empty (non-node) part of the canvas to initiate a selection window. Nodes fallign in the selection window when the mouse button is released must be selected.
+
+--- Prompt 46 [app-empty-drawing-detection] ---
+Add instructions as per how to write the command for powershell @powershell (3-13)
+
+--- Prompt 47 [app-empty-drawing-detection] ---
+let's do the multi-layer approach
+
+--- Prompt 48 [app-empty-drawing-detection] ---
+how wold Additional obfuscation/encryption layers work?
+
+--- Prompt 49 [app-empty-drawing-detection] ---
+where is the token stored? Is it encrypted?
+
+--- Prompt 50 [app-empty-drawing-detection] ---
+Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.
+
+To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
+
+--- Prompt 51 [app-empty-drawing-detection] ---
+This app now works. However, when I package it and distribute the .exe file to people, they are restrained to use the dependency versions packaged with it. In particular, if I publish an update to the package empty-drawing-detection (which doesn't require a modification to the GUI features, like a bug fix), the only way to propagate the change is to repackage the exe and tell my users to use the new version. Currently, I'm storing the packaged exe file in a shared SharePoint (Onedrive) synced folder that people have access to.
+
+
+
+Is there a way for the app to check if new versions of a package exist when the app is launched, and then use that instead of the version that it was published with? Only for cases when a GUI modification isn't required by the dependency updates.
+
+--- Prompt 52 [app-empty-drawing-detection] ---
+In the built exe, I get this error at startup
+
+--- Prompt 53 [app-empty-drawing-detection] ---
+run a bui,d
+
+--- Prompt 54 [app-empty-drawing-detection] ---
+keep cv2 and openpyxl, they are actually needed, my bad
+
+--- Prompt 55 [app-empty-drawing-detection] ---
+why can't we just exclude all dependency not required by the project? I can see that also other useless dependencies are added:
+
+
+
+37373 INFO: Processing standard module hook 'hook-cv2.py' from 'C:\\Users\\alombardi\\Documents\\GitHub\\app-empty-drawing-detection\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+
+38724 INFO: Processing standard module hook 'hook-openpyxl.py' from 'C:\\Users\\alombardi\\Documents\\GitHub\\app-empty-drawing-detection\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+
+Aborted by user request.
+
+--- Prompt 56 [app-empty-drawing-detection] ---
+The build still takes too long. 
+
+I can see that the build attempts to package some dependencies that aren't needed by the project, like pytorch, tensorboard
+
+--- Prompt 57 [app-empty-drawing-detection] ---
+I can see that the build attempts to package some dependencies that aren't needed by the project, like pytorch, tensorboard
+
+--- Prompt 58 [app-empty-drawing-detection] ---
+run a build
+
+--- Prompt 59 [app-empty-drawing-detection] ---
+why is the build taking so long? I had to interrupt it because it ran for over 30 minutes and was not going anywhere!
+
+--- Prompt 60 [app-empty-drawing-detection] ---
+try making a build and verify it succeeds
+
+--- Prompt 61 [app-empty-drawing-detection] ---
+the build takes too long. We need to create another dependency group (non-extra) for build that doesn't include the dev dependencies, and have pyinstaller there. Also update the BUILD_INSTRUCTIONS.md to reflect this, and mind to keep the changes I've done to it manually.
+
+--- Prompt 62 [app-empty-drawing-detection] ---
+Help me publish this as a single standalone .exe file for windows
+
+--- Prompt 63 [app-empty-drawing-detection] ---
+Help me publish this as a single standalone .exe file for windows#
+
+--- Prompt 64 [python-package-folder] ---
+run all tests and provide commit message
+
+--- Prompt 65 [python-package-folder] ---
+I'm now getting
+
+
+
+  File "c:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\.venv\Lib\site-packages\empty_drawing_detection\detect_empty_drawings.py", line 19, in <module>
+
+
+
+    from detect_empty_drawings_utils import (
+
+    ...<5 lines>...
+
+    )
+
+  File "C:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\.venv\Lib\site-packages\empty_drawing_detection\detect_empty_drawings_utils.py", line 12, in <module>
+
+    from ._shared.shared_dataclasses import FilepathsConfig, FilePageId
+
+ImportError: attempted relative import with no known parent package
+
+
+
+despite the fact that the copied folders have an __init__.py file. Note that the same error does not appear for earlier lines of 
+
+C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection\detect_empty_drawings.py
+
+
+
+e.g. we don't get the same error for from ._shared.image_utils import save_PIL_image
+
+
+
+
+
+additionally I think we need to apply the same relative path import for all files imported from the folder, e.g. 
+
+
+
+from empty_drawing_detection_config import EmptyDrawingDetectionConfig
+
+
+
+from detect_empty_drawings_utils import (
+
+    load_checkpoint,
+
+    save_checkpoint,
+
+    should_resume_analysis,
+
+    create_initial_checkpoint,
+
+    setup_analysis_environment
+
+)
+
+
+
+to 
+
+
+
+from .empty_drawing_detection_config import EmptyDrawingDetectionConfig
+
+from .detect_empty_drawings_utils import (
+
+    load_checkpoint,
+
+    save_checkpoint,
+
+    should_resume_analysis,
+
+    create_initial_checkpoint,
+
+    setup_analysis_environment
+
+)
+
+--- Prompt 66 [python-package-folder] ---
+add unit test to cover this feature, then run all tests ensure they pass, then give me commit message
+
+--- Prompt 67 [python-package-folder] ---
+the fix worked, and only relevant files are now packaged in the tar.
+
+
+
+However, we regressed in that the published package has trouble finding dependencies:
+
+
+
+  File "C:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\main.py", line 2, in <module>     
+
+    from empty_drawing_detection.detect_empty_drawings import analyze_folder_for_empty_drawings, create_empty_drawings_spreadsheet, create_multiple_empty_drawings_spreadsheets  # noqa: F401
+
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "c:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\.venv\Lib\site-packages\empty_drawing_detection\detect_empty_drawings.py", line 7, in <module>
+
+    from _shared.image_utils import save_PIL_image
+
+ModuleNotFoundError: No module named '_shared'
+
+
+
+after publishing C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection with this latest version.
+
+
+
+I think the fix should be that, for every file in the target subfolder_to_build that imports a file that was copied there as a dependency, we need to modify temporarily the imports to target a path relative to the subfolder_to_build. For example, when we publish C:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\.venv\Lib\site-packages\empty_drawing_detection\detect_empty_drawings.py, we should temporarily change:
+
+
+
+if True: import sysappend; sysappend.all()
+
+from pathlib import Path
+
+from datetime import datetime
+
+from typing import cast
+
+from PIL import Image
+
+from loguru import logger
+
+from _shared.image_utils import save_PIL_image
+
+from _shared.pdf_utils import pdf_pages_screenshots_from_filepath
+
+from models.Information_extraction._shared_ie.ie_enums import TitleblockPlacement, EmptyDrawingLikelihood
+
+from _shared.shared_dataclasses import FilepathsConfig, FilePageId
+
+from _shared.file_utils import get_filepaths_config, get_available_filepath, get_path_common_root
+
+from _shared.serialization_utils import serialize_to_json_file
+
+from varname.core import nameof
+
+from _globals import is_testing
+
+import numpy as np
+
+import os
+
+from collections import defaultdict
+
+from empty_drawing_detection_config import EmptyDrawingDetectionConfig
+
+from detect_empty_drawings_utils import (
+
+    load_checkpoint,
+
+    save_checkpoint,
+
+    should_resume_analysis,
+
+    create_initial_checkpoint,
+
+    setup_analysis_environment
+
+)
+
+from data.spreadsheet_creation.spreadsheet_utils import create_spreadsheet_from_list_of_dicts
+
+from _shared.file_utils import get_folder_path_for_nesting
+
+
+
+
+
+
+
+to:
+
+
+
+if True: import sysappend; sysappend.all()
+
+from pathlib import Path
+
+from datetime import datetime
+
+from typing import cast
+
+from PIL import Image
+
+from loguru import logger
+
+from ._shared.image_utils import save_PIL_image
+
+from ._shared.pdf_utils import pdf_pages_screenshots_from_filepath
+
+from models.Information_extraction._shared_ie.ie_enums import TitleblockPlacement, EmptyDrawingLikelihood
+
+from ._shared.shared_dataclasses import FilepathsConfig, FilePageId
+
+from ._shared.file_utils import get_filepaths_config, get_available_filepath, get_path_common_root
+
+from ._shared.serialization_utils import serialize_to_json_file
+
+from varname.core import nameof
+
+from ._globals import is_testing
+
+import numpy as np
+
+import os
+
+from collections import defaultdict
+
+from .empty_drawing_detection_config import EmptyDrawingDetectionConfig
+
+from .detect_empty_drawings_utils import (
+
+    load_checkpoint,
+
+    save_checkpoint,
+
+    should_resume_analysis,
+
+    create_initial_checkpoint,
+
+    setup_analysis_environment
+
+)
+
+from .data.spreadsheet_creation.spreadsheet_utils import create_spreadsheet_from_list_of_dicts
+
+from ._shared.file_utils import get_folder_path_for_nesting
+
+--- Prompt 68 [python-package-folder] ---
+the fix worked, and only relevant files are now packaged in the tar.
+
+
+
+However, we regressed in that the published package has trouble finding dependencies:
+
+
+
+  File "C:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\main.py", line 2, in <module>     
+
+
+
+    from empty_drawing_detection.detect_empty_drawings import analyze_folder_for_empty_drawings, create_empty_drawings_spreadsheet, create_multiple_empty_drawings_spreadsheets  # noqa: F401
+
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "c:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\.venv\Lib\site-packages\empty_drawing_detection\detect_empty_drawings.py", line 7, in <module>
+
+    from _shared.image_utils import save_PIL_image
+
+ModuleNotFoundError: No module named '_shared'
+
+
+
+after publishing C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection with this latest version
+
+--- Prompt 69 [app-empty-drawing-detection] ---
+The fix worded, but the log status in the GUI remains stuck at the start. Also I'm getting an error in the debugger (Timers cannot be started from another thread). At the end of the analysis, the GUI log status only shows very limited information about the whole logging.
+
+
+
+try to fix this, perform tests, and return a commit message at the end
+
+--- Prompt 70 [app-empty-drawing-detection] ---
+The fix worded, but the log status in the GUI remains stuck at the start. Also I'm getting an error in the debugger (Timers cannot be started from another thread). At the end of the analysis, the GUI log status only shows very limited information about the whole logging
+
+--- Prompt 71 [python-package-folder] ---
+give me commit description for this
+
+--- Prompt 72 [app-empty-drawing-detection] ---
+The fix worded, but the log status in the GUI remains stuck at the start. Also I'm getting an error in the debugger (Timers cannot be started from another thread)
+
+--- Prompt 73 [python-package-folder] ---
+run all tests and ensure they pass
+
+--- Prompt 74 [python-package-folder] ---
+The fix didn't work. The published tar still includes everything from the main repo
+
+--- Prompt 75 [app-empty-drawing-detection] ---
+The GUI randomly freezes at some point. Additionally, the analysis seems frozen, also the debugger logger stops progressing for several minutes, stuck on 12% or some other random percentage
+
+--- Prompt 76 [app-empty-drawing-detection] ---
+the issue is that the analysis seems frozen, also the debugger logger stops progressing for several minutes, stuck on 12% or some other random percentage
+
+--- Prompt 77 [app-empty-drawing-detection] ---
+how can we test that this works with an unit test
+
+--- Prompt 78 [app-empty-drawing-detection] ---
+Can we display this progress instead of the rotating infinity bar
+
+--- Prompt 79 [app-empty-drawing-detection] ---
+can we return a user error message when the selected folder contains no analyzable files?
+
+--- Prompt 80 [app-empty-drawing-detection] ---
+sorry, I interrupted, can you run it again
+
+--- Prompt 81 [app-empty-drawing-detection] ---
+the app crashes suddently without notice or error when targeting the folder C:\Users\alombardi\Buro Happold\Machine Learning - Documents\ML CAD Assistant\Data\_Applications\Empty_drawing_detection_test_set\0053340 DDC - Project W Master - Draft\Drawings.
+
+
+
+
+
+
+
+Let's add a unit test to try that out.
+
+--- Prompt 82 [app-empty-drawing-detection] ---
+the app crashes suddently without notice or error when targeting the folder C:\Users\alombardi\Buro Happold\Machine Learning - Documents\ML CAD Assistant\Data\_Applications\Empty_drawing_detection_test_set\0053340 DDC - Project W Master - Draft\Drawings.
+
+
+
+Let's add a unit test to try that out.
+
+--- Prompt 83 [app-empty-drawing-detection] ---
+run tests and ensure they pass, syncing the optional dev dependencies first with uv. If they require fixes, do the fixes, then run the tests again until they pass.
+
+
+
+If uv sync fails due to lack of permissions, use
+
+$env:UV_INDEX_AZURE_BHMLRND_PYPI_USERNAME = "alessio.lombardi@burohappold.com"
+
+$env:UV_INDEX_AZURE_BHMLRND_PYPI_PASSWORD = "aviegJYO8PsVCxVtiS4VpxA5rc1yaLMsjaBsDAO7UpN447g31xQ7JQQJ99BKACAAAAAxQNyXAAASAZDO2hr3"
+
+--- Prompt 84 [app-empty-drawing-detection] ---
+run tests and ensure they pass, syncing the optional dev dependencies first with uv. If they require fixes, do the fixes, then run the tests again until they pass.
+
+--- Prompt 85 [app-empty-drawing-detection] ---
+Add an unit test folder with some basic tests and also a test to check the linting with pyright.
+
+--- Prompt 86 [python-package-folder] ---
+Add a unit test to verify this fix. 
+
+Run all tests and ensure they pass. 
+
+Make me a commit description for this fix
+
+--- Prompt 87 [python-package-folder] ---
+okay, I've simply disabled upstream sources in Azure Repos and the problem is gone.
+
+
+
+Now, the next issue is that the tool publishes too much code. Have a look at what the tar contains:
+
+--- Prompt 88 [python-package-folder] ---
+I would first like to understand why, if I delete all extra packages from Azure Artifacts, they reappear when I do `uv sync` on another project that uses empty-drawing-detection
+
+--- Prompt 89 [python-package-folder] ---
+the main issue now is that the publishing workflow for a subfolder_to_build to e.g. Azure Artifacts also publishes a bunch of other packages other than the single subfolder_to_build. For example, for C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection it published the packages in the screenshots and many more. Why is that? Why some packages are published with source "PyPI"? I used the command 
+
+cd C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection
+
+python-package-folder --publish azure --repository-url "https://pkgs.dev.azure.com/BHMLRND/_packaging/BHMLRND/pypi/upload/" --version 2.1.1        
+
+To add some context, it seems like the packages reappear every time I do "uv sync" on another project that needs the published empty_drawing_detection in Azure repos.
+
+--- Prompt 90 [python-package-folder] ---
+the main issue now is that the publishing workflow for a subfolder_to_build to e.g. Azure Artifacts also publishes a bunch of other packages other than the single subfolder_to_build. For example, for C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection it published the packages in the screenshots and many more. Why is that? Why some packages are published with source "PyPI"? I used the command 
+
+
+
+cd C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection
+
+python-package-folder --publish azure --repository-url "https://pkgs.dev.azure.com/BHMLRND/_packaging/BHMLRND/pypi/upload/" --version 2.1.1
+
+--- Prompt 91 [app-empty-drawing-detection] ---
+Looking at C:\Users\alombardi\Documents\GitHub\app-ml-drawing-assistant\main_window.py and related project, create a simple PySide6 app. 
+
+The app is for empty drawing detection. It should allow an user to select a folder, which should be set to folder_to_analyze, where to run the analysis `analyze_folder_for_empty_drawings` as shown in main.py, then, create_empty_drawings_spreadsheet and create_multiple_empty_drawings_spreadsheets should be invoked when the analysis is completed.
+
+
+
+Some options of those methods to be invoked should be exposed in the main window. For example, overwrite_existing of create_multiple_empty_drawings_spreadsheets should be exposed as a boolean tickbox. 
+
+
+
+The app should have a tray icon like the one used for C:\Users\alombardi\Documents\GitHub\app-ml-drawing-assistant\
+
+--- Prompt 92 [python-package-folder] ---
+Type of "analyze_folder_for_empty_drawings" is partially unknown
+
+
+
+  Type of "analyze_folder_for_empty_drawings" is "(folder_path: str | Path, filepaths_config_or_path: str | Path | Unknown = "", titleblock_width_or_percentage: int | float = 0.15, titleblock_height_or_percentage: int | float = 1, titleblock_placement: TitleblockPlacement = TitleblockPlacement.RIGHT, drawing_padding_percent: float = 0.15, config: EmptyDrawingDetectionConfig | None = None, debug_screenshot_cache_directory_name: str = "_cache", checkpoint_interval: int = 10, overwrite_results: bool = False) -> dict[Unknown, EmptyDrawingLikelihood]"
+
+
+
+
+
+That didn't work. Is there another way for this program to export accurate type information also with regards to the folders temporarily copied into the subfolder_to_build? List some options
+
+--- Prompt 93 [python-package-folder] ---
+I was incorrectly targeting the subfolder to build. The build worked now.
+
+
+
+
+
+The next issue is that for some types I get this typing hint error when I install the published package in another project. For example, after installing the built subfolder package:
+
+
+
+C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\data\spreadsheet_creation
+
+
+
+
+
+When I do:
+
+from empty_drawing_detection.detect_empty_drawings import analyze_folder_for_empty_drawings, create_empty_drawings_spreadsheet, 
+
+
+
+I get this annotation error:
+
+Type of "create_multiple_empty_drawings_spreadsheets" is partially unknown
+
+  Type of "create_multiple_empty_drawings_spreadsheets" is "(results: dict[Unknown, Unknown], depth_from_root: int = -1, use_single_output_directory_path: str | None = None, file_path_column_name: str = "File Path", page_number_column_name: str = "Page Number", emptiness_status_column_name: str = "Empty?", overwrite_existing: bool = False) -> dict[str, bool]"PylancereportUnknownVariableType
+
+
+
+For the function:
+
+def analyze_folder_for_empty_drawings(
+
+    folder_path: str | Path,
+
+    filepaths_config_or_path: str | Path | Unknown = "",
+
+    titleblock_width_or_percentage: int | float = 0.15,
+
+    titleblock_height_or_percentage: int | float = 1,
+
+    titleblock_placement: Unknown = TitleblockPlacement.RIGHT,
+
+    drawing_padding_percent: float = 0.15,
+
+    config: Unknown | None = None,
+
+    debug_screenshot_cache_directory_name: str = "_cache",
+
+    checkpoint_interval: int = 10,
+
+    overwrite_results: bool = False
+
+) -> dict[Unknown, Unknown]
+
+
+
+
+
+
+
+Although I can do:
+
+from empty_drawing_detection._shared.shared_dataclasses import FilepathsConfig, FilePageId
+
+
+
+which are the types normally returned by the function, whose original signature is:
+
+
+
+def analyze_folder_for_empty_drawings(folder_path: str | Path, 
+
+
+
+                                     filepaths_config_or_path: str | Path | FilepathsConfig = "",
+
+                                     titleblock_width_or_percentage: int | float = 0.15,
+
+                                     titleblock_height_or_percentage: int | float = 1.00,
+
+                                     titleblock_placement: TitleblockPlacement = TitleblockPlacement.RIGHT,
+
+                                     drawing_padding_percent: float = 0.15,
+
+                                     config: EmptyDrawingDetectionConfig | None = None,
+
+                                     debug_screenshot_cache_directory_name : str = "_cache",
+
+                                     checkpoint_interval: int = 10,
+
+                                     overwrite_results: bool = False) -> dict[FilePageId, EmptyDrawingLikelihood]:
+
+    """
+
+
+
+Is there a way to resolve this? The code can run normally, I just get unknown types out.
+
+--- Prompt 94 [python-package-folder] ---
+let's make the temporary toml file part of the printed output so we can check its structure when attempting the build and publish
+
+--- Prompt 95 [python-package-folder] ---
+Now I'm getting the following when building
+
+C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection
+
+
+
+  InvariantTM (line 7 in C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\main_rgbdiff.py)
+
+  time (line 48 in C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\coco.py)
+
+  time (line 5 in C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\cocoeval.py)
+
+No external dependencies found
+
+
+
+Running build...
+
+Building source distribution...
+
+running egg_info
+
+creating src\ml_cad_assistant.egg-info
+
+writing src\ml_cad_assistant.egg-info\PKG-INFO
+
+writing dependency_links to src\ml_cad_assistant.egg-info\dependency_links.txt
+
+writing requirements to src\ml_cad_assistant.egg-info\requires.txt
+
+writing top-level names to src\ml_cad_assistant.egg-info\top_level.txt
+
+writing manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+reading manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+writing manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+running sdist
+
+running egg_info
+
+writing src\ml_cad_assistant.egg-info\PKG-INFO
+
+writing dependency_links to src\ml_cad_assistant.egg-info\dependency_links.txt
+
+writing requirements to src\ml_cad_assistant.egg-info\requires.txt
+
+writing top-level names to src\ml_cad_assistant.egg-info\top_level.txt
+
+reading manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+writing manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+running check
+
+creating ml_cad_assistant-2.0.0
+
+creating ml_cad_assistant-2.0.0\src
+
+creating ml_cad_assistant-2.0.0\src\_shared
+
+creating ml_cad_assistant-2.0.0\src\data
+
+creating ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+creating ml_cad_assistant-2.0.0\src\data\PytorchCoco
+
+creating ml_cad_assistant-2.0.0\src\data\Text_similarity\Keys_grouping
+
+creating ml_cad_assistant-2.0.0\src\data\Yolo_dataset
+
+creating ml_cad_assistant-2.0.0\src\data\_shared_data
+
+creating ml_cad_assistant-2.0.0\src\data\_shared_data\try_polygon_annotations
+
+creating ml_cad_assistant-2.0.0\src\data\data_storage\IE_pickle_db
+
+creating ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AA_pysonDB
+
+creating ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AB_JsonDB
+
+creating ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AC_json_file
+
+creating ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AD_orjson_file
+
+creating ml_cad_assistant-2.0.0\src\data\graph
+
+creating ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+creating ml_cad_assistant-2.0.0\src\deployment
+
+creating ml_cad_assistant-2.0.0\src\deployment\api
+
+creating ml_cad_assistant-2.0.0\src\deployment\usage_analytics
+
+creating ml_cad_assistant-2.0.0\src\docs\_SS
+
+creating ml_cad_assistant-2.0.0\src\features
+
+creating ml_cad_assistant-2.0.0\src\integration
+
+creating ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem
+
+creating ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection
+
+creating ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+creating ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+creating ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_QueryText
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+creating ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+creating ml_cad_assistant-2.0.0\src\models\Language_operations
+
+creating ml_cad_assistant-2.0.0\src\models\Object_detection\OD_01_SIFT
+
+creating ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN
+
+creating ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\03_Torchvision-tutorial-PennFudanPed
+
+creating ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN
+
+creating ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+creating ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+creating ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+creating ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching    
+
+creating ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o
+
+creating ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+creating ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+creating ml_cad_assistant-2.0.0\src\models\_shared_m
+
+creating ml_cad_assistant-2.0.0\src\repository
+
+creating ml_cad_assistant-2.0.0\src\services
+
+creating ml_cad_assistant-2.0.0\src\services\enums
+
+creating ml_cad_assistant-2.0.0\src\visualization
+
+copying files to ml_cad_assistant-2.0.0...
+
+copying README.md -> ml_cad_assistant-2.0.0
+
+copying pyproject.toml -> ml_cad_assistant-2.0.0
+
+copying src\_globals.py -> ml_cad_assistant-2.0.0\src
+
+copying src\_shared\__init__.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\_globals_inference.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\better_enum.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\concurrency_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\debug_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\file_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\image_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\logging_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\pdf_optimizer.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\pdf_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\serialization_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\shared_dataclasses.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_better_enum.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_concurrency_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_debug_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_file_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_image_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_logging_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_pdf_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_restart-python-script.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_serialization_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_testing_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\test_text_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\testing_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\_shared\text_utils.py -> ml_cad_assistant-2.0.0\src\_shared
+
+copying src\data\datacollection.py -> ml_cad_assistant-2.0.0\src\data
+
+copying src\data\fiftyone_.py -> ml_cad_assistant-2.0.0\src\data
+
+copying src\data\Coco_dataset\bboxes_utils.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\coco_dataclasses.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\coco_dataset.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\data_preprocessing.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\eda.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\main.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\single_and_balance_categories.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\test_coco_dataset.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\test_utils.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\Coco_dataset\utils.py -> ml_cad_assistant-2.0.0\src\data\Coco_dataset
+
+copying src\data\PytorchCoco\dataset_dataclasses.py -> ml_cad_assistant-2.0.0\src\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_processing.py -> ml_cad_assistant-2.0.0\src\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_visual_verification.py -> ml_cad_assistant-2.0.0\src\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_visualization.py -> ml_cad_assistant-2.0.0\src\data\PytorchCoco
+
+copying src\data\PytorchCoco\test_dataset_processing.py -> ml_cad_assistant-2.0.0\src\data\PytorchCoco
+
+copying src\data\Text_similarity\Keys_grouping\Hybrid_method.py -> ml_cad_assistant-2.0.0\src\data\Text_similarity\Keys_grouping
+
+copying src\data\Text_similarity\Keys_grouping\Hybrid_method_utilities.py -> ml_cad_assistant-2.0.0\src\data\Text_similarity\Keys_grouping
+
+copying src\data\Yolo_dataset\create_yolo_dataset.py -> ml_cad_assistant-2.0.0\src\data\Yolo_dataset
+
+copying src\data\Yolo_dataset\test_yolo.py -> ml_cad_assistant-2.0.0\src\data\Yolo_dataset
+
+copying src\data\_shared_data\pdf_data_extraction.py -> ml_cad_assistant-2.0.0\src\data\_shared_data
+
+copying src\data\_shared_data\test_pdf_data_extraction.py -> ml_cad_assistant-2.0.0\src\data\_shared_data
+
+copying src\data\_shared_data\try_polygon_annotations\try_coords_transformation.py -> ml_cad_assistant-2.0.0\src\data\_shared_data\try_polygon_annotations
+
+copying src\data\_shared_data\try_polygon_annotations\try_vertice.py -> ml_cad_assistant-2.0.0\src\data\_shared_data\try_polygon_annotations        
+
+copying src\data\data_storage\IE_pickle_db\pickle_db.py -> ml_cad_assistant-2.0.0\src\data\data_storage\IE_pickle_db
+
+copying src\data\data_storage\IE_pickle_db\test_store_results_pickle_file.py -> ml_cad_assistant-2.0.0\src\data\data_storage\IE_pickle_db
+
+copying src\data\data_storage\_SS\AA_pysonDB\store_results.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AA_pysonDB
+
+copying src\data\data_storage\_SS\AA_pysonDB\test_store_results_pysonDB.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AA_pysonDB
+
+copying src\data\data_storage\_SS\AB_JsonDB\jsonDB.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AB_JsonDB
+
+copying src\data\data_storage\_SS\AB_JsonDB\store_results.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AB_JsonDB
+
+copying src\data\data_storage\_SS\AB_JsonDB\test_store_results_jsonDB.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AB_JsonDB
+
+copying src\data\data_storage\_SS\AC_json_file\store_results.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AC_json_file
+
+copying src\data\data_storage\_SS\AC_json_file\test_store_results_json_file.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AC_json_file     
+
+copying src\data\data_storage\_SS\AD_orjson_file\store_results.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AD_orjson_file
+
+copying src\data\data_storage\_SS\AD_orjson_file\test_store_results_json_file.py -> ml_cad_assistant-2.0.0\src\data\data_storage\_SS\AD_orjson_file
+
+copying src\data\graph\graph_try.py -> ml_cad_assistant-2.0.0\src\data\graph
+
+copying src\data\spreadsheet_creation\spreadsheet_formatting_dataclasses.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_formatting_utils.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_from_db.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_utils.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\test_spreadsheet_formatting.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\test_spreadsheet_from_db.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\test_spreadsheet_utils.py -> ml_cad_assistant-2.0.0\src\data\spreadsheet_creation
+
+copying src\deployment\__init__.py -> ml_cad_assistant-2.0.0\src\deployment
+
+copying src\deployment\api\deployment_fastapi.py -> ml_cad_assistant-2.0.0\src\deployment\api
+
+copying src\deployment\usage_analytics\collect_user_data.py -> ml_cad_assistant-2.0.0\src\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\endpoints_client.py -> ml_cad_assistant-2.0.0\src\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\test_collect_user_data.py -> ml_cad_assistant-2.0.0\src\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\test_endpoints_client.py -> ml_cad_assistant-2.0.0\src\deployment\usage_analytics
+
+copying src\docs\_SS\html_to_md.py -> ml_cad_assistant-2.0.0\src\docs\_SS
+
+copying src\docs\_SS\xml_to_md.py -> ml_cad_assistant-2.0.0\src\docs\_SS
+
+copying src\features\__init__.py -> ml_cad_assistant-2.0.0\src\features
+
+copying src\integration\extract_titleblock_text.py -> ml_cad_assistant-2.0.0\src\integration
+
+copying src\integration\test_edge_cases_and_errors.py -> ml_cad_assistant-2.0.0\src\integration
+
+copying src\integration\test_extract_titleblock_text.py -> ml_cad_assistant-2.0.0\src\integration
+
+copying src\integration\batch_inference_filesystem\inference_and_store_results.py -> ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\inference_cmd.py -> ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\inference_dataclasses.py -> ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem    
+
+copying src\integration\batch_inference_filesystem\main.py -> ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\test_additional_functions.py -> ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\test_inference_and_store_results.py -> ml_cad_assistant-2.0.0\src\integration\batch_inference_filesystem
+
+copying src\integration\empty_drawing_detection\detect_empty_drawings.py -> ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\detect_empty_drawings_parallel.py -> ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection 
+
+copying src\integration\empty_drawing_detection\detect_empty_drawings_utils.py -> ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection    
+
+copying src\integration\empty_drawing_detection\empty_drawing_detection_config.py -> ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection 
+
+copying src\integration\empty_drawing_detection\test_detect_empty_drawings.py -> ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection     
+
+copying src\integration\empty_drawing_detection\test_detect_empty_drawings_parallel.py -> ml_cad_assistant-2.0.0\src\integration\empty_drawing_detection
+
+copying src\ml_cad_assistant.egg-info\PKG-INFO -> ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+copying src\ml_cad_assistant.egg-info\SOURCES.txt -> ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+copying src\ml_cad_assistant.egg-info\dependency_links.txt -> ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+copying src\ml_cad_assistant.egg-info\requires.txt -> ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+copying src\ml_cad_assistant.egg-info\top_level.txt -> ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\dataset_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\main_evaluation.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match_evaluation.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match_test.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\_globals.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\dataset_balance.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\dataset_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\eval.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\finetune.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\main_eval.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\main_finetune.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\pdf_data_extraction.py -> ml_cad_assistant-2.0.0\src\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers\embeddings.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI\azure_openai_embeddings.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI\test_embeddings.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama\embeddings.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama\test_embeddings.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+copying src\models\Information_extraction\IE_QueryText\query_operators.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_QueryText  
+
+copying src\models\Information_extraction\IE_QueryText\test_query_operators.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_QueryText
+
+copying src\models\Information_extraction\IE_from_titleblock\llm_text_extraction_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\azure_openai_utils.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\test_azure_openai_utils.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\test_text_from_single_image.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\text_from_single_image.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS\entra-try.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser\deep_layout_parser.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR\paddleocr_try.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\combined.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\hough_try.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\hough_try2.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu\data_extraction_otzu.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss\extract_text_from_titleblock.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\drawing_bounding_boxes_without_tables.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\erode_and_dilate.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\evaluate_key_and_value_extraction.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\test_evaluation.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables\drawing_bounding_boxes_without_tables.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\_globals.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\draw_hough_lines.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\extract_texts_from_handwriting_titleblocks.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\findContours_houghlined_images.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\handwriting_recognition.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\test_extract_texts_from_handwriting_titleblocks.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\_shared_ie\LLM_credentials.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie      
+
+copying src\models\Information_extraction\_shared_ie\__init__.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie       
+
+copying src\models\Information_extraction\_shared_ie\ie_dataclasses_utils.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie 
+
+copying src\models\Information_extraction\_shared_ie\ie_embeddings_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_embeddings_search.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie 
+
+copying src\models\Information_extraction\_shared_ie\ie_enums.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_text_processing.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie   
+
+copying src\models\Information_extraction\_shared_ie\metadata_operations.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie  
+
+copying src\models\Information_extraction\_shared_ie\pattern_matching.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie     
+
+copying src\models\Information_extraction\_shared_ie\pattern_matching_test.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_LLM_credentials.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie 
+
+copying src\models\Information_extraction\_shared_ie\test_ie_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie  
+
+copying src\models\Information_extraction\_shared_ie\test_ie_dataclasses_utils.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_ie_embeddings_search.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_serialization.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie   
+
+copying src\models\Information_extraction\_shared_ie\test_titleblock_validation.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\titleblock_validation.py -> ml_cad_assistant-2.0.0\src\models\Information_extraction\_shared_ie
+
+copying src\models\Language_operations\__init__.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\_shared_language.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\database_language.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\datetime_detection.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\language_detection.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\load_language_model.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\test_database_language.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\test_datetime_detection.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\test_language_detection.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\test_word_similarity.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Language_operations\word_similarity.py -> ml_cad_assistant-2.0.0\src\models\Language_operations
+
+copying src\models\Object_detection\OD_01_SIFT\matching3.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_01_SIFT
+
+copying src\models\Object_detection\OD_01_SIFT\matching3_bbox.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_01_SIFT
+
+copying src\models\Object_detection\OD_01_SIFT\testing_opencv.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_01_SIFT
+
+copying src\models\Object_detection\OD_04_FasterRCNN\evaluate.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\finetune.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\main.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\neural_network_utils.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN 
+
+copying src\models\Object_detection\OD_04_FasterRCNN\test_main.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\test_neural_network_utils.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\__SS\03_Torchvision-tutorial-PennFudanPed\finetuning.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\03_Torchvision-tutorial-PennFudanPed
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\evaluate.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN   
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\finetune.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN   
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\get_fasterRCNN_model.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\main_eval.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\main_finetune.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\evaluate.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\finetune.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\main.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\neural_network_utils.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\_shared_od\__init__.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\evaluation_processing.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\get_object_detection_model.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od       
+
+copying src\models\Object_detection\_shared_od\inference_processing.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\mlflow_utils.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\object_detection_dataclasses.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od     
+
+copying src\models\Object_detection\_shared_od\object_detection_dataclasses_utils.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\plot_object_detection.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\pytorch_converts.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_confusion_matrix.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_get_object_detection_model.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_mlflow_utils.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_reverse_transforms.py -> ml_cad_assistant-2.0.0\src\models\Object_detection\_shared_od
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\_globals.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\opencv_template_match_for_symbol_detection.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\opevcv_template_match_for_symbol_detection_test.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\InvariantTM.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\_globals.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\main_evaluate.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\main_rgbdiff.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o\_globals.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o\drawing_bound_boxes.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\_globals.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\inference.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\json_make.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\json_review.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\train.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\utils.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\__init__.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\coco.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\cocoeval.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\mask.py -> ml_cad_assistant-2.0.0\src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\_shared_m\model_debug_utils.py -> ml_cad_assistant-2.0.0\src\models\_shared_m
+
+copying src\models\_shared_m\model_file_utils.py -> ml_cad_assistant-2.0.0\src\models\_shared_m
+
+copying src\models\_shared_m\plot_utils.py -> ml_cad_assistant-2.0.0\src\models\_shared_m
+
+copying src\repository\inference_repository.py -> ml_cad_assistant-2.0.0\src\repository
+
+copying src\services\data_frame_against_ground_truth_report_services.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\file_services.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\model_selector.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\question_answering_services.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\spreadsheet_styler.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\string_analysis_services.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\structured_output_processor.py -> ml_cad_assistant-2.0.0\src\services
+
+copying src\services\enums\structure_method.py -> ml_cad_assistant-2.0.0\src\services\enums
+
+copying src\visualization\__init__.py -> ml_cad_assistant-2.0.0\src\visualization
+
+copying src\visualization\visualize.py -> ml_cad_assistant-2.0.0\src\visualization
+
+copying src\ml_cad_assistant.egg-info\SOURCES.txt -> ml_cad_assistant-2.0.0\src\ml_cad_assistant.egg-info
+
+Writing ml_cad_assistant-2.0.0\setup.cfg
+
+Creating tar archive
+
+removing 'ml_cad_assistant-2.0.0' (and everything under it)
+
+Building wheel from source distribution...
+
+running egg_info
+
+writing src\ml_cad_assistant.egg-info\PKG-INFO
+
+writing dependency_links to src\ml_cad_assistant.egg-info\dependency_links.txt
+
+writing requirements to src\ml_cad_assistant.egg-info\requires.txt
+
+writing top-level names to src\ml_cad_assistant.egg-info\top_level.txt
+
+reading manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+writing manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+running bdist_wheel
+
+running build
+
+running build_py
+
+creating build\lib
+
+copying src\_globals.py -> build\lib
+
+creating build\lib\data
+
+copying src\data\datacollection.py -> build\lib\data
+
+copying src\data\fiftyone_.py -> build\lib\data
+
+creating build\lib\deployment
+
+copying src\deployment\__init__.py -> build\lib\deployment
+
+creating build\lib\features
+
+copying src\features\__init__.py -> build\lib\features
+
+creating build\lib\integration
+
+copying src\integration\extract_titleblock_text.py -> build\lib\integration
+
+copying src\integration\test_edge_cases_and_errors.py -> build\lib\integration
+
+copying src\integration\test_extract_titleblock_text.py -> build\lib\integration
+
+creating build\lib\repository
+
+copying src\repository\inference_repository.py -> build\lib\repository
+
+creating build\lib\services
+
+copying src\services\data_frame_against_ground_truth_report_services.py -> build\lib\services
+
+copying src\services\file_services.py -> build\lib\services
+
+copying src\services\model_selector.py -> build\lib\services
+
+copying src\services\question_answering_services.py -> build\lib\services
+
+copying src\services\spreadsheet_styler.py -> build\lib\services
+
+copying src\services\string_analysis_services.py -> build\lib\services
+
+copying src\services\structured_output_processor.py -> build\lib\services
+
+creating build\lib\visualization
+
+copying src\visualization\visualize.py -> build\lib\visualization
+
+copying src\visualization\__init__.py -> build\lib\visualization
+
+creating build\lib\_shared
+
+copying src\_shared\better_enum.py -> build\lib\_shared
+
+copying src\_shared\concurrency_utils.py -> build\lib\_shared
+
+copying src\_shared\debug_utils.py -> build\lib\_shared
+
+copying src\_shared\file_utils.py -> build\lib\_shared
+
+copying src\_shared\image_utils.py -> build\lib\_shared
+
+copying src\_shared\logging_utils.py -> build\lib\_shared
+
+copying src\_shared\pdf_optimizer.py -> build\lib\_shared
+
+copying src\_shared\pdf_utils.py -> build\lib\_shared
+
+copying src\_shared\serialization_utils.py -> build\lib\_shared
+
+copying src\_shared\shared_dataclasses.py -> build\lib\_shared
+
+copying src\_shared\testing_utils.py -> build\lib\_shared
+
+copying src\_shared\test_better_enum.py -> build\lib\_shared
+
+copying src\_shared\test_concurrency_utils.py -> build\lib\_shared
+
+copying src\_shared\test_debug_utils.py -> build\lib\_shared
+
+copying src\_shared\test_file_utils.py -> build\lib\_shared
+
+copying src\_shared\test_image_utils.py -> build\lib\_shared
+
+copying src\_shared\test_logging_utils.py -> build\lib\_shared
+
+copying src\_shared\test_pdf_utils.py -> build\lib\_shared
+
+copying src\_shared\test_restart-python-script.py -> build\lib\_shared
+
+copying src\_shared\test_serialization_utils.py -> build\lib\_shared
+
+copying src\_shared\test_testing_utils.py -> build\lib\_shared
+
+copying src\_shared\test_text_utils.py -> build\lib\_shared
+
+copying src\_shared\text_utils.py -> build\lib\_shared
+
+copying src\_shared\_globals_inference.py -> build\lib\_shared
+
+copying src\_shared\__init__.py -> build\lib\_shared
+
+creating build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\bboxes_utils.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\coco_dataclasses.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\coco_dataset.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\data_preprocessing.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\eda.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\main.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\single_and_balance_categories.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\test_coco_dataset.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\test_utils.py -> build\lib\data\Coco_dataset
+
+copying src\data\Coco_dataset\utils.py -> build\lib\data\Coco_dataset
+
+creating build\lib\data\graph
+
+copying src\data\graph\graph_try.py -> build\lib\data\graph
+
+creating build\lib\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_dataclasses.py -> build\lib\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_processing.py -> build\lib\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_visualization.py -> build\lib\data\PytorchCoco
+
+copying src\data\PytorchCoco\dataset_visual_verification.py -> build\lib\data\PytorchCoco
+
+copying src\data\PytorchCoco\test_dataset_processing.py -> build\lib\data\PytorchCoco
+
+creating build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_formatting_dataclasses.py -> build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_formatting_utils.py -> build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_from_db.py -> build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\spreadsheet_utils.py -> build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\test_spreadsheet_formatting.py -> build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\test_spreadsheet_from_db.py -> build\lib\data\spreadsheet_creation
+
+copying src\data\spreadsheet_creation\test_spreadsheet_utils.py -> build\lib\data\spreadsheet_creation
+
+creating build\lib\data\Yolo_dataset
+
+copying src\data\Yolo_dataset\create_yolo_dataset.py -> build\lib\data\Yolo_dataset
+
+copying src\data\Yolo_dataset\test_yolo.py -> build\lib\data\Yolo_dataset
+
+creating build\lib\data\_shared_data
+
+copying src\data\_shared_data\pdf_data_extraction.py -> build\lib\data\_shared_data
+
+copying src\data\_shared_data\test_pdf_data_extraction.py -> build\lib\data\_shared_data
+
+creating build\lib\data\data_storage\IE_pickle_db
+
+copying src\data\data_storage\IE_pickle_db\pickle_db.py -> build\lib\data\data_storage\IE_pickle_db
+
+copying src\data\data_storage\IE_pickle_db\test_store_results_pickle_file.py -> build\lib\data\data_storage\IE_pickle_db
+
+creating build\lib\data\data_storage\_SS\AA_pysonDB
+
+copying src\data\data_storage\_SS\AA_pysonDB\store_results.py -> build\lib\data\data_storage\_SS\AA_pysonDB
+
+copying src\data\data_storage\_SS\AA_pysonDB\test_store_results_pysonDB.py -> build\lib\data\data_storage\_SS\AA_pysonDB
+
+creating build\lib\data\data_storage\_SS\AB_JsonDB
+
+copying src\data\data_storage\_SS\AB_JsonDB\jsonDB.py -> build\lib\data\data_storage\_SS\AB_JsonDB
+
+copying src\data\data_storage\_SS\AB_JsonDB\store_results.py -> build\lib\data\data_storage\_SS\AB_JsonDB
+
+copying src\data\data_storage\_SS\AB_JsonDB\test_store_results_jsonDB.py -> build\lib\data\data_storage\_SS\AB_JsonDB
+
+creating build\lib\data\data_storage\_SS\AC_json_file
+
+copying src\data\data_storage\_SS\AC_json_file\store_results.py -> build\lib\data\data_storage\_SS\AC_json_file
+
+copying src\data\data_storage\_SS\AC_json_file\test_store_results_json_file.py -> build\lib\data\data_storage\_SS\AC_json_file
+
+creating build\lib\data\data_storage\_SS\AD_orjson_file
+
+copying src\data\data_storage\_SS\AD_orjson_file\store_results.py -> build\lib\data\data_storage\_SS\AD_orjson_file
+
+copying src\data\data_storage\_SS\AD_orjson_file\test_store_results_json_file.py -> build\lib\data\data_storage\_SS\AD_orjson_file
+
+creating build\lib\data\Text_similarity\Keys_grouping
+
+copying src\data\Text_similarity\Keys_grouping\Hybrid_method.py -> build\lib\data\Text_similarity\Keys_grouping
+
+copying src\data\Text_similarity\Keys_grouping\Hybrid_method_utilities.py -> build\lib\data\Text_similarity\Keys_grouping
+
+creating build\lib\data\_shared_data\try_polygon_annotations
+
+copying src\data\_shared_data\try_polygon_annotations\try_coords_transformation.py -> build\lib\data\_shared_data\try_polygon_annotations
+
+copying src\data\_shared_data\try_polygon_annotations\try_vertice.py -> build\lib\data\_shared_data\try_polygon_annotations
+
+creating build\lib\deployment\api
+
+copying src\deployment\api\deployment_fastapi.py -> build\lib\deployment\api
+
+creating build\lib\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\collect_user_data.py -> build\lib\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\endpoints_client.py -> build\lib\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\test_collect_user_data.py -> build\lib\deployment\usage_analytics
+
+copying src\deployment\usage_analytics\test_endpoints_client.py -> build\lib\deployment\usage_analytics
+
+creating build\lib\docs\_SS
+
+copying src\docs\_SS\html_to_md.py -> build\lib\docs\_SS
+
+copying src\docs\_SS\xml_to_md.py -> build\lib\docs\_SS
+
+creating build\lib\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\inference_and_store_results.py -> build\lib\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\inference_cmd.py -> build\lib\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\inference_dataclasses.py -> build\lib\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\main.py -> build\lib\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\test_additional_functions.py -> build\lib\integration\batch_inference_filesystem
+
+copying src\integration\batch_inference_filesystem\test_inference_and_store_results.py -> build\lib\integration\batch_inference_filesystem
+
+creating build\lib\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\detect_empty_drawings.py -> build\lib\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\detect_empty_drawings_parallel.py -> build\lib\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\detect_empty_drawings_utils.py -> build\lib\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\empty_drawing_detection_config.py -> build\lib\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\test_detect_empty_drawings.py -> build\lib\integration\empty_drawing_detection
+
+copying src\integration\empty_drawing_detection\test_detect_empty_drawings_parallel.py -> build\lib\integration\empty_drawing_detection
+
+creating build\lib\models\Language_operations
+
+copying src\models\Language_operations\database_language.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\datetime_detection.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\language_detection.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\load_language_model.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\test_database_language.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\test_datetime_detection.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\test_language_detection.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\test_word_similarity.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\word_similarity.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\_shared_language.py -> build\lib\models\Language_operations
+
+copying src\models\Language_operations\__init__.py -> build\lib\models\Language_operations
+
+creating build\lib\models\_shared_m
+
+copying src\models\_shared_m\model_debug_utils.py -> build\lib\models\_shared_m
+
+copying src\models\_shared_m\model_file_utils.py -> build\lib\models\_shared_m
+
+copying src\models\_shared_m\plot_utils.py -> build\lib\models\_shared_m
+
+creating build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\dataset_dataclasses.py -> build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\main_evaluation.py -> build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match.py -> build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match_evaluation.py -> build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying src\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match_test.py -> build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+creating build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\dataset_balance.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\dataset_dataclasses.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\eval.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\finetune.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\main_eval.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\main_finetune.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\pdf_data_extraction.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying src\models\Classification\Historic_scanned\CH_02_CNN_classification\_globals.py -> build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+creating build\lib\models\Information_extraction\IE_from_titleblock
+
+copying src\models\Information_extraction\IE_from_titleblock\llm_text_extraction_dataclasses.py -> build\lib\models\Information_extraction\IE_from_titleblock
+
+creating build\lib\models\Information_extraction\IE_QueryText
+
+copying src\models\Information_extraction\IE_QueryText\query_operators.py -> build\lib\models\Information_extraction\IE_QueryText
+
+copying src\models\Information_extraction\IE_QueryText\test_query_operators.py -> build\lib\models\Information_extraction\IE_QueryText
+
+creating build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_dataclasses.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_dataclasses_utils.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_embeddings_dataclasses.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_embeddings_search.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_enums.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\ie_text_processing.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\LLM_credentials.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\metadata_operations.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\pattern_matching.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\pattern_matching_test.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_ie_dataclasses.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_ie_dataclasses_utils.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_ie_embeddings_search.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_LLM_credentials.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_serialization.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\test_titleblock_validation.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\titleblock_validation.py -> build\lib\models\Information_extraction\_shared_ie
+
+copying src\models\Information_extraction\_shared_ie\__init__.py -> build\lib\models\Information_extraction\_shared_ie
+
+creating build\lib\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers
+
+copying src\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers\embeddings.py -> build\lib\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers
+
+creating build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI\azure_openai_embeddings.py -> build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI\test_embeddings.py -> build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+creating build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama\embeddings.py -> build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+copying src\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama\test_embeddings.py -> build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\azure_openai_utils.py -> build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\test_azure_openai_utils.py -> build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\test_text_from_single_image.py -> build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\text_from_single_image.py -> build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS\entra-try.py -> build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser\deep_layout_parser.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR\paddleocr_try.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\combined.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\hough_try.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\hough_try2.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\draw_hough_lines.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\extract_texts_from_handwriting_titleblocks.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\findContours_houghlined_images.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\handwriting_recognition.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\test_extract_texts_from_handwriting_titleblocks.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\_globals.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu\data_extraction_otzu.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss\extract_text_from_titleblock.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\drawing_bounding_boxes_without_tables.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\erode_and_dilate.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\evaluate_key_and_value_extraction.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\test_evaluation.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+creating build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables
+
+copying src\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables\drawing_bounding_boxes_without_tables.py -> build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables
+
+creating build\lib\models\Object_detection\OD_01_SIFT
+
+copying src\models\Object_detection\OD_01_SIFT\matching3.py -> build\lib\models\Object_detection\OD_01_SIFT
+
+copying src\models\Object_detection\OD_01_SIFT\matching3_bbox.py -> build\lib\models\Object_detection\OD_01_SIFT
+
+copying src\models\Object_detection\OD_01_SIFT\testing_opencv.py -> build\lib\models\Object_detection\OD_01_SIFT
+
+creating build\lib\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\evaluate.py -> build\lib\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\finetune.py -> build\lib\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\main.py -> build\lib\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\neural_network_utils.py -> build\lib\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\test_main.py -> build\lib\models\Object_detection\OD_04_FasterRCNN
+
+copying src\models\Object_detection\OD_04_FasterRCNN\test_neural_network_utils.py -> build\lib\models\Object_detection\OD_04_FasterRCNN
+
+creating build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\evaluation_processing.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\get_object_detection_model.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\inference_processing.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\mlflow_utils.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\object_detection_dataclasses.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\object_detection_dataclasses_utils.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\plot_object_detection.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\pytorch_converts.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_confusion_matrix.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_get_object_detection_model.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_mlflow_utils.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\test_reverse_transforms.py -> build\lib\models\Object_detection\_shared_od
+
+copying src\models\Object_detection\_shared_od\__init__.py -> build\lib\models\Object_detection\_shared_od
+
+creating build\lib\models\Object_detection\__SS\03_Torchvision-tutorial-PennFudanPed
+
+copying src\models\Object_detection\__SS\03_Torchvision-tutorial-PennFudanPed\finetuning.py -> build\lib\models\Object_detection\__SS\03_Torchvision-tutorial-PennFudanPed
+
+creating build\lib\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\evaluate.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\finetune.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\get_fasterRCNN_model.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\main_eval.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\main_finetune.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN
+
+creating build\lib\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\evaluate.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\finetune.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\main.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+copying src\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection\neural_network_utils.py -> build\lib\models\Object_detection\__SS\OD_03_FasterRCNN\Few shot object detection
+
+creating build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\opencv_template_match_for_symbol_detection.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\opevcv_template_match_for_symbol_detection_test.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\_globals.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match
+
+creating build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o\drawing_bound_boxes.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o\_globals.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\02_GPT4o
+
+creating build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\inference.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\json_make.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\json_review.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\train.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\utils.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\_globals.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA
+
+creating build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\InvariantTM.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\main_evaluate.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\main_rgbdiff.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching\_globals.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\01_OpenCV_template_match\Invariant-TemplateMatching
+
+creating build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\coco.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\cocoeval.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\mask.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+copying src\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools\__init__.py -> build\lib\models\Pattern_recognition\CAD_blocks_contents_detection\03_DAnA\data\pycocotools
+
+creating build\lib\services\enums
+
+copying src\services\enums\structure_method.py -> build\lib\services\enums
+
+running egg_info
+
+writing src\ml_cad_assistant.egg-info\PKG-INFO
+
+writing dependency_links to src\ml_cad_assistant.egg-info\dependency_links.txt
+
+writing requirements to src\ml_cad_assistant.egg-info\requires.txt
+
+writing top-level names to src\ml_cad_assistant.egg-info\top_level.txt
+
+reading manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+writing manifest file 'src\ml_cad_assistant.egg-info\SOURCES.txt'
+
+copying src\_shared\test_restart-python-script.py -> build\lib\_shared
+
+copying src\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS\entra-try.py -> build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+installing to build\bdist.win-amd64\wheel
+
+running install
+
+running install_lib
+
+creating build\bdist.win-amd64\wheel
+
+creating build\bdist.win-amd64\wheel\data
+
+creating build\bdist.win-amd64\wheel\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\bboxes_utils.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\coco_dataclasses.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\coco_dataset.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\data_preprocessing.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\eda.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\main.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\single_and_balance_categories.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\test_coco_dataset.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\test_utils.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\Coco_dataset\utils.py -> build\bdist.win-amd64\wheel\.\data\Coco_dataset
+
+copying build\lib\data\datacollection.py -> build\bdist.win-amd64\wheel\.\data
+
+creating build\bdist.win-amd64\wheel\data\data_storage
+
+creating build\bdist.win-amd64\wheel\data\data_storage\IE_pickle_db
+
+copying build\lib\data\data_storage\IE_pickle_db\pickle_db.py -> build\bdist.win-amd64\wheel\.\data\data_storage\IE_pickle_db
+
+copying build\lib\data\data_storage\IE_pickle_db\test_store_results_pickle_file.py -> build\bdist.win-amd64\wheel\.\data\data_storage\IE_pickle_db
+
+creating build\bdist.win-amd64\wheel\data\data_storage\_SS
+
+creating build\bdist.win-amd64\wheel\data\data_storage\_SS\AA_pysonDB
+
+copying build\lib\data\data_storage\_SS\AA_pysonDB\store_results.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AA_pysonDB
+
+copying build\lib\data\data_storage\_SS\AA_pysonDB\test_store_results_pysonDB.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AA_pysonDB  
+
+creating build\bdist.win-amd64\wheel\data\data_storage\_SS\AB_JsonDB
+
+copying build\lib\data\data_storage\_SS\AB_JsonDB\jsonDB.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AB_JsonDB
+
+copying build\lib\data\data_storage\_SS\AB_JsonDB\store_results.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AB_JsonDB
+
+copying build\lib\data\data_storage\_SS\AB_JsonDB\test_store_results_jsonDB.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AB_JsonDB     
+
+creating build\bdist.win-amd64\wheel\data\data_storage\_SS\AC_json_file
+
+copying build\lib\data\data_storage\_SS\AC_json_file\store_results.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AC_json_file
+
+copying build\lib\data\data_storage\_SS\AC_json_file\test_store_results_json_file.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AC_json_file
+
+creating build\bdist.win-amd64\wheel\data\data_storage\_SS\AD_orjson_file
+
+copying build\lib\data\data_storage\_SS\AD_orjson_file\store_results.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AD_orjson_file
+
+copying build\lib\data\data_storage\_SS\AD_orjson_file\test_store_results_json_file.py -> build\bdist.win-amd64\wheel\.\data\data_storage\_SS\AD_orjson_file
+
+copying build\lib\data\fiftyone_.py -> build\bdist.win-amd64\wheel\.\data
+
+creating build\bdist.win-amd64\wheel\data\graph
+
+copying build\lib\data\graph\graph_try.py -> build\bdist.win-amd64\wheel\.\data\graph
+
+creating build\bdist.win-amd64\wheel\data\PytorchCoco
+
+copying build\lib\data\PytorchCoco\dataset_dataclasses.py -> build\bdist.win-amd64\wheel\.\data\PytorchCoco
+
+copying build\lib\data\PytorchCoco\dataset_processing.py -> build\bdist.win-amd64\wheel\.\data\PytorchCoco
+
+copying build\lib\data\PytorchCoco\dataset_visualization.py -> build\bdist.win-amd64\wheel\.\data\PytorchCoco
+
+copying build\lib\data\PytorchCoco\dataset_visual_verification.py -> build\bdist.win-amd64\wheel\.\data\PytorchCoco
+
+copying build\lib\data\PytorchCoco\test_dataset_processing.py -> build\bdist.win-amd64\wheel\.\data\PytorchCoco
+
+creating build\bdist.win-amd64\wheel\data\spreadsheet_creation
+
+copying build\lib\data\spreadsheet_creation\spreadsheet_formatting_dataclasses.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation        
+
+copying build\lib\data\spreadsheet_creation\spreadsheet_formatting_utils.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation
+
+copying build\lib\data\spreadsheet_creation\spreadsheet_from_db.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation
+
+copying build\lib\data\spreadsheet_creation\spreadsheet_utils.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation
+
+copying build\lib\data\spreadsheet_creation\test_spreadsheet_formatting.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation
+
+copying build\lib\data\spreadsheet_creation\test_spreadsheet_from_db.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation
+
+copying build\lib\data\spreadsheet_creation\test_spreadsheet_utils.py -> build\bdist.win-amd64\wheel\.\data\spreadsheet_creation
+
+creating build\bdist.win-amd64\wheel\data\Text_similarity
+
+creating build\bdist.win-amd64\wheel\data\Text_similarity\Keys_grouping
+
+copying build\lib\data\Text_similarity\Keys_grouping\Hybrid_method.py -> build\bdist.win-amd64\wheel\.\data\Text_similarity\Keys_grouping
+
+copying build\lib\data\Text_similarity\Keys_grouping\Hybrid_method_utilities.py -> build\bdist.win-amd64\wheel\.\data\Text_similarity\Keys_grouping 
+
+creating build\bdist.win-amd64\wheel\data\Yolo_dataset
+
+copying build\lib\data\Yolo_dataset\create_yolo_dataset.py -> build\bdist.win-amd64\wheel\.\data\Yolo_dataset
+
+copying build\lib\data\Yolo_dataset\test_yolo.py -> build\bdist.win-amd64\wheel\.\data\Yolo_dataset
+
+creating build\bdist.win-amd64\wheel\data\_shared_data
+
+copying build\lib\data\_shared_data\pdf_data_extraction.py -> build\bdist.win-amd64\wheel\.\data\_shared_data
+
+copying build\lib\data\_shared_data\test_pdf_data_extraction.py -> build\bdist.win-amd64\wheel\.\data\_shared_data
+
+creating build\bdist.win-amd64\wheel\data\_shared_data\try_polygon_annotations
+
+copying build\lib\data\_shared_data\try_polygon_annotations\try_coords_transformation.py -> build\bdist.win-amd64\wheel\.\data\_shared_data\try_polygon_annotations
+
+copying build\lib\data\_shared_data\try_polygon_annotations\try_vertice.py -> build\bdist.win-amd64\wheel\.\data\_shared_data\try_polygon_annotations
+
+creating build\bdist.win-amd64\wheel\deployment
+
+creating build\bdist.win-amd64\wheel\deployment\api
+
+copying build\lib\deployment\api\deployment_fastapi.py -> build\bdist.win-amd64\wheel\.\deployment\api
+
+creating build\bdist.win-amd64\wheel\deployment\usage_analytics
+
+copying build\lib\deployment\usage_analytics\collect_user_data.py -> build\bdist.win-amd64\wheel\.\deployment\usage_analytics
+
+copying build\lib\deployment\usage_analytics\endpoints_client.py -> build\bdist.win-amd64\wheel\.\deployment\usage_analytics
+
+copying build\lib\deployment\usage_analytics\test_collect_user_data.py -> build\bdist.win-amd64\wheel\.\deployment\usage_analytics
+
+copying build\lib\deployment\usage_analytics\test_endpoints_client.py -> build\bdist.win-amd64\wheel\.\deployment\usage_analytics
+
+copying build\lib\deployment\__init__.py -> build\bdist.win-amd64\wheel\.\deployment
+
+creating build\bdist.win-amd64\wheel\docs
+
+creating build\bdist.win-amd64\wheel\docs\_SS
+
+copying build\lib\docs\_SS\html_to_md.py -> build\bdist.win-amd64\wheel\.\docs\_SS
+
+copying build\lib\docs\_SS\xml_to_md.py -> build\bdist.win-amd64\wheel\.\docs\_SS
+
+creating build\bdist.win-amd64\wheel\features
+
+copying build\lib\features\__init__.py -> build\bdist.win-amd64\wheel\.\features
+
+creating build\bdist.win-amd64\wheel\integration
+
+creating build\bdist.win-amd64\wheel\integration\batch_inference_filesystem
+
+copying build\lib\integration\batch_inference_filesystem\inference_and_store_results.py -> build\bdist.win-amd64\wheel\.\integration\batch_inference_filesystem
+
+copying build\lib\integration\batch_inference_filesystem\inference_cmd.py -> build\bdist.win-amd64\wheel\.\integration\batch_inference_filesystem
+
+copying build\lib\integration\batch_inference_filesystem\inference_dataclasses.py -> build\bdist.win-amd64\wheel\.\integration\batch_inference_filesystem
+
+copying build\lib\integration\batch_inference_filesystem\main.py -> build\bdist.win-amd64\wheel\.\integration\batch_inference_filesystem
+
+copying build\lib\integration\batch_inference_filesystem\test_additional_functions.py -> build\bdist.win-amd64\wheel\.\integration\batch_inference_filesystem
+
+copying build\lib\integration\batch_inference_filesystem\test_inference_and_store_results.py -> build\bdist.win-amd64\wheel\.\integration\batch_inference_filesystem
+
+creating build\bdist.win-amd64\wheel\integration\empty_drawing_detection
+
+copying build\lib\integration\empty_drawing_detection\detect_empty_drawings.py -> build\bdist.win-amd64\wheel\.\integration\empty_drawing_detection 
+
+copying build\lib\integration\empty_drawing_detection\detect_empty_drawings_parallel.py -> build\bdist.win-amd64\wheel\.\integration\empty_drawing_detection
+
+copying build\lib\integration\empty_drawing_detection\detect_empty_drawings_utils.py -> build\bdist.win-amd64\wheel\.\integration\empty_drawing_detection
+
+copying build\lib\integration\empty_drawing_detection\empty_drawing_detection_config.py -> build\bdist.win-amd64\wheel\.\integration\empty_drawing_detection
+
+copying build\lib\integration\empty_drawing_detection\test_detect_empty_drawings.py -> build\bdist.win-amd64\wheel\.\integration\empty_drawing_detection
+
+copying build\lib\integration\empty_drawing_detection\test_detect_empty_drawings_parallel.py -> build\bdist.win-amd64\wheel\.\integration\empty_drawing_detection
+
+copying build\lib\integration\extract_titleblock_text.py -> build\bdist.win-amd64\wheel\.\integration
+
+copying build\lib\integration\test_edge_cases_and_errors.py -> build\bdist.win-amd64\wheel\.\integration
+
+copying build\lib\integration\test_extract_titleblock_text.py -> build\bdist.win-amd64\wheel\.\integration
+
+creating build\bdist.win-amd64\wheel\models
+
+creating build\bdist.win-amd64\wheel\models\Classification
+
+creating build\bdist.win-amd64\wheel\models\Classification\Historic_scanned
+
+creating build\bdist.win-amd64\wheel\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match\dataset_dataclasses.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match\main_evaluation.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match_evaluation.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+copying build\lib\models\Classification\Historic_scanned\CH_01_Opencv_template_match\opencv_template_match_test.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_01_Opencv_template_match
+
+creating build\bdist.win-amd64\wheel\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\dataset_balance.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\dataset_dataclasses.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\eval.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\finetune.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\main_eval.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\main_finetune.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\pdf_data_extraction.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+copying build\lib\models\Classification\Historic_scanned\CH_02_CNN_classification\_globals.py -> build\bdist.win-amd64\wheel\.\models\Classification\Historic_scanned\CH_02_CNN_classification
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_Embeddings
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers
+
+copying build\lib\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers\embeddings.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_Embeddings\IEE_03_SentenceTransformers
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_Embeddings\_SS
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+copying build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI\azure_openai_embeddings.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+copying build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI\test_embeddings.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_Embeddings\_SS\IEE_01_AzureOpenAI
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+copying build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama\embeddings.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+copying build\lib\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama\test_embeddings.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_Embeddings\_SS\IEE_02_Langchain_Llama
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\azure_openai_utils.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\test_azure_openai_utils.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\test_text_from_single_image.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\text_from_single_image.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS\entra-try.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\IET_07_AzureOpenAI\_SS
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\llm_text_extraction_dataclasses.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser\deep_layout_parser.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\02_LayoutParser
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR\paddleocr_try.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\03_PaddleOCR
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu\data_extraction_otzu.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\03_Otzu
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss\extract_text_from_titleblock.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\04_adaptive_thresholding_gauss
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\drawing_bounding_boxes_without_tables.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\erode_and_dilate.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\evaluate_key_and_value_extraction.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate\test_evaluation.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\05_erode_and_dilate
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables\drawing_bounding_boxes_without_tables.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\06_titleblock_without_tables
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\combined.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\hough_try.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\04_Hough\hough_try2.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\04_Hough
+
+creating build\bdist.win-amd64\wheel\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\draw_hough_lines.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\extract_texts_from_handwriting_titleblocks.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\findContours_houghlined_images.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\handwriting_recognition.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks
+
+copying build\lib\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\test_extract_texts_from_handwriting_titleblocks.py -> build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks       
+
+error: could not create 'build\bdist.win-amd64\wheel\.\models\Information_extraction\IE_from_titleblock\_SS\06_ExtractTextFromHandwritingTitleblocks\test_extract_texts_from_handwriting_titleblocks.py': No such file or directory
+
+  × Failed to build `C:\Users\alombardi\Documents\GitHub\ml-cad-assistant`
+
+  ├─▶ The build backend returned an error
+
+  ╰─▶ Call to `setuptools.build_meta:__legacy__.build_wheel` failed (exit code: 1)
+
+      hint: This usually indicates a problem with the package or the build environment.
+
+--- Prompt 96 [python-package-folder] ---
+When a folder is copied during the build of subfolder_to_build, it should be copied with the same folder structure of the original repository.
+
+
+
+This is because now the package build and installation works for:
+
+C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection
+
+
+
+however when I install the package in another repository and I try to run the following in a file:
+
+from empty_drawing_detection.detect_empty_drawings import analyze_folder_for_empty_drawings
+
+
+
+the resolution of the import file analyze_folder_for_empty_drawings.py fails when we get to the following line in C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection\detect_empty_drawings.py:
+
+
+
+  File "C:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\main.py", line 4, in <module>
+
+
+
+    from empty_drawing_detection.detect_empty_drawings import analyze_folder_for_empty_drawings, create_empty_drawings_spreadsheet, create_multiple_empty_drawings_spreadsheets
+
+  File "c:\Users\alombardi\Documents\GitHub\app-empty-drawing-detection\.venv\Lib\site-packages\empty_drawing_detection\detect_empty_drawings.py", line 8, in <module>
+
+    from models.Information_extraction._shared_ie.ie_enums import TitleblockPlacement, EmptyDrawingLikelihood   
+
+ModuleNotFoundError: No module named 'models'
+
+
+
+I think this is because the copied folders do not respect the original folder structure. The imported files in the subfolder_to_build are always following the convention of being imported with the full path, e.g. from `models. ...` or from `data. ...`
+
+--- Prompt 97 [python-package-folder] ---
+Now  "spreadsheet-formatting-dataclasses",
+
+    "spreadsheet-utils", are mistaken for packages, but they are actually files in C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\data\spreadsheet_creation. We need a more robust mechanism to distinguish actual dependency packages and files
+
+--- Prompt 98 [python-package-folder] ---
+run all tests and check they pass
+
+--- Prompt 99 [python-package-folder] ---
+better-enum is now identified as a package, but actually, I realised that it's just another file in the solution, when trying to publish the subfolder:
+
+
+
+C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\integration\empty_drawing_detection
+
+
+
+The publish succeeds, but when installing empty_drawing_detection from another solution, I get the error that better-enum package cannot be found.
+
+
+
+It should be copied as a dependency in the subfolder to publish from C:\Users\alombardi\Documents\GitHub\ml-cad-assistant\src\_shared\better_enum.py
+
+--- Prompt 100 [python-package-folder] ---
+run all tests to verify they pass
+
