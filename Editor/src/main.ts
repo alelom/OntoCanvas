@@ -731,6 +731,7 @@ function buildNetworkData(filter: {
   wrapChars: number;
   minFontSize: number;
   maxFontSize: number;
+  relationshipFontSize: number;
   searchQuery: string;
   includeNeighbors: boolean;
   edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
@@ -782,7 +783,8 @@ function buildNetworkData(filter: {
   const layoutMode = filter.layoutMode;
   const wrapChars = filter.wrapChars ?? 10;
   const minFontSize = Math.max(8, Math.min(96, filter.minFontSize ?? 20));
-  const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 60));
+  const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 80));
+  const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 14));
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
@@ -854,6 +856,7 @@ function buildNetworkData(filter: {
       to: e.to,
       arrows: 'to',
       label: style.showLabel ? formatEdgeLabel(e) : '',
+      font: { size: relationshipFontSize, color: '#2c3e50' },
       color: { color: style.color, highlight: style.color },
     };
   });
@@ -1542,13 +1545,18 @@ function renderApp(): void {
             <span style="font-size: 11px;">chars</span>
           </div>
           <div>
-            <strong style="font-size: 12px;">Font size (px)</strong>
+            <strong style="font-size: 12px;">Node font size (px)</strong>
             <div style="margin-top: 6px;">
               <span style="font-size: 11px;">Min (leaves)</span>
               <input type="number" id="minFontSize" min="8" max="96" value="20" style="width: 45px; margin-left: 6px;">
               <span style="font-size: 11px; margin-left: 8px;">Max (roots)</span>
-              <input type="number" id="maxFontSize" min="8" max="96" value="60" style="width: 45px; margin-left: 6px;">
+              <input type="number" id="maxFontSize" min="8" max="96" value="80" style="width: 45px; margin-left: 6px;">
             </div>
+          </div>
+          <div style="margin-top: 10px;">
+            <strong style="font-size: 12px;">Relationships font size</strong>
+            <input type="number" id="relationshipFontSize" min="8" max="48" value="14" style="width: 45px; margin-left: 6px;">
+            <span style="font-size: 11px;">px</span>
           </div>
         </div>
       </div>
@@ -1707,7 +1715,12 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('maxFontSize') as HTMLInputElement).value,
       10
-    ) || 60;
+    ) || 80;
+  const relationshipFontSize =
+    parseInt(
+      (document.getElementById('relationshipFontSize') as HTMLInputElement).value,
+      10
+    ) || 14;
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement;
   const neighborsEl = document.getElementById(
     'searchIncludeNeighbors'
@@ -1719,6 +1732,7 @@ function applyFilter(preserveView = false): void {
     wrapChars,
     minFontSize,
     maxFontSize,
+    relationshipFontSize,
     searchQuery: searchEl?.value ?? '',
     includeNeighbors: neighborsEl?.checked ?? true,
     edgeStyleConfig: getEdgeStyleConfig(edgeStylesContent),
@@ -1950,6 +1964,8 @@ function setupEventListeners(): void {
   document.getElementById('minFontSize')?.addEventListener('change', applyFilter);
   document.getElementById('maxFontSize')?.addEventListener('input', applyFilter);
   document.getElementById('maxFontSize')?.addEventListener('change', applyFilter);
+  document.getElementById('relationshipFontSize')?.addEventListener('input', applyFilter);
+  document.getElementById('relationshipFontSize')?.addEventListener('change', applyFilter);
   document
     .getElementById('searchIncludeNeighbors')
     ?.addEventListener('change', applyFilter);
@@ -1976,7 +1992,8 @@ function setupEventListeners(): void {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'weighted';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '10';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
-    (document.getElementById('maxFontSize') as HTMLInputElement).value = '60';
+    (document.getElementById('maxFontSize') as HTMLInputElement).value = '80';
+    (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '14';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
     document.getElementById('searchAutocomplete')?.classList.remove('visible');

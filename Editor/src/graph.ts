@@ -21,6 +21,7 @@ export interface FilterState {
   wrapChars: number;
   minFontSize: number;
   maxFontSize: number;
+  relationshipFontSize?: number;
   searchQuery: string;
   includeNeighbors: boolean;
   edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
