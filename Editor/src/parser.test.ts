@@ -7,6 +7,8 @@ import {
   updateLabelInStore,
   storeToTurtle,
   extractLocalName,
+  addEdgeToStore,
+  removeEdgeFromStore,
 } from './parser';
 import type { GraphData } from './types';
 
@@ -156,6 +158,37 @@ describe('updateLabelInStore (edit)', () => {
     const node = result.graphData.nodes.find((n) => n.id === 'TestClass');
     expect(node).toBeDefined();
     expect(node!.label).toBe('Test Label');
+  });
+
+  it('adds and removes partOf edge', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const ok = addEdgeToStore(store, 'FacadeCladding', 'Layout', 'partOf');
+    expect(ok).toBe(true);
+    const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
+    const partOfEdge = graphData.edges.find(
+      (e) => e.from === 'FacadeCladding' && e.to === 'Layout' && e.type === 'partOf'
+    );
+    expect(partOfEdge).toBeDefined();
+    const removeOk = removeEdgeFromStore(store, 'FacadeCladding', 'Layout', 'partOf');
+    expect(removeOk).toBe(true);
+    const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
+    const gone = afterRemove.graphData.edges.find(
+      (e) => e.from === 'FacadeCladding' && e.to === 'Layout' && e.type === 'partOf'
+    );
+    expect(gone).toBeUndefined();
+  });
+
+  it('adds contains edge', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const ok = addEdgeToStore(store, 'Layout', 'Annotation', 'contains');
+    expect(ok).toBe(true);
+    const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
+    const containsEdge = graphData.edges.find(
+      (e) => e.from === 'Layout' && e.to === 'Annotation' && e.type === 'contains'
+    );
+    expect(containsEdge).toBeDefined();
   });
 });
 

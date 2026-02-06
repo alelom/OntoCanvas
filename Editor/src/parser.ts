@@ -1,4 +1,4 @@
-import { DataFactory, Parser, Store, Writer } from 'n3';
+import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo } from './types';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
@@ -331,7 +331,8 @@ export function updateEdgeInStore(
     );
     return true;
   }
-  if (edgeType === 'partOf' || edgeType === 'contains') {
+  // Restriction-based edges
+  if (edgeType !== 'subClassOf') {
     if (!removeEdgeFromStore(store, oldFrom, oldTo, edgeType)) return false;
     return addEdgeToStore(store, newFrom, newTo, edgeType);
   }
@@ -411,7 +412,8 @@ export function addEdgeToStore(
     );
     return true;
   }
-  if (edgeType === 'partOf' || edgeType === 'contains') {
+  // Any edge type other than subClassOf is stored as an OWL restriction (onProperty + someValuesFrom)
+  if (edgeType !== 'subClassOf') {
     if (findRestrictionBlank(store, from, edgeType, to)) return false;
     const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
     const blank = new BlankNode();
