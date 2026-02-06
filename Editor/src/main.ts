@@ -24,6 +24,7 @@ import {
   estimateNodeDimensions,
   resolveOverlaps,
   matchesSearch,
+  formatEdgeLabel,
   COLORS,
 } from './graph';
 import './style.css';
@@ -223,13 +224,15 @@ function performDeleteSelection(): boolean {
   const redoActions: Array<() => void> = [];
 
   for (const { from, to, type } of edgesToRemove) {
+    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     const ok = removeEdgeFromStore(ttlStore, from, to, type);
     if (ok) {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
       undoActions.push(() => {
-        addEdgeToStore(ttlStore!, from, to, type);
-        rawData.edges.push({ from, to, type });
+        addEdgeToStore(ttlStore!, from, to, type, card);
+        rawData.edges.push(edge ?? { from, to, type });
       });
       redoActions.push(() => {
         removeEdgeFromStore(ttlStore!, from, to, type);
@@ -252,13 +255,15 @@ function performDeleteSelection(): boolean {
 
   for (const { from, to, type } of connectedEdges) {
     if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
+    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     const ok = removeEdgeFromStore(ttlStore, from, to, type);
     if (ok) {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
       undoActions.push(() => {
-        addEdgeToStore(ttlStore!, from, to, type);
-        rawData.edges.push({ from, to, type });
+        addEdgeToStore(ttlStore!, from, to, type, card);
+        rawData.edges.push(edge ?? { from, to, type });
       });
       redoActions.push(() => {
         removeEdgeFromStore(ttlStore!, from, to, type);
@@ -848,7 +853,7 @@ function buildNetworkData(filter: {
       from: e.from,
       to: e.to,
       arrows: 'to',
-      label: style.showLabel ? e.type : '',
+      label: style.showLabel ? formatEdgeLabel(e) : '',
       color: { color: style.color, highlight: style.color },
     };
   });
@@ -1143,6 +1148,12 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const cardWrap = document.getElementById('editEdgeCardinalityWrap')!;
+  const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
+  const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
+
+  const edge = rawData.edges.find((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType);
+
   modal.dataset.mode = 'edit';
   modal.dataset.oldFrom = edgeFrom;
   modal.dataset.oldTo = edgeTo;
@@ -1153,6 +1164,11 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
   const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
   typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${t}</option>`).join('');
+
+  minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
+  maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
+  cardWrap.style.display = edgeType !== 'subClassOf' ? 'block' : 'none';
+
   modal.querySelector('h3')!.textContent = 'Edit edge';
   modal.style.display = 'flex';
 }
@@ -1162,6 +1178,10 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const cardWrap = document.getElementById('editEdgeCardinalityWrap')!;
+  const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
+  const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
+
   modal.dataset.mode = 'add';
   pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;
@@ -1170,6 +1190,11 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${n.label}</option>`).join('');
   const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
   typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === 'subClassOf' ? ' selected' : ''}>${t}</option>`).join('');
+
+  minCardInput.value = '';
+  maxCardInput.value = '';
+  cardWrap.style.display = typeSel.value !== 'subClassOf' ? 'block' : 'none';
+
   modal.querySelector('h3')!.textContent = 'Add edge';
   modal.style.display = 'flex';
 }
@@ -1186,12 +1211,26 @@ function hideEditEdgeModal(): void {
   document.getElementById('editEdgeModal')!.style.display = 'none';
 }
 
+function getCardinalityFromEditModal(): { minCardinality?: number | null; maxCardinality?: number | null } | undefined {
+  const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
+  const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
+  const cardWrap = document.getElementById('editEdgeCardinalityWrap');
+  if (!cardWrap || cardWrap.style.display === 'none') return undefined;
+  const minVal = minCardInput?.value?.trim();
+  const maxVal = maxCardInput?.value?.trim();
+  const min = minVal === '' ? null : parseInt(minVal, 10);
+  const max = maxVal === '' ? null : parseInt(maxVal, 10);
+  if ((minVal !== '' && (isNaN(min!) || min! < 0)) || (maxVal !== '' && (isNaN(max!) || max! < 0))) return undefined;
+  return { minCardinality: minVal === '' ? null : min!, maxCardinality: maxVal === '' ? null : max! };
+}
+
 function confirmEditEdge(): void {
   const modal = document.getElementById('editEdgeModal')!;
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
   const mode = modal.dataset.mode;
+  const cardinality = getCardinalityFromEditModal();
 
   if (mode === 'add' && pendingAddEdgeData) {
     const { from, to, callback } = pendingAddEdgeData;
@@ -1200,13 +1239,19 @@ function confirmEditEdge(): void {
       hideEditEdgeModal();
       return;
     }
-    const ok = addEdgeToStore(ttlStore, from, to, newType);
+    const card = newType !== 'subClassOf' ? cardinality : undefined;
+    const ok = addEdgeToStore(ttlStore, from, to, newType, card);
     if (!ok) {
       alert('Failed to add edge. An edge may already exist between these nodes.');
       hideEditEdgeModal();
       return;
     }
-    rawData.edges.push({ from, to, type: newType });
+    const newEdge: import('./types').GraphEdge = { from, to, type: newType };
+    if (card) {
+      newEdge.minCardinality = card.minCardinality ?? undefined;
+      newEdge.maxCardinality = card.maxCardinality ?? undefined;
+    }
+    rawData.edges.push(newEdge);
     pushUndoable(
       () => {
         removeEdgeFromStore(ttlStore!, from, to, newType);
@@ -1214,8 +1259,8 @@ function confirmEditEdge(): void {
         if (i >= 0) rawData.edges.splice(i, 1);
       },
       () => {
-        addEdgeToStore(ttlStore!, from, to, newType);
-        rawData.edges.push({ from, to, type: newType });
+        addEdgeToStore(ttlStore!, from, to, newType, card);
+        rawData.edges.push(newEdge);
       }
     );
     hasUnsavedChanges = true;
@@ -1233,7 +1278,12 @@ function confirmEditEdge(): void {
   const newFrom = fromSel.value;
   const newTo = toSel.value;
   const newType = typeSel.value;
-  if (!ttlStore || (oldFrom === newFrom && oldTo === newTo && oldType === newType)) {
+  const oldEdge = rawData.edges.find((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+  const card = newType !== 'subClassOf' ? cardinality : undefined;
+  const sameEdge = oldFrom === newFrom && oldTo === newTo && oldType === newType &&
+    (card?.minCardinality ?? null) === (oldEdge?.minCardinality ?? null) &&
+    (card?.maxCardinality ?? null) === (oldEdge?.maxCardinality ?? null);
+  if (!ttlStore || sameEdge) {
     hideEditEdgeModal();
     return;
   }
@@ -1242,30 +1292,36 @@ function confirmEditEdge(): void {
     hideEditEdgeModal();
     return;
   }
-  const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType);
+  const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
   if (!addOk) {
-    addEdgeToStore(ttlStore, oldFrom, oldTo, oldType);
+    addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
     alert('Failed to update edge.');
     hideEditEdgeModal();
     return;
   }
   const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
   if (idx >= 0) rawData.edges.splice(idx, 1);
-  rawData.edges.push({ from: newFrom, to: newTo, type: newType });
+  const newEdge: import('./types').GraphEdge = { from: newFrom, to: newTo, type: newType };
+  if (card) {
+    newEdge.minCardinality = card.minCardinality ?? undefined;
+    newEdge.maxCardinality = card.maxCardinality ?? undefined;
+  }
+  rawData.edges.push(newEdge);
+  const oldCard = { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null };
   pushUndoable(
     () => {
       removeEdgeFromStore(ttlStore!, newFrom, newTo, newType);
-      addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType);
+      addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType, oldCard);
       const i = rawData.edges.findIndex((e) => e.from === newFrom && e.to === newTo && e.type === newType);
       if (i >= 0) rawData.edges.splice(i, 1);
-      rawData.edges.push({ from: oldFrom, to: oldTo, type: oldType });
+      rawData.edges.push({ from: oldFrom, to: oldTo, type: oldType, ...oldCard });
     },
     () => {
       removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType);
-      addEdgeToStore(ttlStore!, newFrom, newTo, newType);
+      addEdgeToStore(ttlStore!, newFrom, newTo, newType, card);
       const i = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
       if (i >= 0) rawData.edges.splice(i, 1);
-      rawData.edges.push({ from: newFrom, to: newTo, type: newType });
+      rawData.edges.push(newEdge);
     }
   );
   hasUnsavedChanges = true;
@@ -1545,6 +1601,13 @@ function renderApp(): void {
         <label>Relationship: <select id="editEdgeType"></select></label>
         <label style="display: block; margin-top: 8px;">From: <select id="editEdgeFrom"></select></label>
         <label style="display: block; margin-top: 8px;">To: <select id="editEdgeTo"></select></label>
+        <div id="editEdgeCardinalityWrap" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+          <strong style="font-size: 12px;">Cardinality</strong>
+          <div style="display: flex; gap: 12px; margin-top: 6px; align-items: center; flex-wrap: wrap;">
+            <label style="font-size: 11px;">Min: <input type="number" id="editEdgeMinCard" min="0" placeholder="0" style="width: 60px;"></label>
+            <label style="font-size: 11px;">Max: <input type="number" id="editEdgeMaxCard" min="0" placeholder="*" style="width: 60px;" title="Leave empty for unbounded"></label>
+          </div>
+        </div>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editEdgeCancel">Cancel</button>
           <button type="button" id="editEdgeConfirm" class="primary">OK</button>
@@ -1875,6 +1938,11 @@ function setupEventListeners(): void {
   document.getElementById('redoBtn')?.addEventListener('click', performRedo);
   document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModal);
   document.getElementById('editEdgeConfirm')?.addEventListener('click', confirmEditEdge);
+  document.getElementById('editEdgeType')?.addEventListener('change', () => {
+    const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+    const cardWrap = document.getElementById('editEdgeCardinalityWrap');
+    if (cardWrap) cardWrap.style.display = typeSel.value !== 'subClassOf' ? 'block' : 'none';
+  });
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModal();
   });

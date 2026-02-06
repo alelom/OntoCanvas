@@ -16,6 +16,12 @@ export interface GraphEdge {
   from: string;
   to: string;
   type: string;
+  /** Min cardinality (null = unbounded). For qualified restrictions. */
+  minCardinality?: number | null;
+  /** Max cardinality (null = unbounded). For qualified restrictions. */
+  maxCardinality?: number | null;
+  /** Target class for qualified cardinality (when different from edge 'to'). */
+  onClass?: string;
 }
 
 export interface GraphData {

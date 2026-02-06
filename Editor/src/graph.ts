@@ -52,6 +52,16 @@ export function getEdgeTypes(edges: GraphEdge[]): string[] {
   return [...types].sort();
 }
 
+/** Format edge label including cardinality when present, e.g. "contains [0..3]" or "partOf [1..*]" */
+export function formatEdgeLabel(edge: GraphEdge): string {
+  const min = edge.minCardinality;
+  const max = edge.maxCardinality;
+  if (min == null && max == null) return edge.type;
+  const minStr = min != null ? String(min) : '0';
+  const maxStr = max != null ? String(max) : '*';
+  return `${edge.type} [${minStr}..${maxStr}]`;
+}
+
 export function getNodeColor(node: GraphNode, colorBy: string): string {
   if (colorBy === 'default') return COLORS.default;
   const lr = node.labellableRoot;
