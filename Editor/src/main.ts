@@ -1283,6 +1283,10 @@ function confirmRename(): void {
     }
     const nodeIds: string[] = JSON.parse(nodeIdsJson);
     const newLabellable = labellableCb.checked;
+    const oldVals = nodeIds.map((id) => {
+      const n = rawData.nodes.find((x) => x.id === id);
+      return { id, labellable: n?.labellableRoot };
+    });
     let anyChanged = false;
     for (const nodeId of nodeIds) {
       const node = rawData.nodes.find((n) => n.id === nodeId);
@@ -1295,10 +1299,6 @@ function confirmRename(): void {
       }
     }
     if (anyChanged) {
-      const oldVals = nodeIds.map((id) => {
-        const n = rawData.nodes.find((x) => x.id === id);
-        return { id, labellable: n?.labellableRoot };
-      });
       pushUndoable(
         () => {
           oldVals.forEach(({ id, labellable }) => {
