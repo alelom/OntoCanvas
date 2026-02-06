@@ -24,6 +24,7 @@ import {
   estimateNodeDimensions,
   resolveOverlaps,
   matchesSearch,
+  COLORS,
 } from './graph';
 import './style.css';
 
@@ -307,12 +308,6 @@ function performDeleteSelection(): boolean {
   network.unselectAll();
   return true;
 }
-const COLORS = {
-  labellable: '#2ecc71',
-  nonLabellable: '#b8b8b8',
-  unknown: '#95a5a6',
-  default: '#3498db',
-};
 const SPACING = getSpacing();
 
 function initEdgeStylesMenu(
@@ -1158,6 +1153,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
   const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
   typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${t}</option>`).join('');
+  modal.querySelector('h3')!.textContent = 'Edit edge';
   modal.style.display = 'flex';
 }
 

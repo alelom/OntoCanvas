@@ -1,7 +1,7 @@
 import type { DataSet } from 'vis-network';
 import type { GraphData, GraphEdge, GraphNode } from './types';
 
-const COLORS = {
+export const COLORS = {
   labellable: '#2ecc71',
   nonLabellable: '#b8b8b8',
   unknown: '#95a5a6',
