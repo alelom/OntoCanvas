@@ -173,7 +173,6 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
             <select id="layoutMode">
                 <option value="weighted">Weighted (leaves sink, roots rise)</option>
                 <option value="force">Force-directed</option>
-                <option value="hierarchical">Hierarchical</option>
             </select>
         </div>
         <div>
@@ -595,15 +594,6 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
                 }};
             }} else {{
                 base.physics = {{ enabled: false }};
-                base.layout = {{
-                    hierarchical: {{
-                        direction: 'UD',
-                        sortMethod: 'directed',
-                        nodeSpacing: SPACING * 0.6,
-                        levelSeparation: SPACING * 0.8,
-                        treeSpacing: SPACING
-                    }}
-                }};
             }}
             return base;
         }}
@@ -633,14 +623,14 @@ def generate_html(nodes: list[dict], edges: list[dict]) -> str:
                 network.setOptions(options);
                 if (layoutMode === 'force') {{
                     network.once('stabilizationIterationsDone', () => network.fit());
-                }} else if (layoutMode === 'weighted' || layoutMode === 'hierarchical') {{
+                }} else if (layoutMode === 'weighted') {{
                     setTimeout(() => network.fit({{ padding: 20 }}), 100);
                 }}
             }} else {{
                 network = new vis.Network(container, data, options);
                 if (layoutMode === 'force') {{
                     network.once('stabilizationIterationsDone', () => network.fit());
-                }} else if (layoutMode === 'weighted' || layoutMode === 'hierarchical') {{
+                }} else if (layoutMode === 'weighted') {{
                     setTimeout(() => network.fit({{ padding: 20 }}), 100);
                 }}
                 network.on('click', params => {{

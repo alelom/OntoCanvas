@@ -13,7 +13,7 @@ Then open `Visualizer/visualizer.html` in a browser. Features:
 - **Labellable filter**: All / labellable only / non-labellable only
 - **Edge type**: Filter by relationship — subClassOf (taxonomy), contains (containment), partOf (inverse of contains)
 - **Node color by**: Labellable status (green/red) or default
-- **Layout**: Fixed hierarchical — roots (e.g. Drawing sheet) at top, leaves at bottom; same-level siblings cluster by parent
+- **Layout**: Weighted (roots rise, leaves sink) or force-directed; same-level siblings cluster by parent in weighted mode
 - **Spacing**: Slider (50–300) — vertical separation between levels and horizontal spread
 - **Reset / Fit**: Zoom controls
 

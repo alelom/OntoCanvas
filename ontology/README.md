@@ -26,6 +26,19 @@ OWL ontology derived from the first page of `250523_Ontology_schema_rev02.pdf` (
 - `hasFunction` — facade component has function
 - `hasMaterial` — facade component has material
 
+### Why OWL restrictions for partOf and contains
+
+`partOf` and `contains` are **object properties**: they relate individuals to individuals, not classes to classes. In OWL, class axioms describe constraints on instances. To express "instances of Annotation are part of some Layout" at the class level, we use an **OWL restriction**:
+
+```turtle
+:Annotation rdfs:subClassOf [ rdf:type owl:Restriction ;
+                              owl:onProperty :partOf ;
+                              owl:someValuesFrom :Layout
+                            ] .
+```
+
+This means: every instance of Annotation has at least one `partOf` link to some instance of Layout. A direct triple `(Annotation, partOf, Layout)` would not have this meaning in OWL. The restriction is the standard, minimal way to model class-level partOf/contains relationships.
+
 ## Key Relationships (from diagram)
 
 - **DrawingSheet** contains: Layout(s), Metadata, Orientation

@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Editor (Node/npm)
+Editor/node_modules/
+Editor/dist/

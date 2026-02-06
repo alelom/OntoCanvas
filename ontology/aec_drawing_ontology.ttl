@@ -16,6 +16,7 @@
 
 ###  http://example.org/aec-drawing-ontology#labellableRoot
 :labellableRoot rdf:type owl:AnnotationProperty ;
+                rdfs:range xsd:boolean ;
                 rdfs:comment "When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour)." ;
                 rdfs:label "Labellable root" .
 
