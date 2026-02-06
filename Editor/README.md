@@ -4,8 +4,8 @@ Interactive ontology visualizer with TTL file support. Same visualization featur
 
 ## Features
 
-- **Load default ontology** – AEC Drawing Ontology (bundled)
-- **Select TTL file** – Load any `.ttl` or `.turtle` file from your machine
+- **Load ontology from file** – Open any `.ttl` or `.turtle` ontology from your machine
+- **Load last opened ontology** – Quickly reopen the most recently used ontology file
 - **Labellable filter** – All / labellable only / non-labellable only
 - **Node color by** – Labellable status or default
 - **Layout** – Weighted or force-directed
