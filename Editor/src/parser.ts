@@ -143,14 +143,9 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
 
       if (propName === 'partOf') {
         const key1 = `${subjName}->${targetName}`;
-        const key2 = `${targetName}->${subjName}`;
         if (!seenPairs.has(key1)) {
           seenPairs.add(key1);
           edges.push({ from: subjName, to: targetName, type: 'partOf' });
-        }
-        if (!seenPairs.has(key2)) {
-          seenPairs.add(key2);
-          edges.push({ from: targetName, to: subjName, type: 'contains' });
         }
       } else {
         const key = `${subjName}->${targetName}`;

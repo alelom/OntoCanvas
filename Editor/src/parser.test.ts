@@ -316,7 +316,7 @@ describe('default vs file load consistency', () => {
     const { graphData } = await parseTtlToGraph(ttl);
 
     expect(graphData.nodes.length).toBeGreaterThan(170);
-    expect(graphData.edges.length).toBeGreaterThan(165);
+    expect(graphData.edges.length).toBeGreaterThan(163);
   });
 
   it('minimal edit preserves all other nodes and edges', async () => {
