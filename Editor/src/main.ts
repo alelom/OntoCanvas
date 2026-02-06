@@ -32,6 +32,180 @@ import './style.css';
 const IDB_NAME = 'OntologyEditor';
 const IDB_STORE = 'lastFile';
 const IDB_KEY = 'handle';
+const IDB_DISPLAY_NAME = 'OntologyEditorDisplay';
+const IDB_DISPLAY_STORE = 'config';
+
+interface DisplayConfig {
+  version: number;
+  nodePositions: Record<string, { x: number; y: number }>;
+  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
+  wrapChars: number;
+  minFontSize: number;
+  maxFontSize: number;
+  relationshipFontSize: number;
+  layoutMode: string;
+  searchQuery: string;
+  includeNeighbors: boolean;
+  annotationStyleConfig?: unknown;
+  viewState?: { scale: number; position: { x: number; y: number } };
+}
+
+const DISPLAY_CONFIG_VERSION = 1;
+
+function getDisplayConfigKey(): string | null {
+  return loadedFilePath || loadedFileName || null;
+}
+
+/** Normalize to filename for consistent lookup across different load paths. */
+function getDisplayConfigKeyNormalized(): string | null {
+  const raw = getDisplayConfigKey();
+  if (!raw) return null;
+  const basename = raw.replace(/^.*[/\\]/, '');
+  return basename || raw;
+}
+
+async function openDisplayConfigDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DISPLAY_NAME, 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_DISPLAY_STORE)) {
+        db.createObjectStore(IDB_DISPLAY_STORE);
+      }
+    };
+  });
+}
+
+async function loadDisplayConfigFromIndexedDB(): Promise<DisplayConfig | null> {
+  const keysToTry = [
+    getDisplayConfigKeyNormalized(),
+    getDisplayConfigKey(),
+  ].filter((k): k is string => !!k);
+  const seen = new Set<string>();
+  const uniqueKeys = keysToTry.filter((k) => {
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  if (uniqueKeys.length === 0) return null;
+  try {
+    const db = await openDisplayConfigDB();
+    for (const key of uniqueKeys) {
+      const result = await new Promise<DisplayConfig | null>((resolve) => {
+        const tx = db.transaction(IDB_DISPLAY_STORE, 'readonly');
+        const store = tx.objectStore(IDB_DISPLAY_STORE);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          const v = req.result;
+          resolve(v && typeof v === 'object' && v.version === DISPLAY_CONFIG_VERSION ? v : null);
+        };
+        req.onerror = () => resolve(null);
+      });
+      if (result) {
+        db.close();
+        return result;
+      }
+    }
+    db.close();
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+async function saveDisplayConfigToIndexedDB(config: DisplayConfig): Promise<void> {
+  const key = getDisplayConfigKeyNormalized() || getDisplayConfigKey();
+  if (!key) return;
+  try {
+    const db = await openDisplayConfigDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_DISPLAY_STORE);
+      store.put({ ...config, version: DISPLAY_CONFIG_VERSION }, key);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  } catch {
+    // ignore
+  }
+}
+
+function collectDisplayConfig(): DisplayConfig | null {
+  if (rawData.nodes.length === 0) return null;
+  const edgeStylesContent = document.getElementById('edgeStylesContent');
+  const annotationPropsContent = document.getElementById('annotationPropsContent');
+  const nodePositions: Record<string, { x: number; y: number }> = {};
+  rawData.nodes.forEach((n) => {
+    if (n.x != null && n.y != null) nodePositions[n.id] = { x: n.x, y: n.y };
+  });
+  return {
+    version: DISPLAY_CONFIG_VERSION,
+    nodePositions,
+    edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent) : {},
+    wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 10,
+    minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
+    maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
+    relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 14,
+    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'weighted',
+    searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
+    includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
+    annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent) : undefined,
+    viewState: network
+      ? { scale: network.getScale(), position: network.getViewPosition() }
+      : undefined,
+  };
+}
+
+function applyDisplayConfig(config: DisplayConfig): void {
+  Object.entries(config.nodePositions || {}).forEach(([id, pos]) => {
+    const node = rawData.nodes.find((n) => n.id === id);
+    if (node) {
+      node.x = pos.x;
+      node.y = pos.y;
+    }
+  });
+  (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 10);
+  (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
+  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 80);
+  (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 14);
+  (document.getElementById('layoutMode') as HTMLSelectElement).value = config.layoutMode ?? 'weighted';
+  (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
+  (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
+  const edgeStyleConfig = config.edgeStyleConfig || {};
+  if (document.getElementById('edgeStylesContent')) {
+    getEdgeTypes(rawData.edges).forEach((type) => {
+      const c = edgeStyleConfig[type];
+      if (c) {
+        const showCb = document.querySelector(`.edge-show-cb[data-type="${type}"]`) as HTMLInputElement | null;
+        const labelCb = document.querySelector(`.edge-label-cb[data-type="${type}"]`) as HTMLInputElement | null;
+        const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement | null;
+        if (showCb) showCb.checked = c.show !== false;
+        if (labelCb) labelCb.checked = c.showLabel !== false;
+        if (colorEl) colorEl.value = c.color || getDefaultEdgeColors()[type] || getDefaultColor();
+      }
+    });
+  }
+  // Annotation style config is stored but restoration is deferred (complex DOM structure)
+}
+
+let displayConfigSaveTimer: number | null = null;
+
+function scheduleDisplayConfigSave(): void {
+  if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
+  displayConfigSaveTimer = window.setTimeout(() => {
+    displayConfigSaveTimer = null;
+    const config = collectDisplayConfig();
+    if (config) saveDisplayConfigToIndexedDB(config).catch(() => {});
+  }, 500);
+}
 
 async function getLastFileFromIndexedDB(): Promise<{
   handle: FileSystemFileHandle;
@@ -1582,6 +1756,10 @@ function renderApp(): void {
           </label>
         </span>
       </span>
+      <span id="displayConfigGroup" style="display: none; gap: 8px; align-items: center;">
+        <button type="button" id="saveDisplayConfig" title="Save display config to a .display.json file (e.g. next to your ontology)">Save display config</button>
+        <button type="button" id="loadDisplayConfig" title="Load display config from a .display.json file">Load display config</button>
+      </span>
       </div>
       <div id="errorMsg" class="error" style="display: none;"></div>
     </div>
@@ -1673,15 +1851,33 @@ async function loadTtlAndRender(
     updateSaveButtonVisibility();
 
     vizControls.style.display = 'contents';
+    const displayConfigGroup = document.getElementById('displayConfigGroup');
+    if (displayConfigGroup) displayConfigGroup.style.display = 'inline-flex';
 
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
     if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
 
+    let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
+    const displayConfig = await loadDisplayConfigFromIndexedDB();
+    if (displayConfig) {
+      applyDisplayConfig(displayConfig);
+      if (displayConfig.viewState) savedViewState = displayConfig.viewState;
+    }
+
     // Allow layout to settle after vizControls appears, then render
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => applyFilter());
+      requestAnimationFrame(() => {
+        applyFilter();
+        if (network && savedViewState) {
+          network.moveTo({
+            scale: savedViewState.scale,
+            position: savedViewState.position,
+            animation: false,
+          });
+        }
+      });
     });
   } catch (err) {
     errorMsg.textContent = `Parse error: ${err instanceof Error ? err.message : String(err)}`;
@@ -1848,6 +2044,18 @@ function applyFilter(preserveView = false): void {
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
     });
+    network.on('dragEnd', () => {
+      if (!network) return;
+      const positions = network.getPositions();
+      Object.entries(positions).forEach(([id, pos]) => {
+        const node = rawData.nodes.find((n) => n.id === id);
+        if (node && pos) {
+          node.x = pos.x;
+          node.y = pos.y;
+        }
+      });
+      scheduleDisplayConfigSave();
+    });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
       if (!network) return;
       if (!params.nodes.length) return;
@@ -1868,6 +2076,8 @@ function applyFilter(preserveView = false): void {
   (document.getElementById('edgeCount')!).textContent = String(
     data.edges.length
   );
+
+  scheduleDisplayConfigSave();
 }
 
 function setupEventListeners(): void {
@@ -2055,6 +2265,108 @@ function setupEventListeners(): void {
     network?.fit();
   });
   document.getElementById('saveChanges')?.addEventListener('click', saveTtl);
+
+  document.getElementById('saveDisplayConfig')?.addEventListener('click', async () => {
+    if (rawData.nodes.length === 0) return;
+    if (network) {
+      const positions = network.getPositions();
+      Object.entries(positions).forEach(([id, pos]) => {
+        const node = rawData.nodes.find((n) => n.id === id);
+        if (node && pos) {
+          node.x = pos.x;
+          node.y = pos.y;
+        }
+      });
+    }
+    const config = collectDisplayConfig();
+    if (!config) return;
+    const baseName = (loadedFileName || loadedFilePath || 'ontology').replace(/\.(ttl|turtle)$/i, '');
+    const suggestedName = `${baseName}.display.json`;
+    try {
+      if ('showSaveFilePicker' in window) {
+        const handle = await (window as Window & { showSaveFilePicker: (o?: { suggestedName?: string; types?: object[] }) => Promise<FileSystemFileHandle> })
+          .showSaveFilePicker({ suggestedName, types: [{ accept: { 'application/json': ['.json'] } }] });
+        const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' }));
+        a.download = suggestedName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+        errorMsg.textContent = `Failed to save display config: ${err instanceof Error ? err.message : String(err)}`;
+        errorMsg.style.display = 'block';
+      }
+    }
+  });
+
+  const loadDisplayConfigInput = document.createElement('input');
+  loadDisplayConfigInput.type = 'file';
+  loadDisplayConfigInput.accept = '.json,application/json';
+  loadDisplayConfigInput.style.display = 'none';
+  document.body.appendChild(loadDisplayConfigInput);
+  loadDisplayConfigInput.addEventListener('change', async () => {
+    const file = loadDisplayConfigInput.files?.[0];
+    loadDisplayConfigInput.value = '';
+    if (!file || rawData.nodes.length === 0) return;
+    try {
+      const text = await file.text();
+      const config = JSON.parse(text) as DisplayConfig;
+      if (!config || typeof config !== 'object') throw new Error('Invalid config format');
+      applyDisplayConfig(config);
+      applyFilter();
+      if (network && config.viewState) {
+        network.moveTo({
+          scale: config.viewState.scale,
+          position: config.viewState.position,
+          animation: false,
+        });
+      }
+      saveDisplayConfigToIndexedDB(config).catch(() => {});
+    } catch (err) {
+      const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+      errorMsg.textContent = `Failed to load display config: ${err instanceof Error ? err.message : String(err)}`;
+      errorMsg.style.display = 'block';
+    }
+  });
+
+  document.getElementById('loadDisplayConfig')?.addEventListener('click', async () => {
+    if (rawData.nodes.length === 0) return;
+    try {
+      if ('showOpenFilePicker' in window) {
+        const [handle] = await (window as Window & { showOpenFilePicker: (o?: object) => Promise<FileSystemFileHandle[]> })
+          .showOpenFilePicker({ types: [{ accept: { 'application/json': ['.json'] } }] });
+        const file = await handle.getFile();
+        const text = await file.text();
+        const config = JSON.parse(text) as DisplayConfig;
+        if (!config || typeof config !== 'object') throw new Error('Invalid config format');
+        applyDisplayConfig(config);
+        applyFilter();
+        if (network && config.viewState) {
+          network.moveTo({
+            scale: config.viewState.scale,
+            position: config.viewState.position,
+            animation: false,
+          });
+        }
+        saveDisplayConfigToIndexedDB(config).catch(() => {});
+      } else {
+        loadDisplayConfigInput.click();
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+        errorMsg.textContent = `Failed to load display config: ${err instanceof Error ? err.message : String(err)}`;
+        errorMsg.style.display = 'block';
+      }
+    }
+  });
 
   const redrawNetworkOnMenuToggle = (): void => {
     requestAnimationFrame(() => {
