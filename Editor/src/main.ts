@@ -435,10 +435,16 @@ function renderLineTypeDropdown(
     </div>`;
 }
 
+let annotationPropsMenuClickAbort: AbortController | null = null;
+
 function initAnnotationPropsMenu(
   container: HTMLElement,
   onApply: () => void
 ): void {
+  annotationPropsMenuClickAbort?.abort();
+  annotationPropsMenuClickAbort = new AbortController();
+  const signal = annotationPropsMenuClickAbort.signal;
+
   container.innerHTML = '';
   const boolProps = annotationProperties.filter((ap) => ap.isBoolean);
   const textProps = annotationProperties.filter((ap) => !ap.isBoolean);
@@ -556,9 +562,13 @@ function initAnnotationPropsMenu(
       }
     });
   });
-  document.addEventListener('click', () => {
-    container.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
-  });
+  document.addEventListener(
+    'click',
+    () => {
+      container.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
+    },
+    { signal }
+  );
 }
 
 function getAnnotationStyleConfig(container: HTMLElement | null): AnnotationStyleConfig {
