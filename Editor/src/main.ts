@@ -331,7 +331,7 @@ function initEdgeStylesMenu(
         <span>Show</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
-        <input type="checkbox" class="edge-label-cb" data-type="${type}">
+        <input type="checkbox" class="edge-label-cb" data-type="${type}" checked>
         <span>Label</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px;">
@@ -362,7 +362,7 @@ function getEdgeStyleConfig(
     ) as HTMLInputElement | null;
     config[type] = {
       show: showCb?.checked ?? true,
-      showLabel: labelCb?.checked ?? false,
+      showLabel: labelCb?.checked ?? true,
       color: colorEl?.value ?? getDefaultEdgeColors()[type] ?? getDefaultColor(),
     };
   });
@@ -845,7 +845,7 @@ function buildNetworkData(filter: {
 
   const edges = filteredEdges.map((e) => {
     const style = edgeStyleConfig[e.type] || {
-      showLabel: false,
+      showLabel: true,
       color: getDefaultColor(),
     };
     return {
@@ -856,6 +856,26 @@ function buildNetworkData(filter: {
       label: style.showLabel ? formatEdgeLabel(e) : '',
       color: { color: style.color, highlight: style.color },
     };
+  });
+
+  // Assign smooth curves to overlapping edges (same node pair) to avoid label/line overlap
+  const pairToEdges = new Map<string, Array<Record<string, unknown>>>();
+  edges.forEach((edgeObj) => {
+    const pairKey = [edgeObj.from, edgeObj.to].sort().join('|');
+    if (!pairToEdges.has(pairKey)) pairToEdges.set(pairKey, []);
+    pairToEdges.get(pairKey)!.push(edgeObj as Record<string, unknown>);
+  });
+  pairToEdges.forEach((list) => {
+    if (list.length >= 2) {
+      list.forEach((edgeObj, i) => {
+        const smoothTypes = ['curvedCW', 'curvedCCW'] as const;
+        const roundness = 0.15 + (i >> 1) * 0.1;
+        edgeObj.smooth = {
+          type: smoothTypes[i % 2],
+          roundness: i % 2 === 0 ? roundness : -roundness,
+        };
+      });
+    }
   });
 
   return {
@@ -1963,7 +1983,7 @@ function setupEventListeners(): void {
     document.getElementById('searchAutocomplete')?.classList.remove('visible');
     textDisplayPopup && (textDisplayPopup.style.display = 'none');
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
-    document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = false));
+    document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     getEdgeTypes(rawData.edges).forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
       if (colorEl) colorEl.value = getDefaultEdgeColors()[type] ?? getDefaultColor();
