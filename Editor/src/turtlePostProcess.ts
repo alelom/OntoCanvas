@@ -36,8 +36,8 @@ function applyStyleFixes(raw: string): string {
   output = output.replace(/ a (owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
   output = output.replace(/ a :/g, ' rdf:type :');
   output = output.replace(/ a </g, ' rdf:type <');
-  output = output.replace(/ false(?=[.;\s\n]|$)/g, '"false"^^xsd:boolean');
-  output = output.replace(/ true(?=[.;\s\n]|$)/g, '"true"^^xsd:boolean');
+  output = output.replace(/ false(?=[.;\s\n]|$)/g, ' "false"^^xsd:boolean');
+  output = output.replace(/ true(?=[.;\s\n]|$)/g, ' "true"^^xsd:boolean');
   return output;
 }
 
@@ -188,34 +188,39 @@ function removeBlankBlocks(raw: string, blankIds: Set<string>): string {
     const ref = id.startsWith('_:') ? id : `_:${id}`;
     return ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }).join('|');
-  // Match blank node block: _:n3-X ... until " ." at end of triple
-  const re = new RegExp(`(^|\\n)\\s*(${escaped})\\s+[\\s\\S]*? \\.\\s*(\\n|$)`, 'gm');
+  // Match blank node block: _:n3-X ... until period at end of triple (allow optional space before .)
+  const re = new RegExp(`(^|\\n)\\s*(${escaped})\\s+[\\s\\S]*?\\s*\\.\\s*(\\n|$)`, 'gm');
   return raw.replace(re, (m) => (m.startsWith('\n') ? '\n' : ''));
 }
 
 function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): string {
   let output = raw;
-  for (const [id, inline] of inlineBlanks) {
+  // Process in reverse dependency order so nested blanks get replaced first
+  const sorted = [...inlineBlanks.entries()].reverse();
+  for (const [id, inline] of sorted) {
     const ref = id.startsWith('_:') ? id : `_:${id}`;
-    const re = new RegExp(`(?<![\\w:-])${ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[.;\\s\\]\\n]|$)`, 'g');
+    const escapedRef = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Include comma in lookahead for comma-separated object lists (e.g. rdfs:subClassOf _:n3-0, _:n3-1)
+    const re = new RegExp(`(?<![\\w:-])${escapedRef}(?=[.,;\\s\\]\\n]|$)`, 'g');
     output = output.replace(re, inline);
   }
   return output;
 }
 
 function convertBlanksToInline(raw: string): string {
-  const parser = new Parser({ format: 'text/turtle' });
+  const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
   let quads: Quad[];
   try {
-    quads = parser.parse(raw);
-  } catch {
+    quads = [...parser.parse(raw)];
+  } catch (e) {
     return raw;
   }
 
   const blankAsObject = new Set<string>();
   for (const q of quads) {
     if (q.object.termType === 'BlankNode') {
-      blankAsObject.add(blankNodeId(q.object as BlankNode));
+      const id = blankNodeId(q.object as BlankNode);
+      blankAsObject.add(id);
     }
   }
   if (blankAsObject.size === 0) return raw;

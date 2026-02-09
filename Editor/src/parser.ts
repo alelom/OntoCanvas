@@ -525,7 +525,6 @@ export function storeToTurtle(store: Store): Promise<string> {
   return new Promise((resolve, reject) => {
     const writer = new Writer({
       prefixes: TURTLE_PREFIXES,
-      baseIRI: 'http://example.org/aec-drawing-ontology#',
     });
     for (const q of store) {
       writer.addQuad(q);

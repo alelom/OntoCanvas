@@ -289,12 +289,13 @@ describe('storeToTurtle (save)', () => {
     expect(output).toMatch(/#\s+Classes/);
   });
 
-  it('output includes @base when using relative IRIs', async () => {
+  it('output uses :prefix style for ontology IRIs', async () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
     const output = await storeToTurtle(store);
 
-    expect(output).toMatch(/@base\s+<http:\/\/example\.org\/aec-drawing-ontology#>?\s*\./);
+    expect(output).toMatch(/@prefix : <http:\/\/example\.org\/aec-drawing-ontology#>?\s*\./);
+    expect(output).toMatch(/:Ontology|:Layout|:FacadeComponent/);
   });
 
   it('output does not repeat section dividers', async () => {
@@ -315,6 +316,15 @@ describe('storeToTurtle (save)', () => {
     expect(output).not.toMatch(/\b a (owl|rdf|rdfs|xsd|xml):/);
     expect(output).toMatch(/"false"\^\^xsd:boolean/);
     expect(output).not.toMatch(/\blabellableRoot false[.;\s]/);
+  });
+
+  it('output inlines blank nodes (rdfs:subClassOf uses [ ... ] not _:n3-X)', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const output = await storeToTurtle(store);
+
+    expect(output).not.toMatch(/_\s*:\s*n3-\d/);
+    expect(output).toMatch(/\[\s*rdf:type\s+owl:Restriction/);
   });
 });
 
