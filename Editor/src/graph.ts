@@ -24,7 +24,7 @@ export interface FilterState {
   relationshipFontSize?: number;
   searchQuery: string;
   includeNeighbors: boolean;
-  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
+  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: string }>;
   layoutMode: string;
 }
 

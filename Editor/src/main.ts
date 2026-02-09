@@ -42,7 +42,7 @@ const IDB_DISPLAY_STORE = 'config';
 interface DisplayConfig {
   version: number;
   nodePositions: Record<string, { x: number; y: number }>;
-  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
+  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }>;
   wrapChars: number;
   minFontSize: number;
   maxFontSize: number;
@@ -191,9 +191,17 @@ function applyDisplayConfig(config: DisplayConfig): void {
         const showCb = document.querySelector(`.edge-show-cb[data-type="${type}"]`) as HTMLInputElement | null;
         const labelCb = document.querySelector(`.edge-label-cb[data-type="${type}"]`) as HTMLInputElement | null;
         const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement | null;
+        const lineTypeEl = document.querySelector(`.edge-linetype[data-type="${type}"]`) as HTMLInputElement | null;
         if (showCb) showCb.checked = c.show !== false;
         if (labelCb) labelCb.checked = c.showLabel !== false;
         if (colorEl) colorEl.value = c.color || getDefaultEdgeColors()[type] || getDefaultColor();
+        if (lineTypeEl && c.lineType) {
+          lineTypeEl.value = c.lineType;
+          const dropdown = lineTypeEl.closest('.ap-linetype-dropdown');
+          const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
+          const opt = BORDER_LINE_OPTIONS.find((o) => o.value === c.lineType);
+          if (trigger && opt) trigger.innerHTML = `${renderLineTypeSvg(opt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
+        }
       }
     });
     updateEdgeColorsLegend();
@@ -647,6 +655,10 @@ function initEdgeStylesMenu(
         <span style="font-size: 11px;">Color:</span>
         <input type="color" class="edge-color-picker" data-type="${type}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
       </label>
+      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
+        <span>B. Line:</span>
+        ${renderEdgeLineTypeDropdown(type, 'solid')}
+      </label>
       ${editBtn}
       ${deleteBtn}
     `;
@@ -655,12 +667,50 @@ function initEdgeStylesMenu(
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(); }));
+
+  edgeStylesContent.querySelectorAll('.ap-linetype-trigger').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dropdown = btn.closest('.ap-linetype-dropdown');
+      const panel = dropdown?.querySelector('.ap-linetype-panel') as HTMLElement;
+      const isOpen = panel?.style.display === 'block';
+      edgeStylesContent.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
+      if (panel && !isOpen) panel.style.display = 'block';
+    });
+  });
+  edgeStylesContent.querySelectorAll('.ap-linetype-option').forEach((opt) => {
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const value = (opt as HTMLElement).dataset.value as BorderLineType;
+      const dropdown = opt.closest('.ap-linetype-dropdown');
+      const hiddenInput = dropdown?.querySelector('.edge-linetype') as HTMLInputElement;
+      const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
+      if (hiddenInput && trigger && value) {
+        hiddenInput.value = value;
+        const selectedOpt = BORDER_LINE_OPTIONS.find((o) => o.value === value);
+        if (selectedOpt) {
+          trigger.innerHTML = `${renderLineTypeSvg(selectedOpt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
+        }
+        (dropdown?.querySelector('.ap-linetype-panel') as HTMLElement).style.display = 'none';
+        onApply();
+        updateEdgeColorsLegend();
+      }
+    });
+  });
   edgeStylesContent.querySelectorAll('.edge-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
       showEditRelationshipTypeModal(type, edgeStylesContent, onApply);
     });
   });
+  if (!edgeLineTypeDocListenerAdded) {
+    edgeLineTypeDocListenerAdded = true;
+    document.addEventListener('click', () => {
+      const edgeStylesContentEl = document.getElementById('edgeStylesContent');
+      edgeStylesContentEl?.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
+    });
+  }
+
   edgeStylesContent.querySelectorAll('.edge-delete-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
@@ -684,6 +734,8 @@ function initEdgeStylesMenu(
   });
   updateEdgeColorsLegend();
 }
+
+let edgeLineTypeDocListenerAdded = false;
 
 let addRelationshipTypeHandlersInitialized = false;
 
@@ -734,8 +786,8 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
 
 function getEdgeStyleConfig(
   edgeStylesContent: HTMLElement
-): Record<string, { show: boolean; showLabel: boolean; color: string }> {
-  const config: Record<string, { show: boolean; showLabel: boolean; color: string }> = {};
+): Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> {
+  const config: Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> = {};
   getAllRelationshipTypes().forEach((type) => {
     const showCb = edgeStylesContent.querySelector(
       `.edge-show-cb[data-type="${type}"]`
@@ -746,10 +798,15 @@ function getEdgeStyleConfig(
     const colorEl = edgeStylesContent.querySelector(
       `.edge-color-picker[data-type="${type}"]`
     ) as HTMLInputElement | null;
+    const lineTypeEl = edgeStylesContent.querySelector(
+      `.edge-linetype[data-type="${type}"]`
+    ) as HTMLInputElement | null;
+    const lineType = (lineTypeEl?.value as BorderLineType) ?? 'solid';
     config[type] = {
       show: showCb?.checked ?? true,
       showLabel: labelCb?.checked ?? true,
       color: colorEl?.value ?? getDefaultEdgeColors()[type] ?? getDefaultColor(),
+      lineType,
     };
   });
   return config;
@@ -838,6 +895,28 @@ function renderLineTypeDropdown(
     </div>`;
 }
 
+/** Line type dropdown for edges (uses data-type instead of data-prop/data-val). */
+function renderEdgeLineTypeDropdown(type: string, selected: BorderLineType): string {
+  const selectedOpt = BORDER_LINE_OPTIONS.find((o) => o.value === selected) ?? BORDER_LINE_OPTIONS[0];
+  const optionsHtml = BORDER_LINE_OPTIONS.map(
+    (opt) => `
+    <div class="ap-linetype-option" data-value="${opt.value}" style="display: flex; align-items: center; padding: 4px 8px; cursor: pointer; font-size: 11px; border-bottom: 1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='#fff'">
+      ${renderLineTypeSvg(opt.svgDasharray)}
+    </div>`
+  ).join('');
+  return `
+    <div class="ap-linetype-dropdown" style="position: relative; display: inline-block;">
+      <input type="hidden" class="edge-linetype" data-type="${type}" value="${selected}">
+      <button type="button" class="ap-linetype-trigger" style="display: flex; align-items: center; padding: 2px 6px; border: 1px solid #ccc; border-radius: 3px; background: #fff; cursor: pointer; font-size: 11px;">
+        ${renderLineTypeSvg(selectedOpt.svgDasharray)}
+        <span style="margin-left: 4px;">▾</span>
+      </button>
+      <div class="ap-linetype-panel" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 2px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1001; min-width: 60px;">
+        ${optionsHtml}
+      </div>
+    </div>`;
+}
+
 let annotationPropsMenuClickAbort: AbortController | null = null;
 
 function initAnnotationPropsMenu(
@@ -868,7 +947,7 @@ function initAnnotationPropsMenu(
             <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
               <div><span style="font-size: 10px;">Fill:</span> <input type="color" class="ap-bool-fill" data-prop="${ap.name}" data-val="${dataVal}" value="${defaults.fill}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
               <div><span style="font-size: 10px;">Border:</span> <input type="color" class="ap-bool-border" data-prop="${ap.name}" data-val="${dataVal}" value="${defaults.border}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
-              <div><span style="font-size: 10px;">Line:</span> ${renderLineTypeDropdown(ap.name, dataVal, defaults.lineType, 'ap-bool-linetype')}</div>
+              <div><span style="font-size: 10px;">B. Line:</span> ${renderLineTypeDropdown(ap.name, dataVal, defaults.lineType, 'ap-bool-linetype')}</div>
             </div>
           </div>`;
       };
@@ -905,7 +984,7 @@ function initAnnotationPropsMenu(
           <div style="display: flex; flex-direction: column; gap: 4px;">
             <div><span style="font-size: 10px;">Fill:</span> <input type="color" class="ap-regex-fill" value="${fillColor}" style="width: 24px; height: 18px;"></div>
             <div><span style="font-size: 10px;">Border:</span> <input type="color" class="ap-regex-border" value="${borderColor}" style="width: 24px; height: 18px;"></div>
-            <div><span style="font-size: 10px;">Line:</span> ${renderLineTypeDropdown(ap.name, '', borderLineType, 'ap-regex-linetype')}</div>
+            <div><span style="font-size: 10px;">B. Line:</span> ${renderLineTypeDropdown(ap.name, '', borderLineType, 'ap-regex-linetype')}</div>
           </div>
           <button type="button" class="ap-remove-rule" style="font-size: 11px;">×</button>
         `;
@@ -1139,7 +1218,7 @@ function buildNetworkData(filter: {
   relationshipFontSize: number;
   searchQuery: string;
   includeNeighbors: boolean;
-  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
+  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }>;
   annotationStyleConfig: AnnotationStyleConfig;
   layoutMode: string;
 }): { nodes: DataSet; edges: DataSet } {
@@ -1255,8 +1334,11 @@ function buildNetworkData(filter: {
     const style = edgeStyleConfig[e.type] || {
       showLabel: true,
       color: getDefaultColor(),
+      lineType: 'solid' as BorderLineType,
     };
     const edgeComment = getRelationshipComment(e.type);
+    const lineType = style.lineType ?? 'solid';
+    const dashes = lineType === 'solid' ? false : borderLineTypeToVis(lineType);
     return {
       id: `${e.from}->${e.to}:${e.type}`,
       from: e.from,
@@ -1265,6 +1347,7 @@ function buildNetworkData(filter: {
       label: style.showLabel ? getEdgeDisplayLabel(e) : '',
       font: { size: relationshipFontSize, color: '#2c3e50' },
       color: { color: style.color, highlight: style.color },
+      dashes,
       ...(edgeComment && { title: edgeComment }),
     };
   });
@@ -2557,6 +2640,14 @@ function setupEventListeners(): void {
     getAllRelationshipTypes().forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
       if (colorEl) colorEl.value = getDefaultEdgeColors()[type] ?? getDefaultColor();
+      const lineTypeEl = document.querySelector(`.edge-linetype[data-type="${type}"]`) as HTMLInputElement;
+      if (lineTypeEl) {
+        lineTypeEl.value = 'solid';
+        const dropdown = lineTypeEl.closest('.ap-linetype-dropdown');
+        const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
+        const opt = BORDER_LINE_OPTIONS.find((o) => o.value === 'solid');
+        if (trigger && opt) trigger.innerHTML = `${renderLineTypeSvg(opt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
+      }
     });
     updateEdgeColorsLegend();
     document.querySelectorAll('.ap-bool-show').forEach((cb) => ((cb as HTMLInputElement).checked = true));
