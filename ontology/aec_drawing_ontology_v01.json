@@ -1,0 +1,781 @@
+{
+  "version": 1,
+  "nodePositions": {
+    "Function": {
+      "x": 1320,
+      "y": 220
+    },
+    "FunctionalProperties": {
+      "x": 1320,
+      "y": 0
+    },
+    "FacadeComponent": {
+      "x": 25028,
+      "y": 660
+    },
+    "DrawingElement": {
+      "x": 25769,
+      "y": 440
+    },
+    "Material": {
+      "x": 3919,
+      "y": 220
+    },
+    "MaterialProperties": {
+      "x": 3919,
+      "y": 0
+    },
+    "AddOn": {
+      "x": 5326,
+      "y": 440
+    },
+    "FrameType": {
+      "x": 5709,
+      "y": 220
+    },
+    "CWFrameMemberProperties": {
+      "x": 6493,
+      "y": 0
+    },
+    "Aesthetic": {
+      "x": 185,
+      "y": 440
+    },
+    "Airtightness": {
+      "x": 627,
+      "y": 440
+    },
+    "Aluminium": {
+      "x": 2870,
+      "y": 440
+    },
+    "Annotation": {
+      "x": 21083,
+      "y": 440
+    },
+    "Asymmetrical": {
+      "x": 8075,
+      "y": 440
+    },
+    "Symmetry": {
+      "x": 8305,
+      "y": 220
+    },
+    "SectionProperties": {
+      "x": 9527,
+      "y": 0
+    },
+    "BackingWall": {
+      "x": 21401,
+      "y": 1100
+    },
+    "PanelComponent": {
+      "x": 22949,
+      "y": 880
+    },
+    "Base": {
+      "x": 11366,
+      "y": 220
+    },
+    "DetailLocation": {
+      "x": 12002,
+      "y": 0
+    },
+    "Beam": {
+      "x": 12858,
+      "y": 660
+    },
+    "StructuralMember": {
+      "x": 13208,
+      "y": 440
+    },
+    "LinearStructuralComponent": {
+      "x": 13321,
+      "y": 220
+    },
+    "StructuralComponent": {
+      "x": 13662,
+      "y": 0
+    },
+    "Blockwork": {
+      "x": 21603,
+      "y": 1320
+    },
+    "RoofCladding": {
+      "x": 21691,
+      "y": 1100
+    },
+    "Board": {
+      "x": 22115,
+      "y": 1100
+    },
+    "Bracket": {
+      "x": 24876,
+      "y": 1100
+    },
+    "PointComponent": {
+      "x": 25228,
+      "y": 880
+    },
+    "BreatherMembrane": {
+      "x": 22442,
+      "y": 1320
+    },
+    "Membrane": {
+      "x": 22626,
+      "y": 1100
+    },
+    "Brick": {
+      "x": 14708,
+      "y": 220
+    },
+    "FacingMaterial": {
+      "x": 15070,
+      "y": 0
+    },
+    "CHS": {
+      "x": 8861,
+      "y": 440
+    },
+    "SectionShape": {
+      "x": 9472,
+      "y": 220
+    },
+    "CWFrameMember": {
+      "x": 26011,
+      "y": 1100
+    },
+    "LinearComponent": {
+      "x": 27307,
+      "y": 880
+    },
+    "CWSystem": {
+      "x": 6512,
+      "y": 220
+    },
+    "Cable": {
+      "x": 13754,
+      "y": 440
+    },
+    "Capped": {
+      "x": 6931,
+      "y": 440
+    },
+    "GlazingRetention": {
+      "x": 7295,
+      "y": 220
+    },
+    "Capping": {
+      "x": 26265,
+      "y": 1100
+    },
+    "CastInChannel": {
+      "x": 25228,
+      "y": 1320
+    },
+    "Fixing": {
+      "x": 25359,
+      "y": 1100
+    },
+    "CavityBarrier": {
+      "x": 26493,
+      "y": 1320
+    },
+    "Gasket": {
+      "x": 27033,
+      "y": 1100
+    },
+    "CavityWallSystem": {
+      "x": 28863,
+      "y": 880
+    },
+    "FacadeSystem": {
+      "x": 29503,
+      "y": 660
+    },
+    "Cementboard": {
+      "x": 21991,
+      "y": 1320
+    },
+    "Channel": {
+      "x": 26703,
+      "y": 1320
+    },
+    "ChordBracing": {
+      "x": 13174,
+      "y": 660
+    },
+    "Circular": {
+      "x": 10330,
+      "y": 440
+    },
+    "GenericShapeProperty": {
+      "x": 10694,
+      "y": 220
+    },
+    "Clay": {
+      "x": 3156,
+      "y": 440
+    },
+    "ClosedState": {
+      "x": 26415,
+      "y": 1540
+    },
+    "Column": {
+      "x": 13524,
+      "y": 660
+    },
+    "Concrete": {
+      "x": 3422,
+      "y": 440
+    },
+    "Corner": {
+      "x": 11618,
+      "y": 220
+    },
+    "CurtainWallSystem": {
+      "x": 29333,
+      "y": 880
+    },
+    "Curved": {
+      "x": 15723,
+      "y": 440
+    },
+    "FacadeShape": {
+      "x": 16510,
+      "y": 220
+    },
+    "GeometricProperties": {
+      "x": 16510,
+      "y": 0
+    },
+    "DGU": {
+      "x": 22978,
+      "y": 1320
+    },
+    "FacadeCladding": {
+      "x": 23382,
+      "y": 1100
+    },
+    "DeadLoad": {
+      "x": 17676,
+      "y": 220
+    },
+    "StructuralProperties": {
+      "x": 17890,
+      "y": 0
+    },
+    "DeadLoadBracket": {
+      "x": 24701,
+      "y": 1320
+    },
+    "Detail": {
+      "x": 18515,
+      "y": 0
+    },
+    "DoubleLaminated": {
+      "x": 18926,
+      "y": 220
+    },
+    "GlazingProperties": {
+      "x": 19376,
+      "y": 0
+    },
+    "DrawingSheet": {
+      "x": 25158,
+      "y": 0
+    },
+    "Note": {
+      "x": 31372,
+      "y": 220
+    },
+    "Orientation": {
+      "x": 30704,
+      "y": 0
+    },
+    "RevisionTable": {
+      "x": 31772,
+      "y": 220
+    },
+    "Layout": {
+      "x": 25558,
+      "y": 220
+    },
+    "Metadata": {
+      "x": 31949,
+      "y": 0
+    },
+    "Legend": {
+      "x": 32112,
+      "y": 220
+    },
+    "Titleblock": {
+      "x": 32497,
+      "y": 220
+    },
+    "DrawingType": {
+      "x": 33791,
+      "y": 0
+    },
+    "EPDM": {
+      "x": 22581,
+      "y": 1320
+    },
+    "Elevation": {
+      "x": 32979,
+      "y": 220
+    },
+    "Extruded": {
+      "x": 5631,
+      "y": 440
+    },
+    "Fabricated": {
+      "x": 6015,
+      "y": 440
+    },
+    "FacadeSecondaryStructure": {
+      "x": 27817,
+      "y": 1100
+    },
+    "Faceted": {
+      "x": 16009,
+      "y": 440
+    },
+    "Fin": {
+      "x": 27982,
+      "y": 1100
+    },
+    "FireCompartmentation": {
+      "x": 1206,
+      "y": 440
+    },
+    "Firestop": {
+      "x": 28138,
+      "y": 1100
+    },
+    "Flipper": {
+      "x": 26861,
+      "y": 1320
+    },
+    "GA": {
+      "x": 33473,
+      "y": 220
+    },
+    "GRC": {
+      "x": 29753,
+      "y": 1100
+    },
+    "PrecastSystem": {
+      "x": 29815,
+      "y": 880
+    },
+    "Glass": {
+      "x": 3708,
+      "y": 440
+    },
+    "Head": {
+      "x": 11870,
+      "y": 220
+    },
+    "HelpingHandBracket": {
+      "x": 24876,
+      "y": 1320
+    },
+    "HollowGasketShape": {
+      "x": 27071,
+      "y": 1320
+    },
+    "Horizontal": {
+      "x": 30512,
+      "y": 220
+    },
+    "ISection": {
+      "x": 9128,
+      "y": 440
+    },
+    "Insulation": {
+      "x": 24234,
+      "y": 1100
+    },
+    "Laminated": {
+      "x": 19354,
+      "y": 220
+    },
+    "LocalisedPenetration": {
+      "x": 25711,
+      "y": 1100
+    },
+    "Louvre": {
+      "x": 28331,
+      "y": 1100
+    },
+    "Masonry": {
+      "x": 23136,
+      "y": 1320
+    },
+    "Metal": {
+      "x": 3935,
+      "y": 440
+    },
+    "MineralWool": {
+      "x": 23943,
+      "y": 1320
+    },
+    "Monolithic": {
+      "x": 19804,
+      "y": 220
+    },
+    "Mullion": {
+      "x": 25932,
+      "y": 1320
+    },
+    "OGasket": {
+      "x": 27005,
+      "y": 1540
+    },
+    "OpenState": {
+      "x": 26546,
+      "y": 1540
+    },
+    "OtherInsulation": {
+      "x": 24128,
+      "y": 1320
+    },
+    "PGasket": {
+      "x": 27136,
+      "y": 1540
+    },
+    "PanelStructuralComponent": {
+      "x": 14209,
+      "y": 220
+    },
+    "Perspective": {
+      "x": 34011,
+      "y": 220
+    },
+    "Plan": {
+      "x": 34373,
+      "y": 220
+    },
+    "Planar": {
+      "x": 16295,
+      "y": 440
+    },
+    "Plasterboard": {
+      "x": 22230,
+      "y": 1320
+    },
+    "Polycarbonate": {
+      "x": 4319,
+      "y": 440
+    },
+    "Precast": {
+      "x": 4742,
+      "y": 440
+    },
+    "PrecastConcrete": {
+      "x": 23303,
+      "y": 1320
+    },
+    "PrecastRestraintBracket": {
+      "x": 25052,
+      "y": 1320
+    },
+    "ProfiledMetal": {
+      "x": 23479,
+      "y": 1320
+    },
+    "PushIn": {
+      "x": 27261,
+      "y": 1540
+    },
+    "SolidGasketShape": {
+      "x": 27374,
+      "y": 1320
+    },
+    "RHS": {
+      "x": 9394,
+      "y": 440
+    },
+    "Rail": {
+      "x": 27756,
+      "y": 1320
+    },
+    "RainscreenSystem": {
+      "x": 30086,
+      "y": 880
+    },
+    "Rectangular": {
+      "x": 10733,
+      "y": 440
+    },
+    "Reflvet": {
+      "x": 27625,
+      "y": 1320
+    },
+    "Restraint": {
+      "x": 18104,
+      "y": 220
+    },
+    "SFS": {
+      "x": 21401,
+      "y": 1320
+    },
+    "SSG": {
+      "x": 7295,
+      "y": 440
+    },
+    "Screw": {
+      "x": 25368,
+      "y": 1320
+    },
+    "Sealant": {
+      "x": 28508,
+      "y": 1100
+    },
+    "Section": {
+      "x": 34647,
+      "y": 220
+    },
+    "SectionChannel": {
+      "x": 9660,
+      "y": 440
+    },
+    "SemiUnitisedCurtainWall": {
+      "x": 29129,
+      "y": 1100
+    },
+    "SerratedSawtooth": {
+      "x": 16776,
+      "y": 440
+    },
+    "ShelfAngle": {
+      "x": 27869,
+      "y": 1320
+    },
+    "Silicone": {
+      "x": 28504,
+      "y": 1320
+    },
+    "Slab": {
+      "x": 13962,
+      "y": 440
+    },
+    "SlabEdge": {
+      "x": 12188,
+      "y": 220
+    },
+    "SlideIn": {
+      "x": 27386,
+      "y": 1540
+    },
+    "SmallPanels": {
+      "x": 23637,
+      "y": 1320
+    },
+    "Square": {
+      "x": 11097,
+      "y": 440
+    },
+    "Stick": {
+      "x": 6340,
+      "y": 440
+    },
+    "StickCurtainWall": {
+      "x": 29391,
+      "y": 1100
+    },
+    "Stone": {
+      "x": 14960,
+      "y": 220
+    },
+    "SupportType": {
+      "x": 35039,
+      "y": 0
+    },
+    "Symmetrical": {
+      "x": 8556,
+      "y": 440
+    },
+    "TGU": {
+      "x": 23785,
+      "y": 1320
+    },
+    "Terracotta": {
+      "x": 15322,
+      "y": 220
+    },
+    "TextualNote": {
+      "x": 31259,
+      "y": 440
+    },
+    "Thermal": {
+      "x": 1687,
+      "y": 440
+    },
+    "Timber": {
+      "x": 5028,
+      "y": 440
+    },
+    "TimberCassette": {
+      "x": 21788,
+      "y": 1320
+    },
+    "Toggle": {
+      "x": 7659,
+      "y": 440
+    },
+    "TopHat": {
+      "x": 10005,
+      "y": 440
+    },
+    "Transom": {
+      "x": 26090,
+      "y": 1320
+    },
+    "Typical": {
+      "x": 12573,
+      "y": 220
+    },
+    "UMPC": {
+      "x": 29865,
+      "y": 1100
+    },
+    "Unitised": {
+      "x": 6626,
+      "y": 440
+    },
+    "UnitisedCurtainWall": {
+      "x": 29595,
+      "y": 1100
+    },
+    "Upstand": {
+      "x": 14209,
+      "y": 440
+    },
+    "VCL": {
+      "x": 24313,
+      "y": 1320
+    },
+    "Vertical": {
+      "x": 30941,
+      "y": 220
+    },
+    "Vision": {
+      "x": 1973,
+      "y": 440
+    },
+    "Wall": {
+      "x": 14456,
+      "y": 440
+    },
+    "Waterproofing": {
+      "x": 2376,
+      "y": 440
+    },
+    "WaterproofingMembrane": {
+      "x": 22766,
+      "y": 1320
+    },
+    "Wedge": {
+      "x": 27499,
+      "y": 1540
+    },
+    "WeldedBolt": {
+      "x": 25499,
+      "y": 1320
+    },
+    "WindowSystem": {
+      "x": 28685,
+      "y": 1100
+    },
+    "WoodFibre": {
+      "x": 24498,
+      "y": 1320
+    },
+    "ZigZag": {
+      "x": 17277,
+      "y": 440
+    },
+    "Image": {
+      "x": 31467,
+      "y": 440
+    }
+  },
+  "edgeStyleConfig": {
+    "contains": {
+      "show": true,
+      "showLabel": true,
+      "color": "#cc141d"
+    },
+    "has": {
+      "show": true,
+      "showLabel": true,
+      "color": "#1128d4"
+    },
+    "subClassOf": {
+      "show": true,
+      "showLabel": true,
+      "color": "#9e9e9e"
+    }
+  },
+  "wrapChars": 10,
+  "minFontSize": 20,
+  "maxFontSize": 80,
+  "relationshipFontSize": 14,
+  "layoutMode": "weighted",
+  "searchQuery": "",
+  "includeNeighbors": true,
+  "annotationStyleConfig": {
+    "booleanProps": {
+      "labellableRoot": {
+        "whenTrue": {
+          "fillColor": "#2ecc71",
+          "borderColor": "#000000",
+          "borderLineType": "solid",
+          "show": true
+        },
+        "whenFalse": {
+          "fillColor": "#b8b8b8",
+          "borderColor": "#000000",
+          "borderLineType": "dashed",
+          "show": true
+        },
+        "whenUndefined": {
+          "fillColor": "#95a5a6",
+          "borderColor": "#000000",
+          "borderLineType": "dashed",
+          "show": true
+        }
+      },
+      "hasCardinality": {
+        "whenTrue": {
+          "fillColor": "#2ecc71",
+          "borderColor": "#000000",
+          "borderLineType": "solid",
+          "show": true
+        },
+        "whenFalse": {
+          "fillColor": "#b8b8b8",
+          "borderColor": "#000000",
+          "borderLineType": "dashed",
+          "show": true
+        },
+        "whenUndefined": {
+          "fillColor": "#95a5a6",
+          "borderColor": "#000000",
+          "borderLineType": "dashed",
+          "show": true
+        }
+      }
+    },
+    "textProps": {}
+  },
+  "viewState": {
+    "scale": 0.021726801284443622,
+    "position": {
+      "x": 18572.819513291353,
+      "y": 2465.576472303598
+    }
+  }
+}
