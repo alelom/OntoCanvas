@@ -105,8 +105,8 @@
 
 :Annotation rdf:type owl:Class;
     rdfs:label "Annotation";
-    :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf owl:Thing.
+    :labellableRoot "true"^^xsd:boolean;
+    rdfs:subClassOf owl:Thing, :Metadata.
 
 :Asymmetrical rdf:type owl:Class;
     rdfs:label "Asymmetrical";
@@ -428,7 +428,7 @@
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
     rdfs:label "Layout";
     :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :Annotation ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :Annotation ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
 
 :Metadata rdf:type owl:Class;
     rdfs:comment "Can be standalone label - drawing metadata";
