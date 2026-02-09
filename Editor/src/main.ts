@@ -2365,6 +2365,8 @@ function applyFilter(preserveView = false): void {
   const data = buildNetworkData(currentFilter);
   const options = getNetworkOptions(layoutMode);
 
+  scheduleDisplayConfigSave();
+
   const manipulationOptions = {
     enabled: true,
     initiallyActive: true,
