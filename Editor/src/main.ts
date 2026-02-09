@@ -157,7 +157,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 10,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
-    relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 14,
+    relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'weighted',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
@@ -179,7 +179,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 10);
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
   (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 80);
-  (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 14);
+  (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('layoutMode') as HTMLSelectElement).value = config.layoutMode ?? 'weighted';
   (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
@@ -1268,7 +1268,7 @@ function buildNetworkData(filter: {
   const wrapChars = filter.wrapChars ?? 10;
   const minFontSize = Math.max(8, Math.min(96, filter.minFontSize ?? 20));
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 80));
-  const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 14));
+  const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
@@ -2090,14 +2090,14 @@ function renderApp(): void {
         </select>
       </div>
       <div id="styleMenusGroup" style="display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid #000; border-radius: 4px;">
-        <details id="annotationPropsMenu">
-          <summary style="cursor: pointer; font-weight: bold;">Annotation Properties</summary>
-          <div id="annotationPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
-        </details>
         <details id="edgeStylesMenu">
           <summary style="cursor: pointer; font-weight: bold;">Relationships</summary>
           <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
           <button type="button" id="addRelationshipTypeBtn" style="margin-top: 6px; font-size: 11px;">+ Add relationship type</button>
+        </details>
+        <details id="annotationPropsMenu">
+          <summary style="cursor: pointer; font-weight: bold;">Annotation Properties</summary>
+          <div id="annotationPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
         </details>
       </div>
       <div id="textDisplayWrap" style="position: relative; display: inline-block;">
@@ -2119,7 +2119,7 @@ function renderApp(): void {
           </div>
           <div style="margin-top: 10px;">
             <strong style="font-size: 12px;">Relationships font size</strong>
-            <input type="number" id="relationshipFontSize" min="8" max="48" value="14" style="width: 45px; margin-left: 6px;">
+            <input type="number" id="relationshipFontSize" min="8" max="48" value="18" style="width: 45px; margin-left: 6px;">
             <span style="font-size: 11px;">px</span>
           </div>
         </div>
@@ -2342,7 +2342,7 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('relationshipFontSize') as HTMLInputElement).value,
       10
-    ) || 14;
+    ) || 18;
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement;
   const neighborsEl = document.getElementById(
     'searchIncludeNeighbors'
@@ -2632,7 +2632,7 @@ function setupEventListeners(): void {
     (document.getElementById('wrapChars') as HTMLInputElement).value = '10';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '80';
-    (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '14';
+    (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
     document.getElementById('searchAutocomplete')?.classList.remove('visible');
