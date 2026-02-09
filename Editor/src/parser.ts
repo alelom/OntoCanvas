@@ -73,13 +73,15 @@ function getObjectProperties(store: Store): ObjectPropertyInfo[] {
     seen.add(name);
     const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
     const label = labelQuad?.object?.value ?? name;
+    const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
+    const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
     const hasCardQuad = store.getQuads(subj, DataFactory.namedNode(HAS_CARDINALITY_PROP), null, null)[0];
     let hasCardinality = true;
     if (hasCardQuad?.object) {
       const val = String((hasCardQuad.object as { value?: unknown }).value ?? '').toLowerCase();
       hasCardinality = val === 'true' || val === '"true"';
     }
-    result.push({ name, label: String(label), hasCardinality });
+    result.push({ name, label: String(label), hasCardinality, comment: comment || undefined });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -148,6 +150,9 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
     const label = labelQuad?.object?.value ?? localName;
 
+    const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
+    const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
+
     let labellableRoot: boolean | null = null;
     const annotations: Record<string, string | boolean | null> = {};
     const outQuads = store.getQuads(subj, null, null, null);
@@ -168,7 +173,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       }
     }
 
-    nodes.push({ id: localName, label, labellableRoot, annotations });
+    nodes.push({ id: localName, label, labellableRoot, comment: comment || undefined, annotations });
   }
 
   // subClassOf edges
@@ -262,6 +267,32 @@ function findLabellablePredicate(store: Store): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Update rdfs:comment for a class in the store.
+ */
+export function updateCommentInStore(
+  store: Store,
+  localName: string,
+  comment: string | null
+): boolean {
+  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
+  const commentPred = DataFactory.namedNode(RDFS + 'comment');
+  for (const q of classQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    if (extractLocalName(subj.value) !== localName) continue;
+
+    const commentQuads = store.getQuads(subj, commentPred, null, null);
+    const graph = commentQuads[0]?.graph ?? store.getQuads(subj, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+    for (const cq of commentQuads) store.removeQuad(cq);
+    if (comment !== null && comment.trim() !== '') {
+      store.addQuad(subj, commentPred, DataFactory.literal(comment.trim()), graph);
+    }
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -478,6 +509,54 @@ export function addObjectPropertyToStore(
     graph
   );
   return name;
+}
+
+/**
+ * Update rdfs:label for an object property in the store.
+ * Returns false for subClassOf or if property not found.
+ */
+export function updateObjectPropertyLabelInStore(
+  store: Store,
+  propertyName: string,
+  newLabel: string
+): boolean {
+  if (propertyName === 'subClassOf') return false;
+  const propUri = getPropertyUri(propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+
+  const labelPred = DataFactory.namedNode(RDFS + 'label');
+  const labelQuads = store.getQuads(subject, labelPred, null, null);
+  const graph = labelQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const lq of labelQuads) store.removeQuad(lq);
+  store.addQuad(subject, labelPred, DataFactory.literal(newLabel.trim()), graph);
+  return true;
+}
+
+/**
+ * Update rdfs:comment for an object property in the store.
+ * Returns false for subClassOf (standard RDFS property) or if property not found.
+ */
+export function updateObjectPropertyCommentInStore(
+  store: Store,
+  propertyName: string,
+  comment: string | null
+): boolean {
+  if (propertyName === 'subClassOf') return false;
+  const propUri = getPropertyUri(propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+
+  const commentPred = DataFactory.namedNode(RDFS + 'comment');
+  const commentQuads = store.getQuads(subject, commentPred, null, null);
+  const graph = commentQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const cq of commentQuads) store.removeQuad(cq);
+  if (comment !== null && comment.trim() !== '') {
+    store.addQuad(subject, commentPred, DataFactory.literal(comment.trim()), graph);
+  }
+  return true;
 }
 
 /**

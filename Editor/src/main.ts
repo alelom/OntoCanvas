@@ -5,6 +5,7 @@ import {
   parseTtlToGraph,
   updateLabelInStore,
   updateLabellableInStore,
+  updateCommentInStore,
   updateEdgeInStore,
   addEdgeToStore,
   removeEdgeFromStore,
@@ -12,6 +13,8 @@ import {
   removeNodeFromStore,
   addObjectPropertyToStore,
   removeObjectPropertyFromStore,
+  updateObjectPropertyLabelInStore,
+  updateObjectPropertyCommentInStore,
   storeToTurtle,
 } from './parser';
 import type { GraphData, GraphEdge, GraphNode } from './types';
@@ -26,7 +29,6 @@ import {
   estimateNodeDimensions,
   resolveOverlaps,
   matchesSearch,
-  formatEdgeLabel,
   COLORS,
 } from './graph';
 import './style.css';
@@ -526,6 +528,94 @@ function getAllRelationshipTypes(): string[] {
   return [...new Set(['subClassOf', ...fromProps])].sort();
 }
 
+const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
+
+function getRelationshipLabel(type: string): string {
+  if (type === 'subClassOf') return 'subClassOf';
+  const op = objectProperties.find((p) => p.name === type);
+  return op?.label ?? type;
+}
+
+/** Format edge label for graph display, using relationship label and optional cardinality. */
+function getEdgeDisplayLabel(edge: import('./types').GraphEdge): string {
+  const baseLabel = getRelationshipLabel(edge.type);
+  const min = edge.minCardinality;
+  const max = edge.maxCardinality;
+  if (min == null && max == null) return baseLabel;
+  const minStr = min != null ? String(min) : '0';
+  const maxStr = max != null ? String(max) : '*';
+  return `${baseLabel} [${minStr}..${maxStr}]`;
+}
+
+function getRelationshipComment(type: string): string | null {
+  if (type === 'subClassOf') return SUBCLASSOF_COMMENT;
+  const op = objectProperties.find((p) => p.name === type);
+  return op?.comment ?? null;
+}
+
+let editRelationshipTypeHandlersInitialized = false;
+
+function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onApply: () => void): void {
+  if (editRelationshipTypeHandlersInitialized) return;
+  editRelationshipTypeHandlersInitialized = true;
+  document.getElementById('editRelTypeCancel')?.addEventListener('click', () => {
+    document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
+  });
+  document.getElementById('editRelTypeConfirm')?.addEventListener('click', () => {
+    const type = (document.getElementById('editRelationshipTypeModal') as HTMLElement).dataset.type!;
+    const labelInput = document.getElementById('editRelTypeLabel') as HTMLInputElement;
+    const commentInput = document.getElementById('editRelTypeComment') as HTMLTextAreaElement;
+    const newLabel = labelInput?.value?.trim() ?? '';
+    const newComment = commentInput?.value?.trim() ?? '';
+    if (!newLabel || !ttlStore) return;
+    const op = objectProperties.find((p) => p.name === type);
+    if (!op) return;
+    const oldLabel = op.label;
+    const oldComment = op.comment ?? '';
+    const labelChanged = oldLabel !== newLabel;
+    const commentChanged = oldComment !== newComment;
+    if (!labelChanged && !commentChanged) {
+      document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
+      return;
+    }
+    if (labelChanged) {
+      updateObjectPropertyLabelInStore(ttlStore, type, newLabel);
+      op.label = newLabel;
+    }
+    if (commentChanged) {
+      updateObjectPropertyCommentInStore(ttlStore, type, newComment || null);
+      op.comment = newComment || undefined;
+    }
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
+    initEdgeStylesMenu(edgeStylesContent, onApply);
+    updateEdgeColorsLegend();
+    applyFilter(true);
+    document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
+  });
+  document.getElementById('editRelationshipTypeModal')?.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement).closest('#editRelationshipTypeModal') && e.key === 'Escape') {
+      document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
+      e.preventDefault();
+    }
+  });
+}
+
+function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElement, onApply: () => void): void {
+  initEditRelationshipTypeHandlers(edgeStylesContent, onApply);
+  const modal = document.getElementById('editRelationshipTypeModal')!;
+  modal.dataset.type = type;
+  const nameEl = document.getElementById('editRelTypeName') as HTMLElement;
+  const labelInput = document.getElementById('editRelTypeLabel') as HTMLInputElement;
+  const commentInput = document.getElementById('editRelTypeComment') as HTMLTextAreaElement;
+  if (nameEl) nameEl.textContent = `Identifier: ${type} (used in ontology, cannot be changed here)`;
+  const op = objectProperties.find((p) => p.name === type);
+  if (labelInput) labelInput.value = op?.label ?? type;
+  if (commentInput) commentInput.value = op?.comment ?? '';
+  modal.style.display = 'flex';
+  labelInput?.focus();
+}
+
 function initEdgeStylesMenu(
   edgeStylesContent: HTMLElement,
   onApply: () => void
@@ -534,14 +624,17 @@ function initEdgeStylesMenu(
   const types = getAllRelationshipTypes();
   types.forEach((type) => {
     const color = getDefaultEdgeColors()[type] || getDefaultColor();
-    const isDeletable = type !== 'subClassOf';
-    const deleteBtn = isDeletable
+    const isEditable = type !== 'subClassOf';
+    const editBtn = isEditable
+      ? `<button type="button" class="edge-edit-btn" data-type="${type}" title="Edit relationship type (name, comment)" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>`
+      : '';
+    const deleteBtn = isEditable
       ? `<button type="button" class="edge-delete-btn" data-type="${type}" title="Delete this relationship type" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`
       : '';
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${type}</span>
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${getRelationshipLabel(type)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
         <input type="checkbox" class="edge-show-cb" data-type="${type}" checked>
         <span>Show</span>
@@ -554,6 +647,7 @@ function initEdgeStylesMenu(
         <span style="font-size: 11px;">Color:</span>
         <input type="color" class="edge-color-picker" data-type="${type}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
       </label>
+      ${editBtn}
       ${deleteBtn}
     `;
     edgeStylesContent.appendChild(row);
@@ -561,6 +655,12 @@ function initEdgeStylesMenu(
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(); }));
+  edgeStylesContent.querySelectorAll('.edge-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const type = (btn as HTMLElement).dataset.type!;
+      showEditRelationshipTypeModal(type, edgeStylesContent, onApply);
+    });
+  });
   edgeStylesContent.querySelectorAll('.edge-delete-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
@@ -671,7 +771,7 @@ function updateEdgeColorsLegend(): void {
   }
   legendEl.innerHTML =
     'Edge colors: ' +
-    types.map((t) => `<span style="color: ${config[t].color}">●</span> ${t}`).join(' ');
+    types.map((t) => `<span style="color: ${config[t].color}">●</span> ${getRelationshipLabel(t)}`).join(' ');
 }
 
 type BorderLineType = 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'dash-dot-dot';
@@ -1142,6 +1242,7 @@ function buildNetworkData(filter: {
       color: { background: style.background, border: style.border },
       font: { size: fontSize, color: '#2c3e50' },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
+      ...(n.comment && { title: n.comment }),
     };
     if (pos) {
       node.x = pos.x;
@@ -1155,14 +1256,16 @@ function buildNetworkData(filter: {
       showLabel: true,
       color: getDefaultColor(),
     };
+    const edgeComment = getRelationshipComment(e.type);
     return {
       id: `${e.from}->${e.to}:${e.type}`,
       from: e.from,
       to: e.to,
       arrows: 'to',
-      label: style.showLabel ? formatEdgeLabel(e) : '',
+      label: style.showLabel ? getEdgeDisplayLabel(e) : '',
       font: { size: relationshipFontSize, color: '#2c3e50' },
       color: { color: style.color, highlight: style.color },
+      ...(edgeComment && { title: edgeComment }),
     };
   });
 
@@ -1290,14 +1393,23 @@ function setupNetworkSelectionAndNavigation(
     if (target.closest?.('.vis-manipulation')) return;
     const rect = container.getBoundingClientRect();
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const nodeAt = net.getNodeAt(domPos);
+    if (nodeAt != null) {
+      const selectedIds = net.getSelectedNodes().map(String);
+      if (selectedIds.length > 1 && selectedIds.includes(String(nodeAt))) {
+        showMultiEditModal(selectedIds);
+      } else {
+        const node = rawData.nodes.find((n) => n.id === String(nodeAt));
+        if (node) showRenameModal(String(nodeAt), node.label, node.labellableRoot);
+      }
+      return;
+    }
     const edgeAt = net.getEdgeAt(domPos);
     if (edgeAt != null) {
       const m = String(edgeAt).match(/^(.+)->(.+):(.+)$/);
       if (m) showEditEdgeModal(m[1], m[2], m[3]);
       return;
     }
-    const nodeAt = net.getNodeAt(domPos);
-    if (nodeAt != null) return;
     const canvasPos = net.DOMtoCanvas(domPos);
     showAddNodeModal(canvasPos.x, canvasPos.y);
   };
@@ -1401,6 +1513,9 @@ function showRenameModal(
   input.dataset.nodeId = nodeId;
   labellableCb.checked = labellableRoot === true;
   labellableCb.indeterminate = labellableRoot === null;
+  const node = rawData.nodes.find((n) => n.id === nodeId);
+  const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
+  if (commentInput) commentInput.value = node?.comment ?? '';
   modal.style.display = 'flex';
   input.focus();
   input.select();
@@ -1422,6 +1537,12 @@ function showMultiEditModal(nodeIds: string[]): void {
   const allFalse = labellableValues.every((v) => v === false);
   labellableCb.checked = allTrue;
   labellableCb.indeterminate = !allTrue && !allFalse;
+  const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
+  const comments = nodes.map((n) => n.comment ?? '').filter((c) => c);
+  if (commentInput) {
+    commentInput.value = comments.length > 0 && comments.every((c) => c === comments[0]) ? comments[0] : '';
+    commentInput.disabled = false;
+  }
   modal.style.display = 'flex';
   labellableCb.focus();
 }
@@ -1481,6 +1602,20 @@ function getPropertyHasCardinality(edgeType: string): boolean {
   return op?.hasCardinality ?? true;
 }
 
+function updateEditEdgeCommentDisplay(): void {
+  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
+  if (!typeSel || !commentEl) return;
+  const comment = getRelationshipComment(typeSel.value);
+  if (comment) {
+    commentEl.textContent = comment;
+    commentEl.style.display = 'block';
+  } else {
+    commentEl.textContent = '';
+    commentEl.style.display = 'none';
+  }
+}
+
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
   const modal = document.getElementById('editEdgeModal')!;
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
@@ -1501,12 +1636,13 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
   const allTypes = getAllEdgeTypes();
-  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${t}</option>`).join('');
+  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${getRelationshipLabel(t)}</option>`).join('');
 
   minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
   maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
   cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType) ? 'block' : 'none';
 
+  updateEditEdgeCommentDisplay();
   modal.querySelector('h3')!.textContent = 'Edit edge';
   modal.style.display = 'flex';
 }
@@ -1527,12 +1663,13 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${n.label}</option>`).join('');
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${n.label}</option>`).join('');
   const allTypes = getAllEdgeTypes();
-  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === 'subClassOf' ? ' selected' : ''}>${t}</option>`).join('');
+  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === 'subClassOf' ? ' selected' : ''}>${getRelationshipLabel(t)}</option>`).join('');
 
   minCardInput.value = '';
   maxCardInput.value = '';
   cardWrap.style.display = typeSel.value !== 'subClassOf' && getPropertyHasCardinality(typeSel.value) ? 'block' : 'none';
 
+  updateEditEdgeCommentDisplay();
   modal.querySelector('h3')!.textContent = 'Add edge';
   modal.style.display = 'flex';
 }
@@ -1682,9 +1819,11 @@ function confirmRename(): void {
     }
     const nodeIds: string[] = JSON.parse(nodeIdsJson);
     const newLabellable = labellableCb.checked;
+    const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
+    const newComment = commentInput?.value?.trim() ?? '';
     const oldVals = nodeIds.map((id) => {
       const n = rawData.nodes.find((x) => x.id === id);
-      return { id, labellable: n?.labellableRoot };
+      return { id, labellable: n?.labellableRoot, comment: n?.comment ?? '' };
     });
     let anyChanged = false;
     for (const nodeId of nodeIds) {
@@ -1696,16 +1835,23 @@ function confirmRename(): void {
         updateLabellableInStore(ttlStore, nodeId, newLabellable);
         anyChanged = true;
       }
+      if (node && (node.comment ?? '') !== newComment) {
+        node.comment = newComment || undefined;
+        updateCommentInStore(ttlStore, nodeId, newComment || null);
+        anyChanged = true;
+      }
     }
     if (anyChanged) {
       pushUndoable(
         () => {
-          oldVals.forEach(({ id, labellable }) => {
+          oldVals.forEach(({ id, labellable, comment }) => {
             const n = rawData.nodes.find((x) => x.id === id);
             if (n && ttlStore) {
               n.labellableRoot = labellable ?? null;
               if (n.annotations) n.annotations['labellableRoot'] = labellable ?? null;
               updateLabellableInStore(ttlStore, id, labellable === true);
+              n.comment = comment || undefined;
+              updateCommentInStore(ttlStore, id, comment || null);
             }
           });
         },
@@ -1717,6 +1863,8 @@ function confirmRename(): void {
               if (!n.annotations) n.annotations = {};
               n.annotations['labellableRoot'] = newLabellable;
               updateLabellableInStore(ttlStore, id, newLabellable);
+              n.comment = newComment || undefined;
+              updateCommentInStore(ttlStore, id, newComment || null);
             }
           });
         }
@@ -1739,11 +1887,16 @@ function confirmRename(): void {
     return;
   }
 
+  const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
+  const newComment = commentInput?.value?.trim() ?? '';
+  const oldComment = node.comment ?? '';
+  const commentChanged = oldComment !== newComment;
+
   const labelChanged = node.label !== newLabel;
   const newLabellable = labellableCb.checked;
   const labellableChanged = (node.labellableRoot === true) !== newLabellable;
 
-  if (!labelChanged && !labellableChanged) {
+  if (!labelChanged && !labellableChanged && !commentChanged) {
     hideRenameModal();
     return;
   }
@@ -1761,6 +1914,10 @@ function confirmRename(): void {
     node.annotations['labellableRoot'] = newLabellable;
     updateLabellableInStore(ttlStore, nodeId, newLabellable);
   }
+  if (commentChanged && ttlStore) {
+    node.comment = newComment || undefined;
+    updateCommentInStore(ttlStore, nodeId, newComment || null);
+  }
 
   pushUndoable(
     () => {
@@ -1774,6 +1931,10 @@ function confirmRename(): void {
         node.annotations['labellableRoot'] = oldLabellable ?? null;
         updateLabellableInStore(ttlStore, nodeId, oldLabellable === true);
       }
+      if (commentChanged && ttlStore) {
+        node.comment = oldComment || undefined;
+        updateCommentInStore(ttlStore, nodeId, oldComment || null);
+      }
     },
     () => {
       if (labelChanged) {
@@ -1785,6 +1946,10 @@ function confirmRename(): void {
         if (!node.annotations) node.annotations = {};
         node.annotations['labellableRoot'] = newLabellable;
         updateLabellableInStore(ttlStore, nodeId, newLabellable);
+      }
+      if (commentChanged && ttlStore) {
+        node.comment = newComment || undefined;
+        updateCommentInStore(ttlStore, nodeId, newComment || null);
       }
     }
   );
@@ -1923,6 +2088,10 @@ function renderApp(): void {
           <input type="checkbox" id="renameLabellable" />
           Labellable
         </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
+          <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
+        </label>
         <div class="modal-actions">
           <button type="button" id="renameCancel">Cancel</button>
           <button type="button" id="renameConfirm" class="primary">OK</button>
@@ -1953,10 +2122,29 @@ function renderApp(): void {
         </div>
       </div>
     </div>
+    <div id="editRelationshipTypeModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Edit relationship type</h3>
+        <p id="editRelTypeName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
+        <label style="display: block; margin-top: 8px;">
+          <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <input type="text" id="editRelTypeLabel" placeholder="e.g. contains" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
+          <textarea id="editRelTypeComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
+        </label>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="editRelTypeCancel">Cancel</button>
+          <button type="button" id="editRelTypeConfirm" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
     <div id="editEdgeModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Edit edge</h3>
         <label>Relationship: <select id="editEdgeType"></select></label>
+        <div id="editEdgeComment" style="font-size: 11px; color: #666; margin-top: 4px; margin-bottom: 8px; line-height: 1.4; display: none;"></div>
         <label style="display: block; margin-top: 8px;">From: <select id="editEdgeFrom"></select></label>
         <label style="display: block; margin-top: 8px;">To: <select id="editEdgeTo"></select></label>
         <div id="editEdgeCardinalityWrap" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
@@ -2342,6 +2530,7 @@ function setupEventListeners(): void {
     const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
     const cardWrap = document.getElementById('editEdgeCardinalityWrap');
     if (cardWrap) cardWrap.style.display = typeSel.value !== 'subClassOf' && getPropertyHasCardinality(typeSel.value) ? 'block' : 'none';
+    updateEditEdgeCommentDisplay();
   });
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModal();

@@ -2,6 +2,8 @@ export interface GraphNode {
   id: string;
   label: string;
   labellableRoot: boolean | null;
+  /** rdfs:comment from the ontology */
+  comment?: string | null;
   annotations?: Record<string, string | boolean | null>;
   x?: number;
   y?: number;
@@ -16,6 +18,8 @@ export interface ObjectPropertyInfo {
   name: string;
   label: string;
   hasCardinality: boolean;
+  /** rdfs:comment from the ontology */
+  comment?: string | null;
 }
 
 export interface GraphEdge {

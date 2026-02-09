@@ -118,6 +118,19 @@ describe('parseTtlToGraph (load)', () => {
     const containsEdges = graphData.edges.filter((e) => e.type === 'contains');
     expect(containsEdges.length).toBeGreaterThan(0);
   });
+
+  it('extracts rdfs:comment for nodes and object properties', async () => {
+    const ttl = loadOntologyAsString();
+    const { graphData, objectProperties } = await parseTtlToGraph(ttl);
+
+    const drawingElement = graphData.nodes.find((n) => n.id === 'DrawingElement');
+    expect(drawingElement?.comment).toBeDefined();
+    expect(drawingElement!.comment).toContain('Element depicted');
+
+    const containsProp = objectProperties.find((p) => p.name === 'contains');
+    expect(containsProp?.comment).toBeDefined();
+    expect(containsProp!.comment).toContain('containment');
+  });
 });
 
 describe('updateLabelInStore (edit)', () => {

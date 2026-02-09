@@ -28,6 +28,10 @@ const SECTION_ORDER = [
 ];
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+const OWL_NS = 'http://www.w3.org/2002/07/owl#';
+const OWL_ON_PROPERTY = OWL_NS + 'onProperty';
+const OWL_ON_CLASS = OWL_NS + 'onClass';
+const OWL_SOME_VALUES_FROM = OWL_NS + 'someValuesFrom';
 
 // --- Style fixes (explicit rdf:type, boolean literals) ---
 
@@ -111,6 +115,34 @@ function serializeTerm(
   }
 }
 
+/**
+ * Deduplicate quads for an owl:Restriction blank. An OWL restriction must have exactly one
+ * owl:onProperty and exactly one target (owl:onClass or owl:someValuesFrom). If merged/corrupt
+ * data has duplicates, keep only the first of each to prevent invalid Turtle output.
+ */
+function deduplicateRestrictionQuads(quads: Quad[]): Quad[] {
+  const isRestriction = quads.some(
+    (q) => (q.predicate as NamedNode).value === RDF_TYPE && (q.object as NamedNode).value === OWL_NS + 'Restriction'
+  );
+  if (!isRestriction) return quads;
+
+  let seenOnProperty = false;
+  let seenTarget = false;
+  const result: Quad[] = [];
+  for (const q of quads) {
+    const p = (q.predicate as NamedNode).value;
+    if (p === OWL_ON_PROPERTY) {
+      if (seenOnProperty) continue;
+      seenOnProperty = true;
+    } else if (p === OWL_ON_CLASS || p === OWL_SOME_VALUES_FROM) {
+      if (seenTarget) continue;
+      seenTarget = true;
+    }
+    result.push(q);
+  }
+  return result;
+}
+
 function buildInlineForms(quads: Quad[]): Map<string, string> {
   const blankAsObject = new Set<string>();
   const quadsBySubject = new Map<string, Quad[]>();
@@ -133,7 +165,8 @@ function buildInlineForms(quads: Quad[]): Map<string, string> {
     const cached = result.get(id);
     if (cached) return cached;
 
-    const list = quadsBySubject.get(id) ?? [];
+    let list = quadsBySubject.get(id) ?? [];
+    list = deduplicateRestrictionQuads(list);
     const parts: string[] = [];
     for (const q of list) {
       const pred = q.predicate as NamedNode;
