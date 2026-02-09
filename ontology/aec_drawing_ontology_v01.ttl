@@ -410,8 +410,7 @@
     rdfs:comment "Subject is characterised by a property.";
     rdfs:label "hasProperty";
     rdfs:range owl:Thing;
-    rdfs:domain owl:Thing;
-    :hasCardinality "true"^^xsd:boolean.
+    rdfs:domain owl:Thing.
 
 :Orientation rdf:type owl:Class;
     rdfs:comment "Can be standalone label - drawing orientation";
@@ -436,8 +435,6 @@
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf owl:Thing.
 
-:hasCardinality rdf:type owl:AnnotationProperty;
-    rdfs:range xsd:boolean.
 
 :Legend rdf:type owl:Class;
     rdfs:comment "A legend containing mapping information between symbols and a text signifier.";
