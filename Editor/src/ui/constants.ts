@@ -1,7 +1,7 @@
 /**
  * UI constants.
  */
-export const EDGE_TYPES = ['subClassOf', 'partOf', 'contains'];
+export const EDGE_TYPES = ['subClassOf', 'contains'];
 
 export const COLORS = {
   labellable: '#2ecc71',

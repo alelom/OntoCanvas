@@ -12,6 +12,12 @@ export interface AnnotationPropertyInfo {
   isBoolean: boolean;
 }
 
+export interface ObjectPropertyInfo {
+  name: string;
+  label: string;
+  hasCardinality: boolean;
+}
+
 export interface GraphEdge {
   from: string;
   to: string;

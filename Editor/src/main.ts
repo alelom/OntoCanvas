@@ -10,6 +10,8 @@ import {
   removeEdgeFromStore,
   addNodeToStore,
   removeNodeFromStore,
+  addObjectPropertyToStore,
+  removeObjectPropertyFromStore,
   storeToTurtle,
 } from './parser';
 import type { GraphData, GraphEdge, GraphNode } from './types';
@@ -181,7 +183,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
   const edgeStyleConfig = config.edgeStyleConfig || {};
   if (document.getElementById('edgeStylesContent')) {
-    getEdgeTypes(rawData.edges).forEach((type) => {
+    Object.keys(edgeStyleConfig).forEach((type) => {
       const c = edgeStyleConfig[type];
       if (c) {
         const showCb = document.querySelector(`.edge-show-cb[data-type="${type}"]`) as HTMLInputElement | null;
@@ -192,6 +194,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
         if (colorEl) colorEl.value = c.color || getDefaultEdgeColors()[type] || getDefaultColor();
       }
     });
+    updateEdgeColorsLegend();
   }
   // Annotation style config is stored but restoration is deferred (complex DOM structure)
 }
@@ -286,6 +289,7 @@ function updateLoadLastOpenedButton(name: string | null, pathHint?: string): voi
 
 let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: { name: string; isBoolean: boolean }[] = [];
+let objectProperties: { name: string; label: string; hasCardinality: boolean }[] = [];
 let network: Network | null = null;
 let addNodeMode = false;
 let pendingAddNodePosition: { x: number; y: number } | null = null;
@@ -517,13 +521,23 @@ function performDeleteSelection(): boolean {
 }
 const SPACING = getSpacing();
 
+function getAllRelationshipTypes(): string[] {
+  const fromProps = objectProperties.map((op) => op.name);
+  return [...new Set(['subClassOf', ...fromProps])].sort();
+}
+
 function initEdgeStylesMenu(
   edgeStylesContent: HTMLElement,
   onApply: () => void
 ): void {
   edgeStylesContent.innerHTML = '';
-  getEdgeTypes(rawData.edges).forEach((type) => {
+  const types = getAllRelationshipTypes();
+  types.forEach((type) => {
     const color = getDefaultEdgeColors()[type] || getDefaultColor();
+    const isDeletable = type !== 'subClassOf';
+    const deleteBtn = isDeletable
+      ? `<button type="button" class="edge-delete-btn" data-type="${type}" title="Delete this relationship type" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`
+      : '';
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     row.innerHTML = `
@@ -540,19 +554,89 @@ function initEdgeStylesMenu(
         <span style="font-size: 11px;">Color:</span>
         <input type="color" class="edge-color-picker" data-type="${type}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
       </label>
+      ${deleteBtn}
     `;
     edgeStylesContent.appendChild(row);
   });
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
-    .forEach((el) => el.addEventListener('change', onApply));
+    .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(); }));
+  edgeStylesContent.querySelectorAll('.edge-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const type = (btn as HTMLElement).dataset.type!;
+      const count = rawData.edges.filter((e) => e.type === type).length;
+      const msg =
+        count === 0
+          ? `Delete relationship type "${type}"?`
+          : `You're going to delete ${count} edge${count === 1 ? '' : 's'} by deleting this relationship. Are you sure?`;
+      if (!confirm(msg)) return;
+      if (!ttlStore) return;
+      const removed = removeObjectPropertyFromStore(ttlStore, type);
+      if (removed >= 0) {
+        rawData.edges = rawData.edges.filter((e) => e.type !== type);
+        objectProperties = objectProperties.filter((op) => op.name !== type);
+        hasUnsavedChanges = true;
+        updateSaveButtonVisibility();
+        initEdgeStylesMenu(edgeStylesContent, onApply);
+        applyFilter(true);
+      }
+    });
+  });
+  updateEdgeColorsLegend();
+}
+
+let addRelationshipTypeHandlersInitialized = false;
+
+function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
+  if (addRelationshipTypeHandlersInitialized) return;
+  addRelationshipTypeHandlersInitialized = true;
+  const labelInput = document.getElementById('addRelTypeLabel') as HTMLInputElement;
+  if (labelInput) {
+    labelInput.addEventListener('input', () => {
+      const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
+      okBtn.disabled = !labelInput.value.trim();
+    });
+    labelInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('addRelTypeConfirm')?.click();
+    });
+  }
+  document.getElementById('addRelationshipTypeBtn')?.addEventListener('click', () => {
+    const modal = document.getElementById('addRelationshipTypeModal')!;
+    const li = document.getElementById('addRelTypeLabel') as HTMLInputElement;
+    const hasCardCb = document.getElementById('addRelTypeHasCardinality') as HTMLInputElement;
+    const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
+    li.value = '';
+    hasCardCb.checked = true;
+    okBtn.disabled = true;
+    li.focus();
+    modal.style.display = 'flex';
+  });
+  document.getElementById('addRelTypeCancel')?.addEventListener('click', () => {
+    document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
+  });
+  document.getElementById('addRelTypeConfirm')?.addEventListener('click', () => {
+    const li = document.getElementById('addRelTypeLabel') as HTMLInputElement;
+    const hasCardCb = document.getElementById('addRelTypeHasCardinality') as HTMLInputElement;
+    const label = li.value.trim();
+    if (!label || !ttlStore) return;
+    const name = addObjectPropertyToStore(ttlStore, label, hasCardCb.checked);
+    if (name) {
+      objectProperties.push({ name, label, hasCardinality: hasCardCb.checked });
+      objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+      initEdgeStylesMenu(edgeStylesContent, applyFilter);
+      applyFilter(true);
+    }
+    document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
+  });
 }
 
 function getEdgeStyleConfig(
   edgeStylesContent: HTMLElement
 ): Record<string, { show: boolean; showLabel: boolean; color: string }> {
   const config: Record<string, { show: boolean; showLabel: boolean; color: string }> = {};
-  getEdgeTypes(rawData.edges).forEach((type) => {
+  getAllRelationshipTypes().forEach((type) => {
     const showCb = edgeStylesContent.querySelector(
       `.edge-show-cb[data-type="${type}"]`
     ) as HTMLInputElement | null;
@@ -569,6 +653,25 @@ function getEdgeStyleConfig(
     };
   });
   return config;
+}
+
+function updateEdgeColorsLegend(): void {
+  const legendEl = document.getElementById('edgeColorsLegend');
+  if (!legendEl) return;
+  const edgeStylesContent = document.getElementById('edgeStylesContent');
+  if (!edgeStylesContent) {
+    legendEl.textContent = '';
+    return;
+  }
+  const config = getEdgeStyleConfig(edgeStylesContent);
+  const types = Object.keys(config).filter((t) => config[t].show);
+  if (types.length === 0) {
+    legendEl.textContent = '';
+    return;
+  }
+  legendEl.innerHTML =
+    'Edge colors: ' +
+    types.map((t) => `<span style="color: ${config[t].color}">●</span> ${t}`).join(' ');
 }
 
 type BorderLineType = 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'dash-dot-dot';
@@ -1366,7 +1469,17 @@ function confirmAddNode(): void {
   hideAddNodeModal();
 }
 
-const EDGE_TYPES = ['subClassOf', 'contains'];
+function getAllEdgeTypes(): string[] {
+  const fromProps = objectProperties.map((op) => op.name);
+  const fromEdges = getEdgeTypes(rawData.edges);
+  return [...new Set(['subClassOf', ...fromProps, ...fromEdges])].sort();
+}
+
+function getPropertyHasCardinality(edgeType: string): boolean {
+  if (edgeType === 'subClassOf') return false;
+  const op = objectProperties.find((p) => p.name === edgeType);
+  return op?.hasCardinality ?? true;
+}
 
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
   const modal = document.getElementById('editEdgeModal')!;
@@ -1387,12 +1500,12 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   toSel.disabled = false;
   fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
-  const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
+  const allTypes = getAllEdgeTypes();
   typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${t}</option>`).join('');
 
   minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
   maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
-  cardWrap.style.display = edgeType !== 'subClassOf' ? 'block' : 'none';
+  cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType) ? 'block' : 'none';
 
   modal.querySelector('h3')!.textContent = 'Edit edge';
   modal.style.display = 'flex';
@@ -1413,12 +1526,12 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   toSel.disabled = true;
   fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${n.label}</option>`).join('');
   toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${n.label}</option>`).join('');
-  const allTypes = [...new Set([...EDGE_TYPES, ...getEdgeTypes(rawData.edges)])].sort();
+  const allTypes = getAllEdgeTypes();
   typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === 'subClassOf' ? ' selected' : ''}>${t}</option>`).join('');
 
   minCardInput.value = '';
   maxCardInput.value = '';
-  cardWrap.style.display = typeSel.value !== 'subClassOf' ? 'block' : 'none';
+  cardWrap.style.display = typeSel.value !== 'subClassOf' && getPropertyHasCardinality(typeSel.value) ? 'block' : 'none';
 
   modal.querySelector('h3')!.textContent = 'Add edge';
   modal.style.display = 'flex';
@@ -1736,6 +1849,7 @@ function renderApp(): void {
         <details id="edgeStylesMenu">
           <summary style="cursor: pointer; font-weight: bold;">Relationships</summary>
           <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+          <button type="button" id="addRelationshipTypeBtn" style="margin-top: 6px; font-size: 11px;">+ Add relationship type</button>
         </details>
       </div>
       <div id="textDisplayWrap" style="position: relative; display: inline-block;">
@@ -1798,10 +1912,7 @@ function renderApp(): void {
     <div id="info">
       Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span>
       <span id="filePathDisplay" style="margin-left: 24px; font-size: 11px;"></span>
-      <span style="margin-left: 24px; font-size: 11px;">
-        Edge colors:         <span style="color: #3498db">●</span> subClassOf
-        <span style="color: #27ae60">●</span> contains
-      </span>
+      <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>
     </div>
     <div id="renameModal" class="modal" style="display: none;">
@@ -1825,6 +1936,20 @@ function renderApp(): void {
         <div class="modal-actions">
           <button type="button" id="addNodeCancel">Cancel</button>
           <button type="button" id="addNodeConfirm" class="primary" disabled>OK</button>
+        </div>
+      </div>
+    </div>
+    <div id="addRelationshipTypeModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Add relationship type</h3>
+        <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" /></label>
+        <label style="display: block; margin-top: 10px;">
+          <input type="checkbox" id="addRelTypeHasCardinality" checked /> Has cardinality
+        </label>
+        <p style="font-size: 11px; color: #666; margin-top: 6px;">When checked, edges of this type can specify min/max cardinality (e.g. "contains [0..3]").</p>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="addRelTypeCancel">Cancel</button>
+          <button type="button" id="addRelTypeConfirm" class="primary" disabled>OK</button>
         </div>
       </div>
     </div>
@@ -1862,9 +1987,10 @@ async function loadTtlAndRender(
   errorMsg.textContent = '';
 
   try {
-    const { graphData, store, annotationProperties: annotationProps } = await parseTtlToGraph(ttlString);
+    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps } = await parseTtlToGraph(ttlString);
     rawData = graphData;
     annotationProperties = annotationProps;
+    objectProperties = objectProps;
     ttlStore = store;
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
@@ -1886,6 +2012,7 @@ async function loadTtlAndRender(
     const annotationPropsContent = document.getElementById('annotationPropsContent');
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
     if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
+    initAddRelationshipTypeHandlers(edgeStylesContent);
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     const displayConfig = await loadDisplayConfigFromIndexedDB();
@@ -2214,7 +2341,7 @@ function setupEventListeners(): void {
   document.getElementById('editEdgeType')?.addEventListener('change', () => {
     const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
     const cardWrap = document.getElementById('editEdgeCardinalityWrap');
-    if (cardWrap) cardWrap.style.display = typeSel.value !== 'subClassOf' ? 'block' : 'none';
+    if (cardWrap) cardWrap.style.display = typeSel.value !== 'subClassOf' && getPropertyHasCardinality(typeSel.value) ? 'block' : 'none';
   });
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModal();
@@ -2238,10 +2365,11 @@ function setupEventListeners(): void {
     textDisplayPopup && (textDisplayPopup.style.display = 'none');
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
-    getEdgeTypes(rawData.edges).forEach((type) => {
+    getAllRelationshipTypes().forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
       if (colorEl) colorEl.value = getDefaultEdgeColors()[type] ?? getDefaultColor();
     });
+    updateEdgeColorsLegend();
     document.querySelectorAll('.ap-bool-show').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.ap-bool-fill[data-val="true"]').forEach((el) => ((el as HTMLInputElement).value = DEFAULT_BOOL_COLORS.whenTrue.fill));
     document.querySelectorAll('.ap-bool-border[data-val="true"]').forEach((el) => ((el as HTMLInputElement).value = DEFAULT_BOOL_COLORS.whenTrue.border));

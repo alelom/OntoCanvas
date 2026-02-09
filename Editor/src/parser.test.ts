@@ -11,6 +11,7 @@ import {
   addNodeToStore,
   removeEdgeFromStore,
   removeNodeFromStore,
+  addObjectPropertyToStore,
 } from './parser';
 import type { GraphData } from './types';
 
@@ -325,6 +326,36 @@ describe('storeToTurtle (save)', () => {
 
     expect(output).not.toMatch(/_\s*:\s*n3-\d/);
     expect(output).toMatch(/\[\s*rdf:type\s+owl:Restriction/);
+  });
+});
+
+describe('addObjectPropertyToStore', () => {
+  it('adds new object property with hasCardinality and round-trips', async () => {
+    const ttl = loadOntologyAsString();
+    const { store, objectProperties: beforeProps } = await parseTtlToGraph(ttl);
+
+    const name = addObjectPropertyToStore(store, 'references', false);
+    expect(name).toBe('references');
+
+    const output = await storeToTurtle(store);
+    expect(output).toMatch(/:references\s+rdf:type\s+owl:ObjectProperty/);
+    expect(output).toMatch(/:hasCardinality\s+"false"/);
+
+    const { objectProperties: afterProps } = await parseTtlToGraph(output);
+    const refProp = afterProps.find((p) => p.name === 'references');
+    expect(refProp).toBeDefined();
+    expect(refProp!.hasCardinality).toBe(false);
+  });
+
+  it('adds object property with hasCardinality true', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+
+    const name = addObjectPropertyToStore(store, 'links to', true);
+    expect(name).toBeTruthy();
+
+    const output = await storeToTurtle(store);
+    expect(output).toMatch(/:hasCardinality\s+"true"/);
   });
 });
 

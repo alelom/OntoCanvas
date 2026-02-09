@@ -1,6 +1,6 @@
 import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
 import { postProcessTurtle } from './turtlePostProcess';
-import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo } from './types';
+import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo } from './types';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -8,6 +8,8 @@ const XSD_BOOLEAN = XSD + 'boolean';
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
+const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
+const HAS_CARDINALITY_PROP = BASE_IRI + 'hasCardinality';
 
 export function extractLocalName(uri: string): string {
   if (uri.includes('#')) return uri.split('#').pop()!;
@@ -55,6 +57,31 @@ export interface ParseResult {
   graphData: GraphData;
   store: Store;
   annotationProperties: AnnotationPropertyInfo[];
+  objectProperties: ObjectPropertyInfo[];
+}
+
+function getObjectProperties(store: Store): ObjectPropertyInfo[] {
+  const result: ObjectPropertyInfo[] = [];
+  const seen = new Set<string>();
+  const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
+  for (const q of opQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    const subjUri = (subj as { value: string }).value;
+    const name = extractLocalName(subjUri);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
+    const label = labelQuad?.object?.value ?? name;
+    const hasCardQuad = store.getQuads(subj, DataFactory.namedNode(HAS_CARDINALITY_PROP), null, null)[0];
+    let hasCardinality = true;
+    if (hasCardQuad?.object) {
+      const val = String((hasCardQuad.object as { value?: unknown }).value ?? '').toLowerCase();
+      hasCardinality = val === 'true' || val === '"true"';
+    }
+    result.push({ name, label: String(label), hasCardinality });
+  }
+  return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] {
@@ -194,7 +221,8 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     }
   }
 
-  return { graphData: { nodes, edges }, store, annotationProperties: annotationProps };
+  const objectProps = getObjectProperties(store);
+  return { graphData: { nodes, edges }, store, annotationProperties: annotationProps, objectProperties: objectProps };
 }
 
 /**
@@ -282,8 +310,6 @@ const TURTLE_PREFIXES: Record<string, string> = {
   xsd: 'http://www.w3.org/2001/XMLSchema#',
   rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
 };
-
-const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 
 function toClassUri(localName: string): string {
   return BASE_IRI + localName;
@@ -410,6 +436,50 @@ export function removeNodeFromStore(store: Store, localName: string): boolean {
   return true;
 }
 
+function ensureHasCardinalityAnnotationProperty(store: Store): void {
+  const apUri = DataFactory.namedNode(HAS_CARDINALITY_PROP);
+  const existing = store.getQuads(apUri, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'AnnotationProperty'), null);
+  if (existing.length > 0) return;
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  store.addQuad(apUri, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'AnnotationProperty'), graph);
+  store.addQuad(apUri, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(XSD + 'boolean'), graph);
+}
+
+/**
+ * Add a new object property (relationship type) to the store.
+ * Returns the property localName, or null on failure.
+ */
+export function addObjectPropertyToStore(
+  store: Store,
+  label: string,
+  hasCardinality: boolean,
+  localName?: string
+): string | null {
+  const existingNames = new Set(getObjectProperties(store).map((op) => op.name));
+  let name = localName ?? (extractLocalName(label) || 'newProperty').replace(/\s+/g, '');
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) name = 'newProperty';
+  let base = name;
+  let n = 0;
+  while (existingNames.has(name)) {
+    name = `${base}${++n}`;
+  }
+  ensureHasCardinalityAnnotationProperty(store);
+  const subjUri = BASE_IRI + name;
+  const subject = DataFactory.namedNode(subjUri);
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'ObjectProperty'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(OWL + 'Thing'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(OWL + 'Thing'), graph);
+  store.addQuad(
+    subject,
+    DataFactory.namedNode(HAS_CARDINALITY_PROP),
+    DataFactory.literal(String(hasCardinality), DataFactory.namedNode(XSD + 'boolean')),
+    graph
+  );
+  return name;
+}
+
 /**
  * Add an edge to the store. Supports subClassOf (direct quad) and partOf/contains (OWL restrictions).
  * Cardinality is optional; when provided, uses qualified cardinality (owl:onClass + min/maxQualifiedCardinality).
@@ -516,6 +586,36 @@ export function removeEdgeFromStore(
   const blankAsObjQuads = store.getQuads(null, null, blank, null);
   for (const q of blankAsObjQuads) store.removeQuad(q);
   return true;
+}
+
+/**
+ * Remove an object property from the store and all edges that use it.
+ * Returns the number of edges removed, or -1 on failure.
+ * Does not remove subClassOf (it is not an object property).
+ */
+export function removeObjectPropertyFromStore(store: Store, propertyName: string): number {
+  if (propertyName === 'subClassOf') return -1;
+  const propUri = getPropertyUri(propertyName);
+  const propNode = DataFactory.namedNode(propUri);
+  const onPropertyPred = DataFactory.namedNode(OWL + 'onProperty');
+  const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
+  let removed = 0;
+  const blanksToRemove: import('n3').BlankNode[] = [];
+  for (const q of store.getQuads(null, onPropertyPred, propNode, null)) {
+    if (q.subject.termType === 'BlankNode') blanksToRemove.push(q.subject as import('n3').BlankNode);
+  }
+  for (const blank of blanksToRemove) {
+    const fromQuads = store.getQuads(null, subClassOfPred, blank, null);
+    for (const fq of fromQuads) {
+      store.removeQuad(fq);
+      removed++;
+    }
+    for (const bq of store.getQuads(blank, null, null, null)) store.removeQuad(bq);
+    for (const oq of store.getQuads(null, null, blank, null)) store.removeQuad(oq);
+  }
+  const subject = DataFactory.namedNode(propUri);
+  for (const q of store.getQuads(subject, null, null, null)) store.removeQuad(q);
+  return removed;
 }
 
 /**
