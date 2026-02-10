@@ -17,6 +17,9 @@ export function extractLocalName(uri: string): string {
   return uri;
 }
 
+// Re-export for convenience
+export { extractLocalName as extractLocalNameFromUri };
+
 function isBlankNode(term: { termType: string }): boolean {
   return term.termType === 'BlankNode';
 }
@@ -655,6 +658,115 @@ export function addDataPropertyToStore(
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(OWL + 'Thing'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), rangeNode, graph);
   return name;
+}
+
+/**
+ * Add a new annotation property (owl:AnnotationProperty) to the store.
+ * Returns the property localName, or null on failure.
+ */
+export function addAnnotationPropertyToStore(
+  store: Store,
+  label: string,
+  isBoolean: boolean,
+  localName?: string
+): string | null {
+  const existingNames = new Set(getAnnotationProperties(store).map((ap) => ap.name));
+  let name = localName ?? (extractLocalName(label) || 'newAnnotationProperty').replace(/\s+/g, '');
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) name = 'newAnnotationProperty';
+  let base = name;
+  let n = 0;
+  while (existingNames.has(name)) {
+    name = `${base}${++n}`;
+  }
+  const subjUri = BASE_IRI + name;
+  const subject = DataFactory.namedNode(subjUri);
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'AnnotationProperty'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
+  if (isBoolean) {
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(XSD_BOOLEAN), graph);
+  }
+  return name;
+}
+
+/**
+ * Update rdfs:label for an annotation property in the store.
+ */
+export function updateAnnotationPropertyLabelInStore(
+  store: Store,
+  propertyName: string,
+  newLabel: string
+): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  const labelPred = DataFactory.namedNode(RDFS + 'label');
+  const labelQuads = store.getQuads(subject, labelPred, null, null);
+  const graph = labelQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const lq of labelQuads) store.removeQuad(lq);
+  store.addQuad(subject, labelPred, DataFactory.literal(newLabel.trim()), graph);
+  return true;
+}
+
+/**
+ * Update rdfs:comment for an annotation property in the store.
+ */
+export function updateAnnotationPropertyCommentInStore(
+  store: Store,
+  propertyName: string,
+  comment: string | null
+): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  const commentPred = DataFactory.namedNode(RDFS + 'comment');
+  const commentQuads = store.getQuads(subject, commentPred, null, null);
+  const graph = commentQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const cq of commentQuads) store.removeQuad(cq);
+  if (comment !== null && comment.trim() !== '') {
+    store.addQuad(subject, commentPred, DataFactory.literal(comment.trim()), graph);
+  }
+  return true;
+}
+
+/**
+ * Update whether an annotation property is boolean (rdfs:range xsd:boolean).
+ */
+export function updateAnnotationPropertyIsBooleanInStore(
+  store: Store,
+  propertyName: string,
+  isBoolean: boolean
+): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  const rangePred = DataFactory.namedNode(RDFS + 'range');
+  const rangeQuads = store.getQuads(subject, rangePred, null, null);
+  const graph = rangeQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  
+  // Remove existing range quads
+  for (const rq of rangeQuads) store.removeQuad(rq);
+  
+  // Add boolean range if needed
+  if (isBoolean) {
+    store.addQuad(subject, rangePred, DataFactory.namedNode(XSD_BOOLEAN), graph);
+  }
+  return true;
+}
+
+/**
+ * Remove an annotation property from the store.
+ */
+export function removeAnnotationPropertyFromStore(store: Store, propertyName: string): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  for (const q of quads) store.removeQuad(q);
+  return true;
 }
 
 /**

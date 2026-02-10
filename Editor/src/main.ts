@@ -23,7 +23,13 @@ import {
   addDataPropertyRestrictionToClass,
   removeDataPropertyRestrictionFromClass,
   getDataPropertyRestrictionsForClass,
+  addAnnotationPropertyToStore,
+  updateAnnotationPropertyLabelInStore,
+  updateAnnotationPropertyCommentInStore,
+  updateAnnotationPropertyIsBooleanInStore,
+  removeAnnotationPropertyFromStore,
   storeToTurtle,
+  extractLocalName,
 } from './parser';
 import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction } from './types';
 import {
@@ -1036,6 +1042,166 @@ function showEditDataPropertyModal(name: string): void {
   labelInput?.focus();
 }
 
+let editAnnotationPropertyHandlersInitialized = false;
+
+function initEditAnnotationPropertyHandlers(): void {
+  if (editAnnotationPropertyHandlersInitialized) return;
+  editAnnotationPropertyHandlersInitialized = true;
+  document.getElementById('editAnnotationPropCancel')?.addEventListener('click', () => {
+    document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
+  });
+  document.getElementById('editAnnotationPropConfirm')?.addEventListener('click', () => {
+    const modal = document.getElementById('editAnnotationPropertyModal')!;
+    const name = (modal as HTMLElement).dataset.annotationPropName!;
+    const labelInput = document.getElementById('editAnnotationPropLabel') as HTMLInputElement;
+    const commentInput = document.getElementById('editAnnotationPropComment') as HTMLTextAreaElement;
+    const isBooleanCb = document.getElementById('editAnnotationPropIsBoolean') as HTMLInputElement;
+    const newLabel = labelInput?.value?.trim() ?? '';
+    const newComment = commentInput?.value?.trim() ?? '';
+    const newIsBoolean = isBooleanCb?.checked ?? false;
+    if (!newLabel || !ttlStore) return;
+    const ap = annotationProperties.find((p) => p.name === name);
+    if (!ap) return;
+    const labelChanged = (ap.name !== newLabel && ap.name !== extractLocalName(newLabel));
+    const commentChanged = false; // We don't track comments in annotationProperties array
+    const isBooleanChanged = ap.isBoolean !== newIsBoolean;
+    if (!labelChanged && !commentChanged && !isBooleanChanged) {
+      document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
+      return;
+    }
+    if (labelChanged) {
+      updateAnnotationPropertyLabelInStore(ttlStore, name, newLabel);
+      // Update the name if it changed (based on label)
+      const newName = extractLocalName(newLabel) || name;
+      if (newName !== name) {
+        // Name changed, need to update the array
+        annotationProperties = annotationProperties.filter((p) => p.name !== name);
+        annotationProperties.push({ name: newName, isBoolean: ap.isBoolean });
+        annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+      } else {
+        // Just update the label in the existing entry
+        const idx = annotationProperties.findIndex((p) => p.name === name);
+        if (idx >= 0) {
+          // Label is stored as name, so we don't need to update it
+        }
+      }
+    }
+    if (commentChanged || commentInput?.value.trim()) {
+      updateAnnotationPropertyCommentInStore(ttlStore, name, newComment || null);
+    }
+    if (isBooleanChanged) {
+      updateAnnotationPropertyIsBooleanInStore(ttlStore, name, newIsBoolean);
+      const idx = annotationProperties.findIndex((p) => p.name === name);
+      if (idx >= 0) {
+        annotationProperties[idx].isBoolean = newIsBoolean;
+      }
+    }
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
+    const annotationPropsContent = document.getElementById('annotationPropsContent');
+    if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
+    document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
+  });
+  document.getElementById('editAnnotationPropertyModal')?.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement).closest('#editAnnotationPropertyModal') && (e.key === 'Escape')) {
+      document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
+      e.preventDefault();
+    }
+  });
+}
+
+function showEditAnnotationPropertyModal(name: string): void {
+  initEditAnnotationPropertyHandlers();
+  const modal = document.getElementById('editAnnotationPropertyModal')!;
+  (modal as HTMLElement).dataset.annotationPropName = name;
+  const nameEl = document.getElementById('editAnnotationPropName') as HTMLElement;
+  const labelInput = document.getElementById('editAnnotationPropLabel') as HTMLInputElement;
+  const commentInput = document.getElementById('editAnnotationPropComment') as HTMLTextAreaElement;
+  const isBooleanCb = document.getElementById('editAnnotationPropIsBoolean') as HTMLInputElement;
+  const ap = annotationProperties.find((p) => p.name === name);
+  if (nameEl) nameEl.textContent = `Identifier: ${name} (used in ontology)`;
+  // Get label from store - annotation properties may have rdfs:label
+  if (labelInput) {
+    if (ttlStore) {
+      const propUri = 'http://example.org/aec-drawing-ontology#' + name;
+      const labelQuads = ttlStore.getQuads(propUri, 'http://www.w3.org/2000/01/rdf-schema#label', null, null);
+      if (labelQuads.length > 0) {
+        const labelObj = labelQuads[0].object as { value?: string };
+        labelInput.value = labelObj?.value ?? name;
+      } else {
+        labelInput.value = name;
+      }
+    } else {
+      labelInput.value = name;
+    }
+  }
+  if (commentInput) {
+    // Try to get comment from store
+    if (ttlStore) {
+      const propUri = 'http://example.org/aec-drawing-ontology#' + name;
+      const commentQuads = ttlStore.getQuads(propUri, 'http://www.w3.org/2000/01/rdf-schema#comment', null, null);
+      if (commentQuads.length > 0) {
+        const commentObj = commentQuads[0].object as { value?: string };
+        commentInput.value = commentObj?.value ?? '';
+      } else {
+        commentInput.value = '';
+      }
+    } else {
+      commentInput.value = '';
+    }
+  }
+  if (isBooleanCb) isBooleanCb.checked = ap?.isBoolean ?? false;
+  modal.style.display = 'flex';
+  labelInput?.focus();
+}
+
+let addAnnotationPropertyHandlersInitialized = false;
+
+function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement): void {
+  if (addAnnotationPropertyHandlersInitialized) return;
+  addAnnotationPropertyHandlersInitialized = true;
+  const labelInput = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
+  const isBooleanCb = document.getElementById('addAnnotationPropIsBoolean') as HTMLInputElement;
+  if (labelInput) {
+    labelInput.addEventListener('input', () => {
+      const okBtn = document.getElementById('addAnnotationPropConfirm') as HTMLButtonElement;
+      okBtn.disabled = !labelInput.value.trim();
+    });
+    labelInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('addAnnotationPropConfirm')?.click();
+    });
+  }
+  document.getElementById('addAnnotationPropertyBtn')?.addEventListener('click', () => {
+    const modal = document.getElementById('addAnnotationPropertyModal')!;
+    const li = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
+    const okBtn = document.getElementById('addAnnotationPropConfirm') as HTMLButtonElement;
+    li.value = '';
+    if (isBooleanCb) isBooleanCb.checked = false;
+    okBtn.disabled = true;
+    li.focus();
+    modal.style.display = 'flex';
+  });
+  document.getElementById('addAnnotationPropCancel')?.addEventListener('click', () => {
+    document.getElementById('addAnnotationPropertyModal')!.style.display = 'none';
+  });
+  document.getElementById('addAnnotationPropConfirm')?.addEventListener('click', () => {
+    const li = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
+    const isBool = isBooleanCb?.checked ?? false;
+    const label = li.value.trim();
+    if (!label || !ttlStore) return;
+    const name = addAnnotationPropertyToStore(ttlStore, label, isBool);
+    if (name) {
+      annotationProperties.push({ name, isBoolean: isBool });
+      annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+      const content = document.getElementById('annotationPropsContent');
+      if (content) initAnnotationPropsMenu(content, applyFilter);
+    }
+    document.getElementById('addAnnotationPropertyModal')!.style.display = 'none';
+  });
+}
+
 let addDataPropertyHandlersInitialized = false;
 
 function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
@@ -1254,7 +1420,11 @@ function initAnnotationPropsMenu(
           </div>`;
       };
       row.innerHTML = `
-        <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; margin-bottom: 6px;">${ap.name}</div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${ap.name}</div>
+          <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
+          <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
+        </div>
         <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px;">
           ${renderBoolBlock('true', DEFAULT_BOOL_COLORS.whenTrue)}
           ${renderBoolBlock('false', DEFAULT_BOOL_COLORS.whenFalse)}
@@ -1273,7 +1443,11 @@ function initAnnotationPropsMenu(
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       row.innerHTML = `
-        <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; margin-bottom: 6px;">${ap.name}</div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${ap.name}</div>
+          <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
+          <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
+        </div>
         <div class="ap-text-rules" data-prop="${ap.name}"></div>
         <button type="button" class="ap-add-rule" data-prop="${ap.name}" style="font-size: 11px; margin-top: 4px;">+ Add regex rule</button>
       `;
@@ -1310,12 +1484,69 @@ function initAnnotationPropsMenu(
     container.appendChild(textSection);
   }
 
+  // Add event listeners for edit and delete buttons
+  container.querySelectorAll('.annotation-prop-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn as HTMLElement).dataset.name!;
+      showEditAnnotationPropertyModal(name);
+    }, { signal });
+  });
+  container.querySelectorAll('.annotation-prop-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn as HTMLElement).dataset.name!;
+      if (!confirm(`Delete annotation property "${name}"?`)) return;
+      if (!ttlStore) return;
+      
+      // Save all quads for this property for undo
+      const propUri = 'http://example.org/aec-drawing-ontology#' + name;
+      const allQuads = Array.from(ttlStore.getQuads(propUri, null, null, null));
+      const ap = annotationProperties.find((p) => p.name === name);
+      
+      if (removeAnnotationPropertyFromStore(ttlStore, name)) {
+        annotationProperties = annotationProperties.filter((ap) => ap.name !== name);
+        
+        // Add undo action
+        pushUndoable(
+          () => {
+            // Undo: restore the property
+            if (ttlStore) {
+              for (const q of allQuads) {
+                ttlStore.addQuad(q);
+              }
+            }
+            if (ap) {
+              annotationProperties.push(ap);
+              annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+            }
+            initAnnotationPropsMenu(container, onApply);
+            hasUnsavedChanges = true;
+            updateSaveButtonVisibility();
+          },
+          () => {
+            // Redo: delete again
+            if (ttlStore) {
+              removeAnnotationPropertyFromStore(ttlStore, name);
+            }
+            annotationProperties = annotationProperties.filter((ap) => ap.name !== name);
+            initAnnotationPropsMenu(container, onApply);
+            hasUnsavedChanges = true;
+            updateSaveButtonVisibility();
+          }
+        );
+        
+        hasUnsavedChanges = true;
+        updateSaveButtonVisibility();
+        initAnnotationPropsMenu(container, onApply);
+      }
+    }, { signal });
+  });
+
   if (boolProps.length === 0 && textProps.length === 0) {
     container.innerHTML = '<span style="font-size: 11px; color: #888;">No annotation properties in ontology</span>';
   }
 
   container.querySelectorAll('.ap-bool-show, .ap-bool-fill, .ap-bool-border').forEach((el) =>
-    el.addEventListener('change', onApply)
+    el.addEventListener('change', onApply, { signal })
   );
 
   container.querySelectorAll('.ap-linetype-trigger').forEach((btn) => {
@@ -2758,6 +2989,7 @@ function renderApp(): void {
         <details id="annotationPropsMenu">
           <summary style="cursor: pointer; font-weight: bold;">Annotation Properties</summary>
           <div id="annotationPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+          <button type="button" id="addAnnotationPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add annotation property</button>
         </details>
       </div>
       <div id="textDisplayWrap" style="position: relative; display: inline-block;">
@@ -2937,6 +3169,42 @@ function renderApp(): void {
         </div>
       </div>
     </div>
+    <div id="addAnnotationPropertyModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Add annotation property</h3>
+        <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addAnnotationPropLabel" placeholder="e.g. isVisible" /></label>
+        <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
+          <input type="checkbox" id="addAnnotationPropIsBoolean" /> 
+          <span>Boolean property (rdfs:range xsd:boolean)</span>
+        </label>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="addAnnotationPropCancel">Cancel</button>
+          <button type="button" id="addAnnotationPropConfirm" class="primary" disabled>OK</button>
+        </div>
+      </div>
+    </div>
+    <div id="editAnnotationPropertyModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Edit annotation property</h3>
+        <p id="editAnnotationPropName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
+        <label style="display: block; margin-top: 8px;">
+          <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <input type="text" id="editAnnotationPropLabel" placeholder="e.g. isVisible" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
+          <textarea id="editAnnotationPropComment" rows="2" placeholder="Optional" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
+        </label>
+        <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
+          <input type="checkbox" id="editAnnotationPropIsBoolean" /> 
+          <span>Boolean property (rdfs:range xsd:boolean)</span>
+        </label>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="editAnnotationPropCancel">Cancel</button>
+          <button type="button" id="editAnnotationPropConfirm" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
     <div id="editEdgeModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Edit edge</h3>
@@ -3025,6 +3293,7 @@ async function loadTtlAndRender(
     if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
     initAddRelationshipTypeHandlers(edgeStylesContent);
     initAddDataPropertyHandlers(dataPropsContent ?? undefined);
+    initAddAnnotationPropertyHandlers(annotationPropsContent ?? undefined);
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     const displayConfig = await loadDisplayConfigFromIndexedDB();
