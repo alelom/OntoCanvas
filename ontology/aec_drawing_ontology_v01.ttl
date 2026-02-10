@@ -816,7 +816,7 @@
 :TextualNote rdf:type owl:Class;
     rdfs:label "Text";
     :labellableRoot "true"^^xsd:boolean;
-    rdfs:subClassOf :Note, [ rdf:type owl:Restriction ; owl:onProperty :refersToDrawingId ; owl:onDataRange xsd:string ].
+    rdfs:subClassOf :Note.
 
 #################################################################
 #    Data Properties
