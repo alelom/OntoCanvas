@@ -31,6 +31,11 @@ import {
   storeToTurtle,
   extractLocalName,
 } from './parser';
+import {
+  searchExternalClasses,
+  preloadExternalOntologyClasses,
+  type ExternalClassInfo,
+} from './externalOntologySearch';
 import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction } from './types';
 import {
   wrapText,
@@ -2318,42 +2323,221 @@ function hideRenameModal(): void {
   document.getElementById('renameModal')!.style.display = 'none';
 }
 
+let addNodeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+let selectedExternalClass: ExternalClassInfo | null = null;
+
 function showAddNodeModal(canvasX: number, canvasY: number): void {
   pendingAddNodePosition = { x: canvasX, y: canvasY };
   addNodeModalShowing = true;
   const modal = document.getElementById('addNodeModal')!;
-  const input = document.getElementById('addNodeInput') as HTMLInputElement;
+  const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
+  const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
   const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
-  input.value = '';
+  const externalTabBtn = document.getElementById('addNodeExternalTabBtn');
+  const externalTabContent = document.getElementById('addNodeExternalTabContent');
+  const customTabContent = document.getElementById('addNodeCustomTab');
+  
+  // Show/hide external tab based on whether we have external references
+  if (externalTabBtn && externalOntologyReferences.length > 0) {
+    externalTabBtn.style.display = '';
+  } else if (externalTabBtn) {
+    externalTabBtn.style.display = 'none';
+  }
+  
+  // Reset to custom tab
+  document.querySelectorAll('.add-node-tab').forEach((tab) => {
+    (tab as HTMLElement).classList.remove('active');
+    (tab as HTMLElement).style.borderBottomColor = 'transparent';
+    (tab as HTMLElement).style.fontWeight = 'normal';
+    (tab as HTMLElement).style.color = '#666';
+  });
+  const customTabBtn = document.querySelector('.add-node-tab[data-tab="custom"]') as HTMLElement;
+  if (customTabBtn) {
+    customTabBtn.classList.add('active');
+    customTabBtn.style.borderBottomColor = '#3498db';
+    customTabBtn.style.fontWeight = 'bold';
+    customTabBtn.style.color = '#000';
+  }
+  
+  if (customTabContent) customTabContent.style.display = 'block';
+  if (externalTabContent) externalTabContent.style.display = 'none';
+  
+  if (customInput) customInput.value = '';
+  if (externalInput) externalInput.value = '';
+  const resultsDiv = document.getElementById('addNodeExternalResults');
+  const descDiv = document.getElementById('addNodeExternalDescription');
+  if (resultsDiv) resultsDiv.style.display = 'none';
+  if (descDiv) descDiv.style.display = 'none';
+  
   okBtn.disabled = true;
   modal.style.display = 'flex';
-  input.focus();
+  if (customInput) customInput.focus();
 }
 
 function hideAddNodeModal(): void {
   pendingAddNodePosition = null;
   addNodeMode = false;
+  selectedExternalClass = null;
+  if (addNodeSearchTimeout) {
+    clearTimeout(addNodeSearchTimeout);
+    addNodeSearchTimeout = null;
+  }
   document.getElementById('addNodeModal')!.style.display = 'none';
 }
 
 function updateAddNodeOkButton(): void {
-  const input = document.getElementById('addNodeInput') as HTMLInputElement;
+  const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
+  const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
   const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
-  if (input && okBtn) {
-    okBtn.disabled = !input.value.trim();
+  const customTabContent = document.getElementById('addNodeCustomTab');
+  const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
+  
+  if (okBtn) {
+    if (isCustomTab) {
+      okBtn.disabled = !customInput?.value.trim();
+    } else {
+      okBtn.disabled = !selectedExternalClass;
+    }
+  }
+}
+
+async function handleExternalClassSearch(query: string): Promise<void> {
+  const resultsDiv = document.getElementById('addNodeExternalResults');
+  const descDiv = document.getElementById('addNodeExternalDescription');
+  
+  if (!query.trim()) {
+    if (resultsDiv) resultsDiv.style.display = 'none';
+    if (descDiv) descDiv.style.display = 'none';
+    selectedExternalClass = null;
+    updateAddNodeOkButton();
+    return;
+  }
+  
+  // Debug logging
+  console.log('Search query:', query);
+  console.log('External references:', externalOntologyReferences);
+  
+  if (externalOntologyReferences.length === 0) {
+    if (resultsDiv) {
+      resultsDiv.innerHTML = '<div style="padding: 8px; color: #666; font-size: 11px;">No external ontologies referenced. Add one via "Manage external references".</div>';
+      resultsDiv.style.display = 'block';
+    }
+    if (descDiv) descDiv.style.display = 'none';
+    selectedExternalClass = null;
+    updateAddNodeOkButton();
+    return;
+  }
+  
+  try {
+    const results = await searchExternalClasses(query, externalOntologyReferences);
+    console.log('Search results:', results);
+  
+    if (results.length === 0) {
+      if (resultsDiv) {
+        resultsDiv.innerHTML = '<div style="padding: 8px; color: #666; font-size: 11px;">No classes found</div>';
+        resultsDiv.style.display = 'block';
+      }
+      if (descDiv) descDiv.style.display = 'none';
+      selectedExternalClass = null;
+    } else if (results.length === 1) {
+      // Single match - show description overlay
+      const match = results[0];
+      selectedExternalClass = match;
+      if (descDiv) {
+        descDiv.innerHTML = `
+          <div style="font-weight: bold; margin-bottom: 4px;">${match.label}${match.prefix ? ` (${match.prefix}:${match.localName})` : ''}</div>
+          ${match.comment ? `<div style="margin-top: 4px;">${match.comment}</div>` : ''}
+          <div style="margin-top: 4px; font-size: 10px; color: #999;">From: ${match.ontologyUrl}</div>
+        `;
+        descDiv.style.display = 'block';
+      }
+      if (resultsDiv) resultsDiv.style.display = 'none';
+    } else {
+    // Multiple matches - show list
+    if (resultsDiv) {
+      resultsDiv.innerHTML = results.map((cls, idx) => `
+        <div class="external-class-result" data-index="${idx}" style="padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; ${idx === 0 ? 'background: #f0f7ff;' : ''}" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background='${idx === 0 ? '#f0f7ff' : 'transparent'}'">
+          <div style="font-weight: bold;">${cls.label}${cls.prefix ? ` (${cls.prefix}:${cls.localName})` : ''}</div>
+          ${cls.comment ? `<div style="font-size: 10px; color: #666; margin-top: 2px;">${cls.comment.substring(0, 100)}${cls.comment.length > 100 ? '...' : ''}</div>` : ''}
+          <div style="font-size: 9px; color: #999; margin-top: 2px;">From: ${cls.ontologyUrl}</div>
+        </div>
+      `).join('');
+      resultsDiv.style.display = 'block';
+      
+      // Add click handlers
+      resultsDiv.querySelectorAll('.external-class-result').forEach((el, idx) => {
+        el.addEventListener('click', () => {
+          selectedExternalClass = results[idx];
+          if (descDiv) {
+            descDiv.innerHTML = `
+              <div style="font-weight: bold; margin-bottom: 4px;">${results[idx].label}${results[idx].prefix ? ` (${results[idx].prefix}:${results[idx].localName})` : ''}</div>
+              ${results[idx].comment ? `<div style="margin-top: 4px;">${results[idx].comment}</div>` : ''}
+              <div style="margin-top: 4px; font-size: 10px; color: #999;">From: ${results[idx].ontologyUrl}</div>
+            `;
+            descDiv.style.display = 'block';
+          }
+          if (resultsDiv) resultsDiv.style.display = 'none';
+          updateAddNodeOkButton();
+        });
+      });
+    }
+    if (descDiv) descDiv.style.display = 'none';
+    selectedExternalClass = results[0]; // Auto-select first result
+    }
+    
+    updateAddNodeOkButton();
+  } catch (err) {
+    console.error('Search error:', err);
+    if (resultsDiv) {
+      resultsDiv.innerHTML = '<div style="padding: 8px; color: #d32f2f; font-size: 11px;">Error searching external ontologies. Check console for details.</div>';
+      resultsDiv.style.display = 'block';
+    }
+    if (descDiv) descDiv.style.display = 'none';
+    selectedExternalClass = null;
+    updateAddNodeOkButton();
   }
 }
 
 function confirmAddNode(): void {
   if (!pendingAddNodePosition) return;
-  const input = document.getElementById('addNodeInput') as HTMLInputElement;
-  const label = input?.value?.trim();
-  if (!label) return;
+  const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
+  const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
+  const customTabContent = document.getElementById('addNodeCustomTab');
+  const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
+  
   const { x, y } = pendingAddNodePosition;
-  const result = addNewNodeAtPosition(x, y, label);
-  if (result) {
-    applyFilter(true);
+  
+  if (isCustomTab) {
+    const label = customInput?.value?.trim();
+    if (!label) return;
+    const result = addNewNodeAtPosition(x, y, label);
+    if (result) {
+      applyFilter(true);
+    }
+  } else {
+    // Add from external ontology
+    if (!selectedExternalClass || !ttlStore) return;
+    
+    // Use the local name as the node ID, but we need to import the class from external ontology
+    // For now, we'll create a local class with the same name and add a comment indicating it's from external
+    const localName = selectedExternalClass.localName;
+    const label = selectedExternalClass.label;
+    const comment = selectedExternalClass.comment 
+      ? `${selectedExternalClass.comment}\n\n(Imported from ${selectedExternalClass.ontologyUrl})`
+      : `(Imported from ${selectedExternalClass.ontologyUrl})`;
+    
+    const result = addNewNodeAtPosition(x, y, label);
+    if (result && ttlStore) {
+      // Update the comment to include external reference info
+      if (comment) {
+        updateCommentInStore(ttlStore, result.id, comment);
+        const node = rawData.nodes.find((n) => n.id === result.id);
+        if (node) node.comment = comment;
+      }
+      applyFilter(true);
+    }
   }
+  
   hideAddNodeModal();
 }
 
@@ -3114,7 +3298,18 @@ function renderApp(): void {
     <div id="addNodeModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Add node</h3>
-        <label>Label: <input type="text" id="addNodeInput" placeholder="Enter node label" /></label>
+        <div id="addNodeTabs" style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #ddd;">
+          <button type="button" class="add-node-tab active" data-tab="custom" style="padding: 8px 16px; background: none; border: none; border-bottom: 2px solid #3498db; cursor: pointer; font-size: 12px; font-weight: bold;">Add custom</button>
+          <button type="button" class="add-node-tab" data-tab="external" id="addNodeExternalTabBtn" style="padding: 8px 16px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 12px; color: #666; display: none;">Add from referenced ontology</button>
+        </div>
+        <div id="addNodeCustomTab" class="add-node-tab-content">
+          <label>Label: <input type="text" id="addNodeInput" placeholder="Enter node label" /></label>
+        </div>
+        <div id="addNodeExternalTabContent" class="add-node-tab-content" style="display: none;">
+          <label>Search class: <input type="text" id="addNodeExternalInput" placeholder="Type to search referenced ontologies..." /></label>
+          <div id="addNodeExternalResults" style="margin-top: 12px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; display: none;"></div>
+          <div id="addNodeExternalDescription" style="margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px; font-size: 11px; color: #666; display: none;"></div>
+        </div>
         <div class="modal-actions">
           <button type="button" id="addNodeCancel">Cancel</button>
           <button type="button" id="addNodeConfirm" class="primary" disabled>OK</button>
@@ -3305,6 +3500,15 @@ async function loadTtlAndRender(
     
     // Load external references
     externalOntologyReferences = await loadExternalRefsFromIndexedDB();
+    
+    // Pre-fetch and cache external ontology classes (await to ensure they're loaded before search)
+    if (externalOntologyReferences.length > 0) {
+      try {
+        await preloadExternalOntologyClasses(externalOntologyReferences);
+      } catch (err) {
+        console.error('Failed to pre-load external ontologies:', err);
+      }
+    }
 
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -3818,15 +4022,24 @@ function setupEventListeners(): void {
         }
       }
       
-      externalOntologyReferences.push({
+      const newRef = {
         url,
         usePrefix,
         prefix: preferredPrefix,
-      });
+      };
+      externalOntologyReferences.push(newRef);
       
       urlInput.value = '';
       renderExternalRefsList();
-      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      await saveExternalRefsToIndexedDB(externalOntologyReferences);
+      
+      // Pre-fetch the newly added ontology
+      try {
+        await preloadExternalOntologyClasses([newRef]);
+      } catch (err) {
+        console.warn(`Failed to pre-load newly added ontology ${newRef.url}:`, err);
+      }
+      
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     } catch (error) {
@@ -4128,7 +4341,62 @@ function setupEventListeners(): void {
     if ((e.target as HTMLElement).id === 'renameModal') hideRenameModal();
   });
 
+  // Tab switching
+  document.querySelectorAll('.add-node-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const tabName = (tab as HTMLElement).dataset.tab;
+      if (!tabName) return;
+      
+      // Update tab styles
+      document.querySelectorAll('.add-node-tab').forEach((t) => {
+        (t as HTMLElement).classList.remove('active');
+        (t as HTMLElement).style.borderBottomColor = 'transparent';
+        (t as HTMLElement).style.fontWeight = 'normal';
+        (t as HTMLElement).style.color = '#666';
+      });
+      (tab as HTMLElement).classList.add('active');
+      (tab as HTMLElement).style.borderBottomColor = '#3498db';
+      (tab as HTMLElement).style.fontWeight = 'bold';
+      (tab as HTMLElement).style.color = '#000';
+      
+      // Show/hide tab content
+      const customTabContent = document.getElementById('addNodeCustomTab');
+      const externalTabContent = document.getElementById('addNodeExternalTabContent');
+      if (tabName === 'custom') {
+        if (customTabContent) customTabContent.style.display = 'block';
+        if (externalTabContent) externalTabContent.style.display = 'none';
+        const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
+        if (customInput) customInput.focus();
+      } else {
+        if (customTabContent) customTabContent.style.display = 'none';
+        if (externalTabContent) externalTabContent.style.display = 'block';
+        const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
+        if (externalInput) externalInput.focus();
+      }
+      
+      updateAddNodeOkButton();
+    });
+  });
+  
   document.getElementById('addNodeInput')?.addEventListener('input', updateAddNodeOkButton);
+  document.getElementById('addNodeExternalInput')?.addEventListener('input', (e) => {
+    const query = (e.target as HTMLInputElement).value.trim();
+    
+    // Clear previous timeout
+    if (addNodeSearchTimeout) {
+      clearTimeout(addNodeSearchTimeout);
+    }
+    
+    // Debounce search
+    addNodeSearchTimeout = setTimeout(() => {
+      handleExternalClassSearch(query).catch((err) => {
+        console.error('Search error:', err);
+      });
+    }, 300);
+    
+    updateAddNodeOkButton();
+  });
+  
   document.getElementById('addNodeCancel')?.addEventListener('click', hideAddNodeModal);
   document.getElementById('addNodeConfirm')?.addEventListener('click', confirmAddNode);
   document.getElementById('addNodeModal')?.addEventListener('keydown', (e) => {
