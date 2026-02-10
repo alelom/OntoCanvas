@@ -10,13 +10,16 @@
 
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
 
+@prefix dano: <https://w3id.org/dano>.
+
 #################################################################
 #    Ontology
 #################################################################
 
 :Ontology rdf:type owl:Ontology;
     rdfs:comment "Ontology for AEC drawing elements - facade, structural, and drawing metadata. Based on schema rev02 (06.04.23).";
-    rdfs:label "AEC Drawing Ontology".
+    rdfs:label "AEC Drawing Ontology" ;
+    owl:imports <https://w3id.org/dano> .
 
 #################################################################
 #    Annotation properties
