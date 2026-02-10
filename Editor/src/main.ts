@@ -2799,10 +2799,11 @@ function renderApp(): void {
       <div class="modal-content">
         <h3>Add object property</h3>
         <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" /></label>
-        <label style="display: block; margin-top: 10px;">
-          <input type="checkbox" id="addRelTypeHasCardinality" checked /> Has cardinality
+        <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
+          <input type="checkbox" id="addRelTypeHasCardinality" checked /> 
+          <span>Has cardinality</span>
+          <span style="cursor: help; color: #666; font-size: 14px; line-height: 1;" title="When checked, edges of this type can specify min/max cardinality (e.g. &quot;contains [0..3]&quot;).">ⓘ</span>
         </label>
-        <p style="font-size: 11px; color: #666; margin-top: 6px;">When checked, edges of this type can specify min/max cardinality (e.g. "contains [0..3]").</p>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="addRelTypeCancel">Cancel</button>
           <button type="button" id="addRelTypeConfirm" class="primary" disabled>OK</button>
