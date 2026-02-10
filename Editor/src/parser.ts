@@ -1012,17 +1012,28 @@ export function removeObjectPropertyFromStore(store: Store, propertyName: string
 /**
  * Serialize the store to Turtle string with section dividers and spacing.
  */
-export function storeToTurtle(store: Store): Promise<string> {
+export function storeToTurtle(store: Store, externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): Promise<string> {
   return new Promise((resolve, reject) => {
+    const prefixes = { ...TURTLE_PREFIXES };
+    
+    // Add prefixes for external ontologies that use prefix
+    if (externalRefs) {
+      for (const ref of externalRefs) {
+        if (ref.usePrefix && ref.prefix) {
+          prefixes[ref.prefix] = ref.url;
+        }
+      }
+    }
+    
     const writer = new Writer({
-      prefixes: TURTLE_PREFIXES,
+      prefixes,
     });
     for (const q of store) {
       writer.addQuad(q);
     }
     writer.end((err: Error | null, result: string) => {
       if (err) reject(err);
-      else resolve(postProcessTurtle(result));
+      else resolve(postProcessTurtle(result, externalRefs));
     });
   });
 }

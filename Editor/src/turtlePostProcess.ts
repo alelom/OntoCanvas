@@ -73,7 +73,7 @@ function getBlankRef(blank: BlankNode): string {
   return id.startsWith('_:') ? id : `_:${id}`;
 }
 
-function shortenIri(iri: string): string {
+function shortenIri(iri: string, externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
   if (iri === BASE_IRI) return '<#';
   for (const [prefix, ns] of Object.entries(TURTLE_PREFIXES)) {
     if (iri.startsWith(ns)) {
@@ -82,17 +82,33 @@ function shortenIri(iri: string): string {
       return `${prefix}:${local}`;
     }
   }
+  
+  // Check external ontologies
+  if (externalRefs) {
+    for (const ref of externalRefs) {
+      if (iri.startsWith(ref.url)) {
+        if (ref.usePrefix && ref.prefix) {
+          const local = iri.slice(ref.url.length);
+          return `${ref.prefix}:${local}`;
+        }
+        // If not using prefix, return full IRI
+        return `<${iri}>`;
+      }
+    }
+  }
+  
   if (iri.startsWith(BASE_IRI)) return `<#${iri.slice(BASE_IRI.length)}>`;
   return `<${iri}>`;
 }
 
 function serializeTerm(
   term: Term,
-  inlineBlanks: Map<string, string>
+  inlineBlanks: Map<string, string>,
+  externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>
 ): string {
   switch (term.termType) {
     case 'NamedNode':
-      return shortenIri(term.value);
+      return shortenIri(term.value, externalRefs);
     case 'Literal': {
       const lit = term as Literal;
       let value = lit.value;
@@ -101,7 +117,7 @@ function serializeTerm(
       const dt = lit.datatype?.value;
       if (dt === 'http://www.w3.org/2001/XMLSchema#boolean') return `"${value}"^^xsd:boolean`;
       if (dt === 'http://www.w3.org/2001/XMLSchema#string') return `"${value}"`;
-      if (dt) return `"${value}"^^${shortenIri(dt)}`;
+      if (dt) return `"${value}"^^${shortenIri(dt, externalRefs)}`;
       return `"${value}"`;
     }
     case 'BlankNode': {
@@ -144,7 +160,7 @@ function deduplicateRestrictionQuads(quads: Quad[]): Quad[] {
   return result;
 }
 
-function buildInlineForms(quads: Quad[]): Map<string, string> {
+function buildInlineForms(quads: Quad[], externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): Map<string, string> {
   const blankAsObject = new Set<string>();
   const quadsBySubject = new Map<string, Quad[]>();
 
@@ -171,8 +187,8 @@ function buildInlineForms(quads: Quad[]): Map<string, string> {
     const parts: string[] = [];
     for (const q of list) {
       const pred = q.predicate as NamedNode;
-      const predStr = pred.value === RDF_TYPE ? 'rdf:type' : shortenIri(pred.value);
-      const objStr = serializeTerm(q.object, result);
+      const predStr = pred.value === RDF_TYPE ? 'rdf:type' : shortenIri(pred.value, externalRefs);
+      const objStr = serializeTerm(q.object, result, externalRefs);
       parts.push(`${predStr} ${objStr}`);
     }
     const inline = `[ ${parts.join(' ; ')} ]`;
@@ -241,7 +257,7 @@ function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): strin
   return output;
 }
 
-function convertBlanksToInline(raw: string): string {
+function convertBlanksToInline(raw: string, externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
   const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
   let quads: Quad[];
   try {
@@ -259,7 +275,7 @@ function convertBlanksToInline(raw: string): string {
   }
   if (blankAsObject.size === 0) return raw;
 
-  const inlineBlanks = buildInlineForms(quads);
+  const inlineBlanks = buildInlineForms(quads, externalRefs);
   let output = removeBlankBlocks(raw, blankAsObject);
   output = replaceBlankRefs(output, inlineBlanks);
   return output;
@@ -315,13 +331,177 @@ function addSectionDividers(raw: string): string {
 // --- Main export ---
 
 /**
- * Post-process raw Turtle output: style fixes, @base, blank node inlining, section dividers.
+ * Post-process raw Turtle output: style fixes, @base, blank node inlining, section dividers, owl:imports.
  */
-export function postProcessTurtle(raw: string): string {
+export function postProcessTurtle(raw: string, externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
   let output = raw;
   output = applyStyleFixes(output);
   output = ensureBase(output);
-  output = convertBlanksToInline(output);
+  output = convertBlanksToInline(output, externalRefs);
+  
+  // Add owl:imports to ontology declaration
+  if (externalRefs && externalRefs.length > 0) {
+    output = addOwlImports(output, externalRefs);
+  }
+  
   output = addSectionDividers(output);
   return output;
+}
+
+function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
+  let output = raw;
+  
+  // First, add @prefix declarations for external ontologies that use prefixes
+  const prefixesToAdd: Array<{ prefix: string; url: string }> = [];
+  for (const ref of externalRefs) {
+    if (ref.usePrefix && ref.prefix) {
+      // Check if prefix already exists
+      const prefixPattern = new RegExp(`@prefix\\s+${ref.prefix}\\s*:`);
+      if (!prefixPattern.test(output)) {
+        prefixesToAdd.push({ prefix: ref.prefix, url: ref.url });
+      }
+    }
+  }
+  
+  if (prefixesToAdd.length > 0) {
+    // Find the last @prefix declaration
+    const prefixMatches = output.match(/@prefix[^\n]+\n?/g);
+    if (prefixMatches && prefixMatches.length > 0) {
+      const lastPrefix = prefixMatches[prefixMatches.length - 1];
+      const insertPos = output.indexOf(lastPrefix) + lastPrefix.length;
+      const prefixDecls = prefixesToAdd.map((p) => `@prefix ${p.prefix}: <${p.url}> .\n`).join('');
+      output = output.slice(0, insertPos) + prefixDecls + output.slice(insertPos);
+    } else {
+      // No prefixes found, add at the beginning
+      const prefixDecls = prefixesToAdd.map((p) => `@prefix ${p.prefix}: <${p.url}> .\n`).join('');
+      output = prefixDecls + output;
+    }
+  }
+  
+  // Find the ontology declaration - match just the start: :Ontology rdf:type owl:Ontology
+  const ontologyPattern = /(:\w+|<[^>]+>)\s+rdf:type\s+owl:Ontology\s*[;]/;
+  const match = output.match(ontologyPattern);
+  
+  if (!match) {
+    // If no ontology declaration found, try to find where to insert it
+    // Look for first @prefix or first triple
+    const firstPrefixMatch = output.match(/@prefix/);
+    const firstTripleMatch = output.match(/^[^@#\s]/m);
+    
+    if (firstPrefixMatch || firstTripleMatch) {
+      // Insert ontology declaration after prefixes
+      const insertPos = firstPrefixMatch ? output.lastIndexOf('@prefix') : (firstTripleMatch?.index ?? 0);
+      // Find the end of the last prefix declaration
+      const afterPrefixes = output.slice(insertPos);
+      const prefixEndMatch = afterPrefixes.match(/@prefix[^\n]+\n/);
+      const actualInsertPos = prefixEndMatch ? insertPos + prefixEndMatch[0].length : insertPos;
+      const before = output.slice(0, actualInsertPos);
+      const after = output.slice(actualInsertPos);
+      const imports = externalRefs.map((ref) => `    owl:imports <${ref.url}>`).join(' ;\n');
+      const ontologyDecl = `${before}:Ontology rdf:type owl:Ontology ;\n${imports} .\n\n${after}`;
+      return ontologyDecl;
+    }
+    return output;
+  }
+  
+  // Found ontology declaration, add imports to it
+  // Find where the ontology declaration actually ends (the final period that closes the statement)
+  // We need to find the period that's not inside a string literal and is on the same statement level
+  const ontologyStart = match.index!;
+  const afterStart = output.slice(ontologyStart);
+  
+  // Find the final period that closes the ontology statement
+  // Strategy: Look for periods that are:
+  // 1. Not inside string literals
+  // 2. On a line by themselves or followed by newline
+  // 3. Followed by a comment section divider (####) or new top-level statement
+  let inString = false;
+  let stringChar = '';
+  let ontologyEnd = ontologyStart;
+  let foundFinalPeriod = false;
+  
+  // Collect all periods that are not in strings
+  const candidatePeriods: Array<{ pos: number; afterText: string }> = [];
+  
+  for (let i = 0; i < afterStart.length; i++) {
+    const char = afterStart[i];
+    const prevChar = i > 0 ? afterStart[i - 1] : '';
+    
+    // Track string literals
+    if ((char === '"' || char === "'") && prevChar !== '\\') {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+        stringChar = '';
+      }
+      continue;
+    }
+    
+    // Skip everything inside strings
+    if (inString) continue;
+    
+    // When we find a period, check what comes after it
+    if (char === '.') {
+      const afterPeriod = afterStart.slice(i + 1);
+      const trimmedAfter = afterPeriod.trim();
+      
+      // Check if this period is followed by newline and then a section divider or new statement
+      if (/^\s*[\n\r]/.test(afterPeriod)) {
+        const afterNewline = trimmedAfter;
+        if (afterNewline.startsWith('#################################################################') ||
+            afterNewline.startsWith('#') ||
+            /^[:\<@]/.test(afterNewline)) {
+          candidatePeriods.push({ pos: i, afterText: afterNewline });
+        }
+      }
+    }
+  }
+  
+  // The first candidate period that's followed by a section divider is likely the end of ontology declaration
+  // If no section divider, use the first one followed by a new statement
+  for (const candidate of candidatePeriods) {
+    if (candidate.afterText.startsWith('#################################################################')) {
+      ontologyEnd = ontologyStart + candidate.pos + 1;
+      foundFinalPeriod = true;
+      break;
+    }
+  }
+  
+  // If we didn't find one with a section divider, use the first candidate
+  if (!foundFinalPeriod && candidatePeriods.length > 0) {
+    ontologyEnd = ontologyStart + candidatePeriods[0].pos + 1;
+    foundFinalPeriod = true;
+  }
+  
+  if (!foundFinalPeriod) {
+    // Fallback: look for first period after match that's on its own line
+    const fallbackMatch = afterStart.match(/\.\s*[\n\r]\s*(#|$|[\n\r])/);
+    if (fallbackMatch && fallbackMatch.index != null) {
+      ontologyEnd = ontologyStart + fallbackMatch.index + 1;
+      foundFinalPeriod = true;
+    } else {
+      // Last resort: assume ontology declaration ends within first 500 chars
+      ontologyEnd = ontologyStart + Math.min(500, afterStart.length);
+    }
+  }
+  
+  const ontologyBlock = output.slice(ontologyStart, ontologyEnd);
+  const before = output.slice(0, ontologyStart);
+  const after = output.slice(ontologyEnd);
+  
+  // Check if it already has properties (contains semicolon)
+  const hasSemicolon = ontologyBlock.includes(';');
+  const imports = externalRefs.map((ref) => `    owl:imports <${ref.url}>`).join(' ;\n');
+  
+  if (hasSemicolon) {
+    // Add imports before the final period
+    const blockWithoutPeriod = ontologyBlock.replace(/\s*\.\s*$/, '');
+    return `${before}${blockWithoutPeriod} ;\n${imports} .\n${after}`;
+  } else {
+    // Replace period with semicolon and add imports
+    const blockWithoutPeriod = ontologyBlock.replace(/\s*\.\s*$/, '');
+    return `${before}${blockWithoutPeriod} ;\n${imports} .\n${after}`;
+  }
 }

@@ -46,6 +46,8 @@ const IDB_STORE = 'lastFile';
 const IDB_KEY = 'handle';
 const IDB_DISPLAY_NAME = 'OntologyEditorDisplay';
 const IDB_DISPLAY_STORE = 'config';
+const IDB_EXTERNAL_REFS_NAME = 'OntologyEditorExternalRefs';
+const IDB_EXTERNAL_REFS_STORE = 'refs';
 
 interface DisplayConfig {
   version: number;
@@ -61,6 +63,14 @@ interface DisplayConfig {
   annotationStyleConfig?: unknown;
   viewState?: { scale: number; position: { x: number; y: number } };
 }
+
+interface ExternalOntologyReference {
+  url: string;
+  usePrefix: boolean;
+  prefix?: string; // Optional prefix name (e.g., 'dc', 'schema')
+}
+
+let externalOntologyReferences: ExternalOntologyReference[] = [];
 
 const DISPLAY_CONFIG_VERSION = 1;
 
@@ -136,6 +146,66 @@ async function saveDisplayConfigToIndexedDB(config: DisplayConfig): Promise<void
       const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
       const store = tx.objectStore(IDB_DISPLAY_STORE);
       store.put({ ...config, version: DISPLAY_CONFIG_VERSION }, key);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  } catch {
+    // ignore
+  }
+}
+
+async function openExternalRefsDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_EXTERNAL_REFS_NAME, 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_EXTERNAL_REFS_STORE)) {
+        db.createObjectStore(IDB_EXTERNAL_REFS_STORE);
+      }
+    };
+  });
+}
+
+async function loadExternalRefsFromIndexedDB(): Promise<ExternalOntologyReference[]> {
+  const key = getDisplayConfigKeyNormalized() || getDisplayConfigKey();
+  if (!key) return [];
+  try {
+    const db = await openExternalRefsDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_EXTERNAL_REFS_STORE, 'readonly');
+      const store = tx.objectStore(IDB_EXTERNAL_REFS_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => {
+        db.close();
+        resolve((req.result as ExternalOntologyReference[]) || []);
+      };
+      req.onerror = () => {
+        db.close();
+        reject(req.error);
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function saveExternalRefsToIndexedDB(refs: ExternalOntologyReference[]): Promise<void> {
+  const key = getDisplayConfigKeyNormalized() || getDisplayConfigKey();
+  if (!key) return;
+  try {
+    const db = await openExternalRefsDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_EXTERNAL_REFS_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_EXTERNAL_REFS_STORE);
+      store.put(refs, key);
       tx.oncomplete = () => {
         db.close();
         resolve();
@@ -2633,7 +2703,7 @@ async function saveTtl(): Promise<void> {
   const overwriteCb = document.getElementById('overwriteFile') as HTMLInputElement | null;
   const doOverwrite = overwriteCb?.checked === true && fileHandle;
   try {
-    const ttlString = await storeToTurtle(ttlStore);
+    const ttlString = await storeToTurtle(ttlStore, externalOntologyReferences);
     if (doOverwrite) {
       const writable = await fileHandle!.createWritable();
       await writable.write(ttlString);
@@ -2739,6 +2809,9 @@ function renderApp(): void {
       <span id="displayConfigGroup" style="display: none; gap: 8px; align-items: center;">
         <button type="button" id="saveDisplayConfig" title="Save display config to a .display.json file (e.g. next to your ontology)">Save display config</button>
         <button type="button" id="loadDisplayConfig" title="Load display config from a .display.json file">Load display config</button>
+      </span>
+      <span id="externalRefsGroup" style="display: none; gap: 8px; align-items: center;">
+        <button type="button" id="manageExternalRefs" title="Manage external ontology references">Manage external references</button>
       </span>
       </div>
       <div id="errorMsg" class="error" style="display: none;"></div>
@@ -2884,6 +2957,24 @@ function renderApp(): void {
         </div>
       </div>
     </div>
+    <div id="externalRefsModal" class="modal" style="display: none;">
+      <div class="modal-content" style="min-width: 500px; max-width: 700px;">
+        <h3>Manage External Ontology References</h3>
+        <div id="externalRefsList" style="margin-top: 16px; margin-bottom: 16px; max-height: 400px; overflow-y: auto;">
+          <!-- External references will be listed here -->
+        </div>
+        <div style="margin-top: 16px; padding: 12px; background: #f9f9f9; border-radius: 4px;">
+          <strong style="font-size: 12px;">Add External Ontology</strong>
+          <div style="margin-top: 8px; display: flex; gap: 8px; align-items: flex-start;">
+            <input type="text" id="addExternalRefUrl" placeholder="Ontology URL (e.g., http://purl.org/dc/elements/1.1/)" style="flex: 1; padding: 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="button" id="addExternalRefBtn" style="padding: 6px 12px; font-size: 12px;">Add</button>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="externalRefsCancel">Close</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -2920,6 +3011,11 @@ async function loadTtlAndRender(
     vizControls.style.display = 'contents';
     const displayConfigGroup = document.getElementById('displayConfigGroup');
     if (displayConfigGroup) displayConfigGroup.style.display = 'inline-flex';
+    const externalRefsGroup = document.getElementById('externalRefsGroup');
+    if (externalRefsGroup) externalRefsGroup.style.display = 'inline-flex';
+    
+    // Load external references
+    externalOntologyReferences = await loadExternalRefsFromIndexedDB();
 
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -3162,6 +3258,82 @@ function applyFilter(preserveView = false): void {
   scheduleDisplayConfigSave();
 }
 
+function renderExternalRefsList(): void {
+  const listEl = document.getElementById('externalRefsList');
+  if (!listEl) return;
+  
+  if (externalOntologyReferences.length === 0) {
+    listEl.innerHTML = '<p style="font-size: 12px; color: #666; text-align: center; padding: 20px;">No external ontology references added yet.</p>';
+    return;
+  }
+  
+  listEl.innerHTML = externalOntologyReferences.map((ref, index) => {
+    const urlDisplay = ref.url.length > 60 ? ref.url.substring(0, 60) + '...' : ref.url;
+    return `
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px; margin-bottom: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
+        <div style="flex: 1;">
+          <a href="${ref.url}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #3498db; text-decoration: none; word-break: break-all;" title="${ref.url}">${urlDisplay}</a>
+          <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">
+              <input type="checkbox" class="external-ref-use-prefix" data-index="${index}" ${ref.usePrefix ? 'checked' : ''}>
+              Use prefix
+            </label>
+            ${ref.usePrefix ? `
+              <input type="text" class="external-ref-prefix" data-index="${index}" value="${ref.prefix || ''}" placeholder="prefix name" style="padding: 4px 6px; font-size: 11px; width: 100px; border: 1px solid #ccc; border-radius: 4px;">
+            ` : ''}
+          </div>
+        </div>
+        <button type="button" class="external-ref-delete" data-index="${index}" style="padding: 4px 8px; font-size: 11px; color: #c0392b; background: none; border: 1px solid #c0392b; border-radius: 4px; cursor: pointer;">Delete</button>
+      </div>
+    `;
+  }).join('');
+  
+  // Add event listeners
+  listEl.querySelectorAll('.external-ref-use-prefix').forEach((cb) => {
+    (cb as HTMLElement).addEventListener('change', ((e: Event) => {
+      const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
+      externalOntologyReferences[index].usePrefix = (e.target as HTMLInputElement).checked;
+      renderExternalRefsList();
+      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+    }) as EventListener);
+  });
+  
+  listEl.querySelectorAll('.external-ref-prefix').forEach((input) => {
+    (input as HTMLElement).addEventListener('change', ((e: Event) => {
+      const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
+      externalOntologyReferences[index].prefix = (e.target as HTMLInputElement).value.trim() || undefined;
+      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+    }) as EventListener);
+  });
+  
+  listEl.querySelectorAll('.external-ref-delete').forEach((btn) => {
+    (btn as HTMLElement).addEventListener('click', ((e: Event) => {
+      const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
+      externalOntologyReferences.splice(index, 1);
+      renderExternalRefsList();
+      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+    }) as EventListener);
+  });
+}
+
+function showExternalRefsModal(): void {
+  const modal = document.getElementById('externalRefsModal');
+  if (!modal) return;
+  renderExternalRefsList();
+  modal.style.display = 'flex';
+}
+
+function hideExternalRefsModal(): void {
+  const modal = document.getElementById('externalRefsModal');
+  if (modal) modal.style.display = 'none';
+}
+
 function setupEventListeners(): void {
   const selectFile = document.getElementById('selectFile');
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
@@ -3235,6 +3407,152 @@ function setupEventListeners(): void {
   });
 
   document.getElementById('layoutMode')?.addEventListener('change', applyFilter);
+
+  document.getElementById('manageExternalRefs')?.addEventListener('click', showExternalRefsModal);
+  document.getElementById('externalRefsCancel')?.addEventListener('click', hideExternalRefsModal);
+  document.getElementById('externalRefsModal')?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'externalRefsModal') hideExternalRefsModal();
+  });
+  document.getElementById('addExternalRefBtn')?.addEventListener('click', async () => {
+    const urlInput = document.getElementById('addExternalRefUrl') as HTMLInputElement;
+    const addBtn = document.getElementById('addExternalRefBtn') as HTMLButtonElement;
+    const url = urlInput?.value.trim();
+    if (!url) return;
+    
+    // Validate URL format
+    let urlObj: URL;
+    try {
+      urlObj = new URL(url);
+    } catch {
+      alert('Please enter a valid URL');
+      return;
+    }
+    
+    // Check if already exists
+    if (externalOntologyReferences.some((ref) => ref.url === url)) {
+      alert('This ontology is already in the list');
+      return;
+    }
+    
+    // Disable button and show loading state
+    if (addBtn) {
+      addBtn.disabled = true;
+      addBtn.textContent = 'Validating...';
+    }
+    
+    try {
+      // Fetch the URL to validate it's an ontology
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/turtle, application/rdf+xml, application/n-triples, text/n3, */*',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // Read the response body once (can only be read once)
+      const text = await response.text();
+      
+      const contentType = response.headers.get('content-type') || '';
+      const isRdfContent = contentType.includes('turtle') || 
+                          contentType.includes('rdf+xml') || 
+                          contentType.includes('n-triples') ||
+                          contentType.includes('n3') ||
+                          url.endsWith('.ttl') ||
+                          url.endsWith('.rdf') ||
+                          url.endsWith('.owl') ||
+                          url.endsWith('.nt') ||
+                          url.endsWith('.n3');
+      
+      if (!isRdfContent) {
+        // Check if it looks like RDF/Turtle
+        const looksLikeRdf = /@prefix|@base|rdf:type|owl:|rdfs:|<http|https:\/\/[^>]+>/i.test(text);
+        if (!looksLikeRdf) {
+          throw new Error('The URL does not appear to be an ontology. It should return RDF/Turtle content.');
+        }
+      }
+      
+      // Parse the ontology to find preferred namespace prefix
+      let preferredPrefix: string | undefined;
+      let usePrefix = true; // Default to true - user can uncheck if they want full IRIs
+      
+      // Try to parse as Turtle
+      try {
+        const { Parser } = await import('n3');
+        const parser = new Parser({ format: 'text/turtle' });
+        const quads = [...parser.parse(text)];
+        
+        // Look for vann:preferredNamespacePrefix
+        const VANN_NS = 'http://purl.org/vocab/vann/';
+        const VANN_PREFERRED_PREFIX = VANN_NS + 'preferredNamespacePrefix';
+        
+        for (const quad of quads) {
+          const pred = quad.predicate as { value?: string };
+          if (pred.value === VANN_PREFERRED_PREFIX) {
+            const obj = quad.object as { value?: string };
+            const prefixValue = obj.value;
+            if (prefixValue && typeof prefixValue === 'string') {
+              preferredPrefix = prefixValue.trim();
+              usePrefix = true;
+              break;
+            }
+          }
+        }
+      } catch (parseError) {
+        // If parsing fails, try regex as fallback
+        const prefixMatch = text.match(/vann:preferredNamespacePrefix\s+"([^"]+)"/i) ||
+                           text.match(/<http:\/\/purl\.org\/vocab\/vann\/preferredNamespacePrefix>\s+"([^"]+)"/i);
+        if (prefixMatch && prefixMatch[1]) {
+          preferredPrefix = prefixMatch[1].trim();
+          usePrefix = true;
+        }
+      }
+      
+      // If no preferred prefix found, extract suggestion from URL
+      if (!preferredPrefix) {
+        const pathParts = urlObj.pathname.split('/').filter((p) => p);
+        if (pathParts.length > 0) {
+          const lastPart = pathParts[pathParts.length - 1];
+          if (lastPart && /^[a-z]/.test(lastPart)) {
+            preferredPrefix = lastPart.replace(/[^a-z0-9]/gi, '');
+          }
+        }
+        if (!preferredPrefix && urlObj.hostname) {
+          const hostParts = urlObj.hostname.split('.');
+          if (hostParts.length > 0) {
+            preferredPrefix = hostParts[0].replace(/[^a-z0-9]/gi, '');
+          }
+        }
+      }
+      
+      externalOntologyReferences.push({
+        url,
+        usePrefix,
+        prefix: preferredPrefix,
+      });
+      
+      urlInput.value = '';
+      renderExternalRefsList();
+      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+    } catch (error) {
+      alert(`Failed to validate ontology: ${error instanceof Error ? error.message : String(error)}\n\nPlease ensure the URL points to a valid ontology file (Turtle/RDF format).`);
+    } finally {
+      if (addBtn) {
+        addBtn.disabled = false;
+        addBtn.textContent = 'Add';
+      }
+    }
+  });
+  document.getElementById('addExternalRefUrl')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      (document.getElementById('addExternalRefBtn') as HTMLButtonElement)?.click();
+    }
+  });
 
   const textDisplayToggle = document.getElementById('textDisplayToggle');
   const textDisplayPopup = document.getElementById('textDisplayPopup');
