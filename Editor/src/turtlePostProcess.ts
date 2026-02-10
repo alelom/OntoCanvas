@@ -24,6 +24,7 @@ const SECTION_ORDER = [
   { type: 'Ontology', label: 'Ontology' },
   { type: 'AnnotationProperty', label: 'Annotation properties' },
   { type: 'ObjectProperty', label: 'Object Properties' },
+  { type: 'DatatypeProperty', label: 'Data Properties' },
   { type: 'Class', label: 'Classes' },
 ];
 
@@ -274,6 +275,7 @@ function addSectionDividers(raw: string): string {
     { type: 'Ontology', re: /(owl:Ontology|owl#Ontology|Ontology>)/ },
     { type: 'AnnotationProperty', re: /(owl:AnnotationProperty|owl#AnnotationProperty|AnnotationProperty>)/ },
     { type: 'ObjectProperty', re: /(owl:ObjectProperty|owl#ObjectProperty|ObjectProperty>)/ },
+    { type: 'DatatypeProperty', re: /(owl:DatatypeProperty|owl#DatatypeProperty|DatatypeProperty>)/ },
     { type: 'Class', re: /(owl:Class|owl#Class|owl\/Class|Class>)/ },
   ];
 

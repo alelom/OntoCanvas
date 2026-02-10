@@ -1,3 +1,10 @@
+/** Data property restriction on a class (min/max cardinality). */
+export interface DataPropertyRestriction {
+  propertyName: string;
+  minCardinality?: number | null;
+  maxCardinality?: number | null;
+}
+
 export interface GraphNode {
   id: string;
   label: string;
@@ -5,6 +12,8 @@ export interface GraphNode {
   /** rdfs:comment from the ontology */
   comment?: string | null;
   annotations?: Record<string, string | boolean | null>;
+  /** Data property restrictions (owl:Restriction with owl:onDataRange) on this class */
+  dataPropertyRestrictions?: DataPropertyRestriction[];
   x?: number;
   y?: number;
 }
@@ -20,6 +29,15 @@ export interface ObjectPropertyInfo {
   hasCardinality: boolean;
   /** rdfs:comment from the ontology */
   comment?: string | null;
+}
+
+export interface DataPropertyInfo {
+  name: string;
+  label: string;
+  /** rdfs:comment from the ontology */
+  comment?: string | null;
+  /** Full URI of the datatype (e.g. http://www.w3.org/2001/XMLSchema#string) */
+  range: string;
 }
 
 export interface GraphEdge {

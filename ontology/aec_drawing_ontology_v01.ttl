@@ -108,6 +108,12 @@
     :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf owl:Thing, :Metadata.
 
+:Metadata rdf:type owl:Class;
+    rdfs:comment "Can be standalone label - drawing metadata";
+    rdfs:label "Metadata";
+    :labellableRoot "false"^^xsd:boolean;
+    rdfs:subClassOf owl:Thing.
+
 :Asymmetrical rdf:type owl:Class;
     rdfs:label "Asymmetrical";
     :labellableRoot "false"^^xsd:boolean;
@@ -429,12 +435,11 @@
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :Annotation ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
 
-:Metadata rdf:type owl:Class;
-    rdfs:comment "Can be standalone label - drawing metadata";
-    rdfs:label "Metadata";
+:DrawingType rdf:type owl:Class;
+    rdfs:comment "Type of drawing view";
+    rdfs:label "Drawing type";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf owl:Thing.
-
 
 :Legend rdf:type owl:Class;
     rdfs:comment "A legend containing mapping information between symbols and a text signifier.";
@@ -446,12 +451,6 @@
     rdfs:label "Titleblock";
     :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :Metadata.
-
-:DrawingType rdf:type owl:Class;
-    rdfs:comment "Type of drawing view";
-    rdfs:label "Drawing type";
-    :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf owl:Thing.
 
 :EPDM rdf:type owl:Class;
     rdfs:label "EPDM";
@@ -817,7 +816,17 @@
 :TextualNote rdf:type owl:Class;
     rdfs:label "Text";
     :labellableRoot "true"^^xsd:boolean;
-    rdfs:subClassOf :Note.
+    rdfs:subClassOf :Note, [ rdf:type owl:Restriction ; owl:onProperty :refersToDrawingId ; owl:onDataRange xsd:string ].
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
+    rdfs:label "refersToDrawingId";
+    rdfs:range xsd:string;
+    rdfs:domain owl:Thing.
 
 :Thermal rdf:type owl:Class;
     rdfs:label "Thermal";

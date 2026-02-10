@@ -15,9 +15,17 @@ import {
   removeObjectPropertyFromStore,
   updateObjectPropertyLabelInStore,
   updateObjectPropertyCommentInStore,
+  addDataPropertyToStore,
+  removeDataPropertyFromStore,
+  updateDataPropertyLabelInStore,
+  updateDataPropertyCommentInStore,
+  updateDataPropertyRangeInStore,
+  addDataPropertyRestrictionToClass,
+  removeDataPropertyRestrictionFromClass,
+  getDataPropertyRestrictionsForClass,
   storeToTurtle,
 } from './parser';
-import type { GraphData, GraphEdge, GraphNode } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction } from './types';
 import {
   wrapText,
   getEdgeTypes,
@@ -299,7 +307,8 @@ function updateLoadLastOpenedButton(name: string | null, pathHint?: string): voi
 
 let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: { name: string; isBoolean: boolean }[] = [];
-let objectProperties: { name: string; label: string; hasCardinality: boolean }[] = [];
+let objectProperties: { name: string; label: string; hasCardinality: boolean; comment?: string | null }[] = [];
+let dataProperties: { name: string; label: string; comment?: string | null; range: string }[] = [];
 let network: Network | null = null;
 let addNodeMode = false;
 let pendingAddNodePosition: { x: number; y: number } | null = null;
@@ -311,6 +320,10 @@ let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
 let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
 let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: string; to: string; id?: string } | null) => void } | null = null;
+/** Initial data property restrictions when rename modal was opened (single-node mode). */
+let renameModalInitialDataProps: DataPropertyRestriction[] | null = null;
+/** Current data property restrictions while editing in rename modal (single-node mode). */
+let renameModalDataPropertyRestrictions: DataPropertyRestriction[] = [];
 
 type UndoableAction = { undo: () => void; redo: () => void };
 let undoStack: UndoableAction[] = [];
@@ -398,9 +411,22 @@ function performDeleteSelection(): boolean {
   if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) return false;
 
   const edgesToRemove: { from: string; to: string; type: string }[] = [];
+  const dataPropertyRestrictionsToRemove: { classId: string; propertyName: string }[] = [];
   for (const edgeId of selectedEdgeIds) {
     const m = edgeId.match(/^(.+)->(.+):(.+)$/);
-    if (m) edgesToRemove.push({ from: m[1], to: m[2], type: m[3] });
+    if (m) {
+      const [, from, to, type] = m;
+      // Check if this is a data property edge
+      if (type === 'dataprop' && from.startsWith('__dataprop__')) {
+        const dpMatch = from.match(/^__dataprop__(.+)__(.+)$/);
+        if (dpMatch) {
+          const [, classId, propertyName] = dpMatch;
+          dataPropertyRestrictionsToRemove.push({ classId, propertyName });
+        }
+      } else {
+        edgesToRemove.push({ from, to, type });
+      }
+    }
   }
 
   const nodesToRemove = selectedNodeIds.filter((id) => rawData.nodes.some((n) => n.id === id));
@@ -412,6 +438,8 @@ function performDeleteSelection(): boolean {
   const nodeRedoActions: Array<() => void> = [];
   const edgeUndoActions: Array<() => void> = [];
   const edgeRedoActions: Array<() => void> = [];
+  const dataPropUndoActions: Array<() => void> = [];
+  const dataPropRedoActions: Array<() => void> = [];
 
   // Remove edges BEFORE nodes. Restriction-based edges (contains, partOf) require the node's
   // subClassOf quads to still exist for removeEdgeFromStore to find and remove them.
@@ -486,6 +514,37 @@ function performDeleteSelection(): boolean {
     }
   }
 
+  // Handle data property restriction deletions
+  for (const { classId, propertyName } of dataPropertyRestrictionsToRemove) {
+    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
+    if (!classNode || !restriction) continue;
+    
+    const oldMin = restriction.minCardinality ?? null;
+    const oldMax = restriction.maxCardinality ?? null;
+    
+    removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
+    const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
+    if (nodeIndex >= 0) {
+      rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, classId);
+    }
+    
+    dataPropUndoActions.push(() => {
+      addDataPropertyRestrictionToClass(ttlStore!, classId, propertyName, { minCardinality: oldMin ?? undefined, maxCardinality: oldMax ?? undefined });
+      const idx = rawData.nodes.findIndex((n) => n.id === classId);
+      if (idx >= 0) {
+        rawData.nodes[idx].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore!, classId);
+      }
+    });
+    dataPropRedoActions.push(() => {
+      removeDataPropertyRestrictionFromClass(ttlStore!, classId, propertyName);
+      const idx = rawData.nodes.findIndex((n) => n.id === classId);
+      if (idx >= 0) {
+        rawData.nodes[idx].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore!, classId);
+      }
+    });
+  }
+
   for (const nodeId of nodesToRemove) {
     const node = rawData.nodes.find((n) => n.id === nodeId);
     if (!node) continue;
@@ -503,7 +562,7 @@ function performDeleteSelection(): boolean {
     });
   }
 
-  const hasActions = nodeUndoActions.length + edgeUndoActions.length > 0;
+  const hasActions = nodeUndoActions.length + edgeUndoActions.length + dataPropUndoActions.length > 0;
   if (!hasActions) return false;
 
   // Clear search so children of deleted nodes remain visible (they were shown as neighbors)
@@ -517,10 +576,12 @@ function performDeleteSelection(): boolean {
     () => {
       nodeUndoActions.forEach((a) => a());
       edgeUndoActions.forEach((a) => a());
+      dataPropUndoActions.forEach((a) => a());
     },
     () => {
       edgeRedoActions.forEach((a) => a());
       nodeRedoActions.forEach((a) => a());
+      dataPropRedoActions.forEach((a) => a());
     }
   );
   hasUnsavedChanges = true;
@@ -634,10 +695,10 @@ function initEdgeStylesMenu(
     const color = getDefaultEdgeColors()[type] || getDefaultColor();
     const isEditable = type !== 'subClassOf';
     const editBtn = isEditable
-      ? `<button type="button" class="edge-edit-btn" data-type="${type}" title="Edit relationship type (name, comment)" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>`
+      ? `<button type="button" class="edge-edit-btn" data-type="${type}" title="Edit object property (name, comment)" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>`
       : '';
     const deleteBtn = isEditable
-      ? `<button type="button" class="edge-delete-btn" data-type="${type}" title="Delete this relationship type" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`
+      ? `<button type="button" class="edge-delete-btn" data-type="${type}" title="Delete this object property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`
       : '';
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
@@ -717,8 +778,8 @@ function initEdgeStylesMenu(
       const count = rawData.edges.filter((e) => e.type === type).length;
       const msg =
         count === 0
-          ? `Delete relationship type "${type}"?`
-          : `You're going to delete ${count} edge${count === 1 ? '' : 's'} by deleting this relationship. Are you sure?`;
+          ? `Delete object property "${type}"?`
+          : `You're going to delete ${count} edge${count === 1 ? '' : 's'} by deleting this object property. Are you sure?`;
       if (!confirm(msg)) return;
       if (!ttlStore) return;
       const removed = removeObjectPropertyFromStore(ttlStore, type);
@@ -781,6 +842,175 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
       applyFilter(true);
     }
     document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
+  });
+}
+
+const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
+const DATA_PROPERTY_RANGE_OPTIONS: { value: string; label: string }[] = [
+  { value: XSD_NS + 'string', label: 'xsd:string' },
+  { value: XSD_NS + 'integer', label: 'xsd:integer' },
+  { value: XSD_NS + 'decimal', label: 'xsd:decimal' },
+  { value: XSD_NS + 'boolean', label: 'xsd:boolean' },
+  { value: XSD_NS + 'date', label: 'xsd:date' },
+  { value: XSD_NS + 'dateTime', label: 'xsd:dateTime' },
+  { value: XSD_NS + 'anyURI', label: 'xsd:anyURI' },
+];
+
+function initDataPropsMenu(dataPropsContent: HTMLElement): void {
+  dataPropsContent.innerHTML = '';
+  dataProperties.forEach((dp) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
+    row.innerHTML = `
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${dp.label}</span>
+      <span style="font-size: 11px; color: #666;">${dp.range.includes('string') ? 'string' : dp.range.includes('integer') ? 'integer' : dp.range.split('#').pop() ?? dp.range}</span>
+      <button type="button" class="data-prop-edit-btn" data-name="${dp.name}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
+      <button type="button" class="data-prop-delete-btn" data-name="${dp.name}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
+    `;
+    dataPropsContent.appendChild(row);
+  });
+  dataPropsContent.querySelectorAll('.data-prop-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn as HTMLElement).dataset.name!;
+      showEditDataPropertyModal(name);
+    });
+  });
+  dataPropsContent.querySelectorAll('.data-prop-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn as HTMLElement).dataset.name!;
+      if (!confirm(`Delete data property "${name}"?`)) return;
+      if (!ttlStore) return;
+      if (removeDataPropertyFromStore(ttlStore, name)) {
+        dataProperties = dataProperties.filter((dp) => dp.name !== name);
+        hasUnsavedChanges = true;
+        updateSaveButtonVisibility();
+        initDataPropsMenu(dataPropsContent);
+      }
+    });
+  });
+}
+
+let editDataPropertyHandlersInitialized = false;
+
+function initEditDataPropertyHandlers(): void {
+  if (editDataPropertyHandlersInitialized) return;
+  editDataPropertyHandlersInitialized = true;
+  document.getElementById('editDataPropCancel')?.addEventListener('click', () => {
+    document.getElementById('editDataPropertyModal')!.style.display = 'none';
+  });
+  document.getElementById('editDataPropConfirm')?.addEventListener('click', () => {
+    const modal = document.getElementById('editDataPropertyModal')!;
+    const name = (modal as HTMLElement).dataset.dataPropName!;
+    const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
+    const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
+    const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
+    const newLabel = labelInput?.value?.trim() ?? '';
+    const newComment = commentInput?.value?.trim() ?? '';
+    const newRange = rangeSel?.value ?? XSD_NS + 'string';
+    if (!newLabel || !ttlStore) return;
+    const dp = dataProperties.find((p) => p.name === name);
+    if (!dp) return;
+    const labelChanged = dp.label !== newLabel;
+    const commentChanged = (dp.comment ?? '') !== newComment;
+    const rangeChanged = dp.range !== newRange;
+    if (!labelChanged && !commentChanged && !rangeChanged) {
+      document.getElementById('editDataPropertyModal')!.style.display = 'none';
+      return;
+    }
+    if (labelChanged) {
+      updateDataPropertyLabelInStore(ttlStore, name, newLabel);
+      dp.label = newLabel;
+    }
+    if (commentChanged) {
+      updateDataPropertyCommentInStore(ttlStore, name, newComment || null);
+      dp.comment = newComment || undefined;
+    }
+    if (rangeChanged) {
+      updateDataPropertyRangeInStore(ttlStore, name, newRange);
+      dp.range = newRange;
+    }
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
+    const dataPropsContent = document.getElementById('dataPropsContent');
+    if (dataPropsContent) initDataPropsMenu(dataPropsContent);
+    document.getElementById('editDataPropertyModal')!.style.display = 'none';
+  });
+  document.getElementById('editDataPropertyModal')?.addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement).closest('#editDataPropertyModal') && (e.key === 'Escape')) {
+      document.getElementById('editDataPropertyModal')!.style.display = 'none';
+      e.preventDefault();
+    }
+  });
+}
+
+function showEditDataPropertyModal(name: string): void {
+  initEditDataPropertyHandlers();
+  const modal = document.getElementById('editDataPropertyModal')!;
+  (modal as HTMLElement).dataset.dataPropName = name;
+  const nameEl = document.getElementById('editDataPropName') as HTMLElement;
+  const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
+  const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
+  const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
+  const dp = dataProperties.find((p) => p.name === name);
+  if (nameEl) nameEl.textContent = `Identifier: ${name} (used in ontology)`;
+  if (labelInput) labelInput.value = dp?.label ?? name;
+  if (commentInput) commentInput.value = dp?.comment ?? '';
+  const rangeOptions = [...DATA_PROPERTY_RANGE_OPTIONS];
+  if (dp?.range && !rangeOptions.some((o) => o.value === dp.range)) {
+    rangeOptions.push({ value: dp.range, label: dp.range.includes('#') ? dp.range.split('#').pop()! : dp.range });
+  }
+  rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${dp?.range === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
+  modal.style.display = 'flex';
+  labelInput?.focus();
+}
+
+let addDataPropertyHandlersInitialized = false;
+
+function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
+  if (addDataPropertyHandlersInitialized) return;
+  addDataPropertyHandlersInitialized = true;
+  const labelInput = document.getElementById('addDataPropLabel') as HTMLInputElement;
+  const rangeSel = document.getElementById('addDataPropRange') as HTMLSelectElement;
+  if (rangeSel) {
+    rangeSel.innerHTML = DATA_PROPERTY_RANGE_OPTIONS.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  }
+  if (labelInput) {
+    labelInput.addEventListener('input', () => {
+      const okBtn = document.getElementById('addDataPropConfirm') as HTMLButtonElement;
+      okBtn.disabled = !labelInput.value.trim();
+    });
+    labelInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('addDataPropConfirm')?.click();
+    });
+  }
+  document.getElementById('addDataPropertyBtn')?.addEventListener('click', () => {
+    const modal = document.getElementById('addDataPropertyModal')!;
+    const li = document.getElementById('addDataPropLabel') as HTMLInputElement;
+    const okBtn = document.getElementById('addDataPropConfirm') as HTMLButtonElement;
+    li.value = '';
+    okBtn.disabled = true;
+    li.focus();
+    modal.style.display = 'flex';
+  });
+  document.getElementById('addDataPropCancel')?.addEventListener('click', () => {
+    document.getElementById('addDataPropertyModal')!.style.display = 'none';
+  });
+  document.getElementById('addDataPropConfirm')?.addEventListener('click', () => {
+    const li = document.getElementById('addDataPropLabel') as HTMLInputElement;
+    const rangeEl = document.getElementById('addDataPropRange') as HTMLSelectElement;
+    const label = li.value.trim();
+    const rangeUri = rangeEl?.value ?? XSD_NS + 'string';
+    if (!label || !ttlStore) return;
+    const name = addDataPropertyToStore(ttlStore, label, rangeUri);
+    if (name) {
+      dataProperties.push({ name, label, range: rangeUri });
+      dataProperties.sort((a, b) => a.name.localeCompare(b.name));
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+      const content = document.getElementById('dataPropsContent');
+      if (content) initDataPropsMenu(content);
+    }
+    document.getElementById('addDataPropertyModal')!.style.display = 'none';
   });
 }
 
@@ -1330,6 +1560,67 @@ function buildNetworkData(filter: {
     return node;
   });
 
+  // Add data property nodes as small rectangles
+  const dataPropertyNodes: Array<Record<string, unknown>> = [];
+  const dataPropertyEdges: Array<Record<string, unknown>> = [];
+  filteredNodes.forEach((n) => {
+    const restrictions = n.dataPropertyRestrictions;
+    if (restrictions && restrictions.length > 0) {
+      restrictions.forEach((restriction, index) => {
+        const dp = dataProperties.find((p) => p.name === restriction.propertyName);
+        const label = dp?.label ?? restriction.propertyName;
+        const cardLabel =
+          restriction.minCardinality != null || restriction.maxCardinality != null
+            ? ` [${restriction.minCardinality ?? 0}..${restriction.maxCardinality ?? '*'}]`
+            : '';
+        const dataPropNodeId = `__dataprop__${n.id}__${restriction.propertyName}`;
+        const classPos = (n.x != null && n.y != null) ? { x: n.x, y: n.y } : nodePositions[n.id];
+        
+        // Position data property node relative to the class node
+        // In hierarchical layout, place below; otherwise place to the right
+        let dataPropPos: { x: number; y: number } | undefined;
+        if (classPos) {
+          if (layoutMode === 'weighted') {
+            // Hierarchical layout: place below the class node
+            const offsetY = 80 + (index * 50); // Start 80px below, then 50px spacing for each additional property
+            dataPropPos = { x: classPos.x, y: classPos.y + offsetY };
+          } else {
+            // Other layouts: place to the right of the class node
+            const offsetX = 200;
+            const offsetY = (index - (restrictions.length - 1) / 2) * 40;
+            dataPropPos = { x: classPos.x + offsetX, y: classPos.y + offsetY };
+          }
+        }
+        
+        dataPropertyNodes.push({
+          id: dataPropNodeId,
+          label: label + cardLabel,
+          shape: 'box',
+          size: 15,
+          color: { background: '#e8f4f8', border: '#4a90a4' },
+          font: { size: 10, color: '#2c3e50' },
+          margin: 4,
+          physics: false,
+          ...(dataPropPos && { x: dataPropPos.x, y: dataPropPos.y }),
+          ...(dp?.comment && { title: dp.comment }),
+        });
+        
+        // Create edge from data property node to class node
+        dataPropertyEdges.push({
+          id: `${dataPropNodeId}->${n.id}:dataprop`,
+          from: dataPropNodeId,
+          to: n.id,
+          arrows: 'to',
+          label: '',
+          font: { size: 10, color: '#666' },
+          color: { color: '#4a90a4', highlight: '#4a90a4' },
+          dashes: [5, 5],
+          width: 1.5,
+        });
+      });
+    }
+  });
+
   const edges = filteredEdges.map((e) => {
     const style = edgeStyleConfig[e.type] || {
       showLabel: true,
@@ -1372,9 +1663,14 @@ function buildNetworkData(filter: {
     }
   });
 
+  // Combine regular nodes with data property nodes
+  const allNodes = [...nodes, ...dataPropertyNodes];
+  // Combine regular edges with data property edges
+  const allEdges = [...edges, ...dataPropertyEdges];
+
   return {
-    nodes: new DataSet(nodes),
-    edges: new DataSet(edges),
+    nodes: new DataSet(allNodes),
+    edges: new DataSet(allEdges),
   };
 }
 
@@ -1478,12 +1774,23 @@ function setupNetworkSelectionAndNavigation(
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const nodeAt = net.getNodeAt(domPos);
     if (nodeAt != null) {
+      const nodeId = String(nodeAt);
+      // Check if this is a data property node
+      if (nodeId.startsWith('__dataprop__')) {
+        // Parse the data property node ID: __dataprop__${classId}__${propertyName}
+        const match = nodeId.match(/^__dataprop__(.+)__(.+)$/);
+        if (match) {
+          const [, classId] = match;
+          showEditEdgeModal(nodeId, classId, 'dataprop');
+          return;
+        }
+      }
       const selectedIds = net.getSelectedNodes().map(String);
-      if (selectedIds.length > 1 && selectedIds.includes(String(nodeAt))) {
+      if (selectedIds.length > 1 && selectedIds.includes(nodeId)) {
         showMultiEditModal(selectedIds);
       } else {
-        const node = rawData.nodes.find((n) => n.id === String(nodeAt));
-        if (node) showRenameModal(String(nodeAt), node.label, node.labellableRoot);
+        const node = rawData.nodes.find((n) => n.id === nodeId);
+        if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
       }
       return;
     }
@@ -1578,6 +1885,45 @@ function updateFilePathDisplay(): void {
   }
 }
 
+function updateRenameDataPropAddButtonState(): void {
+  const selectEl = document.getElementById('renameDataPropSelect') as HTMLSelectElement;
+  const addBtn = document.getElementById('renameDataPropAdd') as HTMLButtonElement;
+  if (!selectEl || !addBtn) return;
+  const hasSelection = selectEl.value.trim() !== '';
+  addBtn.disabled = !hasSelection;
+  addBtn.style.display = hasSelection ? '' : 'none';
+}
+
+function renderRenameModalDataPropsList(): void {
+  const listEl = document.getElementById('renameDataPropsList');
+  const selectEl = document.getElementById('renameDataPropSelect') as HTMLSelectElement;
+  if (!listEl || !selectEl) return;
+  const assignedNames = new Set(renameModalDataPropertyRestrictions.map((r) => r.propertyName));
+  listEl.innerHTML = renameModalDataPropertyRestrictions
+    .map((r) => {
+      const dp = dataProperties.find((p) => p.name === r.propertyName);
+      const label = dp?.label ?? r.propertyName;
+      const card =
+        r.minCardinality != null || r.maxCardinality != null
+          ? ` [${r.minCardinality ?? 0}..${r.maxCardinality ?? '*'}]`
+          : '';
+      return `<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span>${label}${card}</span>
+        <button type="button" class="rename-data-prop-remove" data-name="${r.propertyName}" style="font-size: 11px; padding: 2px 6px;">Remove</button>
+      </div>`;
+    })
+    .join('');
+  selectEl.innerHTML = '<option value="">-- data property --</option>' + dataProperties.filter((p) => !assignedNames.has(p.name)).map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
+  updateRenameDataPropAddButtonState();
+  listEl.querySelectorAll('.rename-data-prop-remove').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn as HTMLElement).dataset.name!;
+      renameModalDataPropertyRestrictions = renameModalDataPropertyRestrictions.filter((r) => r.propertyName !== name);
+      renderRenameModalDataPropsList();
+    });
+  });
+}
+
 function showRenameModal(
   nodeId: string,
   currentLabel: string,
@@ -1599,6 +1945,18 @@ function showRenameModal(
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
+  const dataPropsSection = document.getElementById('renameDataPropsSection');
+  if (dataPropsSection) {
+    if (dataProperties.length === 0) {
+      dataPropsSection.style.display = 'none';
+    } else {
+      dataPropsSection.style.display = 'block';
+      renameModalInitialDataProps = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
+      renameModalDataPropertyRestrictions = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
+      renderRenameModalDataPropsList();
+      updateRenameDataPropAddButtonState();
+    }
+  }
   modal.style.display = 'flex';
   input.focus();
   input.select();
@@ -1626,6 +1984,8 @@ function showMultiEditModal(nodeIds: string[]): void {
     commentInput.value = comments.length > 0 && comments.every((c) => c === comments[0]) ? comments[0] : '';
     commentInput.disabled = false;
   }
+  const dataPropsSection = document.getElementById('renameDataPropsSection');
+  if (dataPropsSection) dataPropsSection.style.display = 'none';
   modal.style.display = 'flex';
   labellableCb.focus();
 }
@@ -1708,25 +2068,127 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
-  const edge = rawData.edges.find((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType);
+  const isDataPropertyEdge = edgeType === 'dataprop';
+  
+  if (isDataPropertyEdge) {
+    // For data property edges, parse the data property node ID to get the class and property
+    const match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
+    if (!match) {
+      hideEditEdgeModal();
+      return;
+    }
+    const [, classId, propertyName] = match;
+    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
+    
+    modal.dataset.mode = 'edit';
+    modal.dataset.oldFrom = edgeFrom;
+    modal.dataset.oldTo = edgeTo;
+    modal.dataset.oldType = edgeType;
+    modal.dataset.dataPropertyName = propertyName;
+    modal.dataset.classId = classId;
+    
+    // For data properties, show the data property name and class, but disable editing
+    fromSel.disabled = true;
+    toSel.disabled = true;
+    typeSel.disabled = true;
+    
+    // Constrain select widths to prevent modal from expanding too wide
+    fromSel.style.maxWidth = '350px';
+    toSel.style.maxWidth = '350px';
+    typeSel.style.maxWidth = '350px';
+    // Also constrain the modal content width
+    const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+    if (modalContent) {
+      modalContent.style.maxWidth = '400px';
+      modalContent.style.width = '400px';
+    }
+    
+    // Show data property node label and class node label
+    const dp = dataProperties.find((p) => p.name === propertyName);
+    const dpLabel = dp?.label ?? propertyName;
+    fromSel.innerHTML = `<option value="${edgeFrom}" selected>${dpLabel} (data property)</option>`;
+    toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
+    
+    // Show data properties in type selector (though it's disabled)
+    typeSel.innerHTML = dataProperties.map((dp) => `<option value="dataprop"${dp.name === propertyName ? ' selected' : ''}>${dp.label} (data property)</option>`).join('');
+    
+    // Show cardinality for data properties
+    minCardInput.value = restriction?.minCardinality != null ? String(restriction.minCardinality) : '';
+    maxCardInput.value = restriction?.maxCardinality != null ? String(restriction.maxCardinality) : '';
+    cardWrap.style.display = 'block';
+    
+    // Show explanation for disabled fields
+    let explanationEl = document.getElementById('editEdgeDataPropExplanation');
+    if (!explanationEl) {
+      explanationEl = document.createElement('div');
+      explanationEl.id = 'editEdgeDataPropExplanation';
+      explanationEl.style.cssText = 'font-size: 11px; color: #666; margin-top: 4px; margin-bottom: 4px; padding: 6px 8px; background: #f0f0f0; border-radius: 4px; line-height: 1.4; width: 100%; box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word;';
+      // Insert after the "To" field, before the cardinality section
+      const toSelParent = toSel.parentElement;
+      if (toSelParent && toSelParent.parentElement) {
+        toSelParent.parentElement.insertBefore(explanationEl, cardWrap);
+      }
+    }
+    const classNodeLabel = classNode?.label ?? classId;
+    explanationEl.textContent = `Note: To change which data property, edit the source node (double-click the class node ${classNodeLabel})`;
+    explanationEl.style.display = 'block';
+    
+    // Hide comment display for data properties (or show data property comment)
+    const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
+    if (commentEl) {
+      if (dp?.comment) {
+        commentEl.textContent = dp.comment;
+        commentEl.style.display = 'block';
+      } else {
+        commentEl.style.display = 'none';
+      }
+    }
+    
+    modal.querySelector('h3')!.textContent = 'Edit data property restriction';
+  } else {
+    // Regular object property edge
+    const edge = rawData.edges.find((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType);
 
-  modal.dataset.mode = 'edit';
-  modal.dataset.oldFrom = edgeFrom;
-  modal.dataset.oldTo = edgeTo;
-  modal.dataset.oldType = edgeType;
-  fromSel.disabled = false;
-  toSel.disabled = false;
-  fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
-  toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
-  const allTypes = getAllEdgeTypes();
-  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${getRelationshipLabel(t)}</option>`).join('');
+    modal.dataset.mode = 'edit';
+    modal.dataset.oldFrom = edgeFrom;
+    modal.dataset.oldTo = edgeTo;
+    modal.dataset.oldType = edgeType;
+    delete modal.dataset.dataPropertyName;
+    delete modal.dataset.classId;
+    
+    fromSel.disabled = false;
+    toSel.disabled = false;
+    typeSel.disabled = false;
+    
+    // Reset max-width for regular edges (let them size naturally)
+    fromSel.style.maxWidth = '';
+    toSel.style.maxWidth = '';
+    typeSel.style.maxWidth = '';
+    const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+    if (modalContent) {
+      modalContent.style.maxWidth = '';
+    }
+    
+    fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
+    toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
+    const allTypes = getAllEdgeTypes();
+    typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${getRelationshipLabel(t)}</option>`).join('');
 
-  minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
-  maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
-  cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType) ? 'block' : 'none';
+    minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
+    maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
+    cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType) ? 'block' : 'none';
 
-  updateEditEdgeCommentDisplay();
-  modal.querySelector('h3')!.textContent = 'Edit edge';
+    updateEditEdgeCommentDisplay();
+    modal.querySelector('h3')!.textContent = 'Edit edge';
+    
+    // Hide explanation for regular edges
+    const explanationEl = document.getElementById('editEdgeDataPropExplanation');
+    if (explanationEl) {
+      explanationEl.style.display = 'none';
+    }
+  }
+  
   modal.style.display = 'flex';
 }
 
@@ -1833,6 +2295,48 @@ function confirmEditEdge(): void {
   const oldFrom = modal.dataset.oldFrom!;
   const oldTo = modal.dataset.oldTo!;
   const oldType = modal.dataset.oldType!;
+  const isDataPropertyEdge = oldType === 'dataprop';
+  
+  if (isDataPropertyEdge) {
+    // Handle data property restriction update
+    const propertyName = modal.dataset.dataPropertyName!;
+    const classId = modal.dataset.classId!;
+    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
+    
+    if (!ttlStore || !classNode || !restriction) {
+      hideEditEdgeModal();
+      return;
+    }
+    
+    const oldMin = restriction.minCardinality ?? null;
+    const oldMax = restriction.maxCardinality ?? null;
+    const newMin = cardinality?.minCardinality ?? null;
+    const newMax = cardinality?.maxCardinality ?? null;
+    
+    const sameCardinality = oldMin === newMin && oldMax === newMax;
+    if (sameCardinality) {
+      hideEditEdgeModal();
+      return;
+    }
+    
+    // Update the restriction in the store
+    removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
+    addDataPropertyRestrictionToClass(ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined });
+    
+    // Update in rawData
+    const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
+    if (nodeIndex >= 0) {
+      rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, classId);
+    }
+    
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
+    hideEditEdgeModal();
+    applyFilter(true);
+    return;
+  }
+  
   const newFrom = fromSel.value;
   const newTo = toSel.value;
   const newType = typeSel.value;
@@ -1964,11 +2468,12 @@ function confirmRename(): void {
   const newLabel = input.value.trim();
   if (!nodeId || !newLabel) return;
 
-  const node = rawData.nodes.find((n) => n.id === nodeId);
-  if (!node) {
+  const nodeIndex = rawData.nodes.findIndex((n) => n.id === nodeId);
+  if (nodeIndex < 0) {
     hideRenameModal();
     return;
   }
+  const node = rawData.nodes[nodeIndex];
 
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   const newComment = commentInput?.value?.trim() ?? '';
@@ -1979,13 +2484,37 @@ function confirmRename(): void {
   const newLabellable = labellableCb.checked;
   const labellableChanged = (node.labellableRoot === true) !== newLabellable;
 
-  if (!labelChanged && !labellableChanged && !commentChanged) {
+  const initialDataProps = renameModalInitialDataProps ?? [];
+  const currentDataProps = renameModalDataPropertyRestrictions;
+  const dataPropsEqual =
+    initialDataProps.length === currentDataProps.length &&
+    initialDataProps.every((a) => {
+      const b = currentDataProps.find((c) => c.propertyName === a.propertyName);
+      return b && a.minCardinality === b.minCardinality && a.maxCardinality === b.maxCardinality;
+    }) &&
+    currentDataProps.every((b) => initialDataProps.some((a) => a.propertyName === b.propertyName));
+  const dataPropsChanged = !dataPropsEqual;
+
+  console.log('[confirmRename] data props', { 
+    nodeId, 
+    hasTtlStore: !!ttlStore, 
+    initialDataProps: JSON.stringify(initialDataProps), 
+    currentDataProps: JSON.stringify(currentDataProps), 
+    dataPropsEqual,
+    dataPropsChanged, 
+    labelChanged, 
+    labellableChanged, 
+    commentChanged 
+  });
+
+  if (!labelChanged && !labellableChanged && !commentChanged && !dataPropsChanged) {
     hideRenameModal();
     return;
   }
 
   const oldLabel = node.label;
   const oldLabellable = node.labellableRoot;
+  const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
 
   if (labelChanged) {
     node.label = newLabel;
@@ -2000,6 +2529,32 @@ function confirmRename(): void {
   if (commentChanged && ttlStore) {
     node.comment = newComment || undefined;
     updateCommentInStore(ttlStore, nodeId, newComment || null);
+  }
+
+  if (dataPropsChanged) {
+    if (ttlStore) {
+      const toRemove = initialDataProps.filter(
+        (i) => !currentDataProps.some((c) => c.propertyName === i.propertyName && c.minCardinality === i.minCardinality && c.maxCardinality === i.maxCardinality)
+      );
+      const toAdd = currentDataProps.filter(
+        (c) => !initialDataProps.some((i) => i.propertyName === c.propertyName && i.minCardinality === c.minCardinality && i.maxCardinality === c.maxCardinality)
+      );
+      console.log('[confirmRename] dataPropsChanged - toRemove:', toRemove, 'toAdd:', toAdd);
+      for (const r of toRemove) {
+        console.log('[confirmRename] Removing restriction:', r);
+        removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
+      }
+      for (const r of toAdd) {
+        console.log('[confirmRename] Adding restriction:', r);
+        const result = addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
+        console.log('[confirmRename] addDataPropertyRestrictionToClass result:', result);
+      }
+      const readBack = getDataPropertyRestrictionsForClass(ttlStore, nodeId);
+      console.log('[confirmRename] Read back restrictions from store:', readBack);
+      rawData.nodes[nodeIndex].dataPropertyRestrictions = readBack;
+    } else {
+      rawData.nodes[nodeIndex].dataPropertyRestrictions = [...currentDataProps];
+    }
   }
 
   pushUndoable(
@@ -2018,6 +2573,19 @@ function confirmRename(): void {
         node.comment = oldComment || undefined;
         updateCommentInStore(ttlStore, nodeId, oldComment || null);
       }
+      if (dataPropsChanged) {
+        rawData.nodes[nodeIndex].dataPropertyRestrictions = [...oldDataProps];
+        if (ttlStore) {
+          const toRemove = currentDataProps.filter(
+          (c) => !oldDataProps.some((i) => i.propertyName === c.propertyName && i.minCardinality === c.minCardinality && i.maxCardinality === c.maxCardinality)
+        );
+        const toAdd = oldDataProps.filter(
+          (i) => !currentDataProps.some((c) => c.propertyName === i.propertyName && c.minCardinality === i.minCardinality && c.maxCardinality === i.maxCardinality)
+        );
+        for (const r of toRemove) removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
+        for (const r of toAdd) addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
+        }
+      }
     },
     () => {
       if (labelChanged) {
@@ -2033,6 +2601,21 @@ function confirmRename(): void {
       if (commentChanged && ttlStore) {
         node.comment = newComment || undefined;
         updateCommentInStore(ttlStore, nodeId, newComment || null);
+      }
+      if (dataPropsChanged) {
+        if (ttlStore) {
+          const toRemove = oldDataProps.filter(
+          (i) => !currentDataProps.some((c) => c.propertyName === i.propertyName && c.minCardinality === i.minCardinality && c.maxCardinality === i.maxCardinality)
+        );
+        const toAdd = currentDataProps.filter(
+          (c) => !oldDataProps.some((i) => i.propertyName === c.propertyName && i.minCardinality === c.minCardinality && i.maxCardinality === c.maxCardinality)
+        );
+        for (const r of toRemove) removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
+        for (const r of toAdd) addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
+          rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, nodeId);
+        } else {
+          rawData.nodes[nodeIndex].dataPropertyRestrictions = [...currentDataProps];
+        }
       }
     }
   );
@@ -2091,9 +2674,14 @@ function renderApp(): void {
       </div>
       <div id="styleMenusGroup" style="display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid #000; border-radius: 4px;">
         <details id="edgeStylesMenu">
-          <summary style="cursor: pointer; font-weight: bold;">Relationships</summary>
+          <summary style="cursor: pointer; font-weight: bold;">Object Properties</summary>
           <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
-          <button type="button" id="addRelationshipTypeBtn" style="margin-top: 6px; font-size: 11px;">+ Add relationship type</button>
+          <button type="button" id="addRelationshipTypeBtn" style="margin-top: 6px; font-size: 11px;">+ Add object property</button>
+        </details>
+        <details id="dataPropsMenu">
+          <summary style="cursor: pointer; font-weight: bold;">Data Properties</summary>
+          <div id="dataPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+          <button type="button" id="addDataPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add data property</button>
         </details>
         <details id="annotationPropsMenu">
           <summary style="cursor: pointer; font-weight: bold;">Annotation Properties</summary>
@@ -2175,6 +2763,20 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
+        <div id="renameDataPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+          <strong style="font-size: 12px;">Assign data property</strong>
+          <div id="renameDataPropsList" style="margin-top: 6px; margin-bottom: 8px; font-size: 11px;"></div>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <select id="renameDataPropSelect" style="padding: 4px 8px; font-size: 11px; min-width: 120px;">
+              <option value="">-- data property --</option>
+            </select>
+            <span style="font-size: 11px;">Min:</span>
+            <input type="number" id="renameDataPropMin" min="0" placeholder="0" style="width: 48px; padding: 4px; font-size: 11px;">
+            <span style="font-size: 11px;">Max:</span>
+            <input type="number" id="renameDataPropMax" min="0" placeholder="*" style="width: 48px; padding: 4px; font-size: 11px;" title="Leave empty for unbounded">
+            <button type="button" id="renameDataPropAdd" style="font-size: 11px; padding: 4px 8px; display: none;" disabled>Add</button>
+          </div>
+        </div>
         <div class="modal-actions">
           <button type="button" id="renameCancel">Cancel</button>
           <button type="button" id="renameConfirm" class="primary">OK</button>
@@ -2193,7 +2795,7 @@ function renderApp(): void {
     </div>
     <div id="addRelationshipTypeModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <h3>Add relationship type</h3>
+        <h3>Add object property</h3>
         <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" /></label>
         <label style="display: block; margin-top: 10px;">
           <input type="checkbox" id="addRelTypeHasCardinality" checked /> Has cardinality
@@ -2207,7 +2809,7 @@ function renderApp(): void {
     </div>
     <div id="editRelationshipTypeModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <h3>Edit relationship type</h3>
+        <h3>Edit object property</h3>
         <p id="editRelTypeName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
@@ -2220,6 +2822,42 @@ function renderApp(): void {
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editRelTypeCancel">Cancel</button>
           <button type="button" id="editRelTypeConfirm" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
+    <div id="addDataPropertyModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Add data property</h3>
+        <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addDataPropLabel" placeholder="e.g. refersToDrawingId" /></label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Range (datatype)</span>
+          <select id="addDataPropRange" style="display: block; margin-top: 4px; padding: 6px; width: 100%; box-sizing: border-box;"></select>
+        </label>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="addDataPropCancel">Cancel</button>
+          <button type="button" id="addDataPropConfirm" class="primary" disabled>OK</button>
+        </div>
+      </div>
+    </div>
+    <div id="editDataPropertyModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <h3>Edit data property</h3>
+        <p id="editDataPropName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
+        <label style="display: block; margin-top: 8px;">
+          <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <input type="text" id="editDataPropLabel" placeholder="e.g. refers to drawing ID" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
+          <textarea id="editDataPropComment" rows="2" placeholder="Optional" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
+        </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Range (rdfs:range datatype)</span>
+          <select id="editDataPropRange" style="display: block; margin-top: 4px; padding: 8px; width: 100%; box-sizing: border-box;"></select>
+        </label>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" id="editDataPropCancel">Cancel</button>
+          <button type="button" id="editDataPropConfirm" class="primary">OK</button>
         </div>
       </div>
     </div>
@@ -2258,10 +2896,11 @@ async function loadTtlAndRender(
   errorMsg.textContent = '';
 
   try {
-    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps } = await parseTtlToGraph(ttlString);
+    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = await parseTtlToGraph(ttlString);
     rawData = graphData;
     annotationProperties = annotationProps;
     objectProperties = objectProps;
+    dataProperties = dataProps;
     ttlStore = store;
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
@@ -2282,8 +2921,11 @@ async function loadTtlAndRender(
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
+    const dataPropsContent = document.getElementById('dataPropsContent');
+    if (dataPropsContent) initDataPropsMenu(dataPropsContent);
     if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
     initAddRelationshipTypeHandlers(edgeStylesContent);
+    initAddDataPropertyHandlers(dataPropsContent ?? undefined);
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     const displayConfig = await loadDisplayConfigFromIndexedDB();
@@ -2488,6 +3130,15 @@ function applyFilter(preserveView = false): void {
       if (!network) return;
       if (!params.nodes.length) return;
       const clickedNodeId = params.nodes[0] as string;
+      // Check if this is a data property node
+      if (clickedNodeId.startsWith('__dataprop__')) {
+        const match = clickedNodeId.match(/^__dataprop__(.+)__(.+)$/);
+        if (match) {
+          const [, classId] = match;
+          showEditEdgeModal(clickedNodeId, classId, 'dataprop');
+          return;
+        }
+      }
       const selectedIds = network.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
         showMultiEditModal(selectedIds);
@@ -2828,6 +3479,33 @@ function setupEventListeners(): void {
 
   document.getElementById('renameCancel')?.addEventListener('click', hideRenameModal);
   document.getElementById('renameConfirm')?.addEventListener('click', confirmRename);
+  document.getElementById('renameDataPropAdd')?.addEventListener('click', () => {
+    const modal = document.getElementById('renameModal')!;
+    if (modal.dataset.mode !== 'single') return;
+    const selectEl = document.getElementById('renameDataPropSelect') as HTMLSelectElement;
+    const minEl = document.getElementById('renameDataPropMin') as HTMLInputElement;
+    const maxEl = document.getElementById('renameDataPropMax') as HTMLInputElement;
+    const propName = selectEl?.value?.trim();
+    if (!propName) return;
+    const min = minEl?.value?.trim();
+    const max = maxEl?.value?.trim();
+    const minCardinality = min === '' ? undefined : parseInt(min, 10);
+    const maxCardinality = max === '' ? undefined : parseInt(max, 10);
+    if (min !== '' && (Number.isNaN(minCardinality!) || minCardinality! < 0)) return;
+    if (max !== '' && (Number.isNaN(maxCardinality!) || maxCardinality! < 0)) return;
+    renameModalDataPropertyRestrictions.push({
+      propertyName: propName,
+      ...(minCardinality !== undefined && { minCardinality: minCardinality! }),
+      ...(maxCardinality !== undefined && { maxCardinality: maxCardinality! }),
+    });
+    if (selectEl) selectEl.value = '';
+    renderRenameModalDataPropsList();
+    if (minEl) minEl.value = '';
+    if (maxEl) maxEl.value = '';
+  });
+  document.getElementById('renameDataPropSelect')?.addEventListener('change', () => {
+    updateRenameDataPropAddButtonState();
+  });
   document.getElementById('renameModal')?.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).closest('#renameModal') && (e.key === 'Enter' || e.key === 'Escape')) {
       if (e.key === 'Enter') confirmRename();

@@ -53,6 +53,10 @@
       "x": 21083,
       "y": 440
     },
+    "Metadata": {
+      "x": 31949,
+      "y": 0
+    },
     "Asymmetrical": {
       "x": 8075,
       "y": 440
@@ -301,8 +305,8 @@
       "x": 25558,
       "y": 220
     },
-    "Metadata": {
-      "x": 31949,
+    "DrawingType": {
+      "x": 33791,
       "y": 0
     },
     "Legend": {
@@ -312,10 +316,6 @@
     "Titleblock": {
       "x": 32497,
       "y": 220
-    },
-    "DrawingType": {
-      "x": 33791,
-      "y": 0
     },
     "EPDM": {
       "x": 22581,
@@ -706,17 +706,20 @@
     "contains": {
       "show": true,
       "showLabel": true,
-      "color": "#cc141d"
+      "color": "#cc141d",
+      "lineType": "solid"
     },
     "has": {
       "show": true,
       "showLabel": true,
-      "color": "#1128d4"
+      "color": "#1128d4",
+      "lineType": "solid"
     },
     "subClassOf": {
       "show": true,
-      "showLabel": true,
-      "color": "#9e9e9e"
+      "showLabel": false,
+      "color": "#9e9e9e",
+      "lineType": "solid"
     }
   },
   "wrapChars": 10,
@@ -747,35 +750,15 @@
           "borderLineType": "dashed",
           "show": true
         }
-      },
-      "hasCardinality": {
-        "whenTrue": {
-          "fillColor": "#2ecc71",
-          "borderColor": "#000000",
-          "borderLineType": "solid",
-          "show": true
-        },
-        "whenFalse": {
-          "fillColor": "#b8b8b8",
-          "borderColor": "#000000",
-          "borderLineType": "dashed",
-          "show": true
-        },
-        "whenUndefined": {
-          "fillColor": "#95a5a6",
-          "borderColor": "#000000",
-          "borderLineType": "dashed",
-          "show": true
-        }
       }
     },
     "textProps": {}
   },
   "viewState": {
-    "scale": 0.021726801284443622,
+    "scale": 0.3686575165895301,
     "position": {
-      "x": 18572.819513291353,
-      "y": 2465.576472303598
+      "x": 31320.43394186444,
+      "y": 359.73531002912836
     }
   }
 }

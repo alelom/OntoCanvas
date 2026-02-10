@@ -1,6 +1,6 @@
 import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
 import { postProcessTurtle } from './turtlePostProcess';
-import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo } from './types';
+import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -58,6 +58,7 @@ export interface ParseResult {
   store: Store;
   annotationProperties: AnnotationPropertyInfo[];
   objectProperties: ObjectPropertyInfo[];
+  dataProperties: DataPropertyInfo[];
 }
 
 function getObjectProperties(store: Store): ObjectPropertyInfo[] {
@@ -173,7 +174,14 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       }
     }
 
-    nodes.push({ id: localName, label, labellableRoot, comment: comment || undefined, annotations });
+    nodes.push({
+      id: localName,
+      label,
+      labellableRoot,
+      comment: comment || undefined,
+      annotations,
+      dataPropertyRestrictions: [],
+    });
   }
 
   // subClassOf edges
@@ -227,7 +235,68 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   }
 
   const objectProps = getObjectProperties(store);
-  return { graphData: { nodes, edges }, store, annotationProperties: annotationProps, objectProperties: objectProps };
+  const dataProps = getDataProperties(store);
+
+  // Parse data property restrictions (class subClassOf [ owl:onProperty dp ; owl:onDataRange ... ])
+  const OWL_ON_DATA_RANGE = OWL + 'onDataRange';
+  for (const q of store.getQuads(null, RDFS + 'subClassOf', null, null)) {
+    const subj = q.subject;
+    const obj = q.object;
+    if (subj.termType !== 'NamedNode' || !isBlankNode(obj)) continue;
+    const onProp = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
+    const onDataRange = store.getQuads(obj, DataFactory.namedNode(OWL_ON_DATA_RANGE), null, null)[0];
+    if (!onProp || !onDataRange) continue;
+    const propName = extractLocalName((onProp.object as { value: string }).value);
+    const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
+    const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
+    const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
+    const toInt = (quad: import('n3').Quad | undefined): number | null =>
+      quad?.object?.value != null ? parseInt(String(quad.object.value), 10) : null;
+    let minCard: number | null = toInt(minQ);
+    let maxCard: number | null = toInt(maxQ);
+    const n = toInt(cardQ);
+    if (n !== null && !isNaN(n)) {
+      minCard = n;
+      maxCard = n;
+    }
+    const subjName = extractLocalName((subj as { value: string }).value);
+    const node = nodes.find((n) => n.id === subjName);
+    if (node && node.dataPropertyRestrictions) {
+      node.dataPropertyRestrictions.push({
+        propertyName: propName,
+        minCardinality: minCard ?? undefined,
+        maxCardinality: maxCard ?? undefined,
+      });
+    }
+  }
+
+  return { graphData: { nodes, edges }, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps };
+}
+
+const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
+
+function getDataProperties(store: Store): DataPropertyInfo[] {
+  const result: DataPropertyInfo[] = [];
+  const seen = new Set<string>();
+  const dpQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
+  for (const q of dpQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    const subjUri = (subj as { value: string }).value;
+    const name = extractLocalName(subjUri);
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
+    const label = labelQuad?.object?.value ?? name;
+    const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
+    const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
+    const rangeQuad = store.getQuads(subj, RDFS + 'range', null, null)[0];
+    const range = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
+      ? (rangeQuad.object as { value: string }).value
+      : XSD_NS + 'string';
+    result.push({ name, label: String(label), comment: comment || undefined, range });
+  }
+  return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
@@ -557,6 +626,249 @@ export function updateObjectPropertyCommentInStore(
     store.addQuad(subject, commentPred, DataFactory.literal(comment.trim()), graph);
   }
   return true;
+}
+
+/**
+ * Add a new data property (owl:DatatypeProperty) to the store.
+ * Returns the property localName, or null on failure.
+ */
+export function addDataPropertyToStore(
+  store: Store,
+  label: string,
+  rangeUri: string,
+  localName?: string
+): string | null {
+  const existingNames = new Set(getDataProperties(store).map((dp) => dp.name));
+  let name = localName ?? (extractLocalName(label) || 'newDataProperty').replace(/\s+/g, '');
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) name = 'newDataProperty';
+  let base = name;
+  let n = 0;
+  while (existingNames.has(name)) {
+    name = `${base}${++n}`;
+  }
+  const subjUri = BASE_IRI + name;
+  const subject = DataFactory.namedNode(subjUri);
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  const rangeNode = DataFactory.namedNode(rangeUri);
+  store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'DatatypeProperty'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(OWL + 'Thing'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), rangeNode, graph);
+  return name;
+}
+
+/**
+ * Update rdfs:label for a data property in the store.
+ */
+export function updateDataPropertyLabelInStore(
+  store: Store,
+  propertyName: string,
+  newLabel: string
+): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  const labelPred = DataFactory.namedNode(RDFS + 'label');
+  const labelQuads = store.getQuads(subject, labelPred, null, null);
+  const graph = labelQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const lq of labelQuads) store.removeQuad(lq);
+  store.addQuad(subject, labelPred, DataFactory.literal(newLabel.trim()), graph);
+  return true;
+}
+
+/**
+ * Update rdfs:comment for a data property in the store.
+ */
+export function updateDataPropertyCommentInStore(
+  store: Store,
+  propertyName: string,
+  comment: string | null
+): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  const commentPred = DataFactory.namedNode(RDFS + 'comment');
+  const commentQuads = store.getQuads(subject, commentPred, null, null);
+  const graph = commentQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const cq of commentQuads) store.removeQuad(cq);
+  if (comment !== null && comment.trim() !== '') {
+    store.addQuad(subject, commentPred, DataFactory.literal(comment.trim()), graph);
+  }
+  return true;
+}
+
+/**
+ * Update rdfs:range for a data property in the store (datatype URI).
+ */
+export function updateDataPropertyRangeInStore(
+  store: Store,
+  propertyName: string,
+  rangeUri: string
+): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const rangePred = DataFactory.namedNode(RDFS + 'range');
+  const rangeQuads = store.getQuads(subject, rangePred, null, null);
+  if (rangeQuads.length === 0) return false;
+  const graph = rangeQuads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const rq of rangeQuads) store.removeQuad(rq);
+  store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  return true;
+}
+
+/**
+ * Remove a data property from the store.
+ */
+export function removeDataPropertyFromStore(store: Store, propertyName: string): boolean {
+  const propUri = BASE_IRI + propertyName;
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  for (const q of quads) store.removeQuad(q);
+  return true;
+}
+
+const OWL_ON_DATA_RANGE = OWL + 'onDataRange';
+
+/** Resolve class URI from store by local name (use actual subject from loaded ontology). */
+function getClassUriFromStore(store: Store, classLocalName: string): string {
+  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
+  for (const q of classQuads) {
+    if (q.subject.termType !== 'NamedNode') continue;
+    const uri = (q.subject as { value: string }).value;
+    if (extractLocalName(uri) === classLocalName) return uri;
+  }
+  return toClassUri(classLocalName);
+}
+
+function findDataRestrictionBlank(
+  store: Store,
+  classLocalName: string,
+  dataPropName: string
+): import('n3').BlankNode | null {
+  const classUri = getClassUriFromStore(store, classLocalName);
+  const dataPropQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
+  let propUri = BASE_IRI + dataPropName;
+  for (const q of dataPropQuads) {
+    if (q.subject.termType === 'NamedNode' && extractLocalName((q.subject as { value: string }).value) === dataPropName) {
+      propUri = (q.subject as { value: string }).value;
+      break;
+    }
+  }
+  const subClassQuads = store.getQuads(
+    DataFactory.namedNode(classUri),
+    DataFactory.namedNode(RDFS + 'subClassOf'),
+    null,
+    null
+  );
+  for (const q of subClassQuads) {
+    const obj = q.object;
+    if (obj.termType !== 'BlankNode') continue;
+    const onProp = store.getQuads(obj, DataFactory.namedNode(OWL + 'onProperty'), null, null)[0];
+    const onDataRange = store.getQuads(obj, DataFactory.namedNode(OWL_ON_DATA_RANGE), null, null)[0];
+    if (!onProp || !onDataRange) continue;
+    if ((onProp.object as { value: string }).value !== propUri) continue;
+    return obj as import('n3').BlankNode;
+  }
+  return null;
+}
+
+/**
+ * Add a data property restriction to a class (owl:Restriction with owl:onDataRange).
+ * Uses the data property's declared range. Returns true on success.
+ */
+export function addDataPropertyRestrictionToClass(
+  store: Store,
+  classLocalName: string,
+  dataPropName: string,
+  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
+): boolean {
+  if (findDataRestrictionBlank(store, classLocalName, dataPropName)) return false;
+  const dataProps = getDataProperties(store);
+  const dp = dataProps.find((p) => p.name === dataPropName);
+  const rangeUri = dp?.range ?? XSD_NS + 'string';
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  const classUri = getClassUriFromStore(store, classLocalName);
+  const dataPropQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
+  let propUri = BASE_IRI + dataPropName;
+  for (const q of dataPropQuads) {
+    if (q.subject.termType === 'NamedNode' && extractLocalName((q.subject as { value: string }).value) === dataPropName) {
+      propUri = (q.subject as { value: string }).value;
+      break;
+    }
+  }
+  const blank = new BlankNode();
+  const min = cardinality?.minCardinality;
+  const max = cardinality?.maxCardinality;
+  store.addQuad(DataFactory.namedNode(classUri), DataFactory.namedNode(RDFS + 'subClassOf'), blank, graph);
+  store.addQuad(blank, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Restriction'), graph);
+  store.addQuad(blank, DataFactory.namedNode(OWL + 'onProperty'), DataFactory.namedNode(propUri), graph);
+  store.addQuad(blank, DataFactory.namedNode(OWL_ON_DATA_RANGE), DataFactory.namedNode(rangeUri), graph);
+  if (min != null && max != null && min === max) {
+    store.addQuad(blank, DataFactory.namedNode(OWL + 'cardinality'), DataFactory.literal(min, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
+  } else {
+    if (min != null) store.addQuad(blank, DataFactory.namedNode(OWL + 'minCardinality'), DataFactory.literal(min, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
+    if (max != null) store.addQuad(blank, DataFactory.namedNode(OWL + 'maxCardinality'), DataFactory.literal(max, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
+  }
+  return true;
+}
+
+/**
+ * Remove a data property restriction from a class.
+ */
+export function removeDataPropertyRestrictionFromClass(
+  store: Store,
+  classLocalName: string,
+  dataPropName: string
+): boolean {
+  const blank = findDataRestrictionBlank(store, classLocalName, dataPropName);
+  if (!blank) return false;
+  const classUri = getClassUriFromStore(store, classLocalName);
+  const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
+  for (const q of store.getQuads(DataFactory.namedNode(classUri), subClassOfPred, blank, null)) store.removeQuad(q);
+  for (const q of store.getQuads(blank, null, null, null)) store.removeQuad(q);
+  for (const q of store.getQuads(null, null, blank, null)) store.removeQuad(q);
+  return true;
+}
+
+/**
+ * Read data property restrictions for a class from the store (same structure as parsed).
+ */
+export function getDataPropertyRestrictionsForClass(
+  store: Store,
+  classLocalName: string
+): DataPropertyRestriction[] {
+  const classUri = getClassUriFromStore(store, classLocalName);
+  const result: DataPropertyRestriction[] = [];
+  const subClassQuads = store.getQuads(DataFactory.namedNode(classUri), DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+  for (const q of subClassQuads) {
+    const obj = q.object;
+    if (obj.termType !== 'BlankNode') continue;
+    const onProp = store.getQuads(obj, DataFactory.namedNode(OWL + 'onProperty'), null, null)[0];
+    const onDataRange = store.getQuads(obj, DataFactory.namedNode(OWL_ON_DATA_RANGE), null, null)[0];
+    if (!onProp || !onDataRange) continue;
+    const propName = extractLocalName((onProp.object as { value: string }).value);
+    const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
+    const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
+    const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
+    const toInt = (quad: import('n3').Quad | undefined): number | null =>
+      quad?.object?.value != null ? parseInt(String(quad.object.value), 10) : null;
+    let minCard: number | null = toInt(minQ);
+    let maxCard: number | null = toInt(maxQ);
+    const n = toInt(cardQ);
+    if (n !== null && !isNaN(n)) {
+      minCard = n;
+      maxCard = n;
+    }
+    result.push({
+      propertyName: propName,
+      minCardinality: minCard ?? undefined,
+      maxCardinality: maxCard ?? undefined,
+    });
+  }
+  return result;
 }
 
 /**
