@@ -341,6 +341,7 @@ function performUndo(): void {
   action.undo();
   redoStack.push(action);
   updateUndoRedoButtons();
+  hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   applyFilter(true);
 }
@@ -351,6 +352,7 @@ function performRedo(): void {
   action.redo();
   undoStack.push(action);
   updateUndoRedoButtons();
+  hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   applyFilter(true);
 }
