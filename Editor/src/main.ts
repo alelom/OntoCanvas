@@ -1499,7 +1499,7 @@ function initAnnotationPropsMenu(
       
       // Save all quads for this property for undo
       const propUri = 'http://example.org/aec-drawing-ontology#' + name;
-      const allQuads = Array.from(ttlStore.getQuads(propUri, null, null, null));
+      const allQuads = Array.from(ttlStore.getQuads(propUri as any, null, null, null));
       const ap = annotationProperties.find((p) => p.name === name);
       
       if (removeAnnotationPropertyFromStore(ttlStore, name)) {
@@ -1511,7 +1511,7 @@ function initAnnotationPropsMenu(
             // Undo: restore the property
             if (ttlStore) {
               for (const q of allQuads) {
-                ttlStore.addQuad(q);
+                ttlStore.addQuad(q.subject, q.predicate, q.object, q.graph);
               }
             }
             if (ap) {
@@ -2110,9 +2110,30 @@ function setupNetworkSelectionAndNavigation(
   container.addEventListener('click', handleNativeClick, true);
   container.addEventListener('dblclick', handleNativeDblclick, true);
 
-  net.on('click', (params: { nodes: string[]; edges: string[]; event?: { srcEvent?: MouseEvent } }) => {
+  net.on('click', (params: { nodes: string[]; edges: string[]; event?: { srcEvent?: MouseEvent; pointer?: { DOM: { x: number; y: number } } } }) => {
     const clickedNode = params.nodes[0] as string | undefined;
     const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
+
+    // If in add node mode and no node clicked, show the add node modal
+    if (!clickedNode && addNodeMode) {
+      const srcEvent = params.event?.srcEvent;
+      if (srcEvent && container) {
+        const rect = container.getBoundingClientRect();
+        const domPos = { x: srcEvent.clientX - rect.left, y: srcEvent.clientY - rect.top };
+        const nodeAt = net.getNodeAt(domPos);
+        if (nodeAt == null) {
+          const canvasPos = net.DOMtoCanvas(domPos);
+          showAddNodeModal(canvasPos.x, canvasPos.y);
+        }
+      }
+      return;
+    }
+
+    // If in add node mode and a node is clicked, exit add node mode
+    if (addNodeMode) {
+      addNodeMode = false;
+      return;
+    }
 
     if (!clickedNode) {
       return;
