@@ -397,7 +397,19 @@ function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix
       const actualInsertPos = prefixEndMatch ? insertPos + prefixEndMatch[0].length : insertPos;
       const before = output.slice(0, actualInsertPos);
       const after = output.slice(actualInsertPos);
-      const imports = externalRefs.map((ref) => `    owl:imports <${ref.url}>`).join(' ;\n');
+      // Check for existing imports in the entire output (in case ontology declaration exists elsewhere)
+      const existingImports = new Set<string>();
+      const importPattern = /owl:imports\s+<([^>]+)>/g;
+      let importMatch;
+      while ((importMatch = importPattern.exec(output)) !== null) {
+        existingImports.add(importMatch[1]);
+      }
+      // Filter out external refs that already have imports
+      const newRefs = externalRefs.filter((ref) => !existingImports.has(ref.url));
+      if (newRefs.length === 0) {
+        return output;
+      }
+      const imports = newRefs.map((ref) => `    owl:imports <${ref.url}>`).join(' ;\n');
       const ontologyDecl = `${before}:Ontology rdf:type owl:Ontology ;\n${imports} .\n\n${after}`;
       return ontologyDecl;
     }
@@ -491,9 +503,25 @@ function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix
   const before = output.slice(0, ontologyStart);
   const after = output.slice(ontologyEnd);
   
+  // Extract existing owl:imports from the ontology block
+  const existingImports = new Set<string>();
+  const importPattern = /owl:imports\s+<([^>]+)>/g;
+  let importMatch;
+  while ((importMatch = importPattern.exec(ontologyBlock)) !== null) {
+    existingImports.add(importMatch[1]);
+  }
+  
+  // Filter out external refs that already have imports
+  const newRefs = externalRefs.filter((ref) => !existingImports.has(ref.url));
+  
+  // If all imports already exist, return unchanged
+  if (newRefs.length === 0) {
+    return output;
+  }
+  
   // Check if it already has properties (contains semicolon)
   const hasSemicolon = ontologyBlock.includes(';');
-  const imports = externalRefs.map((ref) => `    owl:imports <${ref.url}>`).join(' ;\n');
+  const imports = newRefs.map((ref) => `    owl:imports <${ref.url}>`).join(' ;\n');
   
   if (hasSemicolon) {
     // Add imports before the final period

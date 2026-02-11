@@ -36,7 +36,18 @@ import {
   preloadExternalOntologyClasses,
   type ExternalClassInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, BorderLineType } from './types';
+import {
+  type DisplayConfig,
+  type ExternalOntologyReference,
+  loadDisplayConfigFromIndexedDB,
+  saveDisplayConfigToIndexedDB,
+  loadExternalRefsFromIndexedDB,
+  saveExternalRefsToIndexedDB,
+  getLastFileFromIndexedDB,
+  saveLastFileToIndexedDB,
+  DISPLAY_CONFIG_VERSION,
+} from './storage';
 import {
   wrapText,
   getEdgeTypes,
@@ -52,184 +63,7 @@ import {
 } from './graph';
 import './style.css';
 
-const IDB_NAME = 'OntologyEditor';
-const IDB_STORE = 'lastFile';
-const IDB_KEY = 'handle';
-const IDB_DISPLAY_NAME = 'OntologyEditorDisplay';
-const IDB_DISPLAY_STORE = 'config';
-const IDB_EXTERNAL_REFS_NAME = 'OntologyEditorExternalRefs';
-const IDB_EXTERNAL_REFS_STORE = 'refs';
-
-interface DisplayConfig {
-  version: number;
-  nodePositions: Record<string, { x: number; y: number }>;
-  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }>;
-  wrapChars: number;
-  minFontSize: number;
-  maxFontSize: number;
-  relationshipFontSize: number;
-  layoutMode: string;
-  searchQuery: string;
-  includeNeighbors: boolean;
-  annotationStyleConfig?: unknown;
-  viewState?: { scale: number; position: { x: number; y: number } };
-}
-
-interface ExternalOntologyReference {
-  url: string;
-  usePrefix: boolean;
-  prefix?: string; // Optional prefix name (e.g., 'dc', 'schema')
-}
-
 let externalOntologyReferences: ExternalOntologyReference[] = [];
-
-const DISPLAY_CONFIG_VERSION = 1;
-
-function getDisplayConfigKey(): string | null {
-  return loadedFilePath || loadedFileName || null;
-}
-
-/** Normalize to filename for consistent lookup across different load paths. */
-function getDisplayConfigKeyNormalized(): string | null {
-  const raw = getDisplayConfigKey();
-  if (!raw) return null;
-  const basename = raw.replace(/^.*[/\\]/, '');
-  return basename || raw;
-}
-
-async function openDisplayConfigDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_DISPLAY_NAME, 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(IDB_DISPLAY_STORE)) {
-        db.createObjectStore(IDB_DISPLAY_STORE);
-      }
-    };
-  });
-}
-
-async function loadDisplayConfigFromIndexedDB(): Promise<DisplayConfig | null> {
-  const keysToTry = [
-    getDisplayConfigKeyNormalized(),
-    getDisplayConfigKey(),
-  ].filter((k): k is string => !!k);
-  const seen = new Set<string>();
-  const uniqueKeys = keysToTry.filter((k) => {
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-  if (uniqueKeys.length === 0) return null;
-  try {
-    const db = await openDisplayConfigDB();
-    for (const key of uniqueKeys) {
-      const result = await new Promise<DisplayConfig | null>((resolve) => {
-        const tx = db.transaction(IDB_DISPLAY_STORE, 'readonly');
-        const store = tx.objectStore(IDB_DISPLAY_STORE);
-        const req = store.get(key);
-        req.onsuccess = () => {
-          const v = req.result;
-          resolve(v && typeof v === 'object' && v.version === DISPLAY_CONFIG_VERSION ? v : null);
-        };
-        req.onerror = () => resolve(null);
-      });
-      if (result) {
-        db.close();
-        return result;
-      }
-    }
-    db.close();
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-async function saveDisplayConfigToIndexedDB(config: DisplayConfig): Promise<void> {
-  const key = getDisplayConfigKeyNormalized() || getDisplayConfigKey();
-  if (!key) return;
-  try {
-    const db = await openDisplayConfigDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_DISPLAY_STORE);
-      store.put({ ...config, version: DISPLAY_CONFIG_VERSION }, key);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    // ignore
-  }
-}
-
-async function openExternalRefsDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_EXTERNAL_REFS_NAME, 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(IDB_EXTERNAL_REFS_STORE)) {
-        db.createObjectStore(IDB_EXTERNAL_REFS_STORE);
-      }
-    };
-  });
-}
-
-async function loadExternalRefsFromIndexedDB(): Promise<ExternalOntologyReference[]> {
-  const key = getDisplayConfigKeyNormalized() || getDisplayConfigKey();
-  if (!key) return [];
-  try {
-    const db = await openExternalRefsDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_EXTERNAL_REFS_STORE, 'readonly');
-      const store = tx.objectStore(IDB_EXTERNAL_REFS_STORE);
-      const req = store.get(key);
-      req.onsuccess = () => {
-        db.close();
-        resolve((req.result as ExternalOntologyReference[]) || []);
-      };
-      req.onerror = () => {
-        db.close();
-        reject(req.error);
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-async function saveExternalRefsToIndexedDB(refs: ExternalOntologyReference[]): Promise<void> {
-  const key = getDisplayConfigKeyNormalized() || getDisplayConfigKey();
-  if (!key) return;
-  try {
-    const db = await openExternalRefsDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_EXTERNAL_REFS_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_EXTERNAL_REFS_STORE);
-      store.put(refs, key);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    // ignore
-  }
-}
 
 function collectDisplayConfig(): DisplayConfig | null {
   if (rawData.nodes.length === 0) return null;
@@ -305,70 +139,10 @@ function scheduleDisplayConfigSave(): void {
   displayConfigSaveTimer = window.setTimeout(() => {
     displayConfigSaveTimer = null;
     const config = collectDisplayConfig();
-    if (config) saveDisplayConfigToIndexedDB(config).catch(() => {});
+    if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
   }, 500);
 }
 
-async function getLastFileFromIndexedDB(): Promise<{
-  handle: FileSystemFileHandle;
-  name: string;
-  pathHint?: string;
-} | null> {
-  return new Promise((resolve) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onerror = () => resolve(null);
-    req.onsuccess = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.close();
-        resolve(null);
-        return;
-      }
-      const tx = db.transaction(IDB_STORE, 'readonly');
-      const store = tx.objectStore(IDB_STORE);
-      const getReq = store.get(IDB_KEY);
-      getReq.onsuccess = () => {
-        const v = getReq.result;
-        resolve(v && v.handle && v.name ? { handle: v.handle, name: v.name, pathHint: v.pathHint } : null);
-      };
-      getReq.onerror = () => resolve(null);
-    };
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE);
-      }
-    };
-  });
-}
-
-async function saveLastFileToIndexedDB(
-  handle: FileSystemFileHandle,
-  name: string,
-  pathHint?: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      const db = req.result;
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_STORE);
-      store.put({ handle, name, pathHint }, IDB_KEY);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => reject(tx.error);
-    };
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE);
-      }
-    };
-  });
-}
 
 function updateLoadLastOpenedButton(name: string | null, pathHint?: string): void {
   const btn = document.getElementById('loadLastOpened') as HTMLButtonElement;
@@ -1304,7 +1078,6 @@ function updateEdgeColorsLegend(): void {
     types.map((t) => `<span style="color: ${config[t].color}">●</span> ${getRelationshipLabel(t)}`).join(' ');
 }
 
-type BorderLineType = 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'dash-dot-dot';
 
 const BORDER_LINE_OPTIONS: { value: BorderLineType; visValue: false | true | number[]; svgDasharray: string }[] = [
   { value: 'solid', visValue: false, svgDasharray: '' },
@@ -3521,7 +3294,7 @@ async function loadTtlAndRender(
     if (externalRefsGroup) externalRefsGroup.style.display = 'inline-flex';
     
     // Load external references
-    externalOntologyReferences = await loadExternalRefsFromIndexedDB();
+    externalOntologyReferences = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
     
     // Pre-fetch and cache external ontology classes (await to ensure they're loaded before search)
     if (externalOntologyReferences.length > 0) {
@@ -3543,7 +3316,7 @@ async function loadTtlAndRender(
     initAddAnnotationPropertyHandlers(annotationPropsContent ?? undefined);
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
-    const displayConfig = await loadDisplayConfigFromIndexedDB();
+    const displayConfig = await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
     if (displayConfig) {
       applyDisplayConfig(displayConfig);
       if (displayConfig.viewState) savedViewState = displayConfig.viewState;
@@ -3810,7 +3583,7 @@ function renderExternalRefsList(): void {
       const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
       externalOntologyReferences[index].usePrefix = (e.target as HTMLInputElement).checked;
       renderExternalRefsList();
-      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName).catch(() => {});
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     }) as EventListener);
@@ -3820,7 +3593,7 @@ function renderExternalRefsList(): void {
     (input as HTMLElement).addEventListener('change', ((e: Event) => {
       const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
       externalOntologyReferences[index].prefix = (e.target as HTMLInputElement).value.trim() || undefined;
-      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName).catch(() => {});
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     }) as EventListener);
@@ -3831,7 +3604,7 @@ function renderExternalRefsList(): void {
       const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
       externalOntologyReferences.splice(index, 1);
       renderExternalRefsList();
-      saveExternalRefsToIndexedDB(externalOntologyReferences).catch(() => {});
+      saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName).catch(() => {});
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     }) as EventListener);
@@ -4053,7 +3826,7 @@ function setupEventListeners(): void {
       
       urlInput.value = '';
       renderExternalRefsList();
-      await saveExternalRefsToIndexedDB(externalOntologyReferences);
+      await saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName);
       
       // Pre-fetch the newly added ontology
       try {
@@ -4263,7 +4036,7 @@ function setupEventListeners(): void {
           animation: false,
         });
       }
-      saveDisplayConfigToIndexedDB(config).catch(() => {});
+      saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
     } catch (err) {
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
       errorMsg.textContent = `Failed to load display config: ${err instanceof Error ? err.message : String(err)}`;
@@ -4290,7 +4063,7 @@ function setupEventListeners(): void {
             animation: false,
           });
         }
-        saveDisplayConfigToIndexedDB(config).catch(() => {});
+        saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
       } else {
         loadDisplayConfigInput.click();
       }
