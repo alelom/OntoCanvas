@@ -64,6 +64,11 @@ import {
   matchesSearch,
   COLORS,
 } from './graph';
+import {
+  initContextMenu,
+  showContextMenu,
+  updateContextMenuData,
+} from './ui/contextMenu';
 import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
@@ -1985,7 +1990,19 @@ function setupNetworkSelectionAndNavigation(
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
   let selectionBeforeClick: string[] = [];
 
-  container.oncontextmenu = () => false;
+  // Prevent browser's default context menu on the container
+  container.oncontextmenu = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  };
+  
+  // Also add event listener to catch contextmenu events (more reliable)
+  container.addEventListener('contextmenu', (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  }, true); // Use capture phase to catch early
 
   const getContainerCoords = (e: MouseEvent) => {
     const rect = container.getBoundingClientRect();
@@ -1993,9 +2010,26 @@ function setupNetworkSelectionAndNavigation(
   };
 
   const handleMouseDown = (e: MouseEvent) => {
-    if (!container.contains(e.target as Node)) return;
+    const target = e.target as Node;
+    // Check if click is within the container (including canvas elements)
+    if (!container.contains(target) && !container.isSameNode(target)) {
+      // Also check if the target is a child of the container's canvas
+      const canvas = container.querySelector('canvas');
+      if (!canvas || !canvas.contains(target)) return;
+    }
     const coords = getContainerCoords(e);
     if (e.button === RIGHT_BUTTON) {
+      // Check if clicking on a node or edge
+      const nodeAt = net.getNodeAt(coords);
+      const edgeAt = net.getEdgeAt(coords);
+      
+      // If clicking on node/edge, don't start panning (context menu will handle it)
+      if (nodeAt != null || edgeAt != null) {
+        rightPanStart = null;
+        return;
+      }
+      
+      // Otherwise, start panning on empty canvas
       const viewPos = net.getViewPosition();
       const scale = net.getScale();
       rightPanStart = { x: coords.x, y: coords.y, viewPos: { ...viewPos }, scale };
@@ -2025,13 +2059,49 @@ function setupNetworkSelectionAndNavigation(
   };
 
   const handleMouseUp = (e: MouseEvent) => {
-    if (e.button === RIGHT_BUTTON) rightPanStart = null;
+    if (e.button === RIGHT_BUTTON) {
+      const target = e.target as Node;
+      const isInContainer = container.contains(target) || container.isSameNode(target) || 
+                           (container.querySelector('canvas')?.contains(target) ?? false);
+      
+      // Prevent browser's default context menu
+      if (isInContainer) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      // Check if we were panning (rightPanStart exists) or if we should show context menu
+      if (!rightPanStart && isInContainer) {
+        // Show context menu if we didn't pan
+        const coords = getContainerCoords(e);
+        const nodeAt = net.getNodeAt(coords);
+        const edgeAt = net.getEdgeAt(coords);
+        
+        // Show context menu if clicking on node/edge or empty canvas
+        if (nodeAt != null || edgeAt != null || true) {
+          showContextMenu(e, net, container);
+        }
+      }
+      rightPanStart = null;
+    }
   };
 
   const handleMouseLeave = () => {
     rightPanStart = null;
   };
 
+  // Prevent browser context menu on container and all its children (including canvas)
+  const handleContextMenu = (e: MouseEvent) => {
+    const target = e.target as Node;
+    if (container.contains(target) || container.isSameNode(target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    }
+  };
+  
+  container.addEventListener('contextmenu', handleContextMenu, true); // Capture phase
   document.addEventListener('mousedown', handleMouseDown, true);
   document.addEventListener('mousemove', handleMouseMove, true);
   document.addEventListener('mouseup', handleMouseUp, true);
@@ -4135,6 +4205,69 @@ function applyFilter(preserveView = false): void {
     ro.observe(networkContainer);
     resizeNetwork(); // Initial size
     setupNetworkSelectionAndNavigation(network, networkContainer);
+    
+    // Initialize context menu
+    if (ttlStore) {
+      initContextMenu(
+        network,
+        networkContainer,
+        ttlStore,
+        rawData,
+        (addedEdges, failedEdges) => {
+          // On paste callback - add to undo stack
+          if (addedEdges.length > 0) {
+            pushUndoable(
+              () => {
+                // Undo: remove pasted edges
+                addedEdges.forEach((edge) => {
+                  removeEdgeFromStore(ttlStore!, edge.from, edge.to, edge.type);
+                  const idx = rawData.edges.findIndex(
+                    (e) => e.from === edge.from && e.to === edge.to && e.type === edge.type
+                  );
+                  if (idx >= 0) rawData.edges.splice(idx, 1);
+                });
+                applyFilter(true);
+              },
+              () => {
+                // Redo: re-add pasted edges
+                addedEdges.forEach((edge) => {
+                  const card = rawData.edges.find(
+                    (e) => e.from === edge.from && e.to === edge.to && e.type === edge.type
+                  );
+                  const cardinality = card
+                    ? {
+                        minCardinality: card.minCardinality ?? null,
+                        maxCardinality: card.maxCardinality ?? null,
+                      }
+                    : undefined;
+                  addEdgeToStore(ttlStore!, edge.from, edge.to, edge.type, cardinality);
+                  if (!card) {
+                    rawData.edges.push({
+                      from: edge.from,
+                      to: edge.to,
+                      type: edge.type,
+                      minCardinality: cardinality?.minCardinality,
+                      maxCardinality: cardinality?.maxCardinality,
+                    });
+                  }
+                });
+                applyFilter(true);
+              }
+            );
+            applyFilter(true);
+            hasUnsavedChanges = true;
+          }
+        },
+        (count) => {
+          // On copy callback - just log or show notification
+          console.log(`Copied ${count} relationship(s)`);
+        }
+      );
+      
+      // Update context menu data after initialization
+      updateContextMenuData(ttlStore, rawData);
+    }
+    
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
     });
