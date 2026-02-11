@@ -419,6 +419,10 @@ function toClassUri(localName: string): string {
 }
 
 function getPropertyUri(edgeType: string): string {
+  // If edgeType is already a full URI (starts with http:// or https://), return it as-is
+  if (edgeType.startsWith('http://') || edgeType.startsWith('https://')) {
+    return edgeType;
+  }
   return BASE_IRI + edgeType;
 }
 

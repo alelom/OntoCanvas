@@ -31,10 +31,13 @@ import {
   storeToTurtle,
   extractLocalName,
 } from './parser';
+import { Store, DataFactory } from 'n3';
 import {
   searchExternalClasses,
+  searchExternalObjectProperties,
   preloadExternalOntologyClasses,
   type ExternalClassInfo,
+  type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
 import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, BorderLineType } from './types';
 import {
@@ -64,6 +67,144 @@ import {
 import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
+
+/**
+ * Extract external ontology references from owl:imports statements in the store
+ */
+function extractExternalRefsFromStore(store: Store): ExternalOntologyReference[] {
+  const refs: ExternalOntologyReference[] = [];
+  const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+  const OWL = 'http://www.w3.org/2002/07/owl#';
+  const OWL_IMPORTS = OWL + 'imports';
+  
+  // Find ontology declaration
+  const ontologyQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Ontology'), null);
+  
+  if (ontologyQuads.length === 0) {
+    return refs;
+  }
+  
+  const ontologySubject = ontologyQuads[0].subject;
+  
+  // Get owl:imports statements
+  const importQuads = store.getQuads(ontologySubject, DataFactory.namedNode(OWL_IMPORTS), null, null);
+  for (const quad of importQuads) {
+    const importObj = quad.object as { termType: string; value?: string };
+    if (importObj.termType === 'NamedNode' && importObj.value) {
+      const importUrl = importObj.value;
+      if (typeof importUrl === 'string' && (importUrl.startsWith('http://') || importUrl.startsWith('https://'))) {
+        // Try to find prefix from URL patterns
+        const urlWithoutHash = importUrl.endsWith('#') ? importUrl.slice(0, -1) : importUrl;
+        
+        // Try common prefixes based on URL patterns
+        let prefix: string | undefined;
+        if (urlWithoutHash.includes('w3id.org/dano')) {
+          prefix = 'dano';
+        } else if (urlWithoutHash.includes('schema.org')) {
+          prefix = 'schema';
+        } else if (urlWithoutHash.includes('purl.org/dc')) {
+          prefix = 'dc';
+        }
+        
+        refs.push({
+          url: importUrl,
+          usePrefix: prefix !== undefined,
+          prefix: prefix,
+        });
+      }
+    }
+  }
+  
+  return refs;
+}
+
+/**
+ * Extract prefix declarations from TTL string
+ */
+function extractPrefixesFromTtl(ttlString: string): Record<string, string> {
+  const prefixMap: Record<string, string> = {};
+  // Match @prefix prefixName: <url> .
+  const prefixPattern = /@prefix\s+(\w+)\s*:\s*<([^>]+)>\s*\./g;
+  let match;
+  while ((match = prefixPattern.exec(ttlString)) !== null) {
+    const prefix = match[1];
+    const url = match[2];
+    prefixMap[prefix] = url;
+  }
+  return prefixMap;
+}
+
+/**
+ * Extract ontology URL from a node comment that contains "(Imported from ...)"
+ */
+function getNodeOntologyUrl(node: GraphNode): string | null {
+  if (!node.comment) return null;
+  const match = node.comment.match(/\(Imported from ([^)]+)\)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Get prefix for a node if it's from an external ontology
+ */
+function getNodePrefix(node: GraphNode): string | null {
+  const ontologyUrl = getNodeOntologyUrl(node);
+  if (!ontologyUrl) return null;
+  const ref = externalOntologyReferences.find((r) => {
+    const refUrl = r.url.endsWith('#') ? r.url.slice(0, -1) : r.url;
+    const nodeUrl = ontologyUrl.endsWith('#') ? ontologyUrl.slice(0, -1) : ontologyUrl;
+    return refUrl === nodeUrl;
+  });
+  return ref?.usePrefix && ref.prefix ? ref.prefix : null;
+}
+
+/**
+ * Get prefix for an object property if it's from an external ontology
+ * Object properties from external ontologies would have their URI stored in the name
+ */
+function getObjectPropertyPrefix(propertyName: string): string | null {
+  // Check if property name is a full URI
+  if (!propertyName.startsWith('http://') && !propertyName.startsWith('https://')) {
+    return null;
+  }
+  // Find matching external reference
+  for (const ref of externalOntologyReferences) {
+    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    if (propertyName.startsWith(refUrl)) {
+      return ref.usePrefix && ref.prefix ? ref.prefix : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Format node label with prefix if available
+ */
+function formatNodeLabelWithPrefix(node: GraphNode): string {
+  const prefix = getNodePrefix(node);
+  if (prefix) {
+    // Extract local name from node ID or label
+    const localName = node.id.includes(':') ? node.id.split(':').pop() || node.id : node.id;
+    return `${prefix}: ${node.label}`;
+  }
+  return node.label;
+}
+
+/**
+ * Format relationship label with prefix if available
+ */
+function formatRelationshipLabelWithPrefix(propertyName: string, label: string): string {
+  const prefix = getObjectPropertyPrefix(propertyName);
+  if (prefix) {
+    // Extract local name from property name
+    const localName = propertyName.includes('#') 
+      ? propertyName.split('#').pop() || propertyName
+      : propertyName.includes('/')
+      ? propertyName.split('/').pop() || propertyName
+      : propertyName;
+    return `${prefix}: ${label}`;
+  }
+  return label;
+}
 
 function collectDisplayConfig(): DisplayConfig | null {
   if (rawData.nodes.length === 0) return null;
@@ -443,15 +584,65 @@ function performDeleteSelection(): boolean {
   );
   hasUnsavedChanges = true;
   updateSaveButtonVisibility();
+  // Clean up unused external properties and update edge styles menu
+  cleanupUnusedExternalProperties();
+  const edgeStylesContent = document.getElementById('edgeStylesContent');
+  if (edgeStylesContent) {
+    initEdgeStylesMenu(edgeStylesContent, applyFilter);
+  }
   applyFilter(true);
   network.unselectAll();
   return true;
 }
 const SPACING = getSpacing();
 
+/**
+ * Get all relationship types that are actually in use in the graph.
+ * For external properties (URIs), only include them if they're used in edges.
+ */
 function getAllRelationshipTypes(): string[] {
-  const fromProps = objectProperties.map((op) => op.name);
-  return [...new Set(['subClassOf', ...fromProps])].sort();
+  const edgeTypes = getEdgeTypes(rawData.edges);
+  const usedTypes = new Set<string>(edgeTypes);
+  
+  // Include subClassOf always
+  usedTypes.add('subClassOf');
+  
+  // Include local properties (not URIs) from objectProperties
+  const localProps = objectProperties
+    .filter((op) => !op.name.startsWith('http://') && !op.name.startsWith('https://'))
+    .map((op) => op.name);
+  localProps.forEach((prop) => usedTypes.add(prop));
+  
+  // Include external properties (URIs) only if they're used in edges
+  const externalProps = objectProperties
+    .filter((op) => (op.name.startsWith('http://') || op.name.startsWith('https://')) && usedTypes.has(op.name))
+    .map((op) => op.name);
+  externalProps.forEach((prop) => usedTypes.add(prop));
+  
+  return Array.from(usedTypes).sort();
+}
+
+/**
+ * Remove unused external object properties from the objectProperties array.
+ * External properties (URIs) should only be kept if they're used in edges.
+ */
+function cleanupUnusedExternalProperties(): void {
+  const edgeTypes = new Set(getEdgeTypes(rawData.edges));
+  const beforeCount = objectProperties.length;
+  
+  objectProperties = objectProperties.filter((op) => {
+    // Keep local properties (not URIs)
+    if (!op.name.startsWith('http://') && !op.name.startsWith('https://')) {
+      return true;
+    }
+    // For external properties (URIs), only keep if used in edges
+    return edgeTypes.has(op.name);
+  });
+  
+  const afterCount = objectProperties.length;
+  if (beforeCount !== afterCount) {
+    objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+  }
 }
 
 const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
@@ -459,7 +650,20 @@ const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
 function getRelationshipLabel(type: string): string {
   if (type === 'subClassOf') return 'subClassOf';
   const op = objectProperties.find((p) => p.name === type);
-  return op?.label ?? type;
+  if (op) return op.label;
+  // If not found in objectProperties, it might be an external property URI
+  // Try to extract a meaningful label from the URI
+  if (type.startsWith('http://') || type.startsWith('https://')) {
+    // Check if we can find it in external references
+    for (const ref of externalOntologyReferences) {
+      if (type.startsWith(ref.url) || ref.url.endsWith('#') && type.startsWith(ref.url.slice(0, -1))) {
+        const localName = extractLocalName(type);
+        return localName;
+      }
+    }
+    return extractLocalName(type);
+  }
+  return type;
 }
 
 /** Format edge label for graph display, using relationship label and optional cardinality. */
@@ -643,6 +847,8 @@ function initEdgeStylesMenu(
       if (removed >= 0) {
         rawData.edges = rawData.edges.filter((e) => e.type !== type);
         objectProperties = objectProperties.filter((op) => op.name !== type);
+        // Clean up unused external properties
+        cleanupUnusedExternalProperties();
         hasUnsavedChanges = true;
         updateSaveButtonVisibility();
         initEdgeStylesMenu(edgeStylesContent, onApply);
@@ -1625,9 +1831,10 @@ function buildNetworkData(filter: {
           )
         : maxFontSize;
     const style = getNodeStyleFromAnnotations(n, filter.annotationStyleConfig);
+    const displayLabel = formatNodeLabelWithPrefix(n);
     const node: Record<string, unknown> = {
       id: n.id,
-      label: wrapText(n.label, wrapChars),
+      label: wrapText(displayLabel, wrapChars),
       labellableRoot: n.labellableRoot,
       color: { background: style.background, border: style.border },
       font: { size: fontSize, color: '#2c3e50' },
@@ -2344,21 +2551,245 @@ function getAllEdgeTypes(): string[] {
 
 function getPropertyHasCardinality(edgeType: string): boolean {
   if (edgeType === 'subClassOf') return false;
+  // Check if it's an external object property
+  if (selectedExternalObjectProperty) {
+    return selectedExternalObjectProperty.hasCardinality ?? true;
+  }
+  // Check local object properties
   const op = objectProperties.find((p) => p.name === edgeType);
   return op?.hasCardinality ?? true;
 }
 
+let selectedEdgeType: string | null = null;
+let selectedExternalObjectProperty: ExternalObjectPropertyInfo | null = null;
+
 function updateEditEdgeCommentDisplay(): void {
-  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
   const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
-  if (!typeSel || !commentEl) return;
-  const comment = getRelationshipComment(typeSel.value);
+  if (!typeInput || !commentEl) return;
+  
+  let comment: string | null = null;
+  if (selectedExternalObjectProperty) {
+    comment = selectedExternalObjectProperty.comment || null;
+  } else {
+    const edgeType = selectedEdgeType || typeInput.value.trim();
+    comment = edgeType ? getRelationshipComment(edgeType) : null;
+  }
+  
   if (comment) {
     commentEl.textContent = comment;
     commentEl.style.display = 'block';
   } else {
     commentEl.textContent = '';
     commentEl.style.display = 'none';
+  }
+}
+
+let relationshipTooltip: HTMLElement | null = null;
+
+function showRelationshipTooltip(element: HTMLElement, comment: string): void {
+  // Remove existing tooltip if any
+  hideRelationshipTooltip();
+  
+  // Create tooltip element
+  relationshipTooltip = document.createElement('div');
+  relationshipTooltip.textContent = comment;
+  relationshipTooltip.style.cssText = `
+    position: absolute;
+    background: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    max-width: 300px;
+    z-index: 10000;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    word-wrap: break-word;
+  `;
+  
+  // Position tooltip relative to the element
+  const rect = element.getBoundingClientRect();
+  const resultsDiv = document.getElementById('editEdgeTypeResults');
+  if (resultsDiv) {
+    const resultsRect = resultsDiv.getBoundingClientRect();
+    relationshipTooltip.style.left = `${rect.left - resultsRect.left + rect.width + 8}px`;
+    relationshipTooltip.style.top = `${rect.top - resultsRect.top}px`;
+    
+    // Check if tooltip would go off screen, adjust if needed
+    const tooltipWidth = 300; // max-width
+    const tooltipRight = rect.right + tooltipWidth + 8;
+    if (tooltipRight > window.innerWidth) {
+      // Position on the left side instead
+      relationshipTooltip.style.left = `${rect.left - resultsRect.left - tooltipWidth - 8}px`;
+    }
+    
+    resultsDiv.appendChild(relationshipTooltip);
+  }
+}
+
+function hideRelationshipTooltip(): void {
+  if (relationshipTooltip) {
+    relationshipTooltip.remove();
+    relationshipTooltip = null;
+  }
+}
+
+async function updateEditEdgeTypeSearch(query: string): Promise<void> {
+  const resultsDiv = document.getElementById('editEdgeTypeResults');
+  const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
+  if (!resultsDiv || !typeInput) return;
+  
+  const q = query.toLowerCase().trim();
+  if (q.length < 1) {
+    resultsDiv.innerHTML = '';
+    resultsDiv.style.display = 'none';
+    hideRelationshipTooltip();
+    selectedEdgeType = null;
+    selectedExternalObjectProperty = null;
+    updateEditEdgeCommentDisplay();
+    return;
+  }
+  
+  // Search local object properties
+  const allTypes = getAllEdgeTypes();
+  const localMatches: Array<{ type: string; label: string; displayLabel: string; comment: string | null; isExternal: boolean; externalProp: ExternalObjectPropertyInfo | null }> = allTypes.filter((t) => {
+    const label = getRelationshipLabel(t);
+    const displayLabel = formatRelationshipLabelWithPrefix(t, label);
+    return label.toLowerCase().includes(q) || 
+           displayLabel.toLowerCase().includes(q) ||
+           t.toLowerCase().includes(q);
+  }).map((t) => {
+    const comment = getRelationshipComment(t);
+    return {
+      type: t,
+      label: getRelationshipLabel(t),
+      displayLabel: formatRelationshipLabelWithPrefix(t, getRelationshipLabel(t)),
+      comment: comment || null,
+      isExternal: false,
+      externalProp: null as ExternalObjectPropertyInfo | null,
+    };
+  });
+  
+  // Search external object properties
+  let externalMatches: Array<{ type: string; label: string; displayLabel: string; comment: string | null; isExternal: boolean; externalProp: ExternalObjectPropertyInfo | null }> = [];
+  if (externalOntologyReferences.length > 0) {
+    try {
+      console.log(`Searching external object properties for "${query}" across ${externalOntologyReferences.length} reference(s):`, externalOntologyReferences.map(r => r.url));
+      const externalProps = await searchExternalObjectProperties(query, externalOntologyReferences);
+      console.log(`Found ${externalProps.length} external object properties matching "${query}"`);
+      externalMatches = externalProps.map((op) => {
+        const displayLabel = op.prefix ? `${op.prefix}: ${op.label}` : op.label;
+        console.log(`External property: ${op.uri} -> ${displayLabel}`);
+        return {
+          type: op.uri, // Use full URI for external properties
+          label: op.label,
+          displayLabel,
+          comment: op.comment || null,
+          isExternal: true,
+          externalProp: op,
+        };
+      });
+    } catch (err) {
+      console.error('Error searching external object properties:', err);
+    }
+  } else {
+    console.log('No external ontology references loaded, skipping external object property search');
+  }
+  
+  // Combine and sort matches (local first, then external)
+  const allMatches = [...localMatches, ...externalMatches];
+  
+  if (allMatches.length === 0) {
+    resultsDiv.innerHTML = '<div style="padding: 8px; color: #999;">No matches</div>';
+    resultsDiv.style.display = 'block';
+    selectedEdgeType = null;
+    selectedExternalObjectProperty = null;
+  } else if (allMatches.length === 1) {
+    // Auto-select single match
+    const match = allMatches[0];
+    if (match.isExternal && match.externalProp) {
+      selectedExternalObjectProperty = match.externalProp;
+      selectedEdgeType = match.type; // Store the URI
+    } else {
+      selectedEdgeType = match.type;
+      selectedExternalObjectProperty = null;
+    }
+    typeInput.value = match.displayLabel;
+    resultsDiv.style.display = 'none';
+    updateEditEdgeCommentDisplay();
+  } else {
+    // Match dropdown width to input field width and align it properly
+    // The dropdown is positioned absolutely within the label (which has position: relative)
+    // The input field starts after the "Relationship: " text, so we need to align with it
+    const labelElement = typeInput.closest('label');
+    if (labelElement) {
+      // Use getBoundingClientRect to get accurate positioning
+      // Then calculate relative to the label
+      const labelRect = labelElement.getBoundingClientRect();
+      const inputRect = typeInput.getBoundingClientRect();
+      
+      // Calculate input position relative to label
+      const inputLeftRelative = inputRect.left - labelRect.left;
+      const inputWidth = inputRect.width;
+      
+      // Set dropdown width to match input width and position it to align with input
+      // Add 60px offset to the right to fix alignment
+      resultsDiv.style.width = `${inputWidth}px`;
+      resultsDiv.style.left = `${inputLeftRelative + 60}px`;
+    } else {
+      // Fallback: match input width
+      const inputRect = typeInput.getBoundingClientRect();
+      resultsDiv.style.width = `${inputRect.width}px`;
+      resultsDiv.style.left = '0';
+    }
+    
+    resultsDiv.innerHTML = allMatches.map((match, idx) => {
+      const source = match.isExternal ? '<span style="font-size: 9px; color: #999; margin-left: 4px;">(external)</span>' : '';
+      const comment = match.comment || '';
+      // Add title attribute for native browser tooltip, and data attribute for custom tooltip
+      const titleAttr = comment ? `title="${comment.replace(/"/g, '&quot;')}"` : '';
+      return `<div class="edit-edge-type-result" data-index="${idx}" data-comment="${comment.replace(/"/g, '&quot;')}" style="padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; position: relative; word-wrap: break-word; overflow-wrap: break-word; white-space: normal;" ${titleAttr}>${match.displayLabel}${source}</div>`;
+    }).join('');
+    resultsDiv.style.display = 'block';
+    
+    // Add click handlers and hover tooltips
+    resultsDiv.querySelectorAll('.edit-edge-type-result').forEach((el) => {
+      const resultEl = el as HTMLElement;
+      const idx = parseInt(resultEl.dataset.index || '0', 10);
+      const match = allMatches[idx];
+      const comment = match.comment;
+      
+      // Hover handlers for background color and tooltip
+      resultEl.addEventListener('mouseenter', () => {
+        resultEl.style.background = '#f0f7ff';
+        // Show tooltip if comment exists
+        if (comment) {
+          showRelationshipTooltip(resultEl, comment);
+        }
+      });
+      
+      resultEl.addEventListener('mouseleave', () => {
+        resultEl.style.background = 'transparent';
+        hideRelationshipTooltip();
+      });
+      
+      // Click handler
+      resultEl.addEventListener('click', () => {
+        if (match.isExternal && match.externalProp) {
+          selectedExternalObjectProperty = match.externalProp;
+          selectedEdgeType = match.type; // Store the URI
+        } else {
+          selectedEdgeType = match.type;
+          selectedExternalObjectProperty = null;
+        }
+        typeInput.value = match.displayLabel;
+        resultsDiv.style.display = 'none';
+        hideRelationshipTooltip();
+        updateEditEdgeCommentDisplay();
+      });
+    });
   }
 }
 
@@ -2394,12 +2825,20 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     // For data properties, show the data property name and class, but disable editing
     fromSel.disabled = true;
     toSel.disabled = true;
-    typeSel.disabled = true;
+    const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
+    if (typeInput) {
+      typeInput.disabled = true;
+      typeInput.value = 'dataprop (data property)';
+      selectedEdgeType = 'dataprop';
+      selectedExternalObjectProperty = null;
+    }
     
     // Constrain select widths to prevent modal from expanding too wide
     fromSel.style.maxWidth = '350px';
     toSel.style.maxWidth = '350px';
-    typeSel.style.maxWidth = '350px';
+    if (typeInput) {
+      typeInput.style.maxWidth = '350px';
+    }
     // Also constrain the modal content width
     const modalContent = modal.querySelector('.modal-content') as HTMLElement;
     if (modalContent) {
@@ -2413,8 +2852,6 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     fromSel.innerHTML = `<option value="${edgeFrom}" selected>${dpLabel} (data property)</option>`;
     toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
     
-    // Show data properties in type selector (though it's disabled)
-    typeSel.innerHTML = dataProperties.map((dp) => `<option value="dataprop"${dp.name === propertyName ? ' selected' : ''}>${dp.label} (data property)</option>`).join('');
     
     // Show cardinality for data properties
     minCardInput.value = restriction?.minCardinality != null ? String(restriction.minCardinality) : '';
@@ -2462,21 +2899,31 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     
     fromSel.disabled = false;
     toSel.disabled = false;
-    typeSel.disabled = false;
+    const typeInputEdit = document.getElementById('editEdgeType') as HTMLInputElement;
+    if (typeInputEdit) {
+      typeInputEdit.disabled = false;
+    }
     
     // Reset max-width for regular edges (let them size naturally)
     fromSel.style.maxWidth = '';
     toSel.style.maxWidth = '';
-    typeSel.style.maxWidth = '';
+    if (typeInputEdit) {
+      typeInputEdit.style.maxWidth = '';
+    }
     const modalContent = modal.querySelector('.modal-content') as HTMLElement;
     if (modalContent) {
       modalContent.style.maxWidth = '';
     }
     
-    fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${n.label}</option>`).join('');
-    toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
-    const allTypes = getAllEdgeTypes();
-    typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === edgeType ? ' selected' : ''}>${getRelationshipLabel(t)}</option>`).join('');
+    fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${formatNodeLabelWithPrefix(n)}</option>`).join('');
+    toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${formatNodeLabelWithPrefix(n)}</option>`).join('');
+    if (typeInputEdit) {
+      const label = getRelationshipLabel(edgeType);
+      const displayLabel = formatRelationshipLabelWithPrefix(edgeType, label);
+      typeInputEdit.value = displayLabel;
+      selectedEdgeType = edgeType;
+      selectedExternalObjectProperty = null;
+    }
 
     minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
     maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
@@ -2508,14 +2955,22 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;
   toSel.disabled = true;
-  fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${n.label}</option>`).join('');
-  toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${n.label}</option>`).join('');
-  const allTypes = getAllEdgeTypes();
-  typeSel.innerHTML = allTypes.map((t) => `<option value="${t}"${t === 'subClassOf' ? ' selected' : ''}>${getRelationshipLabel(t)}</option>`).join('');
+  fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${formatNodeLabelWithPrefix(n)}</option>`).join('');
+  toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${formatNodeLabelWithPrefix(n)}</option>`).join('');
+  const typeInputAdd = document.getElementById('editEdgeType') as HTMLInputElement;
+  if (typeInputAdd) {
+    const defaultType = 'subClassOf';
+    const label = getRelationshipLabel(defaultType);
+    const displayLabel = formatRelationshipLabelWithPrefix(defaultType, label);
+    typeInputAdd.value = displayLabel;
+    selectedEdgeType = defaultType;
+    selectedExternalObjectProperty = null;
+  }
 
   minCardInput.value = '';
   maxCardInput.value = '';
-  cardWrap.style.display = typeSel.value !== 'subClassOf' && getPropertyHasCardinality(typeSel.value) ? 'block' : 'none';
+  const defaultTypeAdd = 'subClassOf';
+  cardWrap.style.display = defaultTypeAdd !== 'subClassOf' && getPropertyHasCardinality(defaultTypeAdd) ? 'block' : 'none';
 
   updateEditEdgeCommentDisplay();
   modal.querySelector('h3')!.textContent = 'Add edge';
@@ -2551,13 +3006,40 @@ function confirmEditEdge(): void {
   const modal = document.getElementById('editEdgeModal')!;
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
-  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
   const mode = modal.dataset.mode;
   const cardinality = getCardinalityFromEditModal();
+  
+  // Check if we have a selected external object property
+  let newType: string | null = null;
+  if (selectedExternalObjectProperty) {
+    newType = selectedExternalObjectProperty.uri; // Use full URI for external properties
+  } else if (selectedEdgeType) {
+    newType = selectedEdgeType;
+  } else if (typeInput?.value.trim()) {
+    // Try to find in local types
+    const found = getAllEdgeTypes().find(t => {
+      const label = getRelationshipLabel(t);
+      const displayLabel = formatRelationshipLabelWithPrefix(t, label);
+      return displayLabel === typeInput.value.trim() || label === typeInput.value.trim() || t === typeInput.value.trim();
+    });
+    if (found) {
+      newType = found;
+    } else {
+      // If not found locally, it might be an external property that was typed manually
+      // We'll need to search for it
+      alert('Please select a relationship type from the search results.');
+      return;
+    }
+  }
+  
+  if (!newType) {
+    alert('Please select a valid relationship type.');
+    return;
+  }
 
   if (mode === 'add' && pendingAddEdgeData) {
     const { from, to, callback } = pendingAddEdgeData;
-    const newType = typeSel.value;
     if (!ttlStore) {
       hideEditEdgeModal();
       return;
@@ -2575,6 +3057,26 @@ function confirmEditEdge(): void {
       newEdge.maxCardinality = card.maxCardinality ?? undefined;
     }
     rawData.edges.push(newEdge);
+    
+    // If this is an external object property, add it to objectProperties array
+    if (selectedExternalObjectProperty) {
+      const existing = objectProperties.find((op) => op.name === newType);
+      if (!existing) {
+        objectProperties.push({
+          name: newType, // Store the full URI as the name
+          label: selectedExternalObjectProperty.label,
+          hasCardinality: selectedExternalObjectProperty.hasCardinality ?? true,
+          comment: selectedExternalObjectProperty.comment || null,
+        });
+        objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+        // Re-initialize the edge styles menu to include the new property
+        const edgeStylesContent = document.getElementById('edgeStylesContent');
+        if (edgeStylesContent) {
+          initEdgeStylesMenu(edgeStylesContent, applyFilter);
+        }
+      }
+      selectedExternalObjectProperty = null;
+    }
     pushUndoable(
       () => {
         removeEdgeFromStore(ttlStore!, from, to, newType);
@@ -2591,6 +3093,12 @@ function confirmEditEdge(): void {
     callback({ from, to, id: `${from}->${to}:${newType}` });
     pendingAddEdgeData = null;
     hideEditEdgeModal();
+    // Clean up unused external properties and update edge styles menu
+    cleanupUnusedExternalProperties();
+    const edgeStylesContent = document.getElementById('edgeStylesContent');
+    if (edgeStylesContent) {
+      initEdgeStylesMenu(edgeStylesContent, applyFilter);
+    }
     applyFilter(true);
     return;
   }
@@ -2642,7 +3150,6 @@ function confirmEditEdge(): void {
   
   const newFrom = fromSel.value;
   const newTo = toSel.value;
-  const newType = typeSel.value;
   const oldEdge = rawData.edges.find((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
   const card = newType !== 'subClassOf' ? cardinality : undefined;
   const sameEdge = oldFrom === newFrom && oldTo === newTo && oldType === newType &&
@@ -2672,6 +3179,27 @@ function confirmEditEdge(): void {
     newEdge.maxCardinality = card.maxCardinality ?? undefined;
   }
   rawData.edges.push(newEdge);
+  
+  // If this is an external object property, add it to objectProperties array
+  if (selectedExternalObjectProperty && newType !== oldType) {
+    const existing = objectProperties.find((op) => op.name === newType);
+    if (!existing) {
+      objectProperties.push({
+        name: newType, // Store the full URI as the name
+        label: selectedExternalObjectProperty.label,
+        hasCardinality: selectedExternalObjectProperty.hasCardinality ?? true,
+        comment: selectedExternalObjectProperty.comment || null,
+      });
+      objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+      // Re-initialize the edge styles menu to include the new property
+      const edgeStylesContent = document.getElementById('edgeStylesContent');
+      if (edgeStylesContent) {
+        initEdgeStylesMenu(edgeStylesContent, applyFilter);
+      }
+    }
+    selectedExternalObjectProperty = null;
+  }
+  
   const oldCard = { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null };
   pushUndoable(
     () => {
@@ -2691,6 +3219,12 @@ function confirmEditEdge(): void {
   );
   hasUnsavedChanges = true;
   updateSaveButtonVisibility();
+  // Clean up unused external properties and update edge styles menu
+  cleanupUnusedExternalProperties();
+  const edgeStylesContent = document.getElementById('edgeStylesContent');
+  if (edgeStylesContent) {
+    initEdgeStylesMenu(edgeStylesContent, applyFilter);
+  }
   hideEditEdgeModal();
   applyFilter(true);
 }
@@ -3217,9 +3751,10 @@ function renderApp(): void {
       </div>
     </div>
     <div id="editEdgeModal" class="modal" style="display: none;">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 500px; width: 90vw;">
         <h3>Edit edge</h3>
-        <label>Relationship: <select id="editEdgeType"></select></label>
+        <label style="position: relative; display: block;">Relationship: <input type="text" id="editEdgeType" placeholder="Type to search relationships..." autocomplete="off" style="width: 100%; padding: 8px; box-sizing: border-box;"></label>
+        <div id="editEdgeTypeResults" style="max-height: 200px; overflow-y: auto; overflow-x: hidden; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; display: none; background: #fff; position: absolute; z-index: 1000; width: 100%; box-sizing: border-box; left: 0; word-wrap: break-word; overflow-wrap: break-word;"></div>
         <div id="editEdgeComment" style="font-size: 11px; color: #666; margin-top: 4px; margin-bottom: 8px; line-height: 1.4; display: none;"></div>
         <label style="display: block; margin-top: 8px;">From: <select id="editEdgeFrom"></select></label>
         <label style="display: block; margin-top: 8px;">To: <select id="editEdgeTo"></select></label>
@@ -3293,10 +3828,68 @@ async function loadTtlAndRender(
     const externalRefsGroup = document.getElementById('externalRefsGroup');
     if (externalRefsGroup) externalRefsGroup.style.display = 'inline-flex';
     
-    // Load external references
-    externalOntologyReferences = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
+    // Extract external references from owl:imports in the ontology
+    const extractedRefs = extractExternalRefsFromStore(ttlStore);
+    console.log('Extracted external references from ontology:', extractedRefs);
     
-    // Pre-fetch and cache external ontology classes (await to ensure they're loaded before search)
+    // Extract prefixes from @prefix declarations in the TTL
+    const prefixMap = extractPrefixesFromTtl(ttlString);
+    console.log('Extracted prefixes from TTL:', prefixMap);
+    
+    // Enhance extracted refs with prefixes from TTL
+    for (const ref of extractedRefs) {
+      const urlWithoutHash = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+      console.log(`Matching ref URL: ${ref.url} (normalized: ${urlWithoutHash})`);
+      // Find matching prefix in TTL
+      for (const [prefix, url] of Object.entries(prefixMap)) {
+        const urlStr = String(url);
+        const prefixUrlWithoutHash = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr;
+        console.log(`  Comparing with prefix ${prefix}: ${urlStr} (normalized: ${prefixUrlWithoutHash})`);
+        if (urlWithoutHash === prefixUrlWithoutHash) {
+          console.log(`  ✓ Match found! Setting prefix to ${prefix}`);
+          ref.prefix = prefix;
+          ref.usePrefix = true;
+          break;
+        }
+      }
+      if (!ref.prefix) {
+        console.log(`  ✗ No matching prefix found for ${ref.url}`);
+      }
+    }
+    
+    // Load external references from IndexedDB and merge with extracted ones
+    const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
+    console.log('Loaded external references from IndexedDB:', dbRefs);
+    
+    // Merge: use DB refs if they exist, otherwise use extracted ones
+    // For each extracted ref, check if there's a DB ref with the same URL
+    const mergedRefs: ExternalOntologyReference[] = [];
+    const seenUrls = new Set<string>();
+    
+    // First add DB refs (they have user preferences like prefix)
+    for (const dbRef of dbRefs) {
+      const normalizedUrl = dbRef.url.endsWith('#') ? dbRef.url.slice(0, -1) : dbRef.url;
+      mergedRefs.push(dbRef);
+      seenUrls.add(normalizedUrl);
+    }
+    
+    // Then add extracted refs that aren't in DB
+    for (const extRef of extractedRefs) {
+      const normalizedUrl = extRef.url.endsWith('#') ? extRef.url.slice(0, -1) : extRef.url;
+      if (!seenUrls.has(normalizedUrl)) {
+        mergedRefs.push(extRef);
+        seenUrls.add(normalizedUrl);
+      }
+    }
+    
+    externalOntologyReferences = mergedRefs;
+    console.log('Final merged external references:', externalOntologyReferences);
+    console.log(`Total external references: ${externalOntologyReferences.length}`);
+    for (const ref of externalOntologyReferences) {
+      console.log(`  - ${ref.url} (prefix: ${ref.prefix || 'none'}, usePrefix: ${ref.usePrefix})`);
+    }
+    
+    // Pre-fetch and cache external ontology classes and object properties
     if (externalOntologyReferences.length > 0) {
       try {
         await preloadExternalOntologyClasses(externalOntologyReferences);
@@ -3304,6 +3897,49 @@ async function loadTtlAndRender(
         console.error('Failed to pre-load external ontologies:', err);
       }
     }
+    
+    // Extract external object properties from edges that use full URIs
+    // This ensures external properties appear in the Object Properties menu
+    const edgeTypes = getEdgeTypes(rawData.edges);
+    for (const edgeType of edgeTypes) {
+      if ((edgeType.startsWith('http://') || edgeType.startsWith('https://')) && 
+          !objectProperties.find((op) => op.name === edgeType)) {
+        // This is an external property URI, try to find it in external references
+        let found = false;
+        for (const ref of externalOntologyReferences) {
+          const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+          if (edgeType.startsWith(refUrl)) {
+            // Try to fetch the property info
+            try {
+              const externalProps = await searchExternalObjectProperties(extractLocalName(edgeType), [ref]);
+              const prop = externalProps.find((p) => p.uri === edgeType);
+              if (prop) {
+                objectProperties.push({
+                  name: edgeType,
+                  label: prop.label,
+                  hasCardinality: prop.hasCardinality ?? true,
+                  comment: prop.comment || null,
+                });
+                found = true;
+                break;
+              }
+            } catch (err) {
+              console.error('Error fetching external property info:', err);
+            }
+          }
+        }
+        // If not found in external refs, create a basic entry
+        if (!found) {
+          objectProperties.push({
+            name: edgeType,
+            label: extractLocalName(edgeType),
+            hasCardinality: true,
+            comment: null,
+          });
+        }
+      }
+    }
+    objectProperties.sort((a, b) => a.name.localeCompare(b.name));
 
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -3881,10 +4517,51 @@ function setupEventListeners(): void {
   document.getElementById('redoBtn')?.addEventListener('click', performRedo);
   document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModal);
   document.getElementById('editEdgeConfirm')?.addEventListener('click', confirmEditEdge);
-  document.getElementById('editEdgeType')?.addEventListener('change', () => {
-    const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
+  let editEdgeTypeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+  document.getElementById('editEdgeType')?.addEventListener('input', (e) => {
+    const typeInput = e.target as HTMLInputElement;
+    const query = typeInput.value.trim();
+    
+    // Clear previous timeout
+    if (editEdgeTypeSearchTimeout) {
+      clearTimeout(editEdgeTypeSearchTimeout);
+    }
+    
+    // Reset selection when user types
+    selectedEdgeType = null;
+    selectedExternalObjectProperty = null;
+    
+    // Debounce search
+    editEdgeTypeSearchTimeout = setTimeout(() => {
+      updateEditEdgeTypeSearch(query).catch((err) => {
+        console.error('Error in edge type search:', err);
+      });
+    }, 150);
+    
+    // Also update comment display immediately if we have a selected type
+    if (selectedEdgeType) {
+      updateEditEdgeCommentDisplay();
+    }
+  });
+  
+  // Close results when clicking outside
+  document.addEventListener('click', (e) => {
+    const resultsDiv = document.getElementById('editEdgeTypeResults');
+    const typeInput = document.getElementById('editEdgeType');
+    if (resultsDiv && typeInput && 
+        !resultsDiv.contains(e.target as Node) && 
+        !typeInput.contains(e.target as Node)) {
+      resultsDiv.style.display = 'none';
+      hideRelationshipTooltip();
+    }
+  });
+  
+  // Update cardinality display when edge type changes
+  document.getElementById('editEdgeType')?.addEventListener('focusout', () => {
     const cardWrap = document.getElementById('editEdgeCardinalityWrap');
-    if (cardWrap) cardWrap.style.display = typeSel.value !== 'subClassOf' && getPropertyHasCardinality(typeSel.value) ? 'block' : 'none';
+    if (cardWrap && selectedEdgeType) {
+      cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType) ? 'block' : 'none';
+    }
     updateEditEdgeCommentDisplay();
   });
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
