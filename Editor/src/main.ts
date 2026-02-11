@@ -2064,12 +2064,23 @@ function setupNetworkSelectionAndNavigation(
       addNodeMode = true;
       return;
     }
+    // Don't interfere with manipulation UI unless we're in add node mode
     if (target.closest?.('.vis-manipulation') && !addNodeMode) return;
+    
+    // Only handle clicks on the canvas itself when in add node mode
     if (!addNodeMode) return;
+    
+    // Check if click is on the network canvas (not on UI elements)
+    if (!container.contains(target) && !target.closest('#network')) return;
+    
     const rect = container.getBoundingClientRect();
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const nodeAt = net.getNodeAt(domPos);
-    if (nodeAt != null) return;
+    if (nodeAt != null) {
+      // Clicked on a node, exit add node mode
+      addNodeMode = false;
+      return;
+    }
     const canvasPos = net.DOMtoCanvas(domPos);
     showAddNodeModal(canvasPos.x, canvasPos.y);
   };
@@ -2120,26 +2131,37 @@ function setupNetworkSelectionAndNavigation(
     const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
 
     // If in add node mode and no node clicked, show the add node modal
-    if (!clickedNode && addNodeMode) {
+    if (addNodeMode && !clickedNode) {
       const srcEvent = params.event?.srcEvent;
+      const pointer = params.event?.pointer;
+      
+      // Try to get position from srcEvent first, then from pointer
+      let domPos: { x: number; y: number } | null = null;
       if (srcEvent && container) {
         const rect = container.getBoundingClientRect();
-        const domPos = { x: srcEvent.clientX - rect.left, y: srcEvent.clientY - rect.top };
+        domPos = { x: srcEvent.clientX - rect.left, y: srcEvent.clientY - rect.top };
+      } else if (pointer?.DOM) {
+        domPos = pointer.DOM;
+      }
+      
+      if (domPos) {
         const nodeAt = net.getNodeAt(domPos);
         if (nodeAt == null) {
           const canvasPos = net.DOMtoCanvas(domPos);
           showAddNodeModal(canvasPos.x, canvasPos.y);
+          return; // Return early to prevent other handlers
         }
       }
       return;
     }
 
     // If in add node mode and a node is clicked, exit add node mode
-    if (addNodeMode) {
+    if (addNodeMode && clickedNode) {
       addNodeMode = false;
       return;
     }
 
+    // If not in add node mode and no node clicked, don't do anything
     if (!clickedNode) {
       return;
     }
