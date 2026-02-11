@@ -4261,6 +4261,21 @@ function applyFilter(preserveView = false): void {
         (count) => {
           // On copy callback - just log or show notification
           console.log(`Copied ${count} relationship(s)`);
+        },
+        (nodeId) => {
+          // On edit node callback - open edit node modal
+          const node = rawData.nodes.find((n) => n.id === nodeId);
+          if (node) {
+            showRenameModal(nodeId, node.label, node.labellableRoot);
+          }
+        },
+        (edgeId) => {
+          // On edit edge callback - open edit edge modal
+          const match = String(edgeId).match(/^(.+)->(.+):(.+)$/);
+          if (match) {
+            const [, from, to, type] = match;
+            showEditEdgeModal(from, to, type);
+          }
         }
       );
       

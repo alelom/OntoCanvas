@@ -26,12 +26,24 @@ export type OnPasteCallback = (
  */
 export type OnCopyCallback = (count: number) => void;
 
+/**
+ * Callback type for when a node should be edited.
+ */
+export type OnEditNodeCallback = (nodeId: string) => void;
+
+/**
+ * Callback type for when an edge should be edited.
+ */
+export type OnEditEdgeCallback = (edgeId: string) => void;
+
 let contextMenuElement: HTMLElement | null = null;
 let currentNetwork: Network | null = null;
 let currentStore: Store | null = null;
 let currentRawData: GraphData | null = null;
 let onPasteCallback: OnPasteCallback | null = null;
 let onCopyCallback: OnCopyCallback | null = null;
+let onEditNodeCallback: ((nodeId: string) => void) | null = null;
+let onEditEdgeCallback: ((edgeId: string) => void) | null = null;
 let currentTargetNodeId: string | null = null;
 
 /**
@@ -43,13 +55,17 @@ export function initContextMenu(
   store: Store,
   rawData: GraphData,
   onPaste: OnPasteCallback,
-  onCopy: OnCopyCallback
+  onCopy: OnCopyCallback,
+  onEditNode: OnEditNodeCallback,
+  onEditEdge: OnEditEdgeCallback
 ): void {
   currentNetwork = network;
   currentStore = store;
   currentRawData = rawData;
   onPasteCallback = onPaste;
   onCopyCallback = onCopy;
+  onEditNodeCallback = onEditNode;
+  onEditEdgeCallback = onEditEdge;
 
   // Create context menu element if it doesn't exist
   if (!contextMenuElement) {
@@ -189,12 +205,36 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       !hasCopiedRelationships()
     );
 
+    // Separator before "Edit properties"
+    const separator = createSeparator();
+    
+    // Edit properties option (always last)
+    const editBtn = createMenuItem('Edit properties', () => {
+      if (onEditNodeCallback) {
+        onEditNodeCallback(nodeId);
+      }
+      hideContextMenu();
+    });
+
     contextMenuElement.appendChild(copyBtn);
     contextMenuElement.appendChild(pasteBtn);
+    contextMenuElement.appendChild(separator);
+    contextMenuElement.appendChild(editBtn);
   } else if (edgeId) {
-    // Edge context menu (placeholder for future)
-    const placeholder = createMenuItem('(Edge options coming soon)', () => {}, true);
-    contextMenuElement.appendChild(placeholder);
+    // Edge context menu
+    // Separator before "Edit properties"
+    const separator = createSeparator();
+    
+    // Edit properties option (always last)
+    const editBtn = createMenuItem('Edit properties', () => {
+      if (onEditEdgeCallback) {
+        onEditEdgeCallback(edgeId);
+      }
+      hideContextMenu();
+    });
+
+    contextMenuElement.appendChild(separator);
+    contextMenuElement.appendChild(editBtn);
   } else {
     // Canvas context menu (placeholder for future)
     const placeholder = createMenuItem('(Canvas options coming soon)', () => {}, true);
@@ -234,6 +274,19 @@ function createMenuItem(
   }
 
   return item;
+}
+
+/**
+ * Create a separator element for the menu.
+ */
+function createSeparator(): HTMLElement {
+  const separator = document.createElement('div');
+  separator.style.cssText = `
+    height: 1px;
+    background: #e0e0e0;
+    margin: 4px 0;
+  `;
+  return separator;
 }
 
 /**
