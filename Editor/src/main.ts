@@ -70,6 +70,13 @@ import {
   COLORS,
 } from './graph';
 import {
+  initStatusBar,
+  updateStatusBar,
+  updateNodeEdgeCounts,
+  updateFilePathDisplay as updateStatusBarFilePath,
+  updateSelectionInfo as updateStatusBarSelection,
+} from './ui/statusBar';
+import {
   initContextMenu,
   showContextMenu,
   updateContextMenuData,
@@ -2388,16 +2395,14 @@ function buildNetworkData(filter: {
 }
 
 function updateSelectionInfoDisplay(net: Network): void {
-  const selectionEl = document.getElementById('selectionInfo');
-  if (!selectionEl) return;
   const nodeIds = net.getSelectedNodes().map(String);
   if (nodeIds.length === 0) {
-    selectionEl.textContent = '';
+    updateStatusBarSelection('');
   } else if (nodeIds.length === 1) {
     const node = rawData.nodes.find((n) => n.id === nodeIds[0]);
-    selectionEl.textContent = ` | Selected: ${node?.label ?? nodeIds[0]} | Labellable: ${node?.labellableRoot ?? 'N/A'}`;
+    updateStatusBarSelection(` | Selected: ${node?.label ?? nodeIds[0]} | Labellable: ${node?.labellableRoot ?? 'N/A'}`);
   } else {
-    selectionEl.textContent = ` | Selected: ${nodeIds.length} nodes`;
+    updateStatusBarSelection(` | Selected: ${nodeIds.length} nodes`);
   }
 }
 
@@ -2703,17 +2708,7 @@ function updateSaveButtonVisibility(): void {
 }
 
 function updateFilePathDisplay(): void {
-  const el = document.getElementById('filePathDisplay');
-  if (!el) return;
-  if (loadedFilePath) {
-    el.textContent = `| File: ${loadedFilePath}`;
-    el.title = loadedFilePath;
-    el.style.display = '';
-  } else {
-    el.textContent = '';
-    el.title = '';
-    el.style.display = 'none';
-  }
+  updateStatusBarFilePath(loadedFilePath);
 }
 
 function updateRenameDataPropAddButtonState(): void {
@@ -4450,12 +4445,19 @@ async function loadTtlAndRender(
     objectProperties = objectProps;
     dataProperties = dataProps;
     ttlStore = store;
+    
+    // Update status bar with the new store
+    updateStatusBar(ttlStore);
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
     hasUnsavedChanges = false;
     clearUndoRedo();
     updateFilePathDisplay();
+    
+    // Update status bar with the new store
+    updateStatusBar(ttlStore);
+    
     if (handle && fileName) {
       saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
     }
@@ -4731,6 +4733,10 @@ function applyFilter(preserveView = false): void {
   };
 
   const networkContainer = document.getElementById('network')!;
+  
+  // Update status bar with node/edge counts
+  updateNodeEdgeCounts(data.nodes.length, data.edges.length);
+  
   if (network) {
     network.setData(data);
     network.setOptions({
@@ -5101,6 +5107,9 @@ async function loadLastOpenedUrl(): Promise<void> {
       }
 
 function setupEventListeners(): void {
+  // Initialize status bar after DOM is ready
+  initStatusBar();
+  
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
 
   // Open ontology button
