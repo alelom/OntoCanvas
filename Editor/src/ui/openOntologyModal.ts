@@ -1,4 +1,4 @@
-import { getLastFileFromIndexedDB } from '../storage';
+import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB } from '../storage';
 
 /**
  * Callback type for loading an ontology from a file.
@@ -11,14 +11,20 @@ export type OnLoadFromFileCallback = () => Promise<void>;
 export type OnLoadFromUrlCallback = (url: string) => Promise<void>;
 
 /**
- * Callback type for loading the last opened ontology.
+ * Callback type for loading the last opened file.
  */
-export type OnLoadLastOpenedCallback = () => Promise<void>;
+export type OnLoadLastOpenedFileCallback = () => Promise<void>;
+
+/**
+ * Callback type for loading the last opened URL.
+ */
+export type OnLoadLastOpenedUrlCallback = () => Promise<void>;
 
 let modalElement: HTMLElement | null = null;
 let onLoadFromFile: OnLoadFromFileCallback | null = null;
 let onLoadFromUrl: OnLoadFromUrlCallback | null = null;
-let onLoadLastOpened: OnLoadLastOpenedCallback | null = null;
+let onLoadLastOpenedFile: OnLoadLastOpenedFileCallback | null = null;
+let onLoadLastOpenedUrl: OnLoadLastOpenedUrlCallback | null = null;
 
 /**
  * Initialize the open ontology modal.
@@ -26,11 +32,13 @@ let onLoadLastOpened: OnLoadLastOpenedCallback | null = null;
 export function initOpenOntologyModal(
   onFile: OnLoadFromFileCallback,
   onUrl: OnLoadFromUrlCallback,
-  onLast: OnLoadLastOpenedCallback
+  onLastFile: OnLoadLastOpenedFileCallback,
+  onLastUrl: OnLoadLastOpenedUrlCallback
 ): void {
   onLoadFromFile = onFile;
   onLoadFromUrl = onUrl;
-  onLoadLastOpened = onLast;
+  onLoadLastOpenedFile = onLastFile;
+  onLoadLastOpenedUrl = onLastUrl;
 
   // Create modal element if it doesn't exist
   if (!modalElement) {
@@ -107,28 +115,50 @@ export function initOpenOntologyModal(
       }
     });
 
-    // Load last opened button
-    const lastOpenedBtn = document.createElement('button');
-    lastOpenedBtn.id = 'openOntologyLoadLast';
-    lastOpenedBtn.style.cssText = `
+    // Load last opened file button
+    const lastOpenedFileBtn = document.createElement('button');
+    lastOpenedFileBtn.id = 'openOntologyLoadLastFile';
+    lastOpenedFileBtn.style.cssText = `
       padding: 12px 16px;
       font-size: 14px;
       cursor: pointer;
       background: #f5f5f5;
       border: 1px solid #ddd;
       border-radius: 4px;
+      text-align: left;
     `;
-    lastOpenedBtn.addEventListener('click', async () => {
-      if (lastOpenedBtn.dataset.hasLast !== '1') return;
-      if (onLoadLastOpened) {
-        await onLoadLastOpened();
+    lastOpenedFileBtn.addEventListener('click', async () => {
+      if (lastOpenedFileBtn.dataset.hasLast !== '1') return;
+      if (onLoadLastOpenedFile) {
+        await onLoadLastOpenedFile();
+        hideModal();
+      }
+    });
+
+    // Load last opened URL button
+    const lastOpenedUrlBtn = document.createElement('button');
+    lastOpenedUrlBtn.id = 'openOntologyLoadLastUrl';
+    lastOpenedUrlBtn.style.cssText = `
+      padding: 12px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      text-align: left;
+    `;
+    lastOpenedUrlBtn.addEventListener('click', async () => {
+      if (lastOpenedUrlBtn.dataset.hasLast !== '1') return;
+      if (onLoadLastOpenedUrl) {
+        await onLoadLastOpenedUrl();
         hideModal();
       }
     });
 
     buttonContainer.appendChild(fileBtn);
     buttonContainer.appendChild(urlBtn);
-    buttonContainer.appendChild(lastOpenedBtn);
+    buttonContainer.appendChild(lastOpenedFileBtn);
+    buttonContainer.appendChild(lastOpenedUrlBtn);
 
     modalContent.appendChild(title);
     modalContent.appendChild(buttonContainer);
@@ -151,8 +181,8 @@ export function initOpenOntologyModal(
     document.body.appendChild(modalElement);
   }
 
-  // Update last opened button
-  updateLastOpenedButton();
+  // Update last opened buttons
+  updateLastOpenedButtons();
 }
 
 /**
@@ -160,7 +190,7 @@ export function initOpenOntologyModal(
  */
 export function showOpenOntologyModal(): void {
   if (!modalElement) return;
-  updateLastOpenedButton();
+  updateLastOpenedButtons();
   modalElement.style.display = 'flex';
 }
 
@@ -173,28 +203,55 @@ export function hideOpenOntologyModal(): void {
 }
 
 /**
- * Update the "Load last opened" button based on stored data.
+ * Update the "Load last opened" buttons based on stored data.
  */
-async function updateLastOpenedButton(): Promise<void> {
+async function updateLastOpenedButtons(): Promise<void> {
   if (!modalElement) return;
-  const btn = document.getElementById('openOntologyLoadLast') as HTMLButtonElement;
-  if (!btn) return;
+  
+  // Update last opened file button
+  const fileBtn = document.getElementById('openOntologyLoadLastFile') as HTMLButtonElement;
+  if (fileBtn) {
+    const storedFile = await getLastFileFromIndexedDB();
+    if (storedFile && storedFile.name) {
+      fileBtn.textContent = `Open last opened file: ${storedFile.name}`;
+      fileBtn.title = storedFile.pathHint ?? storedFile.name;
+      fileBtn.disabled = false;
+      fileBtn.dataset.hasLast = '1';
+      fileBtn.style.background = '#f5f5f5';
+      fileBtn.style.color = '#333';
+    } else {
+      fileBtn.textContent = 'Open last opened file: (none)';
+      fileBtn.title = 'No previously opened file';
+      fileBtn.disabled = true;
+      fileBtn.dataset.hasLast = '';
+      fileBtn.style.background = '#f5f5f5';
+      fileBtn.style.color = '#999';
+    }
+  }
 
-  const stored = await getLastFileFromIndexedDB();
-  if (stored && stored.name) {
-    btn.textContent = `Load last opened: ${stored.name}`;
-    btn.title = stored.pathHint ?? stored.name;
-    btn.disabled = false;
-    btn.dataset.hasLast = '1';
-    btn.style.background = '#f5f5f5';
-    btn.style.color = '#333';
-  } else {
-    btn.textContent = 'Load last opened: (none)';
-    btn.title = 'No previously opened file';
-    btn.disabled = true;
-    btn.dataset.hasLast = '';
-    btn.style.background = '#f5f5f5';
-    btn.style.color = '#999';
+  // Update last opened URL button
+  const urlBtn = document.getElementById('openOntologyLoadLastUrl') as HTMLButtonElement;
+  if (urlBtn) {
+    const storedUrl = await getLastUrlFromIndexedDB();
+    if (storedUrl && storedUrl.url) {
+      // Truncate URL if too long for display
+      const displayUrl = storedUrl.url.length > 50 
+        ? storedUrl.url.substring(0, 47) + '...'
+        : storedUrl.url;
+      urlBtn.textContent = `Open last opened URL: ${displayUrl}`;
+      urlBtn.title = storedUrl.url;
+      urlBtn.disabled = false;
+      urlBtn.dataset.hasLast = '1';
+      urlBtn.style.background = '#f5f5f5';
+      urlBtn.style.color = '#333';
+    } else {
+      urlBtn.textContent = 'Open last opened URL: (none)';
+      urlBtn.title = 'No previously opened URL';
+      urlBtn.disabled = true;
+      urlBtn.dataset.hasLast = '';
+      urlBtn.style.background = '#f5f5f5';
+      urlBtn.style.color = '#999';
+    }
   }
 }
 

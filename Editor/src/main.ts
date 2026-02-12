@@ -49,6 +49,8 @@ import {
   saveExternalRefsToIndexedDB,
   getLastFileFromIndexedDB,
   saveLastFileToIndexedDB,
+  getLastUrlFromIndexedDB,
+  saveLastUrlToIndexedDB,
   DISPLAY_CONFIG_VERSION,
 } from './storage';
 import {
@@ -3539,7 +3541,12 @@ async function saveTtl(): Promise<void> {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = loadedFileName ?? 'ontology.ttl';
+      // Ensure filename has .ttl extension
+      let downloadName = loadedFileName ?? 'ontology.ttl';
+      if (!downloadName.toLowerCase().endsWith('.ttl') && !downloadName.toLowerCase().endsWith('.turtle')) {
+        downloadName = `${downloadName}.ttl`;
+      }
+      a.download = downloadName;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -3619,7 +3626,7 @@ function renderApp(): void {
           <input type="checkbox" id="searchIncludeNeighbors" checked> Include neighbors
         </label>
       </div>
-      <span id="undoRedoGroup" style="gap: 4px; align-items: center; display: inline-flex;">
+      <span id="undoRedoGroup" style="gap: 4px; align-items: center; display: inline-flex; flex-direction: column;">
         <button type="button" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
         <button type="button" id="redoBtn" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
       </span>
@@ -3631,7 +3638,7 @@ function renderApp(): void {
           </label>
         </span>
       </span>
-      <span id="displayConfigGroup" style="display: none; gap: 8px; align-items: center;">
+      <span id="displayConfigGroup" style="display: none; gap: 4px; align-items: center; flex-direction: column;">
         <button type="button" id="saveDisplayConfig" title="Save display config to a .display.json file (e.g. next to your ontology)">Save display config</button>
         <button type="button" id="loadDisplayConfig" title="Load display config from a .display.json file">Load display config</button>
       </span>
@@ -3882,7 +3889,10 @@ async function loadTtlAndRender(
 
     vizControls.style.display = 'contents';
     const displayConfigGroup = document.getElementById('displayConfigGroup');
-    if (displayConfigGroup) displayConfigGroup.style.display = 'inline-flex';
+    if (displayConfigGroup) {
+      displayConfigGroup.style.display = 'inline-flex';
+      displayConfigGroup.style.flexDirection = 'column';
+    }
     const externalRefsGroup = document.getElementById('externalRefsGroup');
     if (externalRefsGroup) externalRefsGroup.style.display = 'inline-flex';
     
@@ -4439,7 +4449,15 @@ async function loadFromUrl(url: string): Promise<void> {
     // Extract filename from URL
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/');
-    const fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
+    let fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
+    
+    // Ensure filename has .ttl extension
+    if (!fileName.toLowerCase().endsWith('.ttl') && !fileName.toLowerCase().endsWith('.turtle')) {
+      fileName = `${fileName}.ttl`;
+    }
+
+    // Save last opened URL
+    await saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
     await loadTtlAndRender(ttl, fileName, null, url);
   } catch (err) {
@@ -4449,9 +4467,9 @@ async function loadFromUrl(url: string): Promise<void> {
 }
 
 /**
- * Load the last opened ontology.
+ * Load the last opened file.
  */
-async function loadLastOpened(): Promise<void> {
+async function loadLastOpenedFile(): Promise<void> {
   const stored = await getLastFileFromIndexedDB();
   if (!stored) {
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
@@ -4481,6 +4499,26 @@ async function loadLastOpened(): Promise<void> {
   }
 }
 
+/**
+ * Load the last opened URL.
+ */
+async function loadLastOpenedUrl(): Promise<void> {
+  const stored = await getLastUrlFromIndexedDB();
+  if (!stored) {
+    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+    errorMsg.textContent = 'No previously opened URL found.';
+    errorMsg.style.display = 'block';
+    return;
+  }
+  try {
+    await loadFromUrl(stored.url);
+  } catch (err) {
+    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+    errorMsg.textContent = `Failed to load from URL: ${err instanceof Error ? err.message : String(err)}`;
+    errorMsg.style.display = 'block';
+  }
+}
+
 function setupEventListeners(): void {
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
 
@@ -4491,11 +4529,12 @@ function setupEventListeners(): void {
   });
 
   // Initialize the open ontology modal
-  initOpenOntologyModal(
-    loadFromFile,
-    loadFromUrl,
-    loadLastOpened
-  );
+      initOpenOntologyModal(
+        loadFromFile,
+        loadFromUrl,
+        loadLastOpenedFile,
+        loadLastOpenedUrl
+      );
 
   // File input change handler (for fallback when showOpenFilePicker is not available)
   fileInput?.addEventListener('change', async (e) => {
