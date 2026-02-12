@@ -69,6 +69,11 @@ import {
   showContextMenu,
   updateContextMenuData,
 } from './ui/contextMenu';
+import {
+  initOpenOntologyModal,
+  showOpenOntologyModal,
+} from './ui/openOntologyModal';
+import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
 import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
@@ -290,21 +295,7 @@ function scheduleDisplayConfigSave(): void {
 }
 
 
-function updateLoadLastOpenedButton(name: string | null, pathHint?: string): void {
-  const btn = document.getElementById('loadLastOpened') as HTMLButtonElement;
-  if (!btn) return;
-  if (name) {
-    btn.textContent = `Load last opened: ${name}`;
-    btn.title = pathHint ?? name;
-    btn.disabled = false;
-    btn.dataset.hasLast = '1';
-  } else {
-    btn.textContent = 'Load last opened: (none)';
-    btn.title = 'Select a TTL file first to enable';
-    btn.disabled = true;
-    btn.dataset.hasLast = '';
-  }
-}
+// Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: { name: string; isBoolean: boolean }[] = [];
@@ -3566,10 +3557,8 @@ function renderApp(): void {
   app.innerHTML = `
     <div id="controls">
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <strong>Load ontology:</strong>
-        <button type="button" id="selectFile" class="primary">Select TTL file...</button>
-        <button type="button" id="loadLastOpened" title="Select a TTL file first" disabled>Load last opened: (none)</button>
-        <input type="file" id="fileInput" accept=".ttl,.turtle" />
+        <button type="button" id="openOntologyBtn" class="primary" style="width: fit-content;">Open ontology</button>
+        <input type="file" id="fileInput" accept=".ttl,.turtle" style="display: none;" />
       </div>
       <div id="vizControls" style="display: none;">
       <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -3888,7 +3877,6 @@ async function loadTtlAndRender(
     updateFilePathDisplay();
     if (handle && fileName) {
       saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
-      updateLoadLastOpenedButton(fileName, pathHint ?? fileName);
     }
     updateSaveButtonVisibility();
 
@@ -4407,64 +4395,109 @@ function hideExternalRefsModal(): void {
   if (modal) modal.style.display = 'none';
 }
 
+/**
+ * Load ontology from a file.
+ */
+async function loadFromFile(): Promise<void> {
+  const fileInput = document.getElementById('fileInput') as HTMLInputElement;
+  if (!fileInput) return;
+
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await (window as Window & { showOpenFilePicker: (o?: object) => Promise<FileSystemFileHandle[]> })
+        .showOpenFilePicker({
+          types: [{ accept: { 'text/turtle': ['.ttl', '.turtle'] } }],
+          mode: 'readwrite',
+        });
+      const file = await handle.getFile();
+      const ttl = await file.text();
+      const pathHint = (file as File & { path?: string }).path ?? file.name;
+      await loadTtlAndRender(ttl, file.name, handle, pathHint);
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+        errorMsg.textContent = `Failed to open file: ${err instanceof Error ? err.message : String(err)}`;
+        errorMsg.style.display = 'block';
+      }
+    }
+  } else {
+    fileInput.click();
+  }
+}
+
+/**
+ * Load ontology from a URL.
+ */
+async function loadFromUrl(url: string): Promise<void> {
+  const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+  errorMsg.style.display = 'none';
+  errorMsg.textContent = '';
+
+  try {
+    const ttl = await fetchOntologyFromUrl(url);
+
+    // Extract filename from URL
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
+    const fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
+
+    await loadTtlAndRender(ttl, fileName, null, url);
+  } catch (err) {
+    errorMsg.textContent = `Failed to load from URL: ${err instanceof Error ? err.message : String(err)}`;
+    errorMsg.style.display = 'block';
+  }
+}
+
+/**
+ * Load the last opened ontology.
+ */
+async function loadLastOpened(): Promise<void> {
+  const stored = await getLastFileFromIndexedDB();
+  if (!stored) {
+    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+    errorMsg.textContent = 'No previously opened file found.';
+    errorMsg.style.display = 'block';
+    return;
+  }
+  try {
+    const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
+      if (requested !== 'granted') {
+        const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+        errorMsg.textContent = 'Permission to access file was denied.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+    }
+    const file = await stored.handle.getFile();
+    const ttl = await file.text();
+    const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
+    await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
+  } catch (err) {
+    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+    errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
+    errorMsg.style.display = 'block';
+  }
+}
+
 function setupEventListeners(): void {
-  const selectFile = document.getElementById('selectFile');
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
 
-  const loadLastOpened = document.getElementById('loadLastOpened');
-  loadLastOpened?.addEventListener('click', async () => {
-    if (loadLastOpened.dataset.hasLast !== '1') return;
-    const stored = await getLastFileFromIndexedDB();
-    if (!stored) {
-      updateLoadLastOpenedButton(null);
-      return;
-    }
-    try {
-      const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
-      if (perm !== 'granted') {
-        const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
-        if (requested !== 'granted') {
-          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-          errorMsg.textContent = 'Permission to access file was denied.';
-          errorMsg.style.display = 'block';
-          return;
-        }
-      }
-      const file = await stored.handle.getFile();
-      const ttl = await file.text();
-      const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
-      await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
-    } catch (err) {
-      const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-      errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
-      errorMsg.style.display = 'block';
-    }
+  // Open ontology button
+  const openOntologyBtn = document.getElementById('openOntologyBtn');
+  openOntologyBtn?.addEventListener('click', () => {
+    showOpenOntologyModal();
   });
 
-  selectFile?.addEventListener('click', async () => {
-    if ('showOpenFilePicker' in window) {
-      try {
-        const [handle] = await (window as Window & { showOpenFilePicker: (o?: object) => Promise<FileSystemFileHandle[]> })
-          .showOpenFilePicker({
-            types: [{ accept: { 'text/turtle': ['.ttl', '.turtle'] } }],
-            mode: 'readwrite',
-          });
-        const file = await handle.getFile();
-        const ttl = await file.text();
-        const pathHint = (file as File & { path?: string }).path ?? file.name;
-        await loadTtlAndRender(ttl, file.name, handle, pathHint);
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-          errorMsg.textContent = `Failed to open file: ${err instanceof Error ? err.message : String(err)}`;
-          errorMsg.style.display = 'block';
-        }
-      }
-    } else {
-      fileInput?.click();
-    }
-  });
+  // Initialize the open ontology modal
+  initOpenOntologyModal(
+    loadFromFile,
+    loadFromUrl,
+    loadLastOpened
+  );
 
+  // File input change handler (for fallback when showOpenFilePicker is not available)
   fileInput?.addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -5164,18 +5197,12 @@ document.addEventListener('click', (e) => {
   }
 });
 
-async function initLastOpened(): Promise<void> {
-  const stored = await getLastFileFromIndexedDB();
-  if (stored) {
-    updateLoadLastOpenedButton(stored.name, stored.pathHint);
-  } else {
-    updateLoadLastOpenedButton(null);
-  }
-}
-
 renderApp();
 setupEventListeners();
-initLastOpened().catch(() => {});
+// Show the open ontology modal on page load
+setTimeout(() => {
+  showOpenOntologyModal();
+}, 100);
 
 // Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
 (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
