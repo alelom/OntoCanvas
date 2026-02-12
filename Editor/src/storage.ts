@@ -18,6 +18,7 @@ export interface DisplayConfig {
   minFontSize: number;
   maxFontSize: number;
   relationshipFontSize: number;
+  dataPropertyFontSize?: number;
   layoutMode: string;
   searchQuery: string;
   includeNeighbors: boolean;

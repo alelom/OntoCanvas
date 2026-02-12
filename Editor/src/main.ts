@@ -6,6 +6,7 @@ import {
   updateLabelInStore,
   updateLabellableInStore,
   updateCommentInStore,
+  updateAnnotationPropertyValueInStore,
   updateEdgeInStore,
   addEdgeToStore,
   removeEdgeFromStore,
@@ -20,6 +21,7 @@ import {
   updateDataPropertyLabelInStore,
   updateDataPropertyCommentInStore,
   updateDataPropertyRangeInStore,
+  updateDataPropertyDomainsInStore,
   addDataPropertyRestrictionToClass,
   removeDataPropertyRestrictionFromClass,
   getDataPropertyRestrictionsForClass,
@@ -39,7 +41,7 @@ import {
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, BorderLineType } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, BorderLineType } from './types';
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
@@ -234,6 +236,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
     relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
+    dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 18,
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'weighted',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
@@ -256,6 +259,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
   (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 80);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
+  (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 18);
   (document.getElementById('layoutMode') as HTMLSelectElement).value = config.layoutMode ?? 'weighted';
   (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
@@ -302,7 +306,7 @@ function scheduleDisplayConfigSave(): void {
 let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: { name: string; isBoolean: boolean }[] = [];
 let objectProperties: { name: string; label: string; hasCardinality: boolean; comment?: string | null }[] = [];
-let dataProperties: { name: string; label: string; comment?: string | null; range: string }[] = [];
+let dataProperties: DataPropertyInfo[] = [];
 let network: Network | null = null;
 let addNodeMode = false;
 let pendingAddNodePosition: { x: number; y: number } | null = null;
@@ -413,11 +417,19 @@ function performDeleteSelection(): boolean {
     if (m) {
       const [, from, to, type] = m;
       // Check if this is a data property edge
-      if (type === 'dataprop' && from.startsWith('__dataprop__')) {
-        const dpMatch = from.match(/^__dataprop__(.+)__(.+)$/);
+      if (type === 'dataprop' || type === 'dataproprestrict') {
+        // Handle both restriction nodes and generic property nodes
+        let dpMatch = from.match(/^__dataproprestrict__(.+)__(.+)$/);
+        if (!dpMatch) {
+          dpMatch = from.match(/^__dataprop__(.+)__(.+)$/);
+        }
         if (dpMatch) {
           const [, classId, propertyName] = dpMatch;
+          // Only remove if it's actually a restriction (has restriction data)
+          const classNode = rawData.nodes.find((n) => n.id === classId);
+          if (classNode?.dataPropertyRestrictions?.some((r) => r.propertyName === propertyName)) {
           dataPropertyRestrictionsToRemove.push({ classId, propertyName });
+          }
         }
       } else {
         edgesToRemove.push({ from, to, type });
@@ -941,11 +953,44 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
       const name = (btn as HTMLElement).dataset.name!;
       if (!confirm(`Delete data property "${name}"?`)) return;
       if (!ttlStore) return;
-      if (removeDataPropertyFromStore(ttlStore, name)) {
+      
+      // Check if this property is used in any restrictions
+      const restrictionsUsingProperty = rawData.nodes.filter((n) =>
+        n.dataPropertyRestrictions?.some((r) => r.propertyName === name)
+      );
+      
+      if (restrictionsUsingProperty.length > 0) {
+        const classNames = restrictionsUsingProperty.map((n) => n.label || n.id).join(', ');
+        if (!confirm(`This property is used in restrictions on: ${classNames}\n\nDelete anyway? This will also remove all restrictions using this property.`)) {
+          return;
+        }
+        
+        // Remove all restrictions using this property
+        for (const node of restrictionsUsingProperty) {
+          removeDataPropertyRestrictionFromClass(ttlStore, node.id, name);
+          const nodeIndex = rawData.nodes.findIndex((n) => n.id === node.id);
+          if (nodeIndex >= 0) {
+            rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, node.id);
+          }
+        }
+      }
+      
+      // Try to remove from store
+      const removed = removeDataPropertyFromStore(ttlStore, name);
+      
+      // Always remove from the array and refresh UI, even if store removal failed
+      // (the property might have been from an external ontology or already deleted)
+      const wasInArray = dataProperties.some((dp) => dp.name === name);
+      if (wasInArray) {
         dataProperties = dataProperties.filter((dp) => dp.name !== name);
         hasUnsavedChanges = true;
         updateSaveButtonVisibility();
         initDataPropsMenu(dataPropsContent);
+        applyFilter(true); // Refresh the graph to reflect the deletion
+      }
+      
+      if (!removed && wasInArray) {
+        console.warn(`Data property "${name}" was in the list but not found in store. It may have been from an external ontology or already deleted.`);
       }
     });
   });
@@ -974,7 +1019,14 @@ function initEditDataPropertyHandlers(): void {
     const labelChanged = dp.label !== newLabel;
     const commentChanged = (dp.comment ?? '') !== newComment;
     const rangeChanged = dp.range !== newRange;
-    if (!labelChanged && !commentChanged && !rangeChanged) {
+    
+    // Check if domains changed by comparing with original
+    const originalDomainsJson = (modal as HTMLElement).dataset.originalDomains || '[]';
+    const originalDomains = JSON.parse(originalDomainsJson) as string[];
+    const currentDomains = dp.domains || [];
+    const domainsChanged = JSON.stringify(originalDomains.sort()) !== JSON.stringify(currentDomains.sort());
+    
+    if (!labelChanged && !commentChanged && !rangeChanged && !domainsChanged) {
       document.getElementById('editDataPropertyModal')!.style.display = 'none';
       return;
     }
@@ -990,6 +1042,10 @@ function initEditDataPropertyHandlers(): void {
       updateDataPropertyRangeInStore(ttlStore, name, newRange);
       dp.range = newRange;
     }
+    if (domainsChanged) {
+      updateDataPropertyDomainsInStore(ttlStore, name, currentDomains);
+      // dp.domains is already updated by the UI handlers
+    }
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     const dataPropsContent = document.getElementById('dataPropsContent');
@@ -1002,6 +1058,130 @@ function initEditDataPropertyHandlers(): void {
       e.preventDefault();
     }
   });
+  
+  // Add domain button handler
+  document.getElementById('editDataPropAddDomain')?.addEventListener('click', () => {
+    const modal = document.getElementById('editDataPropertyModal')!;
+    const name = (modal as HTMLElement).dataset.dataPropName!;
+    const dp = dataProperties.find((p) => p.name === name);
+    if (!dp) return;
+    
+    // Get available classes (not already added as domains)
+    const availableClasses = rawData.nodes
+      .map((n) => ({ id: n.id, label: n.label || n.id }))
+      .filter((c) => !dp.domains.includes(c.id))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    
+    if (availableClasses.length === 0) {
+      alert('All available classes are already added as domains.');
+      return;
+    }
+    
+    // Create a simple select dropdown
+    const select = document.createElement('select');
+    select.style.cssText = 'width: 100%; padding: 6px; margin-top: 4px; font-size: 11px;';
+    select.innerHTML = '<option value="">-- Select a class --</option>' + 
+      availableClasses.map((c) => `<option value="${c.id}">${c.label}</option>`).join('');
+    
+    // Create a wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin-top: 8px;';
+    wrapper.appendChild(select);
+    
+    // Create confirm button
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = 'Add';
+    confirmBtn.className = 'primary';
+    confirmBtn.style.cssText = 'margin-top: 8px; padding: 6px 12px; font-size: 11px;';
+    confirmBtn.disabled = true;
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'margin-top: 8px; margin-left: 8px; padding: 6px 12px; font-size: 11px;';
+    
+    const buttonWrapper = document.createElement('div');
+    buttonWrapper.style.cssText = 'display: flex; gap: 8px;';
+    buttonWrapper.appendChild(confirmBtn);
+    buttonWrapper.appendChild(cancelBtn);
+    wrapper.appendChild(buttonWrapper);
+    
+    // Insert before the domains list
+    const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
+    if (domainsListEl && domainsListEl.parentElement) {
+      domainsListEl.parentElement.insertBefore(wrapper, domainsListEl);
+    }
+    
+    // Enable confirm button when selection is made
+    select.addEventListener('change', () => {
+      confirmBtn.disabled = !select.value;
+    });
+    
+    // Handle confirm
+    confirmBtn.addEventListener('click', () => {
+      const className = select.value;
+      if (className && !dp.domains.includes(className)) {
+        if (!dp.domains) {
+          dp.domains = [];
+        }
+        dp.domains.push(className);
+        renderDomainsList(domainsListEl, dp.domains);
+      }
+      wrapper.remove();
+    });
+    
+    // Handle cancel
+    cancelBtn.addEventListener('click', () => {
+      wrapper.remove();
+    });
+    
+    select.focus();
+  });
+}
+
+function renderDomainsList(domainsListEl: HTMLElement, domains: string[]): void {
+  domainsListEl.innerHTML = '';
+  
+  // If no custom domains, show owl:Thing (cannot be deleted)
+  if (domains.length === 0) {
+    const thingItem = document.createElement('div');
+    thingItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 4px;';
+    thingItem.innerHTML = `
+      <span style="font-size: 11px; font-family: Consolas, monospace;">owl:Thing</span>
+      <span style="font-size: 10px; color: #999;">(default - all classes)</span>
+    `;
+    domainsListEl.appendChild(thingItem);
+  } else {
+    // Show custom domains with delete buttons
+    domains.forEach((domainName) => {
+      const domainItem = document.createElement('div');
+      domainItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 4px;';
+      domainItem.innerHTML = `
+        <span style="font-size: 11px; font-family: Consolas, monospace;">${domainName}</span>
+        <button type="button" class="domain-delete-btn" data-domain="${domainName}" title="Delete domain" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
+      `;
+      domainsListEl.appendChild(domainItem);
+    });
+  }
+  
+  // Add delete button handlers
+  domainsListEl.querySelectorAll('.domain-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const domainName = (btn as HTMLElement).dataset.domain!;
+      const modal = document.getElementById('editDataPropertyModal')!;
+      const name = (modal as HTMLElement).dataset.dataPropName!;
+      const dp = dataProperties.find((p) => p.name === name);
+      if (!dp) return;
+      
+      // Remove domain from array
+      const newDomains = dp.domains.filter((d) => d !== domainName);
+      dp.domains = newDomains;
+      
+      // Re-render list
+      renderDomainsList(domainsListEl, newDomains);
+    });
+  });
 }
 
 function showEditDataPropertyModal(name: string): void {
@@ -1012,6 +1192,7 @@ function showEditDataPropertyModal(name: string): void {
   const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
   const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
   const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
+  const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
   const dp = dataProperties.find((p) => p.name === name);
   if (nameEl) nameEl.textContent = `Identifier: ${name} (used in ontology)`;
   if (labelInput) labelInput.value = dp?.label ?? name;
@@ -1021,6 +1202,16 @@ function showEditDataPropertyModal(name: string): void {
     rangeOptions.push({ value: dp.range, label: dp.range.includes('#') ? dp.range.split('#').pop()! : dp.range });
   }
   rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${dp?.range === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
+  
+  // Store original domains for change detection
+  const originalDomains = dp ? [...(dp.domains || [])] : [];
+  (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
+  
+  // Render domains list
+  if (domainsListEl && dp) {
+    renderDomainsList(domainsListEl, dp.domains || []);
+  }
+  
   modal.style.display = 'flex';
   labelInput?.focus();
 }
@@ -1224,7 +1415,7 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     if (!label || !ttlStore) return;
     const name = addDataPropertyToStore(ttlStore, label, rangeUri);
     if (name) {
-      dataProperties.push({ name, label, range: rangeUri });
+      dataProperties.push({ name, label, range: rangeUri, domains: [] }); // Default to empty domains (owl:Thing)
       dataProperties.sort((a, b) => a.name.localeCompare(b.name));
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
@@ -1731,6 +1922,7 @@ function buildNetworkData(filter: {
   minFontSize: number;
   maxFontSize: number;
   relationshipFontSize: number;
+  dataPropertyFontSize?: number;
   searchQuery: string;
   includeNeighbors: boolean;
   edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }>;
@@ -1784,6 +1976,7 @@ function buildNetworkData(filter: {
   const minFontSize = Math.max(8, Math.min(96, filter.minFontSize ?? 20));
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 80));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
+  const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 18));
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
@@ -1849,63 +2042,263 @@ function buildNetworkData(filter: {
   // Add data property nodes as small rectangles
   const dataPropertyNodes: Array<Record<string, unknown>> = [];
   const dataPropertyEdges: Array<Record<string, unknown>> = [];
+  
+  // Track which data properties are already displayed as restrictions
+  const displayedAsRestriction = new Set<string>();
+  
+  // Calculate node dimensions for proper positioning
+  const nodeDimensionsMap = new Map<string, { width: number; height: number }>();
+  filteredNodes.forEach((n) => {
+    const d = depth[n.id] ?? 0;
+    const fontSize =
+      maxDepth > 0
+        ? Math.round(
+            minFontSize +
+              (maxFontSize - minFontSize) * (maxDepth - d) / maxDepth
+          )
+        : maxFontSize;
+    nodeDimensionsMap.set(n.id, estimateNodeDimensions(n.label, wrapChars, fontSize));
+  });
+  
+  // Group data properties by their parent class node for better layout
+  const dataPropsByClass = new Map<string, Array<{ id: string; label: string; isRestriction: boolean; propertyName: string }>>();
+  
+  // First, collect all data property restrictions
   filteredNodes.forEach((n) => {
     const restrictions = n.dataPropertyRestrictions;
     if (restrictions && restrictions.length > 0) {
-      restrictions.forEach((restriction, index) => {
+      if (!dataPropsByClass.has(n.id)) {
+        dataPropsByClass.set(n.id, []);
+      }
+      restrictions.forEach((restriction) => {
         const dp = dataProperties.find((p) => p.name === restriction.propertyName);
         const label = dp?.label ?? restriction.propertyName;
         const cardLabel =
           restriction.minCardinality != null || restriction.maxCardinality != null
             ? ` [${restriction.minCardinality ?? 0}..${restriction.maxCardinality ?? '*'}]`
             : '';
-        const dataPropNodeId = `__dataprop__${n.id}__${restriction.propertyName}`;
-        const classPos = (n.x != null && n.y != null) ? { x: n.x, y: n.y } : nodePositions[n.id];
-        
-        // Position data property node relative to the class node
-        // In hierarchical layout, place below; otherwise place to the right
-        let dataPropPos: { x: number; y: number } | undefined;
-        if (classPos) {
-          if (layoutMode === 'weighted') {
-            // Hierarchical layout: place below the class node
-            const offsetY = 80 + (index * 50); // Start 80px below, then 50px spacing for each additional property
-            dataPropPos = { x: classPos.x, y: classPos.y + offsetY };
-          } else {
-            // Other layouts: place to the right of the class node
-            const offsetX = 200;
-            const offsetY = (index - (restrictions.length - 1) / 2) * 40;
-            dataPropPos = { x: classPos.x + offsetX, y: classPos.y + offsetY };
-          }
-        }
-        
-        dataPropertyNodes.push({
+        const dataPropNodeId = `__dataproprestrict__${n.id}__${restriction.propertyName}`;
+        displayedAsRestriction.add(`${n.id}__${restriction.propertyName}`);
+        dataPropsByClass.get(n.id)!.push({
           id: dataPropNodeId,
           label: label + cardLabel,
-          shape: 'box',
-          size: 15,
-          color: { background: '#e8f4f8', border: '#4a90a4' },
-          font: { size: 10, color: '#2c3e50' },
-          margin: 4,
-          physics: false,
-          ...(dataPropPos && { x: dataPropPos.x, y: dataPropPos.y }),
-          ...(dp?.comment && { title: dp.comment }),
-        });
-        
-        // Create edge from data property node to class node
-        dataPropertyEdges.push({
-          id: `${dataPropNodeId}->${n.id}:dataprop`,
-          from: dataPropNodeId,
-          to: n.id,
-          arrows: 'to',
-          label: '',
-          font: { size: 10, color: '#666' },
-          color: { color: '#4a90a4', highlight: '#4a90a4' },
-          dashes: [5, 5],
-          width: 1.5,
+          isRestriction: true,
+          propertyName: restriction.propertyName,
         });
       });
     }
   });
+  
+  // Then, collect generic data properties
+  dataProperties.forEach((dp) => {
+    filteredNodes.forEach((n) => {
+      if (displayedAsRestriction.has(`${n.id}__${dp.name}`)) return;
+      const shouldDisplay = dp.domains.length === 0 || dp.domains.includes(n.id);
+      if (!shouldDisplay) return;
+      
+      if (!dataPropsByClass.has(n.id)) {
+        dataPropsByClass.set(n.id, []);
+      }
+      const dataPropNodeId = `__dataprop__${n.id}__${dp.name}`;
+      dataPropsByClass.get(n.id)!.push({
+        id: dataPropNodeId,
+        label: dp.label,
+        isRestriction: false,
+        propertyName: dp.name,
+      });
+    });
+  });
+  
+  // Position data properties for each class node
+  dataPropsByClass.forEach((dataProps, classId) => {
+    const classNode = filteredNodes.find((n) => n.id === classId);
+    if (!classNode) return;
+    
+    const classPos = (classNode.x != null && classNode.y != null) 
+      ? { x: classNode.x, y: classNode.y } 
+      : nodePositions[classId];
+    if (!classPos) return;
+    
+    const nodeDim = nodeDimensionsMap.get(classId) ?? { width: 100, height: 40 };
+    // Round up the node width to be less conservative (ceiling approach)
+    const classNodeWidth = Math.ceil(nodeDim.width);
+    const classNodeHeight = nodeDim.height;
+    
+    // Calculate available width: node width + 50px on each side
+    // Add tolerance factor (20% more) to allow properties to slightly exceed parent width
+    const baseAvailableWidth = classNodeWidth + 100;
+    const availableWidth = Math.ceil(baseAvailableWidth * 1.2);
+    
+    // Estimate width per data property node (label length + padding)
+    // Each data property node width depends on font size
+    const estimateDataPropWidth = (label: string): number => {
+      // Use character width ratio similar to node dimensions estimation
+      // Font size affects character width: ~0.62 * fontSize per character
+      const charWidth = dataPropertyFontSize * 0.62;
+      const textWidth = label.length * charWidth;
+      // Add padding: 2 * margin (4px each) + some extra for node shape
+      const padding = 8 + 30; // margin + node shape padding
+      return Math.max(60, textWidth + padding);
+    };
+    
+    // Calculate how many properties fit per row
+    let currentRowWidth = 0;
+    let propertiesPerRow: number[] = [];
+    let currentRowCount = 0;
+    
+    dataProps.forEach((dataProp) => {
+      const propWidth = estimateDataPropWidth(dataProp.label);
+      const spacing = 15; // Horizontal spacing between properties
+      
+      // More tolerant check: allow fitting if within available width or if it's the first item in a row
+      // Also allow if adding this property would only slightly exceed (within 10% tolerance)
+      const wouldExceed = currentRowWidth + propWidth + spacing > availableWidth;
+      const exceedsBy = (currentRowWidth + propWidth + spacing) - availableWidth;
+      const tolerance = availableWidth * 0.1; // 10% tolerance
+      const fitsWithTolerance = wouldExceed && exceedsBy <= tolerance;
+      
+      if ((currentRowWidth + propWidth + spacing <= availableWidth || fitsWithTolerance) || currentRowCount === 0) {
+        currentRowWidth += propWidth + spacing;
+        currentRowCount++;
+      } else {
+        // Start new row
+        propertiesPerRow.push(currentRowCount);
+        currentRowWidth = propWidth + spacing;
+        currentRowCount = 1;
+      }
+    });
+    if (currentRowCount > 0) {
+      propertiesPerRow.push(currentRowCount);
+    }
+    
+    // Calculate positions with horizontal fan-out and alternating vertical positions
+    const horizontalSpacing = 15;
+    const verticalOffset = 25; // Vertical offset for alternating rows
+    const baseYOffset = classNodeHeight / 2 + 20; // Start below the node
+    
+    let propIndex = 0;
+    let currentX = classPos.x - (classNodeWidth / 2) - 50; // Start 50px to the left of node edge
+    let currentY = classPos.y + baseYOffset;
+    let rowIndex = 0;
+    
+    dataProps.forEach((dataProp) => {
+      const propWidth = estimateDataPropWidth(dataProp.label);
+      
+      // Check if we need to start a new row
+      if (propIndex > 0 && propertiesPerRow.length > 0) {
+        let propsInPreviousRows = 0;
+        for (let i = 0; i < rowIndex; i++) {
+          propsInPreviousRows += propertiesPerRow[i];
+        }
+        if (propIndex >= propsInPreviousRows + propertiesPerRow[rowIndex]) {
+          // Move to next row
+          rowIndex++;
+          currentX = classPos.x - (classNodeWidth / 2) - 50; // Reset X position
+          currentY = classPos.y + baseYOffset + (rowIndex * (verticalOffset * 2)); // Alternate Y position
+        }
+      }
+      
+      // Calculate X position (centered within available width if row is not full)
+      const propsInCurrentRow = propertiesPerRow[rowIndex] || 1;
+      const totalRowWidth = dataProps
+        .slice(propIndex, propIndex + propsInCurrentRow)
+        .reduce((sum, p) => sum + estimateDataPropWidth(p.label) + horizontalSpacing, 0) - horizontalSpacing;
+      
+      // Center the row if it's shorter than available width
+      const rowStartX = classPos.x - (classNodeWidth / 2) - 50;
+      const rowCenterOffset = (availableWidth - totalRowWidth) / 2;
+      const adjustedRowStartX = rowStartX + rowCenterOffset;
+      
+      // Calculate position for this property
+      let xOffset = 0;
+      for (let i = 0; i < propIndex - (rowIndex > 0 ? propertiesPerRow.slice(0, rowIndex).reduce((a, b) => a + b, 0) : 0); i++) {
+        xOffset += estimateDataPropWidth(dataProps[propIndex - (propIndex - i - 1)]?.label || '') + horizontalSpacing;
+      }
+      
+      // Simpler approach: just position sequentially
+      const dataPropPos: { x: number; y: number } = {
+        x: adjustedRowStartX + (propIndex - (rowIndex > 0 ? propertiesPerRow.slice(0, rowIndex).reduce((a, b) => a + b, 0) : 0)) * (propWidth + horizontalSpacing),
+        y: currentY + (rowIndex % 2 === 0 ? 0 : verticalOffset), // Alternate up/down
+      };
+      
+      // Actually, let me recalculate this more simply
+      let rowStartIndex = 0;
+      for (let i = 0; i < rowIndex; i++) {
+        rowStartIndex += propertiesPerRow[i];
+      }
+      const positionInRow = propIndex - rowStartIndex;
+      
+      // Calculate total width of current row
+      let rowTotalWidth = 0;
+      for (let i = rowStartIndex; i < rowStartIndex + propertiesPerRow[rowIndex]; i++) {
+        if (i < dataProps.length) {
+          rowTotalWidth += estimateDataPropWidth(dataProps[i].label) + (i > rowStartIndex ? horizontalSpacing : 0);
+        }
+      }
+      
+      // Center the row
+      const rowCenterX = classPos.x;
+      const rowLeftX = rowCenterX - (rowTotalWidth / 2);
+      
+      // Position this property
+      let xPos = rowLeftX;
+      for (let i = rowStartIndex; i < propIndex; i++) {
+        xPos += estimateDataPropWidth(dataProps[i].label) + horizontalSpacing;
+      }
+      xPos += estimateDataPropWidth(dataProp.label) / 2; // Center the property node
+      
+      const finalDataPropPos: { x: number; y: number } = {
+        x: xPos,
+        y: currentY + (rowIndex % 2 === 0 ? 0 : verticalOffset), // Alternate up/down for even/odd rows
+      };
+      
+      const dp = dataProperties.find((p) => p.name === dataProp.propertyName);
+      
+      dataPropertyNodes.push({
+        id: dataProp.id,
+        label: wrapText(dataProp.label, wrapChars),
+        shape: 'box',
+        size: 15,
+        color: { background: '#e8f4f8', border: '#4a90a4' },
+        font: { size: dataPropertyFontSize, color: '#2c3e50' },
+        margin: 4,
+        physics: false,
+        x: finalDataPropPos.x,
+        y: finalDataPropPos.y,
+        ...(dp?.comment && { title: dp.comment }),
+      });
+      
+      propIndex++;
+      
+      // Create edge - thicker for restrictions, thinner dashed for normal
+      if (dataProp.isRestriction) {
+        dataPropertyEdges.push({
+          id: `${dataProp.id}->${classId}:dataproprestrict`,
+          from: dataProp.id,
+          to: classId,
+          arrows: 'to',
+          label: '',
+          font: { size: 10, color: '#666' },
+          color: { color: '#4a90a4', highlight: '#4a90a4' },
+          dashes: false, // Solid line
+          width: 3, // Thicker line for restrictions
+        });
+      } else {
+        dataPropertyEdges.push({
+          id: `${dataProp.id}->${classId}:dataprop`,
+          from: dataProp.id,
+          to: classId,
+          arrows: 'to',
+          label: '',
+          font: { size: 10, color: '#666' },
+          color: { color: '#4a90a4', highlight: '#4a90a4' },
+          dashes: [5, 5], // Dashed line
+          width: 1, // Thinner line for normal data properties
+        });
+      }
+    });
+  });
+  
 
   const edges = filteredEdges.map((e) => {
     const style = edgeStyleConfig[e.type] || {
@@ -2138,15 +2531,17 @@ function setupNetworkSelectionAndNavigation(
     if (nodeAt != null) {
       const nodeId = String(nodeAt);
       // Check if this is a data property node
-      if (nodeId.startsWith('__dataprop__')) {
-        // Parse the data property node ID: __dataprop__${classId}__${propertyName}
-        const match = nodeId.match(/^__dataprop__(.+)__(.+)$/);
+      // Check if this is a data property restriction node (editable)
+      if (nodeId.startsWith('__dataproprestrict__')) {
+        // Parse the data property restriction node ID: __dataproprestrict__${classId}__${propertyName}
+        const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
         if (match) {
           const [, classId] = match;
           showEditEdgeModal(nodeId, classId, 'dataprop');
           return;
         }
       }
+      // Generic data property nodes (__dataprop__) are visual only and not editable
       const selectedIds = net.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(nodeId)) {
         showMultiEditModal(selectedIds);
@@ -2159,7 +2554,15 @@ function setupNetworkSelectionAndNavigation(
     const edgeAt = net.getEdgeAt(domPos);
     if (edgeAt != null) {
       const m = String(edgeAt).match(/^(.+)->(.+):(.+)$/);
-      if (m) showEditEdgeModal(m[1], m[2], m[3]);
+      if (m) {
+        const [, from, to, type] = m;
+        // For data property restriction edges, use the from node and 'dataprop' type
+        if (type === 'dataproprestrict') {
+          showEditEdgeModal(from, to, 'dataprop');
+        } else {
+          showEditEdgeModal(m[1], m[2], m[3]);
+        }
+      }
       return;
     }
     const canvasPos = net.DOMtoCanvas(domPos);
@@ -2318,14 +2721,66 @@ function renderRenameModalDataPropsList(): void {
   });
 }
 
+function renderRenameModalAnnotationPropsList(nodeId: string): void {
+  const listEl = document.getElementById('renameAnnotationPropsList');
+  if (!listEl) return;
+  
+  const node = rawData.nodes.find((n) => n.id === nodeId);
+  listEl.innerHTML = '';
+  
+  if (annotationProperties.length === 0) {
+    listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
+    return;
+  }
+  
+  annotationProperties.forEach((ap) => {
+    const currentValue = node?.annotations?.[ap.name];
+    const item = document.createElement('div');
+    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
+    
+    if (ap.isBoolean) {
+      // Boolean annotation property - show checkbox
+      const label = document.createElement('span');
+      label.style.cssText = 'font-size: 11px; min-width: 120px;';
+      label.textContent = ap.name;
+      
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `renameAnnotProp_${ap.name}`;
+      checkbox.checked = currentValue === true;
+      checkbox.indeterminate = currentValue === null || currentValue === undefined;
+      checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
+      
+      item.appendChild(label);
+      item.appendChild(checkbox);
+    } else {
+      // Non-boolean annotation property - show text input
+      const label = document.createElement('span');
+      label.style.cssText = 'font-size: 11px; min-width: 120px;';
+      label.textContent = ap.name + ':';
+      
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = `renameAnnotProp_${ap.name}`;
+      input.value = typeof currentValue === 'string' ? currentValue : '';
+      input.placeholder = 'Enter value';
+      input.style.cssText = 'flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;';
+      
+      item.appendChild(label);
+      item.appendChild(input);
+    }
+    
+    listEl.appendChild(item);
+  });
+}
+
 function showRenameModal(
   nodeId: string,
   currentLabel: string,
-  labellableRoot: boolean | null
+  _labellableRoot: boolean | null
 ): void {
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
-  const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
   const titleEl = modal.querySelector('h3');
   if (titleEl) titleEl.textContent = 'Edit node';
   modal.dataset.mode = 'single';
@@ -2334,11 +2789,21 @@ function showRenameModal(
   input.disabled = false;
   input.style.color = '';
   input.dataset.nodeId = nodeId;
-  labellableCb.checked = labellableRoot === true;
-  labellableCb.indeterminate = labellableRoot === null;
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
+  
+  // Render annotation properties
+  const annotPropsSection = document.getElementById('renameAnnotationPropsSection');
+  if (annotPropsSection) {
+    if (annotationProperties.length === 0) {
+      annotPropsSection.style.display = 'none';
+    } else {
+      annotPropsSection.style.display = 'block';
+      renderRenameModalAnnotationPropsList(nodeId);
+    }
+  }
+  
   const dataPropsSection = document.getElementById('renameDataPropsSection');
   if (dataPropsSection) {
     if (dataProperties.length === 0) {
@@ -2359,7 +2824,6 @@ function showRenameModal(
 function showMultiEditModal(nodeIds: string[]): void {
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
-  const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
   modal.dataset.mode = 'multi';
   modal.dataset.nodeIds = JSON.stringify(nodeIds);
   delete input.dataset.nodeId;
@@ -2367,21 +2831,18 @@ function showMultiEditModal(nodeIds: string[]): void {
   input.disabled = true;
   input.style.color = '#999';
   const nodes = nodeIds.map((id) => rawData.nodes.find((n) => n.id === id)).filter(Boolean) as GraphNode[];
-  const labellableValues = nodes.map((n) => n.labellableRoot);
-  const allTrue = labellableValues.every((v) => v === true);
-  const allFalse = labellableValues.every((v) => v === false);
-  labellableCb.checked = allTrue;
-  labellableCb.indeterminate = !allTrue && !allFalse;
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   const comments = nodes.map((n) => n.comment ?? '').filter((c) => c);
   if (commentInput) {
     commentInput.value = comments.length > 0 && comments.every((c) => c === comments[0]) ? comments[0] : '';
     commentInput.disabled = false;
   }
+  const annotPropsSection = document.getElementById('renameAnnotationPropsSection');
+  if (annotPropsSection) annotPropsSection.style.display = 'none';
   const dataPropsSection = document.getElementById('renameDataPropsSection');
   if (dataPropsSection) dataPropsSection.style.display = 'none';
   modal.style.display = 'flex';
-  labellableCb.focus();
+  commentInput?.focus();
 }
 
 function hideRenameModal(): void {
@@ -2869,8 +3330,15 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   
   if (isDataPropertyEdge) {
     // For data property edges, parse the data property node ID to get the class and property
-    const match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
+    // Handle both restriction nodes (__dataproprestrict__) and generic property nodes (__dataprop__)
+    let match = edgeFrom.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (!match) {
+      match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
+      // Generic data properties are not editable
+      if (match) {
+        hideEditEdgeModal();
+        return;
+      }
       hideEditEdgeModal();
       return;
     }
@@ -3295,7 +3763,6 @@ function confirmEditEdge(): void {
 function confirmRename(): void {
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
-  const labellableCb = document.getElementById('renameLabellable') as HTMLInputElement;
   const mode = modal.dataset.mode;
 
   if (mode === 'multi') {
@@ -3305,23 +3772,17 @@ function confirmRename(): void {
       return;
     }
     const nodeIds: string[] = JSON.parse(nodeIdsJson);
-    const newLabellable = labellableCb.checked;
     const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
     const newComment = commentInput?.value?.trim() ?? '';
+    // For multi-edit, we only support comment changes for now
+    // Annotation properties would need more complex UI
     const oldVals = nodeIds.map((id) => {
       const n = rawData.nodes.find((x) => x.id === id);
-      return { id, labellable: n?.labellableRoot, comment: n?.comment ?? '' };
+      return { id, comment: n?.comment ?? '' };
     });
     let anyChanged = false;
     for (const nodeId of nodeIds) {
       const node = rawData.nodes.find((n) => n.id === nodeId);
-      if (node && (node.labellableRoot === true) !== newLabellable) {
-        node.labellableRoot = newLabellable;
-        if (!node.annotations) node.annotations = {};
-        node.annotations['labellableRoot'] = newLabellable;
-        updateLabellableInStore(ttlStore, nodeId, newLabellable);
-        anyChanged = true;
-      }
       if (node && (node.comment ?? '') !== newComment) {
         node.comment = newComment || undefined;
         updateCommentInStore(ttlStore, nodeId, newComment || null);
@@ -3331,12 +3792,9 @@ function confirmRename(): void {
     if (anyChanged) {
       pushUndoable(
         () => {
-          oldVals.forEach(({ id, labellable, comment }) => {
+          oldVals.forEach(({ id, comment }) => {
             const n = rawData.nodes.find((x) => x.id === id);
             if (n && ttlStore) {
-              n.labellableRoot = labellable ?? null;
-              if (n.annotations) n.annotations['labellableRoot'] = labellable ?? null;
-              updateLabellableInStore(ttlStore, id, labellable === true);
               n.comment = comment || undefined;
               updateCommentInStore(ttlStore, id, comment || null);
             }
@@ -3346,10 +3804,6 @@ function confirmRename(): void {
           nodeIds.forEach((id) => {
             const n = rawData.nodes.find((x) => x.id === id);
             if (n && ttlStore) {
-              n.labellableRoot = newLabellable;
-              if (!n.annotations) n.annotations = {};
-              n.annotations['labellableRoot'] = newLabellable;
-              updateLabellableInStore(ttlStore, id, newLabellable);
               n.comment = newComment || undefined;
               updateCommentInStore(ttlStore, id, newComment || null);
             }
@@ -3381,8 +3835,36 @@ function confirmRename(): void {
   const commentChanged = oldComment !== newComment;
 
   const labelChanged = node.label !== newLabel;
-  const newLabellable = labellableCb.checked;
-  const labellableChanged = (node.labellableRoot === true) !== newLabellable;
+  
+  // Collect annotation property changes
+  const oldAnnotationValues: Record<string, boolean | string | null> = {};
+  const newAnnotationValues: Record<string, boolean | string | null> = {};
+  let annotationPropsChanged = false;
+  
+  annotationProperties.forEach((ap) => {
+    const oldValue = node.annotations?.[ap.name] ?? null;
+    oldAnnotationValues[ap.name] = oldValue;
+    
+    if (ap.isBoolean) {
+      const checkbox = document.getElementById(`renameAnnotProp_${ap.name}`) as HTMLInputElement;
+      if (checkbox) {
+        const newValue = checkbox.indeterminate ? null : checkbox.checked;
+        newAnnotationValues[ap.name] = newValue;
+        if (oldValue !== newValue) {
+          annotationPropsChanged = true;
+        }
+      }
+    } else {
+      const inputEl = document.getElementById(`renameAnnotProp_${ap.name}`) as HTMLInputElement;
+      if (inputEl) {
+        const newValue = inputEl.value.trim() || null;
+        newAnnotationValues[ap.name] = newValue;
+        if (oldValue !== newValue) {
+          annotationPropsChanged = true;
+        }
+      }
+    }
+  });
 
   const initialDataProps = renameModalInitialDataProps ?? [];
   const currentDataProps = renameModalDataPropertyRestrictions;
@@ -3395,37 +3877,46 @@ function confirmRename(): void {
     currentDataProps.every((b) => initialDataProps.some((a) => a.propertyName === b.propertyName));
   const dataPropsChanged = !dataPropsEqual;
 
-  console.log('[confirmRename] data props', { 
-    nodeId, 
-    hasTtlStore: !!ttlStore, 
-    initialDataProps: JSON.stringify(initialDataProps), 
-    currentDataProps: JSON.stringify(currentDataProps), 
-    dataPropsEqual,
-    dataPropsChanged, 
-    labelChanged, 
-    labellableChanged, 
-    commentChanged 
-  });
 
-  if (!labelChanged && !labellableChanged && !commentChanged && !dataPropsChanged) {
+  if (!labelChanged && !annotationPropsChanged && !commentChanged && !dataPropsChanged) {
     hideRenameModal();
     return;
   }
 
   const oldLabel = node.label;
-  const oldLabellable = node.labellableRoot;
+  const oldAnnotationValuesCopy = { ...oldAnnotationValues };
   const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
 
   if (labelChanged) {
     node.label = newLabel;
     if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
   }
-  if (labellableChanged && ttlStore) {
-    node.labellableRoot = newLabellable;
+  
+  // Update annotation properties
+  if (annotationPropsChanged && ttlStore) {
     if (!node.annotations) node.annotations = {};
-    node.annotations['labellableRoot'] = newLabellable;
-    updateLabellableInStore(ttlStore, nodeId, newLabellable);
+    annotationProperties.forEach((ap) => {
+      const newValue = newAnnotationValues[ap.name];
+      const oldValue = oldAnnotationValues[ap.name];
+      
+      if (newValue !== oldValue) {
+        if (!node.annotations) node.annotations = {};
+        node.annotations[ap.name] = newValue;
+        
+        // Update labellableRoot field if this is the labellableRoot property
+        if (ap.name === 'labellableRoot' && typeof newValue === 'boolean') {
+          node.labellableRoot = newValue;
+        } else if (ap.name === 'labellableRoot' && newValue === null) {
+          node.labellableRoot = null;
+        }
+        
+        if (ttlStore) {
+          updateAnnotationPropertyValueInStore(ttlStore, nodeId, ap.name, newValue, ap.isBoolean);
+        }
+      }
+    });
   }
+  
   if (commentChanged && ttlStore) {
     node.comment = newComment || undefined;
     updateCommentInStore(ttlStore, nodeId, newComment || null);
@@ -3463,11 +3954,22 @@ function confirmRename(): void {
         node.label = oldLabel;
         if (ttlStore) updateLabelInStore(ttlStore, nodeId, oldLabel);
       }
-      if (labellableChanged && ttlStore) {
-        node.labellableRoot = oldLabellable;
+      if (annotationPropsChanged && ttlStore) {
         if (!node.annotations) node.annotations = {};
-        node.annotations['labellableRoot'] = oldLabellable ?? null;
-        updateLabellableInStore(ttlStore, nodeId, oldLabellable === true);
+        annotationProperties.forEach((ap) => {
+          const oldValue = oldAnnotationValuesCopy[ap.name];
+          if (!node.annotations) node.annotations = {};
+          node.annotations[ap.name] = oldValue ?? null;
+          
+          // Update labellableRoot field if this is the labellableRoot property
+          if (ap.name === 'labellableRoot') {
+            node.labellableRoot = typeof oldValue === 'boolean' ? oldValue : null;
+          }
+          
+          if (ttlStore) {
+            updateAnnotationPropertyValueInStore(ttlStore, nodeId, ap.name, oldValue ?? null, ap.isBoolean);
+          }
+        });
       }
       if (commentChanged && ttlStore) {
         node.comment = oldComment || undefined;
@@ -3492,11 +3994,24 @@ function confirmRename(): void {
         node.label = newLabel;
         if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
       }
-      if (labellableChanged && ttlStore) {
-        node.labellableRoot = newLabellable;
+      if (annotationPropsChanged && ttlStore) {
         if (!node.annotations) node.annotations = {};
-        node.annotations['labellableRoot'] = newLabellable;
-        updateLabellableInStore(ttlStore, nodeId, newLabellable);
+        annotationProperties.forEach((ap) => {
+          const newValue = newAnnotationValues[ap.name];
+          if (!node.annotations) node.annotations = {};
+          node.annotations[ap.name] = newValue ?? null;
+          
+          // Update labellableRoot field if this is the labellableRoot property
+          if (ap.name === 'labellableRoot' && typeof newValue === 'boolean') {
+            node.labellableRoot = newValue;
+          } else if (ap.name === 'labellableRoot' && newValue === null) {
+            node.labellableRoot = null;
+          }
+          
+          if (ttlStore) {
+            updateAnnotationPropertyValueInStore(ttlStore, nodeId, ap.name, newValue ?? null, ap.isBoolean);
+          }
+        });
       }
       if (commentChanged && ttlStore) {
         node.comment = newComment || undefined;
@@ -3596,7 +4111,7 @@ function renderApp(): void {
         <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
         <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 200px;">
           <div style="margin-bottom: 10px;">
-            <strong style="font-size: 12px;">Wrap text:</strong>
+            <strong style="font-size: 12px;">Nodes text wrap:</strong>
             <input type="number" id="wrapChars" min="1" max="50" value="10" style="width: 50px; margin-left: 6px;">
             <span style="font-size: 11px;">chars</span>
           </div>
@@ -3612,6 +4127,11 @@ function renderApp(): void {
           <div style="margin-top: 10px;">
             <strong style="font-size: 12px;">Relationships font size</strong>
             <input type="number" id="relationshipFontSize" min="8" max="48" value="18" style="width: 45px; margin-left: 6px;">
+            <span style="font-size: 11px;">px</span>
+          </div>
+          <div style="margin-top: 10px;">
+            <strong style="font-size: 12px;">Data properties font size</strong>
+            <input type="number" id="dataPropertyFontSize" min="8" max="48" value="18" style="width: 45px; margin-left: 6px;">
             <span style="font-size: 11px;">px</span>
           </div>
         </div>
@@ -3661,17 +4181,23 @@ function renderApp(): void {
     <div id="renameModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Edit node</h3>
-        <label>Label: <input type="text" id="renameInput" /></label>
-        <label style="display: block; margin-top: 10px;">
-          <input type="checkbox" id="renameLabellable" />
-          Labellable
+        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+          <span style="font-size: 12px;">Label:</span>
+          <input type="text" id="renameInput" style="flex: 1;" />
         </label>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
+        <div id="renameAnnotationPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+          <strong style="font-size: 12px;">Set annotation properties</strong>
+          <div id="renameAnnotationPropsList" style="margin-top: 8px;"></div>
+        </div>
         <div id="renameDataPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
-          <strong style="font-size: 12px;">Assign data property</strong>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <strong style="font-size: 12px;">Assign data property restriction</strong>
+            <span id="dataPropRestrictionInfoIcon" style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; position: relative;" title="Data Property Restriction: A data property restriction allows you to specify constraints on how a data property can be used with a specific class. You can set minimum and maximum cardinality (how many times the property can appear) for instances of this class. Note: To add a new Data Property to your ontology, go to the 'Data Properties' menu in the top bar.">ℹ️</span>
+          </div>
           <div id="renameDataPropsList" style="margin-top: 6px; margin-bottom: 8px; font-size: 11px;"></div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <select id="renameDataPropSelect" style="padding: 4px 8px; font-size: 11px; min-width: 120px;">
@@ -3774,6 +4300,13 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Range (rdfs:range datatype)</span>
           <select id="editDataPropRange" style="display: block; margin-top: 4px; padding: 8px; width: 100%; box-sizing: border-box;"></select>
         </label>
+        <div style="margin-top: 16px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 11px; color: #666; font-weight: bold;">Domains (rdfs:domain)</span>
+            <button type="button" id="editDataPropAddDomain" style="padding: 4px 8px; font-size: 11px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">Add domain</button>
+          </div>
+          <div id="editDataPropDomainsList" style="min-height: 40px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; background: #f9f9f9;"></div>
+        </div>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editDataPropCancel">Cancel</button>
           <button type="button" id="editDataPropConfirm" class="primary">OK</button>
@@ -4077,6 +4610,11 @@ function applyFilter(preserveView = false): void {
       (document.getElementById('relationshipFontSize') as HTMLInputElement).value,
       10
     ) || 18;
+  const dataPropertyFontSize =
+    parseInt(
+      (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value,
+      10
+    ) || 18;
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement;
   const neighborsEl = document.getElementById(
     'searchIncludeNeighbors'
@@ -4089,6 +4627,7 @@ function applyFilter(preserveView = false): void {
     minFontSize,
     maxFontSize,
     relationshipFontSize,
+    dataPropertyFontSize,
     searchQuery: searchEl?.value ?? '',
     includeNeighbors: neighborsEl?.checked ?? true,
     edgeStyleConfig: getEdgeStyleConfig(edgeStylesContent),
@@ -4300,15 +4839,16 @@ function applyFilter(preserveView = false): void {
       if (!network) return;
       if (!params.nodes.length) return;
       const clickedNodeId = params.nodes[0] as string;
-      // Check if this is a data property node
-      if (clickedNodeId.startsWith('__dataprop__')) {
-        const match = clickedNodeId.match(/^__dataprop__(.+)__(.+)$/);
+      // Check if this is a data property restriction node (editable)
+      if (clickedNodeId.startsWith('__dataproprestrict__')) {
+        const match = clickedNodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
         if (match) {
           const [, classId] = match;
           showEditEdgeModal(clickedNodeId, classId, 'dataprop');
           return;
         }
       }
+      // Generic data property nodes (__dataprop__) are visual only and not editable
       const selectedIds = network.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
         showMultiEditModal(selectedIds);
@@ -4470,33 +5010,33 @@ async function loadFromUrl(url: string): Promise<void> {
  * Load the last opened file.
  */
 async function loadLastOpenedFile(): Promise<void> {
-  const stored = await getLastFileFromIndexedDB();
-  if (!stored) {
+    const stored = await getLastFileFromIndexedDB();
+    if (!stored) {
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
     errorMsg.textContent = 'No previously opened file found.';
     errorMsg.style.display = 'block';
-    return;
-  }
-  try {
-    const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') {
-      const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
-      if (requested !== 'granted') {
-        const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-        errorMsg.textContent = 'Permission to access file was denied.';
-        errorMsg.style.display = 'block';
-        return;
-      }
+      return;
     }
-    const file = await stored.handle.getFile();
-    const ttl = await file.text();
-    const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
-    await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
-  } catch (err) {
-    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-    errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
-    errorMsg.style.display = 'block';
-  }
+    try {
+      const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
+        if (requested !== 'granted') {
+          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+          errorMsg.textContent = 'Permission to access file was denied.';
+          errorMsg.style.display = 'block';
+          return;
+        }
+      }
+      const file = await stored.handle.getFile();
+      const ttl = await file.text();
+      const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
+      await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
+    } catch (err) {
+      const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+      errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
+      errorMsg.style.display = 'block';
+    }
 }
 
 /**
@@ -4512,12 +5052,12 @@ async function loadLastOpenedUrl(): Promise<void> {
   }
   try {
     await loadFromUrl(stored.url);
-  } catch (err) {
-    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+      } catch (err) {
+          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
     errorMsg.textContent = `Failed to load from URL: ${err instanceof Error ? err.message : String(err)}`;
-    errorMsg.style.display = 'block';
-  }
-}
+          errorMsg.style.display = 'block';
+        }
+      }
 
 function setupEventListeners(): void {
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;

@@ -282,6 +282,7 @@ function getDataProperties(store: Store): DataPropertyInfo[] {
   const result: DataPropertyInfo[] = [];
   const seen = new Set<string>();
   const dpQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
+  const OWL_THING = OWL + 'Thing';
   for (const q of dpQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
@@ -297,7 +298,26 @@ function getDataProperties(store: Store): DataPropertyInfo[] {
     const range = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
       ? (rangeQuad.object as { value: string }).value
       : XSD_NS + 'string';
-    result.push({ name, label: String(label), comment: comment || undefined, range });
+    
+    // Extract domain(s) - rdfs:domain can appear multiple times
+    const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
+    const domains: string[] = [];
+    for (const domainQuad of domainQuads) {
+      const domainObj = domainQuad.object;
+      if (domainObj.termType === 'NamedNode') {
+        const domainUri = (domainObj as { value: string }).value;
+        // If domain is owl:Thing, it means all classes (empty array)
+        if (domainUri !== OWL_THING) {
+          const domainName = extractLocalName(domainUri);
+          if (!domains.includes(domainName)) {
+            domains.push(domainName);
+          }
+        }
+      }
+    }
+    // If no explicit domain or only owl:Thing, domains array is empty (meaning all classes)
+    
+    result.push({ name, label: String(label), comment: comment || undefined, range, domains });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -403,6 +423,81 @@ export function updateLabellableInStore(
     return true;
   }
   return false;
+}
+
+/**
+ * Update an annotation property value for a class node in the store.
+ * For boolean properties, value should be boolean or null.
+ * For non-boolean properties, value should be string or null.
+ */
+export function updateAnnotationPropertyValueInStore(
+  store: Store,
+  classLocalName: string,
+  annotationPropertyName: string,
+  value: boolean | string | null,
+  isBoolean: boolean
+): boolean {
+  // Find the class subject
+  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
+  let classSubject: import('n3').NamedNode | null = null;
+  for (const q of classQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    if (extractLocalName(subj.value) !== classLocalName) continue;
+    classSubject = subj as import('n3').NamedNode;
+    break;
+  }
+  
+  if (!classSubject) return false;
+  
+  // Find the annotation property predicate URI
+  let propUri: string | null = null;
+  const apQuads = store.getQuads(null, RDF + 'type', OWL + 'AnnotationProperty', null);
+  for (const q of apQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    const currentUri = (subj as { value: string }).value;
+    if (extractLocalName(currentUri) === annotationPropertyName) {
+      propUri = currentUri;
+      break;
+    }
+  }
+  
+  // If not found, assume it's from base IRI
+  if (!propUri) {
+    propUri = BASE_IRI + annotationPropertyName;
+  }
+  
+  const predicate = DataFactory.namedNode(propUri);
+  
+  // Remove existing quads for this annotation property
+  const existingQuads = store.getQuads(classSubject, predicate, null, null);
+  const graph = existingQuads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const q of existingQuads) {
+    store.removeQuad(q);
+  }
+  
+  // Add new quad if value is not null
+  if (value !== null) {
+    if (isBoolean) {
+      const boolValue = value === true || value === 'true';
+      store.addQuad(
+        classSubject,
+        predicate,
+        DataFactory.literal(String(boolValue), DataFactory.namedNode(XSD + 'boolean')),
+        graph
+      );
+    } else {
+      store.addQuad(
+        classSubject,
+        predicate,
+        DataFactory.literal(String(value)),
+        graph
+      );
+    }
+  }
+  
+  return true;
 }
 
 const TURTLE_PREFIXES: Record<string, string> = {
@@ -835,12 +930,99 @@ export function updateDataPropertyRangeInStore(
 }
 
 /**
+ * Update data property domains in the store.
+ * If domains array is empty, sets domain to owl:Thing (all classes).
+ * Otherwise, removes all existing domain quads and adds new ones for each domain.
+ */
+export function updateDataPropertyDomainsInStore(
+  store: Store,
+  propertyName: string,
+  domains: string[]
+): boolean {
+  // Find the property URI (could be from base IRI or external)
+  let propUri: string | null = null;
+  const dpQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
+  for (const q of dpQuads) {
+    if (q.subject.termType === 'NamedNode') {
+      const currentUri = (q.subject as { value: string }).value;
+      if (extractLocalName(currentUri) === propertyName) {
+        propUri = currentUri;
+        break;
+      }
+    }
+  }
+  
+  if (!propUri) {
+    console.warn(`Data property URI for "${propertyName}" not found in store.`);
+    return false;
+  }
+  
+  const subject = DataFactory.namedNode(propUri);
+  const domainPred = DataFactory.namedNode(RDFS + 'domain');
+  const existingDomainQuads = store.getQuads(subject, domainPred, null, null);
+  const graph = existingDomainQuads[0]?.graph ?? DataFactory.defaultGraph();
+  
+  // Remove all existing domain quads
+  for (const dq of existingDomainQuads) {
+    store.removeQuad(dq);
+  }
+  
+  // If domains array is empty, add owl:Thing (default - all classes)
+  if (domains.length === 0) {
+    store.addQuad(subject, domainPred, DataFactory.namedNode(OWL + 'Thing'), graph);
+  } else {
+    // Add each domain
+    for (const domainName of domains) {
+      // Try to find the domain URI (could be base IRI or external)
+      let domainUri: string | null = null;
+      const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
+      for (const cq of classQuads) {
+        if (cq.subject.termType === 'NamedNode') {
+          const currentUri = (cq.subject as { value: string }).value;
+          if (extractLocalName(currentUri) === domainName) {
+            domainUri = currentUri;
+            break;
+          }
+        }
+      }
+      
+      // If not found, assume it's from base IRI
+      if (!domainUri) {
+        domainUri = BASE_IRI + domainName;
+      }
+      
+      store.addQuad(subject, domainPred, DataFactory.namedNode(domainUri), graph);
+    }
+  }
+  
+  return true;
+}
+
+/**
  * Remove a data property from the store.
  */
 export function removeDataPropertyFromStore(store: Store, propertyName: string): boolean {
-  const propUri = BASE_IRI + propertyName;
-  const subject = DataFactory.namedNode(propUri);
-  const quads = store.getQuads(subject, null, null, null);
+  // First try the base IRI
+  let propUri = BASE_IRI + propertyName;
+  let subject = DataFactory.namedNode(propUri);
+  let quads = store.getQuads(subject, null, null, null);
+  
+  // If not found, search for any DatatypeProperty with this local name
+  if (quads.length === 0) {
+    const dpQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
+    for (const q of dpQuads) {
+      if (q.subject.termType === 'NamedNode') {
+        const subjUri = (q.subject as { value: string }).value;
+        if (extractLocalName(subjUri) === propertyName) {
+          propUri = subjUri;
+          subject = DataFactory.namedNode(propUri);
+          quads = store.getQuads(subject, null, null, null);
+          break;
+        }
+      }
+    }
+  }
+  
   if (quads.length === 0) return false;
   for (const q of quads) store.removeQuad(q);
   return true;

@@ -38,6 +38,8 @@ export interface DataPropertyInfo {
   comment?: string | null;
   /** Full URI of the datatype (e.g. http://www.w3.org/2001/XMLSchema#string) */
   range: string;
+  /** Domain class local names (extracted from rdfs:domain). Empty array means owl:Thing (all classes). */
+  domains: string[];
 }
 
 export interface GraphEdge {
