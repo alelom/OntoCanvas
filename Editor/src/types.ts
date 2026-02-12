@@ -20,7 +20,9 @@ export interface GraphNode {
 
 export interface AnnotationPropertyInfo {
   name: string;
-  isBoolean: boolean;
+  isBoolean: boolean; // Deprecated: kept for backward compatibility, use range instead
+  /** Full URI of the datatype range (e.g. http://www.w3.org/2001/XMLSchema#boolean). null means no range specified. */
+  range?: string | null;
 }
 
 export interface ObjectPropertyInfo {

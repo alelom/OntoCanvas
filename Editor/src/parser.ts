@@ -93,17 +93,19 @@ function getObjectProperties(store: Store): ObjectPropertyInfo[] {
 export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] {
   const result: AnnotationPropertyInfo[] = [];
   const seen = new Set<string>();
-  // Find all subjects with rdfs:range xsd:boolean (iterate all quads to avoid getQuads matching issues)
+  // Map of subject URIs to their range values
+  const rangeMap = new Map<string, string>();
   const RDFS_RANGE = RDFS + 'range';
-  const booleanRangeSubjectUris = new Set<string>();
   for (const q of store) {
     const predVal = (q.predicate as { value?: string; id?: string }).value ?? (q.predicate as { value?: string; id?: string }).id;
     if (predVal !== RDFS_RANGE) continue;
     const obj = q.object as { value?: string; id?: string };
     const rangeVal = obj?.value ?? obj?.id;
-    if (typeof rangeVal === 'string' && (rangeVal === XSD_BOOLEAN || rangeVal.endsWith('#boolean'))) {
+    if (typeof rangeVal === 'string') {
       const subjUri = (q.subject as { value: string }).value ?? (q.subject as { id: string }).id;
-      if (subjUri) booleanRangeSubjectUris.add(subjUri);
+      if (subjUri) {
+        rangeMap.set(subjUri, rangeVal);
+      }
     }
   }
   const apQuads = store.getQuads(null, RDF + 'type', OWL + 'AnnotationProperty', null);
@@ -114,8 +116,9 @@ export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] 
     const name = extractLocalName(subjUri);
     if (seen.has(name)) continue;
     seen.add(name);
-    const isBoolean = booleanRangeSubjectUris.has(subjUri);
-    result.push({ name, isBoolean });
+    const range = rangeMap.get(subjUri) ?? null;
+    const isBoolean = range === XSD_BOOLEAN || range?.endsWith('#boolean') || false;
+    result.push({ name, isBoolean, range });
   }
   return result;
 }
@@ -762,11 +765,12 @@ export function addDataPropertyToStore(
 /**
  * Add a new annotation property (owl:AnnotationProperty) to the store.
  * Returns the property localName, or null on failure.
+ * @param rangeUri Full URI of the datatype range (e.g. http://www.w3.org/2001/XMLSchema#boolean). null means no range.
  */
 export function addAnnotationPropertyToStore(
   store: Store,
   label: string,
-  isBoolean: boolean,
+  rangeUri: string | null,
   localName?: string
 ): string | null {
   const existingNames = new Set(getAnnotationProperties(store).map((ap) => ap.name));
@@ -782,8 +786,8 @@ export function addAnnotationPropertyToStore(
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'AnnotationProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
-  if (isBoolean) {
-    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(XSD_BOOLEAN), graph);
+  if (rangeUri) {
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri), graph);
   }
   return name;
 }
@@ -832,13 +836,44 @@ export function updateAnnotationPropertyCommentInStore(
 
 /**
  * Update whether an annotation property is boolean (rdfs:range xsd:boolean).
+ * @deprecated Use updateAnnotationPropertyRangeInStore instead
  */
 export function updateAnnotationPropertyIsBooleanInStore(
   store: Store,
   propertyName: string,
   isBoolean: boolean
 ): boolean {
-  const propUri = BASE_IRI + propertyName;
+  const rangeUri = isBoolean ? XSD_BOOLEAN : null;
+  return updateAnnotationPropertyRangeInStore(store, propertyName, rangeUri);
+}
+
+/**
+ * Update the range (rdfs:range) of an annotation property in the store.
+ * @param rangeUri Full URI of the datatype (e.g. http://www.w3.org/2001/XMLSchema#boolean). null to remove range.
+ */
+export function updateAnnotationPropertyRangeInStore(
+  store: Store,
+  propertyName: string,
+  rangeUri: string | null
+): boolean {
+  // Find the property URI (could be from base IRI or external)
+  let propUri: string | null = null;
+  const apQuads = store.getQuads(null, RDF + 'type', OWL + 'AnnotationProperty', null);
+  for (const q of apQuads) {
+    if (q.subject.termType === 'NamedNode') {
+      const currentUri = (q.subject as { value: string }).value;
+      if (extractLocalName(currentUri) === propertyName) {
+        propUri = currentUri;
+        break;
+      }
+    }
+  }
+  
+  // If not found, assume it's from base IRI
+  if (!propUri) {
+    propUri = BASE_IRI + propertyName;
+  }
+  
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -849,9 +884,9 @@ export function updateAnnotationPropertyIsBooleanInStore(
   // Remove existing range quads
   for (const rq of rangeQuads) store.removeQuad(rq);
   
-  // Add boolean range if needed
-  if (isBoolean) {
-    store.addQuad(subject, rangePred, DataFactory.namedNode(XSD_BOOLEAN), graph);
+  // Add new range if provided
+  if (rangeUri) {
+    store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
   }
   return true;
 }

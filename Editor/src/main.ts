@@ -29,6 +29,7 @@ import {
   updateAnnotationPropertyLabelInStore,
   updateAnnotationPropertyCommentInStore,
   updateAnnotationPropertyIsBooleanInStore,
+  updateAnnotationPropertyRangeInStore,
   removeAnnotationPropertyFromStore,
   storeToTurtle,
   extractLocalName,
@@ -41,7 +42,7 @@ import {
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, BorderLineType } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, BorderLineType } from './types';
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
@@ -304,7 +305,7 @@ function scheduleDisplayConfigSave(): void {
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 let rawData: GraphData = { nodes: [], edges: [] };
-let annotationProperties: { name: string; isBoolean: boolean }[] = [];
+let annotationProperties: AnnotationPropertyInfo[] = [];
 let objectProperties: { name: string; label: string; hasCardinality: boolean; comment?: string | null }[] = [];
 let dataProperties: DataPropertyInfo[] = [];
 let network: Network | null = null;
@@ -1229,17 +1230,17 @@ function initEditAnnotationPropertyHandlers(): void {
     const name = (modal as HTMLElement).dataset.annotationPropName!;
     const labelInput = document.getElementById('editAnnotationPropLabel') as HTMLInputElement;
     const commentInput = document.getElementById('editAnnotationPropComment') as HTMLTextAreaElement;
-    const isBooleanCb = document.getElementById('editAnnotationPropIsBoolean') as HTMLInputElement;
+    const rangeSel = document.getElementById('editAnnotationPropRange') as HTMLSelectElement;
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
-    const newIsBoolean = isBooleanCb?.checked ?? false;
+    const newRange = rangeSel?.value ?? null;
     if (!newLabel || !ttlStore) return;
     const ap = annotationProperties.find((p) => p.name === name);
     if (!ap) return;
     const labelChanged = (ap.name !== newLabel && ap.name !== extractLocalName(newLabel));
     const commentChanged = false; // We don't track comments in annotationProperties array
-    const isBooleanChanged = ap.isBoolean !== newIsBoolean;
-    if (!labelChanged && !commentChanged && !isBooleanChanged) {
+    const rangeChanged = (ap.range ?? null) !== (newRange || null);
+    if (!labelChanged && !commentChanged && !rangeChanged) {
       document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
       return;
     }
@@ -1250,7 +1251,7 @@ function initEditAnnotationPropertyHandlers(): void {
       if (newName !== name) {
         // Name changed, need to update the array
         annotationProperties = annotationProperties.filter((p) => p.name !== name);
-        annotationProperties.push({ name: newName, isBoolean: ap.isBoolean });
+        annotationProperties.push({ name: newName, isBoolean: ap.isBoolean, range: ap.range });
         annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
       } else {
         // Just update the label in the existing entry
@@ -1263,11 +1264,13 @@ function initEditAnnotationPropertyHandlers(): void {
     if (commentChanged || commentInput?.value.trim()) {
       updateAnnotationPropertyCommentInStore(ttlStore, name, newComment || null);
     }
-    if (isBooleanChanged) {
-      updateAnnotationPropertyIsBooleanInStore(ttlStore, name, newIsBoolean);
+    if (rangeChanged) {
+      updateAnnotationPropertyRangeInStore(ttlStore, name, newRange || null);
       const idx = annotationProperties.findIndex((p) => p.name === name);
       if (idx >= 0) {
-        annotationProperties[idx].isBoolean = newIsBoolean;
+        annotationProperties[idx].range = newRange || null;
+        // Update isBoolean for backward compatibility
+        annotationProperties[idx].isBoolean = newRange === XSD_NS + 'boolean' || newRange?.endsWith('#boolean') || false;
       }
     }
     hasUnsavedChanges = true;
@@ -1291,7 +1294,7 @@ function showEditAnnotationPropertyModal(name: string): void {
   const nameEl = document.getElementById('editAnnotationPropName') as HTMLElement;
   const labelInput = document.getElementById('editAnnotationPropLabel') as HTMLInputElement;
   const commentInput = document.getElementById('editAnnotationPropComment') as HTMLTextAreaElement;
-  const isBooleanCb = document.getElementById('editAnnotationPropIsBoolean') as HTMLInputElement;
+  const rangeSel = document.getElementById('editAnnotationPropRange') as HTMLSelectElement;
   const ap = annotationProperties.find((p) => p.name === name);
   if (nameEl) nameEl.textContent = `Identifier: ${name} (used in ontology)`;
   // Get label from store - annotation properties may have rdfs:label
@@ -1324,7 +1327,25 @@ function showEditAnnotationPropertyModal(name: string): void {
       commentInput.value = '';
     }
   }
-  if (isBooleanCb) isBooleanCb.checked = ap?.isBoolean ?? false;
+  
+  // Populate range dropdown
+  if (rangeSel) {
+    const rangeOptions = [
+      { value: '', label: 'No range (untyped)' },
+      ...DATA_PROPERTY_RANGE_OPTIONS,
+    ];
+    const currentRange = ap?.range ?? null;
+    rangeSel.innerHTML = rangeOptions.map((opt) => 
+      `<option value="${opt.value}"${currentRange === opt.value ? ' selected' : ''}>${opt.label}</option>`
+    ).join('');
+    
+    // If current range is not in the list, add it
+    if (currentRange && !rangeOptions.some((o) => o.value === currentRange)) {
+      const rangeLabel = currentRange.includes('#') ? currentRange.split('#').pop()! : currentRange;
+      rangeSel.innerHTML += `<option value="${currentRange}" selected>${rangeLabel}</option>`;
+    }
+  }
+  
   modal.style.display = 'flex';
   labelInput?.focus();
 }
@@ -1335,7 +1356,19 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
   if (addAnnotationPropertyHandlersInitialized) return;
   addAnnotationPropertyHandlersInitialized = true;
   const labelInput = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
-  const isBooleanCb = document.getElementById('addAnnotationPropIsBoolean') as HTMLInputElement;
+  const rangeSel = document.getElementById('addAnnotationPropRange') as HTMLSelectElement;
+  
+  // Populate range dropdown with XSD types
+  if (rangeSel) {
+    const rangeOptions = [
+      { value: '', label: 'No range (untyped)' },
+      ...DATA_PROPERTY_RANGE_OPTIONS,
+    ];
+    rangeSel.innerHTML = rangeOptions.map((opt) => 
+      `<option value="${opt.value}">${opt.label}</option>`
+    ).join('');
+  }
+  
   if (labelInput) {
     labelInput.addEventListener('input', () => {
       const okBtn = document.getElementById('addAnnotationPropConfirm') as HTMLButtonElement;
@@ -1350,7 +1383,7 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
     const li = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
     const okBtn = document.getElementById('addAnnotationPropConfirm') as HTMLButtonElement;
     li.value = '';
-    if (isBooleanCb) isBooleanCb.checked = false;
+    if (rangeSel) rangeSel.value = '';
     okBtn.disabled = true;
     li.focus();
     modal.style.display = 'flex';
@@ -1360,12 +1393,13 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
   });
   document.getElementById('addAnnotationPropConfirm')?.addEventListener('click', () => {
     const li = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
-    const isBool = isBooleanCb?.checked ?? false;
+    const range = rangeSel?.value || null;
     const label = li.value.trim();
     if (!label || !ttlStore) return;
-    const name = addAnnotationPropertyToStore(ttlStore, label, isBool);
+    const name = addAnnotationPropertyToStore(ttlStore, label, range);
     if (name) {
-      annotationProperties.push({ name, isBoolean: isBool });
+      const isBoolean = range === XSD_NS + 'boolean' || range?.endsWith('#boolean') || false;
+      annotationProperties.push({ name, isBoolean, range });
       annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
@@ -4316,10 +4350,15 @@ function renderApp(): void {
     <div id="addAnnotationPropertyModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Add annotation property</h3>
-        <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addAnnotationPropLabel" placeholder="e.g. isVisible" /></label>
-        <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
-          <input type="checkbox" id="addAnnotationPropIsBoolean" /> 
-          <span>Boolean property (rdfs:range xsd:boolean)</span>
+        <label style="display: block; margin-top: 8px;">
+          <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <input type="text" id="addAnnotationPropLabel" placeholder="e.g. isVisible" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Range (rdfs:range datatype)</span>
+          <select id="addAnnotationPropRange" style="display: block; margin-top: 4px; padding: 8px; width: 100%; box-sizing: border-box;">
+            <option value="">No range (untyped)</option>
+          </select>
         </label>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="addAnnotationPropCancel">Cancel</button>
@@ -4339,9 +4378,11 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="editAnnotationPropComment" rows="2" placeholder="Optional" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
-        <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
-          <input type="checkbox" id="editAnnotationPropIsBoolean" /> 
-          <span>Boolean property (rdfs:range xsd:boolean)</span>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Range (rdfs:range datatype)</span>
+          <select id="editAnnotationPropRange" style="display: block; margin-top: 4px; padding: 8px; width: 100%; box-sizing: border-box;">
+            <option value="">No range (untyped)</option>
+          </select>
         </label>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editAnnotationPropCancel">Cancel</button>
