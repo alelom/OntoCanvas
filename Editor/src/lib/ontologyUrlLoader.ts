@@ -107,7 +107,7 @@ export async function fetchOntologyFromUrl(url: string, timeoutMs: number = 1000
 /**
  * Attempts to infer the TTL URL from GitHub repository links in the HTML.
  */
-async function tryInferTtlFromGitHub(doc: Document, baseUrl: string, timeoutMs: number = 10000): Promise<string | null> {
+async function tryInferTtlFromGitHub(doc: Document, _baseUrl: string, timeoutMs: number = 10000): Promise<string | null> {
   const sourceLink = doc.querySelector('a[href*="github.com"]') as HTMLAnchorElement;
   if (!sourceLink || !sourceLink.href) {
     return null;
