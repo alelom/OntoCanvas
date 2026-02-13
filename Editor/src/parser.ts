@@ -194,6 +194,14 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   const subClassQuads = store.getQuads(null, RDFS + 'subClassOf', null, null);
   const seenPairs = new Set<string>();
 
+  // Debug: Log all blank node restrictions to find describes edge
+  const blankNodeRestrictions = subClassQuads.filter((q) => isBlankNode(q.object));
+  console.log(`[DEBUG] Found ${blankNodeRestrictions.length} blank node restrictions (potential edges)`);
+  
+  // Debug: Specifically look for describes property
+  const describesPropertyUri = 'https://w3id.org/dano#describes';
+  let foundDescribesRestriction = false;
+
   for (const q of subClassQuads) {
     const subj = q.subject;
     const obj = q.object;
@@ -220,13 +228,63 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       const minCard = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
       const maxCard = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
 
+      // Debug: Check if this is the describes restriction
+      if (onProperty) {
+        const propUri = (onProperty.object as { value: string }).value;
+        if (propUri === describesPropertyUri || propUri.includes('describes')) {
+          foundDescribesRestriction = true;
+          console.log('[DEBUG] Found describes restriction:', {
+            subject: subjUri,
+            subjectName: subjName,
+            propertyUri: propUri,
+            someValuesFrom: someValuesFrom ? (someValuesFrom.object as { value: string }).value : null,
+            onClass: onClass ? (onClass.object as { value: string }).value : null,
+            subjectInSeenClasses: seenClasses.has(subjName),
+          });
+        }
+      }
+
       const targetQuad = someValuesFrom ?? onClass;
-      if (!onProperty || !targetQuad) continue;
+      if (!onProperty || !targetQuad) {
+        // Debug: Log why restriction was skipped
+        if (!onProperty) {
+          console.log(`[DEBUG] Skipped restriction: missing onProperty for subject ${subjName}`);
+        }
+        if (!targetQuad) {
+          console.log(`[DEBUG] Skipped restriction: missing someValuesFrom/onClass for subject ${subjName}, property ${onProperty ? (onProperty.object as { value: string }).value : 'unknown'}`);
+        }
+        continue;
+      }
       const target = targetQuad.object;
-      if (target.termType !== 'NamedNode') continue;
+      if (target.termType !== 'NamedNode') {
+        console.log(`[DEBUG] Skipped restriction: target is not NamedNode for subject ${subjName}`);
+        continue;
+      }
       const targetName = extractLocalName(target.value);
-      if (!seenClasses.has(targetName)) continue;
-      const propName = extractLocalName(onProperty.object.value);
+      
+      // Debug: Log node matching for describes
+      if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
+        console.log('[DEBUG] Processing describes restriction:', {
+          subjectName: subjName,
+          targetUri: target.value,
+          targetName: targetName,
+          targetInSeenClasses: seenClasses.has(targetName),
+          seenClassesList: Array.from(seenClasses).filter((n) => n.includes('Description') || n.includes('Display')),
+        });
+      }
+      
+      if (!seenClasses.has(targetName)) {
+        // Debug: Log when target node is missing
+        if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
+          console.warn(`[DEBUG] Target node "${targetName}" not in seenClasses. Available classes:`, Array.from(seenClasses));
+        }
+        continue;
+      }
+      
+      // Preserve full URI for external properties, use local name for local properties
+      const propUri = (onProperty.object as { value: string }).value;
+      const isExternalProperty = !propUri.startsWith(BASE_IRI);
+      const propName = isExternalProperty ? propUri : extractLocalName(propUri);
 
       const cardinality = parseCardinalityFromRestriction(
         minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom, propName
@@ -235,13 +293,134 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       const key = `${subjName}->${targetName}:${propName}`;
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
-        edges.push({ from: subjName, to: targetName, type: propName, ...cardinality });
+        const edge: GraphEdge = { 
+          from: subjName, 
+          to: targetName, 
+          type: propName, 
+          ...cardinality,
+          isRestriction: true, // Mark as restriction (from OWL restriction)
+        };
+        
+        // Debug: Log DimensionChain contains edge specifically
+        if (subjName === 'DimensionChain' && targetName === 'Dimension' && propName.includes('contains')) {
+          console.log('[DEBUG] Parsed DimensionChain->Dimension contains restriction:', {
+            edge,
+            cardinality,
+            minQual: minQual ? (minQual.object as { value: string }).value : null,
+            maxQual: maxQual ? (maxQual.object as { value: string }).value : null,
+            qualCard: qualCard ? (qualCard.object as { value: string }).value : null,
+            minCard: minCard ? (minCard.object as { value: string }).value : null,
+            maxCard: maxCard ? (maxCard.object as { value: string }).value : null,
+            someValuesFrom: someValuesFrom ? (someValuesFrom.object as { value: string }).value : null,
+          });
+        }
+        
+        edges.push(edge);
+        // Debug: Log external property edges
+        if (propName.startsWith('http://') || propName.startsWith('https://')) {
+          console.log('[DEBUG] Parsed external property edge:', edge);
+        }
+        // Debug: Specifically log describes edge
+        if (propName === describesPropertyUri || propName.includes('describes')) {
+          console.log('[DEBUG] ✓ Successfully added describes edge:', edge);
+        }
+        // Debug: Log contains edges to check for duplicates
+        if (propName.includes('contains')) {
+          console.log('[DEBUG] Added contains edge:', { key, edge, propName, propUri });
+        }
+      } else {
+        // Debug: Log duplicate edge
+        if (propName === describesPropertyUri || propName.includes('describes')) {
+          console.log('[DEBUG] Duplicate describes edge skipped (key already exists):', key);
+        }
+        // Debug: Log duplicate contains edge
+        if (propName.includes('contains')) {
+          console.warn('[DEBUG] ⚠ Duplicate contains edge skipped (key already exists):', key, {
+            subject: subjUri,
+            target: target.value,
+            propUri: propUri
+          });
+        }
       }
     }
   }
+  
+  // Debug: Summary
+  if (!foundDescribesRestriction) {
+    console.warn('[DEBUG] ⚠ No describes restriction found in TTL store');
+  }
+  console.log(`[DEBUG] Total edges parsed: ${edges.length}`);
+  const describesEdges = edges.filter((e) => e.type === describesPropertyUri || e.type.includes('describes'));
+  console.log(`[DEBUG] Describes edges in parsed edges: ${describesEdges.length}`, describesEdges);
 
   const objectProps = getObjectProperties(store);
   const dataProps = getDataProperties(store);
+
+  // Create edges from object property domain/range definitions
+  // This handles cases where properties are defined but not used in restrictions
+  // (e.g., dano:describes with domain DescriptionElement and range DisplayElement)
+  for (const op of objectProps) {
+    // Get the property URI - check if it's already a full URI or needs BASE_IRI
+    let propUri: string;
+    if (op.name.startsWith('http://') || op.name.startsWith('https://')) {
+      propUri = op.name;
+    } else {
+      // Try to find the actual URI in the store
+      const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
+      let foundUri = BASE_IRI + op.name;
+      for (const q of opQuads) {
+        if (q.subject.termType === 'NamedNode') {
+          const uri = (q.subject as { value: string }).value;
+          if (extractLocalName(uri) === op.name) {
+            foundUri = uri;
+            break;
+          }
+        }
+      }
+      propUri = foundUri;
+    }
+    
+    const propNode = DataFactory.namedNode(propUri);
+    const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), null, null);
+    const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), null, null);
+    
+    // For each domain-range pair, create an edge if both classes exist
+    for (const domainQuad of domainQuads) {
+      if (domainQuad.object.termType !== 'NamedNode') continue;
+      const domainUri = (domainQuad.object as { value: string }).value;
+      const domainName = extractLocalName(domainUri);
+      if (!seenClasses.has(domainName)) continue;
+      
+      for (const rangeQuad of rangeQuads) {
+        if (rangeQuad.object.termType !== 'NamedNode') continue;
+        const rangeUri = (rangeQuad.object as { value: string }).value;
+        const rangeName = extractLocalName(rangeUri);
+        if (!seenClasses.has(rangeName)) continue;
+        
+        // Use full URI for external properties, local name for local properties
+        const isExternalProperty = !propUri.startsWith(BASE_IRI);
+        const propName = isExternalProperty ? propUri : op.name;
+        
+        // Only create edge if it doesn't already exist as a restriction
+        const key = `${domainName}->${rangeName}:${propName}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          const edge: GraphEdge = { 
+            from: domainName, 
+            to: rangeName, 
+            type: propName,
+            isRestriction: false, // Mark as non-restriction (from domain/range, not OWL restriction)
+          };
+          edges.push(edge);
+          
+          // Debug: Log domain/range edges
+          if (propName.includes('describes') || propName.includes('contains')) {
+            console.log('[DEBUG] Added edge from domain/range:', { edge, propUri, domainUri, rangeUri });
+          }
+        }
+      }
+    }
+  }
 
   // Parse data property restrictions (class subClassOf [ owl:onProperty dp ; owl:onDataRange ... ])
   const OWL_ON_DATA_RANGE = OWL + 'onDataRange';

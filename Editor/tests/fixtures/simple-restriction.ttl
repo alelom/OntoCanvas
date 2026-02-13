@@ -1,0 +1,19 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/test#ClassA> a owl:Class ;
+    rdfs:label "Class A" ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty <http://example.org/test#hasProperty> ;
+        owl:onClass <http://example.org/test#ClassB> ;
+        owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger
+    ] .
+
+<http://example.org/test#ClassB> a owl:Class ;
+    rdfs:label "Class B" .
+
+<http://example.org/test#hasProperty> a owl:ObjectProperty ;
+    rdfs:label "has property" .

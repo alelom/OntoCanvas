@@ -66,165 +66,279 @@ export async function fetchExternalOntologyTtl(
     
     // Use HTTP content negotiation - match curl format exactly
     // Override User-Agent to avoid server serving HTML to browsers
-    const response = await fetch(normalizedUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/turtle',
-        'User-Agent': 'curl/8.0.0', // Override browser User-Agent to get Turtle instead of HTML
-      },
-      redirect: 'follow', // Explicitly follow redirects (like curl -L)
-    });
+    // Add timeout using AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.error(`Fetch timeout after 2s for ${normalizedUrl}`);
+    }, 2000); // 2 second timeout
     
-    if (!response.ok) {
-      console.error(`Failed to fetch ${normalizedUrl}: HTTP ${response.status} ${response.statusText}`);
-      return null;
+    let response;
+    try {
+      response = await fetch(normalizedUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/turtle',
+          'User-Agent': 'curl/8.0.0', // Override browser User-Agent to get Turtle instead of HTML
+        },
+        redirect: 'follow', // Explicitly follow redirects (like curl -L)
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+        console.error(`Fetch aborted (timeout) for ${normalizedUrl}`);
+        // If initial fetch times out, try known fallback URLs directly
+        // This handles cases where the redirect is slow but the final URL works
+        console.warn(`Initial fetch timed out, trying fallback URLs directly...`);
+        response = undefined; // Mark that we need to try fallbacks
+      } else {
+        throw fetchErr;
+      }
     }
     
-    const contentType = response.headers.get('content-type') || '';
-    const finalUrl = response.url; // Get final URL after redirects
-    console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
-    
-    let text = await response.text();
-    console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
-    
-    if (!text.trim()) {
-      console.warn(`Empty response from ${normalizedUrl}`);
-      return null;
-    }
-    
-    // Check if we got RDF/Turtle content (content negotiation succeeded)
-    const isRdfContent = contentType.includes('text/turtle') ||
-                         contentType.includes('application/rdf+xml') ||
-                         contentType.includes('application/n-triples') ||
-                         contentType.includes('text/n3') ||
-                         text.trim().startsWith('@prefix') ||
-                         text.trim().startsWith('@base') ||
-                         (text.trim().startsWith('<') && !text.trim().toLowerCase().startsWith('<!doctype'));
-    
-    // Check if response is HTML instead of RDF/Turtle (content negotiation failed)
-    const isHtml = contentType.includes('text/html') || 
-                   text.trim().toLowerCase().startsWith('<!doctype') ||
-                   text.trim().toLowerCase().startsWith('<html');
-    
-    if (isHtml) {
-      // Content negotiation failed - server returned HTML despite Accept: text/turtle
-      // This often happens when servers check User-Agent and serve HTML to browsers
-      // Try to extract the actual Turtle URL from HTML alternate links
-      console.warn(`Content negotiation failed for ${normalizedUrl}: received HTML instead of RDF/Turtle.`);
-      console.warn(`  Attempting to extract Turtle link from HTML...`);
-      
-      // Look for alternate links in HTML (common pattern: <link rel="alternate" type="text/turtle" href="...">)
-      const linkPatterns = [
-        /<link[^>]+rel=["']alternate["'][^>]+type=["']text\/turtle["'][^>]+href=["']([^"']+)["']/i,
-        /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']alternate["'][^>]+type=["']text\/turtle["']/i,
-        /<link[^>]+type=["']text\/turtle["'][^>]+href=["']([^"']+)["']/i,
-      ];
-      
-      for (const pattern of linkPatterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-          const turtleUrl = new URL(match[1], normalizedUrl).href;
-          console.log(`Found alternate Turtle link in HTML: ${turtleUrl}`);
-          
-          // Fetch the actual Turtle content from the alternate link
-          try {
-            const turtleResponse = await fetch(turtleUrl, {
-              method: 'GET',
-              headers: {
-                'Accept': 'text/turtle',
-                'User-Agent': 'curl/8.0.0',
-              },
-              redirect: 'follow',
-            });
-            
-            if (turtleResponse.ok) {
-              text = await turtleResponse.text();
-              const turtleContentType = turtleResponse.headers.get('content-type') || '';
-              console.log(`Successfully fetched Turtle from alternate link: ${turtleUrl}, content-type: ${turtleContentType}`);
-              
-              if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
-                // Cache and return the TTL text
-                externalTtlCache.set(normalizedUrl, text);
-                return text;
-              }
-            }
-          } catch (altErr) {
-            console.warn(`Failed to fetch from alternate link ${turtleUrl}:`, altErr);
-          }
-        }
+    // If we got a response, process it normally
+    if (response) {
+      if (!response.ok) {
+        console.error(`Failed to fetch ${normalizedUrl}: HTTP ${response.status} ${response.statusText}`);
+        return null;
       }
       
-      // If HTML alternate links didn't work, try constructing the direct Turtle URL
-      // For w3id.org/dano, the server redirects to github.io/dano/ which serves HTML to browsers
-      // But the Turtle file is at github.io/dano/dano.ttl
-      console.warn(`Alternate links not found in HTML. Trying direct Turtle URL construction...`);
+      const contentType = response.headers.get('content-type') || '';
+      const finalUrl = response.url; // Get final URL after redirects
+      console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
       
-      // Check if the final URL is from GitHub Pages (common pattern for ontology hosting)
-      if (finalUrl.includes('github.io') || finalUrl.includes('github.com')) {
-        // Try to construct the Turtle URL by appending /dano.ttl or replacing path with /dano.ttl
-        const urlObj = new URL(finalUrl);
-        const pathParts = urlObj.pathname.split('/').filter(p => p);
+      let text = await response.text();
+      console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
+      
+      if (!text.trim()) {
+        console.warn(`Empty response from ${normalizedUrl}`);
+        return null;
+      }
+      
+      // Check if we got RDF/Turtle content (content negotiation succeeded)
+      const isRdfContent = contentType.includes('text/turtle') ||
+                           contentType.includes('application/rdf+xml') ||
+                           contentType.includes('application/n-triples') ||
+                           contentType.includes('text/n3') ||
+                           text.trim().startsWith('@prefix') ||
+                           text.trim().startsWith('@base') ||
+                           (text.trim().startsWith('<') && !text.trim().toLowerCase().startsWith('<!doctype'));
+      
+      // Check if response is HTML instead of RDF/Turtle (content negotiation failed)
+      const isHtml = contentType.includes('text/html') || 
+                     text.trim().toLowerCase().startsWith('<!doctype') ||
+                     text.trim().toLowerCase().startsWith('<html');
+      
+      if (isRdfContent) {
+        // Content negotiation succeeded - cache and return the TTL text
+        externalTtlCache.set(normalizedUrl, text);
+        return text;
+      }
+      
+      if (isHtml) {
+        // Content negotiation failed - server returned HTML despite Accept: text/turtle
+        // This often happens when servers check User-Agent and serve HTML to browsers
+        // Try to extract the actual Turtle URL from HTML alternate links
+        console.warn(`Content negotiation failed for ${normalizedUrl}: received HTML instead of RDF/Turtle.`);
+        console.warn(`  Attempting to extract Turtle link from HTML...`);
         
-        // Try different patterns:
-        const turtleUrlPatterns = [
-          `${urlObj.origin}/${pathParts[0]}/dano.ttl`, // e.g., github.io/dano/dano.ttl
-          `${urlObj.origin}/dano.ttl`, // e.g., github.io/dano.ttl
-          `${urlObj.origin}/${pathParts.join('/')}/dano.ttl`, // Append to existing path
+        // Look for alternate links in HTML (common pattern: <link rel="alternate" type="text/turtle" href="...">)
+        const linkPatterns = [
+          /<link[^>]+rel=["']alternate["'][^>]+type=["']text\/turtle["'][^>]+href=["']([^"']+)["']/i,
+          /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']alternate["'][^>]+type=["']text\/turtle["']/i,
+          /<link[^>]+type=["']text\/turtle["'][^>]+href=["']([^"']+)["']/i,
         ];
         
-        // Also try based on the original normalized URL
-        if (normalizedUrl.includes('w3id.org/dano')) {
-          turtleUrlPatterns.unshift('https://rub-informatik-im-bauwesen.github.io/dano/dano.ttl');
-        }
-        
-        for (const turtleUrl of turtleUrlPatterns) {
-          try {
-            console.log(`Trying direct Turtle URL: ${turtleUrl}`);
-            const turtleResponse = await fetch(turtleUrl, {
-              method: 'GET',
-              headers: {
-                'Accept': 'text/turtle',
-                'User-Agent': 'curl/8.0.0',
-              },
-              redirect: 'follow',
-            });
+        for (const pattern of linkPatterns) {
+          const match = text.match(pattern);
+          if (match && match[1]) {
+            const turtleUrl = new URL(match[1], normalizedUrl).href;
+            console.log(`Found alternate Turtle link in HTML: ${turtleUrl}`);
             
-            if (turtleResponse.ok) {
-              text = await turtleResponse.text();
-              const turtleContentType = turtleResponse.headers.get('content-type') || '';
-              
-              if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
-                console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
-                // Cache and return the TTL text
-                externalTtlCache.set(normalizedUrl, text);
-                return text;
+            // Fetch the actual Turtle content from the alternate link
+            try {
+              const altController = new AbortController();
+              const altTimeoutId = setTimeout(() => altController.abort(), 2000);
+              let turtleResponse;
+              try {
+                turtleResponse = await fetch(turtleUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Accept': 'text/turtle',
+                    'User-Agent': 'curl/8.0.0',
+                  },
+                  redirect: 'follow',
+                  signal: altController.signal,
+                });
+                clearTimeout(altTimeoutId);
+              } catch (altFetchErr) {
+                clearTimeout(altTimeoutId);
+                if (altFetchErr instanceof Error && altFetchErr.name === 'AbortError') {
+                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within 2 seconds`);
+                }
+                throw altFetchErr;
               }
+              
+              if (turtleResponse.ok) {
+                text = await turtleResponse.text();
+                const turtleContentType = turtleResponse.headers.get('content-type') || '';
+                console.log(`Successfully fetched Turtle from alternate link: ${turtleUrl}, content-type: ${turtleContentType}`);
+                
+                if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
+                  // Cache and return the TTL text
+                  externalTtlCache.set(normalizedUrl, text);
+                  return text;
+                }
+              }
+            } catch (altErr) {
+              console.warn(`Failed to fetch from alternate link ${turtleUrl}:`, altErr);
             }
-          } catch (directErr) {
-            // Continue to next pattern
-            console.warn(`Failed to fetch from direct URL ${turtleUrl}:`, directErr);
           }
         }
+        
+        // If HTML alternate links didn't work, try constructing the direct Turtle URL
+        // For w3id.org/dano, the server redirects to github.io/dano/ which serves HTML to browsers
+        // But the Turtle file is at github.io/dano/dano.ttl
+        console.warn(`Alternate links not found in HTML. Trying direct Turtle URL construction...`);
+        
+        // Check if the final URL is from GitHub Pages (common pattern for ontology hosting)
+        if (finalUrl.includes('github.io') || finalUrl.includes('github.com')) {
+          // Try to construct the Turtle URL by appending /dano.ttl or replacing path with /dano.ttl
+          const urlObj = new URL(finalUrl);
+          const pathParts = urlObj.pathname.split('/').filter(p => p);
+          
+          // Try different patterns:
+          const turtleUrlPatterns = [
+            `${urlObj.origin}/${pathParts[0]}/dano.ttl`, // e.g., github.io/dano/dano.ttl
+            `${urlObj.origin}/dano.ttl`, // e.g., github.io/dano.ttl
+            `${urlObj.origin}/${pathParts.join('/')}/dano.ttl`, // Append to existing path
+          ];
+          
+          // Also try based on the original normalized URL
+          if (normalizedUrl.includes('w3id.org/dano')) {
+            turtleUrlPatterns.unshift('https://rub-informatik-im-bauwesen.github.io/dano/dano.ttl');
+          }
+          
+          for (const turtleUrl of turtleUrlPatterns) {
+            try {
+              console.log(`Trying direct Turtle URL: ${turtleUrl}`);
+              const directController = new AbortController();
+              const directTimeoutId = setTimeout(() => directController.abort(), 2000);
+              let turtleResponse;
+              try {
+                turtleResponse = await fetch(turtleUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Accept': 'text/turtle',
+                    'User-Agent': 'curl/8.0.0',
+                  },
+                  redirect: 'follow',
+                  signal: directController.signal,
+                });
+                clearTimeout(directTimeoutId);
+              } catch (directFetchErr) {
+                clearTimeout(directTimeoutId);
+                if (directFetchErr instanceof Error && directFetchErr.name === 'AbortError') {
+                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within 2 seconds`);
+                }
+                throw directFetchErr;
+              }
+              
+              if (turtleResponse.ok) {
+                text = await turtleResponse.text();
+                const turtleContentType = turtleResponse.headers.get('content-type') || '';
+                
+                if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
+                  console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
+                  // Cache and return the TTL text
+                  externalTtlCache.set(normalizedUrl, text);
+                  return text;
+                }
+              }
+            } catch (directErr) {
+              // Continue to next pattern
+              console.warn(`Failed to fetch from direct URL ${turtleUrl}:`, directErr);
+            }
+          }
+        }
+        
+        console.error(`Could not find or fetch Turtle content from ${normalizedUrl}`);
+        console.error(`  Final URL: ${finalUrl}`);
+        console.error(`  Content-Type: ${contentType}`);
+        return null;
       }
       
-      console.error(`Could not find or fetch Turtle content from ${normalizedUrl}`);
-      console.error(`  Final URL: ${finalUrl}`);
-      console.error(`  Content-Type: ${contentType}`);
-      return null;
-    }
-    
-    if (isRdfContent) {
-      // Content negotiation succeeded - cache and return the TTL text
+      // If we get here, we have content but it's not clearly RDF or HTML
+      // Try to parse it anyway (might be RDF without proper content-type header)
+      console.warn(`Unclear content type from ${normalizedUrl}, assuming it's Turtle`);
+      // Cache and return the text anyway
       externalTtlCache.set(normalizedUrl, text);
       return text;
     }
     
-    // If we get here, we have content but it's not clearly RDF or HTML
-    // Try to parse it anyway (might be RDF without proper content-type header)
-    console.warn(`Unclear content type from ${normalizedUrl}, assuming it's Turtle`);
-    // Cache and return the text anyway
-    externalTtlCache.set(normalizedUrl, text);
-    return text;
+    // If we get here, either:
+    // 1. Initial fetch timed out (response is undefined)
+    // 2. We need to try known fallback URLs
+    // Try known fallback URLs directly
+    console.warn(`Trying known fallback URLs directly...`);
+    
+    // Known URL patterns that work when the initial fetch times out
+    const knownFallbacks: Array<{ pattern: string | RegExp; turtleUrl: string }> = [
+      {
+        pattern: /w3id\.org\/dano/,
+        turtleUrl: 'https://rub-informatik-im-bauwesen.github.io/dano/dano.ttl'
+      }
+    ];
+    
+    for (const fallback of knownFallbacks) {
+      if (typeof fallback.pattern === 'string' ? normalizedUrl.includes(fallback.pattern) : fallback.pattern.test(normalizedUrl)) {
+        console.log(`Trying known fallback URL: ${fallback.turtleUrl}`);
+        try {
+          const fallbackController = new AbortController();
+          const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 2000);
+          let fallbackResponse;
+          try {
+            fallbackResponse = await fetch(fallback.turtleUrl, {
+              method: 'GET',
+              headers: {
+                'Accept': 'text/turtle',
+                'User-Agent': 'curl/8.0.0',
+              },
+              redirect: 'follow',
+              signal: fallbackController.signal,
+            });
+            clearTimeout(fallbackTimeoutId);
+          } catch (fallbackFetchErr) {
+            clearTimeout(fallbackTimeoutId);
+            if (fallbackFetchErr instanceof Error && fallbackFetchErr.name === 'AbortError') {
+              console.warn(`Fallback URL timed out: ${fallback.turtleUrl}`);
+              continue; // Try next fallback
+            }
+            throw fallbackFetchErr;
+          }
+          
+          if (fallbackResponse.ok) {
+            const fallbackText = await fallbackResponse.text();
+            const fallbackContentType = fallbackResponse.headers.get('content-type') || '';
+            
+            if (fallbackText.trim() && !fallbackText.trim().toLowerCase().startsWith('<!doctype')) {
+              console.log(`Successfully fetched Turtle from fallback URL: ${fallback.turtleUrl}, content-type: ${fallbackContentType}`);
+              // Cache and return the TTL text
+              externalTtlCache.set(normalizedUrl, fallbackText);
+              return fallbackText;
+            }
+          }
+        } catch (fallbackErr) {
+          console.warn(`Failed to fetch from fallback URL ${fallback.turtleUrl}:`, fallbackErr);
+        }
+      }
+    }
+    
+    // If all fallbacks failed, return null
+    console.error(`Failed to fetch TTL from ${normalizedUrl} and all fallback URLs`);
+    return null;
   } catch (err) {
     console.error(`Failed to fetch TTL from ${normalizedUrl}:`, err);
     return null;
@@ -256,7 +370,7 @@ async function parseOntologyContent(
       if (seen.has(uri)) continue;
       seen.add(uri);
       
-      const localName = extractLocalName(uri);
+      const localName = extractLocalNameFromUri(uri);
       const labelQuads = store.getQuads(subj as any, RDFS + 'label', null, null);
       const labelQuad = labelQuads[0];
       const label = labelQuad?.object && (labelQuad.object as { value?: string }).value 
@@ -316,7 +430,7 @@ async function parseOntologyObjectProperties(
       if (seen.has(uri)) continue;
       seen.add(uri);
       
-      const localName = extractLocalName(uri);
+      const localName = extractLocalNameFromUri(uri);
       const labelQuads = store.getQuads(subj as any, RDFS + 'label', null, null);
       const labelQuad = labelQuads[0];
       const label = labelQuad?.object && (labelQuad.object as { value?: string }).value 

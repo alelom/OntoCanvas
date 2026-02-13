@@ -181,17 +181,9 @@ function applyDisplayConfig(config: DisplayConfig): void {
         const showCb = document.querySelector(`.edge-show-cb[data-type="${type}"]`) as HTMLInputElement | null;
         const labelCb = document.querySelector(`.edge-label-cb[data-type="${type}"]`) as HTMLInputElement | null;
         const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement | null;
-        const lineTypeEl = document.querySelector(`.edge-linetype[data-type="${type}"]`) as HTMLInputElement | null;
         if (showCb) showCb.checked = c.show !== false;
         if (labelCb) labelCb.checked = c.showLabel !== false;
         if (colorEl) colorEl.value = c.color || getDefaultEdgeColors()[type] || getDefaultColor();
-        if (lineTypeEl && c.lineType) {
-          lineTypeEl.value = c.lineType;
-          const dropdown = lineTypeEl.closest('.ap-linetype-dropdown');
-          const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
-          const opt = BORDER_LINE_OPTIONS.find((o) => o.value === c.lineType);
-          if (trigger && opt) trigger.innerHTML = `${renderLineTypeSvg(opt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
-        }
       }
     });
     updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
@@ -323,11 +315,19 @@ function performDeleteSelection(): boolean {
   const edgesToRemove: { from: string; to: string; type: string }[] = [];
   const dataPropertyRestrictionsToRemove: { classId: string; propertyName: string }[] = [];
   for (const edgeId of selectedEdgeIds) {
-    const m = edgeId.match(/^(.+)->(.+):(.+)$/);
-    if (m) {
-      const [, from, to, type] = m;
-      // Check if this is a data property edge
-      if (type === 'dataprop' || type === 'dataproprestrict') {
+    // Edge ID format: "from->to:type"
+    // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
+    // So we need to split on "->" first, then split the second part on ":" from the left (only the first ":")
+    const arrowIndex = edgeId.indexOf('->');
+    if (arrowIndex !== -1) {
+      const from = edgeId.substring(0, arrowIndex);
+      const afterArrow = edgeId.substring(arrowIndex + 2);
+      const colonIndex = afterArrow.indexOf(':');
+      if (colonIndex !== -1) {
+        const to = afterArrow.substring(0, colonIndex);
+        const type = afterArrow.substring(colonIndex + 1);
+        // Check if this is a data property edge
+        if (type === 'dataprop' || type === 'dataproprestrict') {
         // Handle both restriction nodes and generic property nodes
         let dpMatch = from.match(/^__dataproprestrict__(.+)__(.+)$/);
         if (!dpMatch) {
@@ -341,8 +341,9 @@ function performDeleteSelection(): boolean {
           dataPropertyRestrictionsToRemove.push({ classId, propertyName });
           }
         }
-      } else {
-        edgesToRemove.push({ from, to, type });
+        } else {
+          edgesToRemove.push({ from, to, type });
+        }
       }
     }
   }
@@ -588,7 +589,15 @@ function initEdgeStylesMenu(
   edgeStylesContent.innerHTML = '';
   const types = getAllRelationshipTypes(rawData, objectProperties);
   types.forEach((type) => {
-    const color = getDefaultEdgeColors()[type] || getDefaultColor();
+    // Get default color - check both full URI and local name for external properties
+    let color = getDefaultEdgeColors()[type] || getDefaultColor();
+    if (!color || color === getDefaultColor()) {
+      // Try extracting local name for external URIs
+      const localName = type.includes('#') ? type.split('#').pop() : type.split('/').pop();
+      if (localName) {
+        color = getDefaultEdgeColors()[localName] || getDefaultColor();
+      }
+    }
     const isEditable = type !== 'subClassOf';
     const editBtn = isEditable
       ? `<button type="button" class="edge-edit-btn" data-type="${type}" title="Edit object property (name, comment)" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>`
@@ -598,76 +607,36 @@ function initEdgeStylesMenu(
       : '';
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
+    // HTML attributes can contain # without escaping, but we need to escape quotes
+    const htmlEscapedType = type.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     row.innerHTML = `
       <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${getRelationshipLabel(type, objectProperties, externalOntologyReferences)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
-        <input type="checkbox" class="edge-show-cb" data-type="${type}" checked>
+        <input type="checkbox" class="edge-show-cb" data-type="${htmlEscapedType}" checked>
         <span>Show</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
-        <input type="checkbox" class="edge-label-cb" data-type="${type}" checked>
+        <input type="checkbox" class="edge-label-cb" data-type="${htmlEscapedType}" checked>
         <span>Label</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px;">
         <span style="font-size: 11px;">Color:</span>
-        <input type="color" class="edge-color-picker" data-type="${type}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
+        <input type="color" class="edge-color-picker" data-type="${htmlEscapedType}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
       </label>
-      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
-        <span>B. Line:</span>
-        ${renderEdgeLineTypeDropdown(type, 'solid')}
-      </label>
-      ${editBtn}
-      ${deleteBtn}
+      ${editBtn.replace(`data-type="${type}"`, `data-type="${htmlEscapedType}"`)}
+      ${deleteBtn.replace(`data-type="${type}"`, `data-type="${htmlEscapedType}"`)}
     `;
     edgeStylesContent.appendChild(row);
   });
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
-
-  edgeStylesContent.querySelectorAll('.ap-linetype-trigger').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const dropdown = btn.closest('.ap-linetype-dropdown');
-      const panel = dropdown?.querySelector('.ap-linetype-panel') as HTMLElement;
-      const isOpen = panel?.style.display === 'block';
-      edgeStylesContent.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
-      if (panel && !isOpen) panel.style.display = 'block';
-    });
-  });
-  edgeStylesContent.querySelectorAll('.ap-linetype-option').forEach((opt) => {
-    opt.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const value = (opt as HTMLElement).dataset.value as BorderLineType;
-      const dropdown = opt.closest('.ap-linetype-dropdown');
-      const hiddenInput = dropdown?.querySelector('.edge-linetype') as HTMLInputElement;
-      const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
-      if (hiddenInput && trigger && value) {
-        hiddenInput.value = value;
-        const selectedOpt = BORDER_LINE_OPTIONS.find((o) => o.value === value);
-        if (selectedOpt) {
-          trigger.innerHTML = `${renderLineTypeSvg(selectedOpt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
-        }
-        (dropdown?.querySelector('.ap-linetype-panel') as HTMLElement).style.display = 'none';
-        onApply();
-        updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
-      }
-    });
-  });
   edgeStylesContent.querySelectorAll('.edge-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
       showEditRelationshipTypeModal(type, edgeStylesContent, onApply);
     });
   });
-  if (!edgeLineTypeDocListenerAdded) {
-    edgeLineTypeDocListenerAdded = true;
-    document.addEventListener('click', () => {
-      const edgeStylesContentEl = document.getElementById('edgeStylesContent');
-      edgeStylesContentEl?.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
-    });
-  }
-
   edgeStylesContent.querySelectorAll('.edge-delete-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
@@ -694,7 +663,6 @@ function initEdgeStylesMenu(
   updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
 }
 
-let edgeLineTypeDocListenerAdded = false;
 
 let addRelationshipTypeHandlersInitialized = false;
 
@@ -1670,7 +1638,7 @@ function buildNetworkData(filter: {
   dataPropertyFontSize?: number;
   searchQuery: string;
   includeNeighbors: boolean;
-  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }>;
+  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
   annotationStyleConfig: AnnotationStyleConfig;
   layoutMode: string;
 }): { nodes: DataSet; edges: DataSet } {
@@ -1678,9 +1646,50 @@ function buildNetworkData(filter: {
     shouldShowNodeByAnnotations(n, filter.annotationStyleConfig)
   );
   let nodeIds = new Set(filteredNodes.map((n) => n.id));
+  
+  // Debug: Check for describes edges before filtering
+  const describesEdgesBeforeFilter = rawData.edges.filter((e) => 
+    e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
+  );
+  if (describesEdgesBeforeFilter.length > 0) {
+    console.log('[DEBUG] Describes edges in rawData.edges before filtering:', describesEdgesBeforeFilter);
+    console.log('[DEBUG] Available node IDs in filteredNodes:', Array.from(nodeIds));
+    describesEdgesBeforeFilter.forEach((e) => {
+      const fromExists = nodeIds.has(e.from);
+      const toExists = nodeIds.has(e.to);
+      console.log(`[DEBUG] Describes edge: from="${e.from}" (exists: ${fromExists}), to="${e.to}" (exists: ${toExists}), type="${e.type}"`);
+      if (!fromExists || !toExists) {
+        console.warn(`[DEBUG] ⚠ Describes edge will be filtered out - missing nodes`);
+        if (!fromExists) console.warn(`[DEBUG]   Missing from node: "${e.from}"`);
+        if (!toExists) console.warn(`[DEBUG]   Missing to node: "${e.to}"`);
+      }
+    });
+  } else {
+    console.warn('[DEBUG] ⚠ No describes edges found in rawData.edges at all!');
+  }
+  
+  // Debug: Check for edges with external property URIs before filtering
+  const externalEdgesBeforeFilter = rawData.edges.filter((e) => 
+    (e.type.startsWith('http://') || e.type.startsWith('https://')) &&
+    (e.type.includes('describes') || e.type.includes('dano'))
+  );
+  if (externalEdgesBeforeFilter.length > 0) {
+    console.log('[DEBUG] External property edges in rawData.edges:', externalEdgesBeforeFilter);
+    console.log('[DEBUG] Available node IDs:', Array.from(nodeIds));
+    externalEdgesBeforeFilter.forEach((e) => {
+      console.log(`[DEBUG] Edge ${e.type}: from="${e.from}" (exists: ${nodeIds.has(e.from)}), to="${e.to}" (exists: ${nodeIds.has(e.to)})`);
+    });
+  }
+  
   let filteredEdges = rawData.edges.filter(
     (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
   );
+  
+  // Debug: Check describes edges after node filtering
+  const describesEdgesAfterNodeFilter = filteredEdges.filter((e) => 
+    e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
+  );
+  console.log(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
 
   const searchQuery = (filter.searchQuery || '').trim();
   if (searchQuery) {
@@ -1711,10 +1720,56 @@ function buildNetworkData(filter: {
   }
 
   const edgeStyleConfig = filter.edgeStyleConfig;
+  
+  // Debug: Check describes edges before style filtering
+  const describesEdgesBeforeStyleFilter = filteredEdges.filter((e) => 
+    e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
+  );
+  console.log(`[DEBUG] Describes edges before style filtering: ${describesEdgesBeforeStyleFilter.length}`, describesEdgesBeforeStyleFilter);
+  
+  // Debug: Check edge style config for describes
+  const describesEdgeType = describesEdgesBeforeStyleFilter.length > 0 ? describesEdgesBeforeStyleFilter[0].type : null;
+  if (describesEdgeType) {
+    const describesStyle = edgeStyleConfig[describesEdgeType];
+    console.log(`[DEBUG] Edge style config for "${describesEdgeType}":`, describesStyle);
+    console.log(`[DEBUG] All edge style config keys:`, Object.keys(edgeStyleConfig));
+  }
+  
+  // Debug: Log edges with external property URIs
+  const externalEdges = filteredEdges.filter((e) => e.type.startsWith('http://') || e.type.startsWith('https://'));
+  if (externalEdges.length > 0) {
+    console.log('[DEBUG] External property edges found:', externalEdges.map((e) => ({ from: e.from, to: e.to, type: e.type })));
+    console.log('[DEBUG] Edge style config keys:', Object.keys(edgeStyleConfig));
+  }
+  
   filteredEdges = filteredEdges.filter((e) => {
     const style = edgeStyleConfig[e.type];
-    return !style || style.show !== false;
+    const shouldShow = !style || style.show !== false;
+    
+    // Debug: Specifically log describes edge filtering
+    if (e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')) {
+      console.log(`[DEBUG] Describes edge style check:`, {
+        type: e.type,
+        style: style,
+        shouldShow: shouldShow,
+        showValue: style?.show,
+      });
+      if (!shouldShow) {
+        console.warn(`[DEBUG] ⚠ Describes edge filtered out by style config:`, style);
+      }
+    }
+    
+    if (!shouldShow && (e.type.startsWith('http://') || e.type.startsWith('https://'))) {
+      console.warn(`[DEBUG] External edge filtered out: ${e.type}, style:`, style);
+    }
+    return shouldShow;
   });
+  
+  // Debug: Check describes edges after style filtering
+  const describesEdgesAfterStyleFilter = filteredEdges.filter((e) => 
+    e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
+  );
+  console.log(`[DEBUG] Describes edges after style filtering: ${describesEdgesAfterStyleFilter.length}`, describesEdgesAfterStyleFilter);
 
   const layoutMode = filter.layoutMode;
   const wrapChars = filter.wrapChars ?? 10;
@@ -2045,6 +2100,12 @@ function buildNetworkData(filter: {
   });
   
 
+  // Debug: Check describes edges before mapping to vis-network format
+  const describesEdgesBeforeMapping = filteredEdges.filter((e) => 
+    e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
+  );
+  console.log(`[DEBUG] Describes edges before mapping to vis-network: ${describesEdgesBeforeMapping.length}`, describesEdgesBeforeMapping);
+  
   const edges = filteredEdges.map((e) => {
     const style = edgeStyleConfig[e.type] || {
       showLabel: true,
@@ -2052,8 +2113,25 @@ function buildNetworkData(filter: {
       lineType: 'solid' as BorderLineType,
     };
     const edgeComment = getRelationshipComment(e.type, objectProperties);
-    const lineType = style.lineType ?? 'solid';
-    const dashes = lineType === 'solid' ? false : borderLineTypeToVis(lineType);
+    
+    // Styling based on whether edge is from restriction or domain/range
+    // Thick continuous line for restrictions, thin dashed line for normal object properties
+    const isRestriction = e.isRestriction ?? false;
+    const width = isRestriction ? 3 : 1; // Thick for restrictions, thin for normal
+    const dashes = isRestriction ? false : [5, 5]; // Continuous for restrictions, dashed for normal
+    
+    // Debug: Log describes edge mapping
+    if (e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')) {
+      console.log(`[DEBUG] Mapping describes edge to vis-network:`, {
+        from: e.from,
+        to: e.to,
+        type: e.type,
+        style: style,
+        edgeId: `${e.from}->${e.to}:${e.type}`,
+        isRestriction: isRestriction,
+      });
+    }
+    
     return {
       id: `${e.from}->${e.to}:${e.type}`,
       from: e.from,
@@ -2063,16 +2141,36 @@ function buildNetworkData(filter: {
       font: { size: relationshipFontSize, color: '#2c3e50' },
       color: { color: style.color, highlight: style.color },
       dashes,
+      width,
       ...(edgeComment && { title: edgeComment }),
     };
   });
+  
+  // Debug: Check describes edges after mapping
+  const describesEdgesAfterMapping = edges.filter((e) => 
+    (e.id as string).includes('describes')
+  );
+  console.log(`[DEBUG] Describes edges after mapping to vis-network: ${describesEdgesAfterMapping.length}`, describesEdgesAfterMapping);
 
+  // Deduplicate edges by id (same from, to, and type)
+  const edgeMap = new Map<string, Record<string, unknown>>();
+  edges.forEach((edgeObj) => {
+    const edgeId = edgeObj.id as string;
+    if (!edgeMap.has(edgeId)) {
+      edgeMap.set(edgeId, edgeObj as Record<string, unknown>);
+    } else {
+      // Duplicate edge found - log it
+      console.warn('Duplicate edge detected:', edgeId, edgeObj);
+    }
+  });
+  const uniqueEdges = Array.from(edgeMap.values());
+  
   // Assign smooth curves to overlapping edges (same node pair) to avoid label/line overlap
   const pairToEdges = new Map<string, Array<Record<string, unknown>>>();
-  edges.forEach((edgeObj) => {
+  uniqueEdges.forEach((edgeObj) => {
     const pairKey = [edgeObj.from, edgeObj.to].sort().join('|');
     if (!pairToEdges.has(pairKey)) pairToEdges.set(pairKey, []);
-    pairToEdges.get(pairKey)!.push(edgeObj as Record<string, unknown>);
+    pairToEdges.get(pairKey)!.push(edgeObj);
   });
   pairToEdges.forEach((list) => {
     if (list.length >= 2) {
@@ -2089,8 +2187,26 @@ function buildNetworkData(filter: {
 
   // Combine regular nodes with data property nodes
   const allNodes = [...nodes, ...dataPropertyNodes];
-  // Combine regular edges with data property edges
-  const allEdges = [...edges, ...dataPropertyEdges];
+  // Combine regular edges with data property edges (use deduplicated edges)
+  const allEdges = [...uniqueEdges, ...dataPropertyEdges];
+  
+  // Debug: Final check for describes edges
+  const describesEdgesFinal = allEdges.filter((e) => 
+    (e.id as string).includes('describes')
+  );
+  console.log(`[DEBUG] ===== FINAL: Describes edges in allEdges: ${describesEdgesFinal.length} =====`);
+  if (describesEdgesFinal.length > 0) {
+    console.log('[DEBUG] ✓ Describes edges will be rendered:', describesEdgesFinal);
+  } else {
+    console.warn('[DEBUG] ⚠ NO describes edges in final allEdges - edge will NOT appear in graph!');
+    console.log('[DEBUG] Summary of filtering:');
+    console.log(`  - Total edges in rawData.edges: ${rawData.edges.length}`);
+    console.log(`  - Describes edges in rawData.edges: ${rawData.edges.filter((e) => e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')).length}`);
+    console.log(`  - Filtered edges after node filtering: ${filteredEdges.length}`);
+    console.log(`  - Edges after style filtering: ${filteredEdges.length}`);
+    console.log(`  - Edges mapped to vis-network: ${edges.length}`);
+    console.log(`  - Unique edges (after deduplication): ${uniqueEdges.length}`);
+  }
 
   return {
     nodes: new DataSet(allNodes),
@@ -2296,14 +2412,23 @@ function setupNetworkSelectionAndNavigation(
     }
     const edgeAt = net.getEdgeAt(domPos);
     if (edgeAt != null) {
-      const m = String(edgeAt).match(/^(.+)->(.+):(.+)$/);
-      if (m) {
-        const [, from, to, type] = m;
-        // For data property restriction edges, use the from node and 'dataprop' type
-        if (type === 'dataproprestrict') {
-          showEditEdgeModal(from, to, 'dataprop');
-        } else {
-          showEditEdgeModal(m[1], m[2], m[3]);
+      // Edge ID format: "from->to:type"
+      // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
+      const edgeIdStr = String(edgeAt);
+      const arrowIndex = edgeIdStr.indexOf('->');
+      if (arrowIndex !== -1) {
+        const from = edgeIdStr.substring(0, arrowIndex);
+        const afterArrow = edgeIdStr.substring(arrowIndex + 2);
+        const colonIndex = afterArrow.indexOf(':');
+        if (colonIndex !== -1) {
+          const to = afterArrow.substring(0, colonIndex);
+          const type = afterArrow.substring(colonIndex + 1);
+          // For data property restriction edges, use the from node and 'dataprop' type
+          if (type === 'dataproprestrict') {
+            showEditEdgeModal(from, to, 'dataprop');
+          } else {
+            showEditEdgeModal(from, to, type);
+          }
         }
       }
       return;
@@ -3051,7 +3176,42 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     modal.querySelector('h3')!.textContent = 'Edit data property restriction';
   } else {
     // Regular object property edge
-    const edge = rawData.edges.find((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType);
+    // Find all matching edges first
+    const allMatchingEdges = rawData.edges.filter((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType);
+    
+    // ALWAYS prioritize restriction edges - they have the actual cardinality constraints
+    let edge = allMatchingEdges.find((e) => e.isRestriction === true);
+    if (!edge && allMatchingEdges.length > 0) {
+      // Fall back to any matching edge if no restriction edge found
+      edge = allMatchingEdges[0];
+      console.warn('[DEBUG] No restriction edge found, using fallback:', {
+        edgeFrom,
+        edgeTo,
+        edgeType,
+        allMatchingEdges,
+        selectedEdge: edge,
+      });
+    } else if (!edge) {
+      console.error('[DEBUG] No matching edge found at all:', {
+        edgeFrom,
+        edgeTo,
+        edgeType,
+        allEdgesWithType: rawData.edges.filter((e) => e.type === edgeType).slice(0, 5),
+      });
+    }
+    
+    // Debug: Log edge lookup - ALWAYS log, not just when multiple edges
+    console.log('[DEBUG] Edge lookup result:', {
+      edgeFrom,
+      edgeTo,
+      edgeType,
+      allMatchingEdgesCount: allMatchingEdges.length,
+      allMatchingEdges,
+      selectedEdge: edge,
+      selectedEdgeIsRestriction: edge?.isRestriction,
+      selectedEdgeMinCard: edge?.minCardinality,
+      selectedEdgeMaxCard: edge?.maxCardinality,
+    });
 
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
@@ -3088,8 +3248,43 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       selectedExternalObjectProperty = null;
     }
 
-    minCardInput.value = edge?.minCardinality != null ? String(edge.minCardinality) : '';
-    maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
+    // Debug: Log edge lookup for troubleshooting
+    console.log('[DEBUG] showEditEdgeModal - edge lookup:', {
+      edgeFrom,
+      edgeTo,
+      edgeType,
+      foundEdge: edge,
+      allMatchingEdges: rawData.edges.filter((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType),
+    });
+    
+    // Set cardinality values - handle null/undefined correctly
+    if (edge?.minCardinality != null && edge.minCardinality !== undefined) {
+      minCardInput.value = String(edge.minCardinality);
+    } else {
+      minCardInput.value = '';
+    }
+    if (edge?.maxCardinality != null && edge.maxCardinality !== undefined) {
+      maxCardInput.value = String(edge.maxCardinality);
+    } else {
+      maxCardInput.value = '';
+    }
+    
+    // Set isRestriction checkbox - check if this is a restriction edge
+    const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+    if (isRestrictionCb) {
+      // Check if this is a restriction edge - prioritize explicit isRestriction flag
+      const isRestriction = edge?.isRestriction === true;
+      isRestrictionCb.checked = isRestriction;
+      console.log('[DEBUG] showEditEdgeModal - restriction checkbox:', {
+        isRestriction,
+        edgeIsRestriction: edge?.isRestriction,
+        minCardinality: edge?.minCardinality,
+        maxCardinality: edge?.maxCardinality,
+        edgeType,
+      });
+    }
+    
+    // Show cardinality section if this is not subClassOf and the property supports cardinality
     cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
 
     updateEditEdgeCommentDisplayLocal();
@@ -3134,6 +3329,12 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   maxCardInput.value = '';
   const defaultTypeAdd = 'subClassOf';
   cardWrap.style.display = defaultTypeAdd !== 'subClassOf' && getPropertyHasCardinality(defaultTypeAdd, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
+
+  // Reset isRestriction checkbox - default to true (restriction) for non-subClassOf edges
+  const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+  if (isRestrictionCb) {
+    isRestrictionCb.checked = defaultTypeAdd !== 'subClassOf';
+  }
 
   updateEditEdgeCommentDisplayLocal();
   modal.querySelector('h3')!.textContent = 'Add edge';
@@ -3204,7 +3405,17 @@ function confirmEditEdge(): void {
       hideEditEdgeModalWithCleanup();
       return;
     }
-    const newEdge: import('./types').GraphEdge = { from, to, type: newType };
+    
+    // Get isRestriction checkbox value
+    const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+    const isRestriction = isRestrictionCb?.checked ?? (newType !== 'subClassOf' && card != null);
+    
+    const newEdge: import('./types').GraphEdge = { 
+      from, 
+      to, 
+      type: newType,
+      isRestriction: isRestriction
+    };
     if (card) {
       newEdge.minCardinality = card.minCardinality ?? undefined;
       newEdge.maxCardinality = card.maxCardinality ?? undefined;
@@ -3326,7 +3537,17 @@ function confirmEditEdge(): void {
   }
   const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
   if (idx >= 0) rawData.edges.splice(idx, 1);
-  const newEdge: import('./types').GraphEdge = { from: newFrom, to: newTo, type: newType };
+  
+  // Get isRestriction checkbox value
+  const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+  const isRestriction = isRestrictionCb?.checked ?? (newType !== 'subClassOf' && card != null);
+  
+  const newEdge: import('./types').GraphEdge = { 
+    from: newFrom, 
+    to: newTo, 
+    type: newType,
+    isRestriction: isRestriction
+  };
   if (card) {
     newEdge.minCardinality = card.minCardinality ?? undefined;
     newEdge.maxCardinality = card.maxCardinality ?? undefined;
@@ -3993,6 +4214,11 @@ function renderApp(): void {
             <label style="font-size: 11px;">Max: <input type="number" id="editEdgeMaxCard" min="0" placeholder="*" style="width: 60px;" title="Leave empty for unbounded"></label>
           </div>
         </div>
+        <label style="display: flex; align-items: center; gap: 6px; margin-top: 12px;">
+          <input type="checkbox" id="editEdgeIsRestriction" />
+          <span style="font-size: 12px;">OWL restriction</span>
+          <span style="cursor: help; color: #666; font-size: 14px; line-height: 1;" title="When checked, creates an OWL restriction (thick continuous line). When unchecked, creates a normal object property connection (dashed line).">ⓘ</span>
+        </label>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editEdgeCancel">Cancel</button>
           <button type="button" id="editEdgeConfirm" class="primary">OK</button>
@@ -4051,6 +4277,14 @@ async function loadTtlAndRender(
     objectProperties = objectProps;
     dataProperties = dataProps;
     ttlStore = store;
+    
+    // Debug: Check if describes edge exists in rawData.edges after parsing
+    const describesEdgesInRawData = rawData.edges.filter((e) => 
+      e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
+    );
+    console.log('[DEBUG] After parsing - describes edges in rawData.edges:', describesEdgesInRawData.length, describesEdgesInRawData);
+    console.log('[DEBUG] All edges in rawData.edges:', rawData.edges.length);
+    console.log('[DEBUG] All node IDs in rawData.nodes:', rawData.nodes.map((n) => n.id));
     
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
@@ -4148,36 +4382,22 @@ async function loadTtlAndRender(
     
     // Extract external object properties from edges that use full URIs
     // This ensures external properties appear in the Object Properties menu
+    // Create basic entries immediately without any network requests to avoid blocking
     const edgeTypes = getEdgeTypes(rawData.edges);
     for (const edgeType of edgeTypes) {
-      if ((edgeType.startsWith('http://') || edgeType.startsWith('https://')) && 
-          !objectProperties.find((op) => op.name === edgeType)) {
-        // This is an external property URI, try to find it in external references
-        let found = false;
-        for (const ref of externalOntologyReferences) {
-          const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
-          if (edgeType.startsWith(refUrl)) {
-            // Try to fetch the property info
-            try {
-              const externalProps = await searchExternalObjectProperties(extractLocalName(edgeType), [ref]);
-              const prop = externalProps.find((p) => p.uri === edgeType);
-              if (prop) {
-                objectProperties.push({
-                  name: edgeType,
-                  label: prop.label,
-                  hasCardinality: prop.hasCardinality ?? true,
-                  comment: prop.comment || null,
-                });
-                found = true;
-                break;
-              }
-      } catch (err) {
-              console.error('Error fetching external property info:', err);
-            }
-          }
+      if ((edgeType.startsWith('http://') || edgeType.startsWith('https://'))) {
+        // Check if this property already exists (either as full URI or as local name)
+        const localName = extractLocalName(edgeType);
+        const existingByUri = objectProperties.find((op) => op.name === edgeType);
+        const existingByLocalName = objectProperties.find((op) => op.name === localName);
+        
+        // If it exists as local name, update it to use the full URI to avoid duplicates
+        if (existingByLocalName && !existingByUri) {
+          existingByLocalName.name = edgeType;
         }
-        // If not found in external refs, create a basic entry
-        if (!found) {
+        
+        // Only add if it doesn't exist yet - create basic entry immediately (no network requests)
+        if (!existingByUri && !existingByLocalName) {
           objectProperties.push({
             name: edgeType,
             label: extractLocalName(edgeType),
@@ -4303,7 +4523,6 @@ function applyFilter(preserveView = false): void {
       showAddNodeModal(x, y);
       callback(null);
     },
-    editNode: false,
     addEdge: (
       edgeData: { from: string; to: string },
       callback: (data: { from: string; to: string; id?: string } | null) => void
@@ -4322,12 +4541,37 @@ function applyFilter(preserveView = false): void {
         callback: (data: { from: string; to: string } | null) => void
       ) => {
         const edgeId = edgeData.id ?? '';
-        const match = edgeId.match(/^(.+)->(.+):(.+)$/);
-        if (!match || !ttlStore) {
+        // Edge ID format: "from->to:type"
+        // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
+        // So we need to split on "->" first, then split the second part on ":" from the left (only the first ":")
+        const arrowIndex = edgeId.indexOf('->');
+        if (arrowIndex === -1 || !ttlStore) {
           callback(null);
           return;
         }
-        const [, from, to, type] = match;
+        const from = edgeId.substring(0, arrowIndex);
+        const afterArrow = edgeId.substring(arrowIndex + 2);
+        const colonIndex = afterArrow.indexOf(':');
+        if (colonIndex === -1) {
+          callback(null);
+          return;
+        }
+        const to = afterArrow.substring(0, colonIndex);
+        const type = afterArrow.substring(colonIndex + 1);
+        
+        // Debug: Log edge click
+        console.log('[DEBUG] Edge clicked for editing:', { edgeId, from, to, type });
+        
+        // Debug: Check what edges exist in rawData for this match
+        const matchingEdges = rawData.edges.filter((e) => e.from === from && e.to === to && e.type === type);
+        console.log('[DEBUG] All matching edges in rawData:', {
+          from,
+          to,
+          type,
+          matchingEdges,
+          allEdgesWithType: rawData.edges.filter((e) => e.type === type).slice(0, 5),
+        });
+        
         pendingEditEdgeCallback = callback;
         showEditEdgeModal(from, to, type);
       },
@@ -4459,10 +4703,19 @@ function applyFilter(preserveView = false): void {
         },
         (edgeId) => {
           // On edit edge callback - open edit edge modal
-          const match = String(edgeId).match(/^(.+)->(.+):(.+)$/);
-          if (match) {
-            const [, from, to, type] = match;
-            showEditEdgeModal(from, to, type);
+          // Edge ID format: "from->to:type"
+          // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
+          const edgeIdStr = String(edgeId);
+          const arrowIndex = edgeIdStr.indexOf('->');
+          if (arrowIndex !== -1) {
+            const from = edgeIdStr.substring(0, arrowIndex);
+            const afterArrow = edgeIdStr.substring(arrowIndex + 2);
+            const colonIndex = afterArrow.indexOf(':');
+            if (colonIndex !== -1) {
+              const to = afterArrow.substring(0, colonIndex);
+              const type = afterArrow.substring(colonIndex + 1);
+              showEditEdgeModal(from, to, type);
+            }
           }
         }
       );
@@ -4965,14 +5218,6 @@ function setupEventListeners(): void {
     getAllRelationshipTypes(rawData, objectProperties).forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
       if (colorEl) colorEl.value = getDefaultEdgeColors()[type] ?? getDefaultColor();
-      const lineTypeEl = document.querySelector(`.edge-linetype[data-type="${type}"]`) as HTMLInputElement;
-      if (lineTypeEl) {
-        lineTypeEl.value = 'solid';
-        const dropdown = lineTypeEl.closest('.ap-linetype-dropdown');
-        const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
-        const opt = BORDER_LINE_OPTIONS.find((o) => o.value === 'solid');
-        if (trigger && opt) trigger.innerHTML = `${renderLineTypeSvg(opt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
-      }
     });
     updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
     document.querySelectorAll('.ap-bool-show').forEach((cb) => ((cb as HTMLInputElement).checked = true));
@@ -5428,5 +5673,76 @@ setTimeout(() => {
     const tx = db.transaction('config', 'readwrite');
     tx.objectStore('config').clear();
     db.close();
+  },
+  /** Find edge by from/to labels and type. Returns edge ID for use with editEdge. */
+  findEdgeByLabels: (fromLabel: string, toLabel: string, typeLabel?: string): string | null => {
+    const fromNode = rawData.nodes.find((n) => (n.label || n.id) === fromLabel);
+    const toNode = rawData.nodes.find((n) => (n.label || n.id) === toLabel);
+    if (!fromNode || !toNode) return null;
+    
+    const edge = rawData.edges.find((e) => {
+      if (e.from !== fromNode.id || e.to !== toNode.id) return false;
+      if (typeLabel) {
+        const edgeTypeLabel = getRelationshipLabel(e.type, objectProperties, externalOntologyReferences);
+        return edgeTypeLabel === typeLabel || e.type.includes(typeLabel);
+      }
+      return true;
+    });
+    
+    if (!edge) return null;
+    return `${edge.from}->${edge.to}:${edge.type}`;
+  },
+  /** Get edge data from rawData by edge ID. */
+  getEdgeData: (edgeId: string): { from: string; to: string; type: string; isRestriction?: boolean; minCardinality?: number | null; maxCardinality?: number | null } | null => {
+    // Parse edge ID: "from->to:type"
+    const arrowIndex = edgeId.indexOf('->');
+    if (arrowIndex === -1) return null;
+    const from = edgeId.substring(0, arrowIndex);
+    const afterArrow = edgeId.substring(arrowIndex + 2);
+    const colonIndex = afterArrow.indexOf(':');
+    if (colonIndex === -1) return null;
+    const to = afterArrow.substring(0, colonIndex);
+    const type = afterArrow.substring(colonIndex + 1);
+    
+    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    if (!edge) return null;
+    
+    return {
+      from: edge.from,
+      to: edge.to,
+      type: edge.type,
+      isRestriction: edge.isRestriction,
+      minCardinality: edge.minCardinality,
+      maxCardinality: edge.maxCardinality,
+    };
+  },
+  /** Trigger edit edge modal programmatically. */
+  editEdge: (edgeId: string): boolean => {
+    const arrowIndex = edgeId.indexOf('->');
+    if (arrowIndex === -1) return false;
+    const from = edgeId.substring(0, arrowIndex);
+    const afterArrow = edgeId.substring(arrowIndex + 2);
+    const colonIndex = afterArrow.indexOf(':');
+    if (colonIndex === -1) return false;
+    const to = afterArrow.substring(0, colonIndex);
+    const type = afterArrow.substring(colonIndex + 1);
+    
+    showEditEdgeModal(from, to, type);
+    return true;
+  },
+  /** Get Edit Edge modal values. */
+  getEditEdgeModalValues: (): { minCardinality: string; maxCardinality: string; isRestrictionChecked: boolean } | null => {
+    const modal = document.getElementById('editEdgeModal');
+    if (!modal || modal.style.display === 'none') return null;
+    
+    const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
+    const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
+    const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+    
+    return {
+      minCardinality: minCardInput?.value || '',
+      maxCardinality: maxCardInput?.value || '',
+      isRestrictionChecked: isRestrictionCb?.checked || false,
+    };
   },
 };

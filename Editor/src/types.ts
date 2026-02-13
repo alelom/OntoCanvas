@@ -54,6 +54,8 @@ export interface GraphEdge {
   maxCardinality?: number | null;
   /** Target class for qualified cardinality (when different from edge 'to'). */
   onClass?: string;
+  /** Whether this edge comes from an OWL restriction (true) or from domain/range definition (false/undefined) */
+  isRestriction?: boolean;
 }
 
 export interface GraphData {

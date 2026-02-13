@@ -1,7 +1,7 @@
 import type { GraphData, BorderLineType, ObjectPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { getAllRelationshipTypes, getRelationshipLabel } from './relationshipUtils';
-import { getDefaultEdgeColors, getDefaultColor } from '../graph';
+import { getDefaultEdgeColors, getDefaultColor, getEdgeTypes } from '../graph';
 
 /**
  * Border line type options for edge and annotation property styling
@@ -69,9 +69,11 @@ export function renderEdgeLineTypeDropdown(type: string, selected: BorderLineTyp
       ${renderLineTypeSvg(opt.svgDasharray)}
     </div>`
   ).join('');
+  // HTML attributes can contain # without escaping, but we need to escape quotes
+  const htmlEscapedType = type.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   return `
     <div class="ap-linetype-dropdown" style="position: relative; display: inline-block;">
-      <input type="hidden" class="edge-linetype" data-type="${type}" value="${selected}">
+      <input type="hidden" class="edge-linetype" data-type="${htmlEscapedType}" value="${selected}">
       <button type="button" class="ap-linetype-trigger" style="display: flex; align-items: center; padding: 2px 6px; border: 1px solid #ccc; border-radius: 3px; background: #fff; cursor: pointer; font-size: 11px;">
         ${renderLineTypeSvg(selectedOpt.svgDasharray)}
         <span style="margin-left: 4px;">▾</span>
@@ -92,24 +94,48 @@ export function getEdgeStyleConfig(
   externalOntologyReferences: ExternalOntologyReference[]
 ): Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> {
   const config: Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> = {};
-  getAllRelationshipTypes(rawData, objectProperties).forEach((type) => {
+  
+  // Get all relationship types from the menu (what's in the DOM)
+  const menuTypes = getAllRelationshipTypes(rawData, objectProperties);
+  
+  // Also include any edge types that are actually in rawData.edges but might not be in the menu yet
+  // This handles cases where external properties are in edges but not yet in objectProperties
+  const edgeTypes = getEdgeTypes(rawData.edges);
+  const allTypes = new Set([...menuTypes, ...edgeTypes]);
+  
+  allTypes.forEach((type) => {
+    // Escape special CSS characters in the type for use in attribute selectors
+    // CSS.escape() handles #, :, and other special characters
+    const escapedType = CSS.escape(type);
+    
     const showCb = edgeStylesContent.querySelector(
-      `.edge-show-cb[data-type="${type}"]`
+      `.edge-show-cb[data-type="${escapedType}"]`
     ) as HTMLInputElement | null;
     const labelCb = edgeStylesContent.querySelector(
-      `.edge-label-cb[data-type="${type}"]`
+      `.edge-label-cb[data-type="${escapedType}"]`
     ) as HTMLInputElement | null;
     const colorEl = edgeStylesContent.querySelector(
-      `.edge-color-picker[data-type="${type}"]`
+      `.edge-color-picker[data-type="${escapedType}"]`
     ) as HTMLInputElement | null;
     const lineTypeEl = edgeStylesContent.querySelector(
-      `.edge-linetype[data-type="${type}"]`
+      `.edge-linetype[data-type="${escapedType}"]`
     ) as HTMLInputElement | null;
     const lineType = (lineTypeEl?.value as BorderLineType) ?? 'solid';
+    
+    // Get default color - check both full URI and local name for external properties
+    let defaultColor = getDefaultEdgeColors()[type] ?? getDefaultColor();
+    if (!defaultColor || defaultColor === getDefaultColor()) {
+      // Try extracting local name for external URIs
+      const localName = type.includes('#') ? type.split('#').pop() : type.split('/').pop();
+      if (localName) {
+        defaultColor = getDefaultEdgeColors()[localName] ?? getDefaultColor();
+      }
+    }
+    
     config[type] = {
-      show: showCb?.checked ?? true,
+      show: showCb?.checked ?? true, // Default to true if checkbox doesn't exist (edge not in menu yet)
       showLabel: labelCb?.checked ?? true,
-      color: colorEl?.value ?? getDefaultEdgeColors()[type] ?? getDefaultColor(),
+      color: colorEl?.value ?? defaultColor,
       lineType,
     };
   });

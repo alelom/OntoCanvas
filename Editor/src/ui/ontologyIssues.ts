@@ -59,12 +59,14 @@ function detectUnusedAnnotationProperties(store: Store): OntologyIssue[] {
     }
   }
   
-  // Find unused annotation properties
+  // Find unused annotation properties - deduplicate by name
+  const reportedNames = new Set<string>();
   for (const [apUri, apName] of apUriToName) {
-    if (!usedApUris.has(apUri)) {
+    if (!usedApUris.has(apUri) && !reportedNames.has(apName)) {
       // Check if this annotation property is in our list
       const ap = annotationProperties.find(p => p.name === apName);
       if (ap) {
+        reportedNames.add(apName);
         issues.push({
           type: 'unused_annotation_property',
           severity: 'warning',

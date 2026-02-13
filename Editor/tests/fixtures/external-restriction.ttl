@@ -1,0 +1,17 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dano: <https://w3id.org/dano#> .
+
+<http://example.org/test#DescriptionElement> a owl:Class ;
+    rdfs:label "Description Element" ;
+    rdfs:subClassOf [
+        a owl:Restriction ;
+        owl:onProperty dano:describes ;
+        owl:onClass <http://example.org/test#DisplayElement> ;
+        owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger
+    ] .
+
+<http://example.org/test#DisplayElement> a owl:Class ;
+    rdfs:label "Display Element" .
