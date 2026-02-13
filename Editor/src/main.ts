@@ -112,7 +112,19 @@ import {
   hideAddNodeModal,
   hideEditEdgeModal,
   getCardinalityFromEditModal,
+  showLoadingModal,
+  hideLoadingModal,
 } from './ui/modals';
+import {
+  BORDER_LINE_OPTIONS,
+  borderLineTypeToVis,
+  renderLineTypeSvg,
+  renderLineTypeDropdown,
+  renderEdgeLineTypeDropdown,
+  getEdgeStyleConfig,
+  updateEdgeColorsLegend,
+} from './ui/edgeStyleUtils';
+import { getNetworkOptions } from './ui/networkConfig';
 import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
 import './style.css';
 
@@ -129,7 +141,7 @@ function collectDisplayConfig(): DisplayConfig | null {
   return {
     version: DISPLAY_CONFIG_VERSION,
     nodePositions,
-    edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent) : {},
+    edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences) : {},
     wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 10,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
@@ -182,7 +194,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
         }
       }
     });
-    updateEdgeColorsLegend();
+    updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
   }
   // Annotation style config is stored but restoration is deferred (complex DOM structure)
 }
@@ -542,7 +554,7 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     initEdgeStylesMenu(edgeStylesContent, onApply);
-    updateEdgeColorsLegend();
+    updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
     applyFilter(true);
     document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
   });
@@ -611,7 +623,7 @@ function initEdgeStylesMenu(
   });
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
-    .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(); }));
+    .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
 
   edgeStylesContent.querySelectorAll('.ap-linetype-trigger').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -638,7 +650,7 @@ function initEdgeStylesMenu(
         }
         (dropdown?.querySelector('.ap-linetype-panel') as HTMLElement).style.display = 'none';
         onApply();
-        updateEdgeColorsLegend();
+        updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
       }
     });
   });
@@ -679,7 +691,7 @@ function initEdgeStylesMenu(
       }
     });
   });
-  updateEdgeColorsLegend();
+  updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
 }
 
 let edgeLineTypeDocListenerAdded = false;
@@ -1272,66 +1284,6 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
   });
 }
 
-function getEdgeStyleConfig(
-  edgeStylesContent: HTMLElement
-): Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> {
-  const config: Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> = {};
-  getAllRelationshipTypes(rawData, objectProperties).forEach((type) => {
-    const showCb = edgeStylesContent.querySelector(
-      `.edge-show-cb[data-type="${type}"]`
-    ) as HTMLInputElement | null;
-    const labelCb = edgeStylesContent.querySelector(
-      `.edge-label-cb[data-type="${type}"]`
-    ) as HTMLInputElement | null;
-    const colorEl = edgeStylesContent.querySelector(
-      `.edge-color-picker[data-type="${type}"]`
-    ) as HTMLInputElement | null;
-    const lineTypeEl = edgeStylesContent.querySelector(
-      `.edge-linetype[data-type="${type}"]`
-    ) as HTMLInputElement | null;
-    const lineType = (lineTypeEl?.value as BorderLineType) ?? 'solid';
-    config[type] = {
-      show: showCb?.checked ?? true,
-      showLabel: labelCb?.checked ?? true,
-      color: colorEl?.value ?? getDefaultEdgeColors()[type] ?? getDefaultColor(),
-      lineType,
-    };
-  });
-  return config;
-}
-
-function updateEdgeColorsLegend(): void {
-  const legendEl = document.getElementById('edgeColorsLegend');
-  if (!legendEl) return;
-  const edgeStylesContent = document.getElementById('edgeStylesContent');
-  if (!edgeStylesContent) {
-    legendEl.textContent = '';
-    return;
-  }
-  const config = getEdgeStyleConfig(edgeStylesContent);
-  const types = Object.keys(config).filter((t) => config[t].show);
-  if (types.length === 0) {
-    legendEl.textContent = '';
-    return;
-  }
-  legendEl.innerHTML =
-    'Edge colors: ' +
-    types.map((t) => `<span style="color: ${config[t].color}">●</span> ${getRelationshipLabel(t, objectProperties, externalOntologyReferences)}`).join(' ');
-}
-
-
-const BORDER_LINE_OPTIONS: { value: BorderLineType; visValue: false | true | number[]; svgDasharray: string }[] = [
-  { value: 'solid', visValue: false, svgDasharray: '' },
-  { value: 'dashed', visValue: [5, 5], svgDasharray: '5,3' },
-  { value: 'dotted', visValue: [1, 3], svgDasharray: '1,3' },
-  { value: 'dash-dot', visValue: [5, 2, 1, 2], svgDasharray: '5,2,1,2' },
-  { value: 'dash-dot-dot', visValue: [5, 2, 1, 2, 1, 2], svgDasharray: '5,2,1,2,1,2' },
-];
-
-function borderLineTypeToVis(value: BorderLineType): false | true | number[] {
-  return BORDER_LINE_OPTIONS.find((o) => o.value === value)?.visValue ?? false;
-}
-
 interface AnnotationStyleConfig {
   booleanProps: Record<
     string,
@@ -1350,59 +1302,6 @@ const DEFAULT_BOOL_COLORS = {
   whenUndefined: { fill: '#95a5a6', border: '#000000', lineType: 'dashed' as BorderLineType },
 };
 const DEFAULT_TEXT_COLOR = { fill: '#3498db', border: '#2980b9', lineType: 'solid' as BorderLineType };
-
-function renderLineTypeSvg(dasharray: string): string {
-  return `<svg width="32" height="10" style="display: block;"><line x1="2" y1="5" x2="30" y2="5" stroke="#333" stroke-width="1.5" ${dasharray ? `stroke-dasharray="${dasharray}"` : ''}></line></svg>`;
-}
-
-function renderLineTypeDropdown(
-  dataProp: string,
-  dataVal: string,
-  selected: BorderLineType,
-  inputClass: string
-): string {
-  const selectedOpt = BORDER_LINE_OPTIONS.find((o) => o.value === selected) ?? BORDER_LINE_OPTIONS[0];
-  const dataValAttr = dataVal ? ` data-val="${dataVal}"` : '';
-  const optionsHtml = BORDER_LINE_OPTIONS.map(
-    (opt) => `
-    <div class="ap-linetype-option" data-value="${opt.value}" style="display: flex; align-items: center; padding: 4px 8px; cursor: pointer; font-size: 11px; border-bottom: 1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='#fff'">
-      ${renderLineTypeSvg(opt.svgDasharray)}
-    </div>`
-  ).join('');
-  return `
-    <div class="ap-linetype-dropdown" style="position: relative; display: inline-block;">
-      <input type="hidden" class="${inputClass}" data-prop="${dataProp}"${dataValAttr} value="${selected}">
-      <button type="button" class="ap-linetype-trigger" style="display: flex; align-items: center; padding: 2px 6px; border: 1px solid #ccc; border-radius: 3px; background: #fff; cursor: pointer; font-size: 11px;">
-        ${renderLineTypeSvg(selectedOpt.svgDasharray)}
-        <span style="margin-left: 4px;">▾</span>
-      </button>
-      <div class="ap-linetype-panel" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 2px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1001; min-width: 60px;">
-        ${optionsHtml}
-      </div>
-    </div>`;
-}
-
-/** Line type dropdown for edges (uses data-type instead of data-prop/data-val). */
-function renderEdgeLineTypeDropdown(type: string, selected: BorderLineType): string {
-  const selectedOpt = BORDER_LINE_OPTIONS.find((o) => o.value === selected) ?? BORDER_LINE_OPTIONS[0];
-  const optionsHtml = BORDER_LINE_OPTIONS.map(
-    (opt) => `
-    <div class="ap-linetype-option" data-value="${opt.value}" style="display: flex; align-items: center; padding: 4px 8px; cursor: pointer; font-size: 11px; border-bottom: 1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='#fff'">
-      ${renderLineTypeSvg(opt.svgDasharray)}
-    </div>`
-  ).join('');
-  return `
-    <div class="ap-linetype-dropdown" style="position: relative; display: inline-block;">
-      <input type="hidden" class="edge-linetype" data-type="${type}" value="${selected}">
-      <button type="button" class="ap-linetype-trigger" style="display: flex; align-items: center; padding: 2px 6px; border: 1px solid #ccc; border-radius: 3px; background: #fff; cursor: pointer; font-size: 11px;">
-        ${renderLineTypeSvg(selectedOpt.svgDasharray)}
-        <span style="margin-left: 4px;">▾</span>
-      </button>
-      <div class="ap-linetype-panel" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 2px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1001; min-width: 60px;">
-        ${optionsHtml}
-      </div>
-    </div>`;
-}
 
 let annotationPropsMenuClickAbort: AbortController | null = null;
 
@@ -2470,40 +2369,6 @@ function setupNetworkSelectionAndNavigation(
   });
 }
 
-function getNetworkOptions(layoutMode: string): Record<string, unknown> {
-  const base: Record<string, unknown> = {
-    nodes: {
-      shape: 'box',
-      margin: 10,
-      font: { size: 20, color: '#2c3e50' },
-    },
-    edges: { smooth: { type: 'cubicBezier' }, arrows: 'to' },
-    interaction: {
-      dragView: false,
-      dragNodes: true,
-      multiselect: true,
-    },
-  };
-  if (layoutMode === 'weighted') {
-    base.physics = { enabled: false };
-  } else if (layoutMode === 'force') {
-    base.physics = {
-      enabled: true,
-      barnesHut: {
-        gravitationalConstant: -2000,
-        centralGravity: 0.3,
-        springLength: SPACING,
-        springConstant: 0.04,
-        damping: 0.09,
-        avoidOverlap: 0.1,
-      },
-      stabilization: { iterations: 150 },
-    };
-  } else {
-    base.physics = { enabled: false };
-  }
-  return base;
-}
 
 function updateSaveButtonVisibility(): void {
   const group = document.getElementById('saveGroup');
@@ -4167,15 +4032,6 @@ function renderApp(): void {
   `;
 }
 
-function showLoadingModal(): void {
-  const modal = document.getElementById('loadingModal');
-  if (modal) modal.style.display = 'flex';
-}
-
-function hideLoadingModal(): void {
-  const modal = document.getElementById('loadingModal');
-  if (modal) modal.style.display = 'none';
-}
 
 async function loadTtlAndRender(
   ttlString: string,
@@ -4421,7 +4277,7 @@ function applyFilter(preserveView = false): void {
     dataPropertyFontSize,
     searchQuery: searchEl?.value ?? '',
     includeNeighbors: neighborsEl?.checked ?? true,
-    edgeStyleConfig: getEdgeStyleConfig(edgeStylesContent),
+    edgeStyleConfig: getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences),
     annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent),
     layoutMode,
   };
@@ -5117,7 +4973,7 @@ function setupEventListeners(): void {
         if (trigger && opt) trigger.innerHTML = `${renderLineTypeSvg(opt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
       }
     });
-    updateEdgeColorsLegend();
+    updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
     document.querySelectorAll('.ap-bool-show').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.ap-bool-fill[data-val="true"]').forEach((el) => ((el as HTMLInputElement).value = DEFAULT_BOOL_COLORS.whenTrue.fill));
     document.querySelectorAll('.ap-bool-border[data-val="true"]').forEach((el) => ((el as HTMLInputElement).value = DEFAULT_BOOL_COLORS.whenTrue.border));

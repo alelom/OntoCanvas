@@ -41,3 +41,19 @@ export function getCardinalityFromEditModal(): { minCardinality?: number | null;
   if ((minVal !== '' && (isNaN(min!) || min! < 0)) || (maxVal !== '' && (isNaN(max!) || max! < 0))) return undefined;
   return { minCardinality: minVal === '' ? null : min!, maxCardinality: maxVal === '' ? null : max! };
 }
+
+/**
+ * Show the loading modal
+ */
+export function showLoadingModal(): void {
+  const modal = document.getElementById('loadingModal');
+  if (modal) modal.style.display = 'flex';
+}
+
+/**
+ * Hide the loading modal
+ */
+export function hideLoadingModal(): void {
+  const modal = document.getElementById('loadingModal');
+  if (modal) modal.style.display = 'none';
+}
