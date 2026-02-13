@@ -4261,13 +4261,11 @@ async function loadTtlAndRender(
       console.log(`  - ${ref.url} (prefix: ${ref.prefix || 'none'}, usePrefix: ${ref.usePrefix})`);
     }
     
-    // Pre-fetch and cache external ontology classes and object properties
+    // Pre-fetch and cache external ontology classes and object properties (non-blocking)
     if (externalOntologyReferences.length > 0) {
-      try {
-        await preloadExternalOntologyClasses(externalOntologyReferences);
-      } catch (err) {
+      preloadExternalOntologyClasses(externalOntologyReferences).catch((err) => {
         console.error('Failed to pre-load external ontologies:', err);
-      }
+      });
     }
     
     // Extract external object properties from edges that use full URIs
@@ -4685,34 +4683,7 @@ async function loadFromUrl(url: string): Promise<void> {
   errorMsg.textContent = '';
 
   try {
-    // Add retry logic for transient failures
-    let ttl: string;
-    let lastError: Error | null = null;
-    const maxRetries = 2;
-    
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        ttl = await fetchOntologyFromUrl(url, 15000); // 15 second timeout
-        lastError = null;
-        break;
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        // Don't retry on certain errors (timeout, network, 404)
-        if (lastError.message.includes('timeout') || 
-            lastError.message.includes('Network error') ||
-            lastError.message.includes('404')) {
-          throw lastError;
-        }
-        // Wait before retry (exponential backoff)
-        if (attempt < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-        }
-      }
-    }
-    
-    if (lastError) {
-      throw lastError;
-    }
+    const ttl = await fetchOntologyFromUrl(url);
 
     // Extract filename from URL
     const urlObj = new URL(url);
@@ -4727,7 +4698,7 @@ async function loadFromUrl(url: string): Promise<void> {
     // Save last opened URL (non-blocking)
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
-    await loadTtlAndRender(ttl!, fileName, null, url);
+    await loadTtlAndRender(ttl, fileName, null, url);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('Failed to load ontology from URL:', err);
