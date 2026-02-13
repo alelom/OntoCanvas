@@ -4685,7 +4685,34 @@ async function loadFromUrl(url: string): Promise<void> {
   errorMsg.textContent = '';
 
   try {
-    const ttl = await fetchOntologyFromUrl(url);
+    // Add retry logic for transient failures
+    let ttl: string;
+    let lastError: Error | null = null;
+    const maxRetries = 2;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        ttl = await fetchOntologyFromUrl(url, 15000); // 15 second timeout
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        // Don't retry on certain errors (timeout, network, 404)
+        if (lastError.message.includes('timeout') || 
+            lastError.message.includes('Network error') ||
+            lastError.message.includes('404')) {
+          throw lastError;
+        }
+        // Wait before retry (exponential backoff)
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+    }
+    
+    if (lastError) {
+      throw lastError;
+    }
 
     // Extract filename from URL
     const urlObj = new URL(url);
@@ -4697,12 +4724,14 @@ async function loadFromUrl(url: string): Promise<void> {
       fileName = `${fileName}.ttl`;
     }
 
-    // Save last opened URL
-    await saveLastUrlToIndexedDB(url, fileName).catch(() => {});
+    // Save last opened URL (non-blocking)
+    saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
-    await loadTtlAndRender(ttl, fileName, null, url);
+    await loadTtlAndRender(ttl!, fileName, null, url);
   } catch (err) {
-    errorMsg.textContent = `Failed to load from URL: ${err instanceof Error ? err.message : String(err)}`;
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error('Failed to load ontology from URL:', err);
+    errorMsg.textContent = `Failed to load from URL: ${errorMessage}`;
     errorMsg.style.display = 'block';
   }
 }
