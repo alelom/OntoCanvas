@@ -1905,7 +1905,7 @@ function buildNetworkData(filter: {
       if ((currentRowWidth + propWidth + spacing <= availableWidth || fitsWithTolerance) || currentRowCount === 0) {
         currentRowWidth += propWidth + spacing;
         currentRowCount++;
-          } else {
+      } else {
         // Start new row
         propertiesPerRow.push(currentRowCount);
         currentRowWidth = propWidth + spacing;
