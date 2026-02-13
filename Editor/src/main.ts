@@ -107,6 +107,12 @@ import {
   showRelationshipTooltip,
   hideRelationshipTooltip,
 } from './ui/relationshipUtils';
+import {
+  hideRenameModal,
+  hideAddNodeModal,
+  hideEditEdgeModal,
+  getCardinalityFromEditModal,
+} from './ui/modals';
 import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
 import './style.css';
 
@@ -2673,9 +2679,7 @@ function showMultiEditModal(nodeIds: string[]): void {
   commentInput?.focus();
 }
 
-function hideRenameModal(): void {
-  document.getElementById('renameModal')!.style.display = 'none';
-}
+// hideRenameModal moved to ui/modals.ts
 
 let addNodeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 let selectedExternalClass: ExternalClassInfo | null = null;
@@ -2728,7 +2732,8 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   if (customInput) customInput.focus();
 }
 
-function hideAddNodeModal(): void {
+// hideAddNodeModal wrapper - state cleanup still needed in main.ts
+function hideAddNodeModalWithCleanup(): void {
   pendingAddNodePosition = null;
   addNodeMode = false;
   selectedExternalClass = null;
@@ -2736,7 +2741,7 @@ function hideAddNodeModal(): void {
     clearTimeout(addNodeSearchTimeout);
     addNodeSearchTimeout = null;
   }
-  document.getElementById('addNodeModal')!.style.display = 'none';
+  hideAddNodeModalWithCleanup();
 }
 
 function updateAddNodeOkButton(): void {
@@ -2892,7 +2897,7 @@ function confirmAddNode(): void {
     }
   }
   
-  hideAddNodeModal();
+  hideAddNodeModalWithCleanup();
 }
 
 // Relationship utility functions moved to ui/relationshipUtils.ts
@@ -3098,10 +3103,10 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
       // Generic data properties are not editable
       if (match) {
-        hideEditEdgeModal();
+        hideEditEdgeModalWithCleanup();
         return;
       }
-      hideEditEdgeModal();
+      hideEditEdgeModalWithCleanup();
       return;
     }
     const [, classId, propertyName] = match;
@@ -3270,7 +3275,8 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   modal.style.display = 'flex';
 }
 
-function hideEditEdgeModal(): void {
+// hideEditEdgeModal wrapper - state cleanup still needed in main.ts
+function hideEditEdgeModalWithCleanup(): void {
   if (pendingEditEdgeCallback) {
     pendingEditEdgeCallback(null);
     pendingEditEdgeCallback = null;
@@ -3279,21 +3285,10 @@ function hideEditEdgeModal(): void {
     pendingAddEdgeData.callback(null);
     pendingAddEdgeData = null;
   }
-  document.getElementById('editEdgeModal')!.style.display = 'none';
+  hideEditEdgeModalWithCleanup();
 }
 
-function getCardinalityFromEditModal(): { minCardinality?: number | null; maxCardinality?: number | null } | undefined {
-  const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
-  const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
-  const cardWrap = document.getElementById('editEdgeCardinalityWrap');
-  if (!cardWrap || cardWrap.style.display === 'none') return undefined;
-  const minVal = minCardInput?.value?.trim();
-  const maxVal = maxCardInput?.value?.trim();
-  const min = minVal === '' ? null : parseInt(minVal, 10);
-  const max = maxVal === '' ? null : parseInt(maxVal, 10);
-  if ((minVal !== '' && (isNaN(min!) || min! < 0)) || (maxVal !== '' && (isNaN(max!) || max! < 0))) return undefined;
-  return { minCardinality: minVal === '' ? null : min!, maxCardinality: maxVal === '' ? null : max! };
-}
+// getCardinalityFromEditModal moved to ui/modals.ts
 
 function confirmEditEdge(): void {
   const modal = document.getElementById('editEdgeModal')!;
@@ -3334,14 +3329,14 @@ function confirmEditEdge(): void {
   if (mode === 'add' && pendingAddEdgeData) {
     const { from, to, callback } = pendingAddEdgeData;
     if (!ttlStore) {
-      hideEditEdgeModal();
+      hideEditEdgeModalWithCleanup();
       return;
     }
     const card = newType !== 'subClassOf' ? cardinality : undefined;
     const ok = addEdgeToStore(ttlStore, from, to, newType, card);
     if (!ok) {
       alert('Failed to add edge. An edge may already exist between these nodes.');
-      hideEditEdgeModal();
+      hideEditEdgeModalWithCleanup();
       return;
     }
     const newEdge: import('./types').GraphEdge = { from, to, type: newType };
@@ -3385,7 +3380,7 @@ function confirmEditEdge(): void {
     updateSaveButtonVisibility();
     callback({ from, to, id: `${from}->${to}:${newType}` });
     pendingAddEdgeData = null;
-    hideEditEdgeModal();
+    hideEditEdgeModalWithCleanup();
     // Clean up unused external properties and update edge styles menu
     objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
     const edgeStylesContent = document.getElementById('edgeStylesContent');
@@ -3409,7 +3404,7 @@ function confirmEditEdge(): void {
     const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     
     if (!ttlStore || !classNode || !restriction) {
-      hideEditEdgeModal();
+      hideEditEdgeModalWithCleanup();
       return;
     }
     
@@ -3420,7 +3415,7 @@ function confirmEditEdge(): void {
     
     const sameCardinality = oldMin === newMin && oldMax === newMax;
     if (sameCardinality) {
-      hideEditEdgeModal();
+      hideEditEdgeModalWithCleanup();
       return;
     }
     
@@ -3436,7 +3431,7 @@ function confirmEditEdge(): void {
     
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
-    hideEditEdgeModal();
+    hideEditEdgeModalWithCleanup();
     applyFilter(true);
     return;
   }
@@ -3449,19 +3444,19 @@ function confirmEditEdge(): void {
     (card?.minCardinality ?? null) === (oldEdge?.minCardinality ?? null) &&
     (card?.maxCardinality ?? null) === (oldEdge?.maxCardinality ?? null);
   if (!ttlStore || sameEdge) {
-    hideEditEdgeModal();
+    hideEditEdgeModalWithCleanup();
     return;
   }
   const removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
   if (!removeOk) {
-    hideEditEdgeModal();
+    hideEditEdgeModalWithCleanup();
     return;
   }
   const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
   if (!addOk) {
     addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
     alert('Failed to update edge.');
-    hideEditEdgeModal();
+    hideEditEdgeModalWithCleanup();
     return;
   }
   const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
@@ -3518,7 +3513,7 @@ function confirmEditEdge(): void {
   if (edgeStylesContent) {
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
   }
-  hideEditEdgeModal();
+  hideEditEdgeModalWithCleanup();
   applyFilter(true);
 }
 
@@ -5055,12 +5050,12 @@ function setupEventListeners(): void {
     updateEditEdgeCommentDisplay();
   });
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModal();
+    if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModalWithCleanup();
   });
   document.getElementById('editEdgeModal')?.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).closest('#editEdgeModal') && (e.key === 'Enter' || e.key === 'Escape')) {
       if (e.key === 'Enter') confirmEditEdge();
-      else hideEditEdgeModal();
+      else hideEditEdgeModalWithCleanup();
       e.preventDefault();
     }
   });
@@ -5367,7 +5362,7 @@ function setupEventListeners(): void {
         const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
         if (okBtn && !okBtn.disabled) confirmAddNode();
       } else {
-        hideAddNodeModal();
+        hideAddNodeModalWithCleanup();
       }
       e.preventDefault();
     }
