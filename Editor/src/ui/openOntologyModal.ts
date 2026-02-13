@@ -128,8 +128,11 @@ export function initOpenOntologyModal(
       text-align: left;
     `;
     lastOpenedFileBtn.addEventListener('click', async () => {
-      if (lastOpenedFileBtn.dataset.hasLast !== '1') return;
       if (onLoadLastOpenedFile) {
+        // Check if button is disabled, but still try to load if callback exists
+        if (lastOpenedFileBtn.disabled) {
+          return;
+        }
         await onLoadLastOpenedFile();
         hideModal();
       }
@@ -148,8 +151,11 @@ export function initOpenOntologyModal(
       text-align: left;
     `;
     lastOpenedUrlBtn.addEventListener('click', async () => {
-      if (lastOpenedUrlBtn.dataset.hasLast !== '1') return;
       if (onLoadLastOpenedUrl) {
+        // Check if button is disabled, but still try to load if callback exists
+        if (lastOpenedUrlBtn.disabled) {
+          return;
+        }
         await onLoadLastOpenedUrl();
         hideModal();
       }
@@ -181,8 +187,10 @@ export function initOpenOntologyModal(
     document.body.appendChild(modalElement);
   }
 
-  // Update last opened buttons
-  updateLastOpenedButtons();
+  // Update last opened buttons (non-blocking)
+  updateLastOpenedButtons().catch(() => {
+    // Silently handle errors - buttons will just show "(none)"
+  });
 }
 
 /**

@@ -49,7 +49,7 @@ const externalObjectPropertiesCache: Map<string, ExternalObjectPropertyInfo[]> =
  * This is the central function that ensures we fetch TTL once and reuse it.
  * Returns the TTL text, or null if fetching failed.
  */
-async function fetchExternalOntologyTtl(
+export async function fetchExternalOntologyTtl(
   url: string
 ): Promise<string | null> {
   // Normalize URL (remove trailing # if present)
