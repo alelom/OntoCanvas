@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphData } from '../types';
+import type { GraphEdge, GraphData, ObjectPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
@@ -6,13 +6,6 @@ import { extractLocalName } from '../parser';
 import { formatRelationshipLabelWithPrefix } from './externalRefs';
 
 export const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
-
-export interface ObjectPropertyInfo {
-  name: string;
-  label: string;
-  hasCardinality: boolean;
-  comment?: string | null;
-}
 
 /**
  * Get all relationship types that are actually in use in the graph.

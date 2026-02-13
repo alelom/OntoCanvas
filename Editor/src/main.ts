@@ -4303,6 +4303,7 @@ function applyFilter(preserveView = false): void {
       showAddNodeModal(x, y);
       callback(null);
     },
+    editNode: false,
     addEdge: (
       edgeData: { from: string; to: string },
       callback: (data: { from: string; to: string; id?: string } | null) => void
@@ -4890,7 +4891,7 @@ function setupEventListeners(): void {
     ?.addEventListener('change', () => applyFilter());
   document.getElementById('undoBtn')?.addEventListener('click', performUndo);
   document.getElementById('redoBtn')?.addEventListener('click', performRedo);
-  document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModal);
+  document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModalWithCleanup);
   document.getElementById('editEdgeConfirm')?.addEventListener('click', confirmEditEdge);
   let editEdgeTypeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   document.getElementById('editEdgeType')?.addEventListener('input', (e) => {
