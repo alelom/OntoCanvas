@@ -4152,7 +4152,29 @@ function renderApp(): void {
         </div>
       </div>
     </div>
+    <div id="loadingModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 20000;">
+      <div style="background: white; border-radius: 8px; padding: 32px; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);">
+        <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Loading ontology...</div>
+        <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+      </div>
+    </div>
+    <style>
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
   `;
+}
+
+function showLoadingModal(): void {
+  const modal = document.getElementById('loadingModal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function hideLoadingModal(): void {
+  const modal = document.getElementById('loadingModal');
+  if (modal) modal.style.display = 'none';
 }
 
 async function loadTtlAndRender(
@@ -4293,7 +4315,7 @@ async function loadTtlAndRender(
                 found = true;
                 break;
               }
-            } catch (err) {
+      } catch (err) {
               console.error('Error fetching external property info:', err);
             }
           }
@@ -4437,7 +4459,6 @@ function applyFilter(preserveView = false): void {
       }
       showAddEdgeModal(from, to, callback);
     },
-    editNode: false,
     editEdge: {
       editWithoutDrag: (
         edgeData: { id?: string; from: string; to: string },
@@ -4652,6 +4673,7 @@ async function loadFromFile(): Promise<void> {
   if (!fileInput) return;
 
   if ('showOpenFilePicker' in window) {
+    showLoadingModal();
     try {
       const [handle] = await (window as Window & { showOpenFilePicker: (o?: object) => Promise<FileSystemFileHandle[]> })
         .showOpenFilePicker({
@@ -4662,7 +4684,9 @@ async function loadFromFile(): Promise<void> {
       const ttl = await file.text();
       const pathHint = (file as File & { path?: string }).path ?? file.name;
       await loadTtlAndRender(ttl, file.name, handle, pathHint);
+      hideLoadingModal();
     } catch (err) {
+      hideLoadingModal();
       if ((err as Error).name !== 'AbortError') {
         const errorMsg = document.getElementById('errorMsg') as HTMLElement;
         errorMsg.textContent = `Failed to open file: ${err instanceof Error ? err.message : String(err)}`;
@@ -4682,6 +4706,7 @@ async function loadFromUrl(url: string): Promise<void> {
   errorMsg.style.display = 'none';
   errorMsg.textContent = '';
 
+  showLoadingModal();
   try {
     const ttl = await fetchOntologyFromUrl(url);
 
@@ -4699,7 +4724,9 @@ async function loadFromUrl(url: string): Promise<void> {
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
     await loadTtlAndRender(ttl, fileName, null, url);
+    hideLoadingModal();
   } catch (err) {
+    hideLoadingModal();
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('Failed to load ontology from URL:', err);
     errorMsg.textContent = `Failed to load from URL: ${errorMessage}`;
@@ -4718,11 +4745,13 @@ async function loadLastOpenedFile(): Promise<void> {
     errorMsg.style.display = 'block';
       return;
     }
+    showLoadingModal();
     try {
       const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
       if (perm !== 'granted') {
         const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
         if (requested !== 'granted') {
+          hideLoadingModal();
           const errorMsg = document.getElementById('errorMsg') as HTMLElement;
           errorMsg.textContent = 'Permission to access file was denied.';
           errorMsg.style.display = 'block';
@@ -4733,7 +4762,9 @@ async function loadLastOpenedFile(): Promise<void> {
       const ttl = await file.text();
       const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
       await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
+      hideLoadingModal();
     } catch (err) {
+      hideLoadingModal();
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
       errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
       errorMsg.style.display = 'block';
@@ -4753,12 +4784,12 @@ async function loadLastOpenedUrl(): Promise<void> {
   }
   try {
     await loadFromUrl(stored.url);
-      } catch (err) {
-          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+  } catch (err) {
+    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
     errorMsg.textContent = `Failed to load from URL: ${err instanceof Error ? err.message : String(err)}`;
-          errorMsg.style.display = 'block';
-        }
-      }
+    errorMsg.style.display = 'block';
+  }
+}
 
 function setupEventListeners(): void {
   // Initialize status bar after DOM is ready
@@ -4784,10 +4815,13 @@ function setupEventListeners(): void {
   fileInput?.addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    showLoadingModal();
     try {
       const ttl = await file.text();
       await loadTtlAndRender(ttl, file.name, null);
+      hideLoadingModal();
     } catch (err) {
+      hideLoadingModal();
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
       errorMsg.textContent = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
       errorMsg.style.display = 'block';
