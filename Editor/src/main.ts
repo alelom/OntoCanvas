@@ -2006,7 +2006,7 @@ function buildNetworkData(filter: {
       if ((currentRowWidth + propWidth + spacing <= availableWidth || fitsWithTolerance) || currentRowCount === 0) {
         currentRowWidth += propWidth + spacing;
         currentRowCount++;
-      } else {
+          } else {
         // Start new row
         propertiesPerRow.push(currentRowCount);
         currentRowWidth = propWidth + spacing;
@@ -2099,21 +2099,21 @@ function buildNetworkData(filter: {
       };
       
       const dp = dataProperties.find((p) => p.name === dataProp.propertyName);
-      
-      dataPropertyNodes.push({
+        
+        dataPropertyNodes.push({
         id: dataProp.id,
         label: wrapText(dataProp.label, wrapChars),
-        shape: 'box',
-        size: 15,
-        color: { background: '#e8f4f8', border: '#4a90a4' },
+          shape: 'box',
+          size: 15,
+          color: { background: '#e8f4f8', border: '#4a90a4' },
         font: { size: dataPropertyFontSize, color: '#2c3e50' },
-        margin: 4,
-        physics: false,
+          margin: 4,
+          physics: false,
         x: finalDataPropPos.x,
         y: finalDataPropPos.y,
-        ...(dp?.comment && { title: dp.comment }),
-      });
-      
+          ...(dp?.comment && { title: dp.comment }),
+        });
+        
       propIndex++;
       
       // Create edge - thicker for restrictions, thinner dashed for normal
@@ -4174,8 +4174,6 @@ async function loadTtlAndRender(
     dataProperties = dataProps;
     ttlStore = store;
     
-    // Update status bar with the new store
-    updateStatusBar(ttlStore);
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
@@ -4183,8 +4181,10 @@ async function loadTtlAndRender(
     clearUndoRedo();
     updateFilePathDisplay();
     
-    // Update status bar with the new store
-    updateStatusBar(ttlStore);
+    // Update status bar with the new store (defer to avoid blocking)
+    setTimeout(() => {
+      updateStatusBar(ttlStore);
+    }, 0);
     
     if (handle && fileName) {
       saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
