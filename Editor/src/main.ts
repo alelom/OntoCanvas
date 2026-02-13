@@ -103,7 +103,7 @@ import {
   getRelationshipComment,
   getAllEdgeTypes,
   getPropertyHasCardinality,
-  updateEditEdgeCommentDisplay as getEditEdgeComment,
+  updateEditEdgeCommentDisplay,
   showRelationshipTooltip,
   hideRelationshipTooltip,
 } from './ui/relationshipUtils';
@@ -2741,7 +2741,7 @@ function hideAddNodeModalWithCleanup(): void {
     clearTimeout(addNodeSearchTimeout);
     addNodeSearchTimeout = null;
   }
-  hideAddNodeModalWithCleanup();
+  hideAddNodeModal();
 }
 
 function updateAddNodeOkButton(): void {
@@ -2906,12 +2906,12 @@ let selectedEdgeType: string | null = null;
 let selectedExternalObjectProperty: ExternalObjectPropertyInfo | null = null;
 
 // Wrapper for updateEditEdgeCommentDisplay that updates the DOM
-function updateEditEdgeCommentDisplay(): void {
+function updateEditEdgeCommentDisplayLocal(): void {
   const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
   const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
   if (!typeInput || !commentEl) return;
   
-  const comment = getEditEdgeComment(
+  const comment = updateEditEdgeCommentDisplay(
     selectedEdgeType,
     selectedExternalObjectProperty,
     typeInput.value,
@@ -2939,7 +2939,7 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
     hideRelationshipTooltip();
     selectedEdgeType = null;
     selectedExternalObjectProperty = null;
-    updateEditEdgeCommentDisplay();
+    updateEditEdgeCommentDisplayLocal();
     return;
   }
   
@@ -3009,7 +3009,7 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
     }
     typeInput.value = match.displayLabel;
     resultsDiv.style.display = 'none';
-    updateEditEdgeCommentDisplay();
+    updateEditEdgeCommentDisplayLocal();
   } else {
     // Match dropdown width to input field width and align it properly
     // The dropdown is positioned absolutely within the label (which has position: relative)
@@ -3078,7 +3078,7 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
         typeInput.value = match.displayLabel;
         resultsDiv.style.display = 'none';
         hideRelationshipTooltip();
-        updateEditEdgeCommentDisplay();
+        updateEditEdgeCommentDisplayLocal();
       });
     });
   }
@@ -3227,7 +3227,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     maxCardInput.value = edge?.maxCardinality != null ? String(edge.maxCardinality) : '';
     cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
 
-    updateEditEdgeCommentDisplay();
+    updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
     
     // Hide explanation for regular edges
@@ -3270,7 +3270,7 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   const defaultTypeAdd = 'subClassOf';
   cardWrap.style.display = defaultTypeAdd !== 'subClassOf' && getPropertyHasCardinality(defaultTypeAdd, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
 
-  updateEditEdgeCommentDisplay();
+  updateEditEdgeCommentDisplayLocal();
   modal.querySelector('h3')!.textContent = 'Add edge';
   modal.style.display = 'flex';
 }
@@ -3285,7 +3285,7 @@ function hideEditEdgeModalWithCleanup(): void {
     pendingAddEdgeData.callback(null);
     pendingAddEdgeData = null;
   }
-  hideEditEdgeModalWithCleanup();
+  hideEditEdgeModal();
 }
 
 // getCardinalityFromEditModal moved to ui/modals.ts
@@ -4795,7 +4795,7 @@ function setupEventListeners(): void {
     fileInput.value = '';
   });
 
-  document.getElementById('layoutMode')?.addEventListener('change', applyFilter);
+  document.getElementById('layoutMode')?.addEventListener('change', () => applyFilter());
 
   const externalRefsCallbacks: ExternalRefsModalCallbacks = {
     onUpdate: () => {
@@ -4890,10 +4890,10 @@ function setupEventListeners(): void {
         const VANN_NS = 'http://purl.org/vocab/vann/';
         const VANN_PREFERRED_PREFIX = VANN_NS + 'preferredNamespacePrefix';
         
-        for (const quad of quads) {
-          const pred = quad.predicate as { value?: string };
+        for (const quad of quads as Array<{ predicate: { value?: string }; object: { value?: string } }>) {
+          const pred = quad.predicate;
           if (pred.value === VANN_PREFERRED_PREFIX) {
-            const obj = quad.object as { value?: string };
+            const obj = quad.object;
             const prefixValue = obj.value;
             if (prefixValue && typeof prefixValue === 'string') {
               preferredPrefix = prefixValue.trim();
@@ -4987,17 +4987,17 @@ function setupEventListeners(): void {
     }
   });
 
-  document.getElementById('wrapChars')?.addEventListener('input', applyFilter);
-  document.getElementById('wrapChars')?.addEventListener('change', applyFilter);
-  document.getElementById('minFontSize')?.addEventListener('input', applyFilter);
-  document.getElementById('minFontSize')?.addEventListener('change', applyFilter);
-  document.getElementById('maxFontSize')?.addEventListener('input', applyFilter);
-  document.getElementById('maxFontSize')?.addEventListener('change', applyFilter);
-  document.getElementById('relationshipFontSize')?.addEventListener('input', applyFilter);
-  document.getElementById('relationshipFontSize')?.addEventListener('change', applyFilter);
+  document.getElementById('wrapChars')?.addEventListener('input', () => applyFilter());
+  document.getElementById('wrapChars')?.addEventListener('change', () => applyFilter());
+  document.getElementById('minFontSize')?.addEventListener('input', () => applyFilter());
+  document.getElementById('minFontSize')?.addEventListener('change', () => applyFilter());
+  document.getElementById('maxFontSize')?.addEventListener('input', () => applyFilter());
+  document.getElementById('maxFontSize')?.addEventListener('change', () => applyFilter());
+  document.getElementById('relationshipFontSize')?.addEventListener('input', () => applyFilter());
+  document.getElementById('relationshipFontSize')?.addEventListener('change', () => applyFilter());
   document
     .getElementById('searchIncludeNeighbors')
-    ?.addEventListener('change', applyFilter);
+    ?.addEventListener('change', () => applyFilter());
   document.getElementById('undoBtn')?.addEventListener('click', performUndo);
   document.getElementById('redoBtn')?.addEventListener('click', performRedo);
   document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModal);
@@ -5025,7 +5025,7 @@ function setupEventListeners(): void {
     
     // Also update comment display immediately if we have a selected type
     if (selectedEdgeType) {
-      updateEditEdgeCommentDisplay();
+      updateEditEdgeCommentDisplayLocal();
     }
   });
   
@@ -5047,7 +5047,7 @@ function setupEventListeners(): void {
     if (cardWrap && selectedEdgeType) {
       cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
     }
-    updateEditEdgeCommentDisplay();
+    updateEditEdgeCommentDisplayLocal();
   });
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModalWithCleanup();
