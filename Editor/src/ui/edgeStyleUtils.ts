@@ -103,6 +103,9 @@ export function getEdgeStyleConfig(
   const edgeTypes = getEdgeTypes(rawData.edges);
   const allTypes = new Set([...menuTypes, ...edgeTypes]);
   
+  // Get default colors for all types (distributed across spectrum)
+  const defaultColors = getDefaultEdgeColors([...allTypes]);
+  
   allTypes.forEach((type) => {
     // Escape special CSS characters in the type for use in attribute selectors
     // CSS.escape() handles #, :, and other special characters
@@ -123,12 +126,12 @@ export function getEdgeStyleConfig(
     const lineType = (lineTypeEl?.value as BorderLineType) ?? 'solid';
     
     // Get default color - check both full URI and local name for external properties
-    let defaultColor = getDefaultEdgeColors()[type] ?? getDefaultColor();
+    let defaultColor = defaultColors[type] ?? getDefaultColor();
     if (!defaultColor || defaultColor === getDefaultColor()) {
       // Try extracting local name for external URIs
       const localName = type.includes('#') ? type.split('#').pop() : type.split('/').pop();
       if (localName) {
-        defaultColor = getDefaultEdgeColors()[localName] ?? getDefaultColor();
+        defaultColor = defaultColors[localName] ?? getDefaultColor();
       }
     }
     

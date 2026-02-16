@@ -8,12 +8,96 @@ export const COLORS = {
   default: '#3498db',
 };
 
-const DEFAULT_EDGE_COLORS: Record<string, string> = {
-  subClassOf: '#3498db',
-  contains: '#27ae60',
-};
+// subClassOf is always black
+const SUBCLASSOF_COLOR = '#000000';
 const DEFAULT_COLOR = '#95a5a6';
 const SPACING = 220;
+
+/**
+ * Convert HSL to hex color
+ */
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  
+  if (0 <= h && h < 60) {
+    r = c; g = x; b = 0;
+  } else if (60 <= h && h < 120) {
+    r = x; g = c; b = 0;
+  } else if (120 <= h && h < 180) {
+    r = 0; g = c; b = x;
+  } else if (180 <= h && h < 240) {
+    r = 0; g = x; b = c;
+  } else if (240 <= h && h < 300) {
+    r = x; g = 0; b = c;
+  } else if (300 <= h && h < 360) {
+    r = c; g = 0; b = x;
+  }
+  
+  r = Math.round((r + m) * 255);
+  g = Math.round((g + m) * 255);
+  b = Math.round((b + m) * 255);
+  
+  return `#${[r, g, b].map(x => {
+    const hex = x.toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('')}`;
+}
+
+/**
+ * Generate a color from purple to red based on index and total count.
+ * Colors are evenly distributed across the spectrum: purple -> blue -> cyan -> green -> yellow -> orange -> red
+ */
+function generateSpectrumColor(index: number, total: number): string {
+  if (total <= 1) {
+    // If only one property, use purple
+    return '#8000ff';
+  }
+  
+  // Map index to hue: 0 = purple (270°), 1 = blue (240°), 2 = cyan (180°), 3 = green (120°), 4 = yellow (60°), 5 = orange (30°), 6 = red (0°)
+  // Interpolate between these key colors
+  const keyHues = [270, 240, 180, 120, 60, 30, 0]; // Purple to red
+  const position = (index / (total - 1)) * (keyHues.length - 1);
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.min(lowerIndex + 1, keyHues.length - 1);
+  const t = position - lowerIndex;
+  
+  const hue = keyHues[lowerIndex] + t * (keyHues[upperIndex] - keyHues[lowerIndex]);
+  
+  // Use HSL with high saturation and medium lightness for vibrant colors, then convert to hex
+  return hslToHex(hue, 70, 50);
+}
+
+/**
+ * Generate default edge colors for all edge types, distributed evenly across the spectrum.
+ * subClassOf is always black, other properties get colors from purple to red.
+ */
+export function getDefaultEdgeColors(edgeTypes?: string[]): Record<string, string> {
+  const colors: Record<string, string> = {
+    subClassOf: SUBCLASSOF_COLOR, // Always black
+  };
+  
+  if (!edgeTypes) {
+    // Return minimal default if no types provided (backward compatibility)
+    return colors;
+  }
+  
+  // Filter out subClassOf and sort the rest for consistent color assignment
+  const objectPropertyTypes = edgeTypes
+    .filter((type) => type !== 'subClassOf')
+    .sort(); // Sort for consistent ordering
+  
+  // Assign colors evenly across the spectrum
+  objectPropertyTypes.forEach((type, index) => {
+    colors[type] = generateSpectrumColor(index, objectPropertyTypes.length);
+  });
+  
+  return colors;
+}
 
 export interface FilterState {
   labellable: string;
@@ -68,10 +152,6 @@ export function getNodeColor(node: GraphNode, colorBy: string): string {
   if (lr === true) return COLORS.labellable;
   if (lr === false) return COLORS.nonLabellable;
   return COLORS.unknown;
-}
-
-export function getDefaultEdgeColors(): Record<string, string> {
-  return { ...DEFAULT_EDGE_COLORS };
 }
 
 export function getDefaultColor(): string {

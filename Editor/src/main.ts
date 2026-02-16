@@ -175,6 +175,8 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
   const edgeStyleConfig = config.edgeStyleConfig || {};
   if (document.getElementById('edgeStylesContent')) {
+    const types = getAllRelationshipTypes(rawData, objectProperties);
+    const defaultColors = getDefaultEdgeColors(types);
     Object.keys(edgeStyleConfig).forEach((type) => {
       const c = edgeStyleConfig[type];
       if (c) {
@@ -183,7 +185,23 @@ function applyDisplayConfig(config: DisplayConfig): void {
         const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement | null;
         if (showCb) showCb.checked = c.show !== false;
         if (labelCb) labelCb.checked = c.showLabel !== false;
-        if (colorEl) colorEl.value = c.color || getDefaultEdgeColors()[type] || getDefaultColor();
+        if (colorEl) {
+          // Use saved color if available, otherwise use default color for this type
+          colorEl.value = c.color || defaultColors[type] || getDefaultColor();
+        }
+      }
+    });
+    // For types not in saved config, ensure they have default colors
+    // This ensures that even if no saved config exists, all types get their spectrum colors
+    types.forEach((type) => {
+      if (!edgeStyleConfig[type]) {
+        const escapedType = CSS.escape(type);
+        const colorEl = document.querySelector(`.edge-color-picker[data-type="${escapedType}"]`) as HTMLInputElement | null;
+        if (colorEl) {
+          // Always set default color if not in saved config (override any existing value)
+          const defaultColor = defaultColors[type] || getDefaultColor();
+          colorEl.value = defaultColor;
+        }
       }
     });
     updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
@@ -588,16 +606,11 @@ function initEdgeStylesMenu(
 ): void {
   edgeStylesContent.innerHTML = '';
   const types = getAllRelationshipTypes(rawData, objectProperties);
+  // Get default colors for all types (distributed across spectrum)
+  const defaultColors = getDefaultEdgeColors(types);
   types.forEach((type) => {
-    // Get default color - check both full URI and local name for external properties
-    let color = getDefaultEdgeColors()[type] || getDefaultColor();
-    if (!color || color === getDefaultColor()) {
-      // Try extracting local name for external URIs
-      const localName = type.includes('#') ? type.split('#').pop() : type.split('/').pop();
-      if (localName) {
-        color = getDefaultEdgeColors()[localName] || getDefaultColor();
-      }
-    }
+    // Get default color - use the generated color directly
+    const color = defaultColors[type] || getDefaultColor();
     const isEditable = type !== 'subClassOf';
     const editBtn = isEditable
       ? `<button type="button" class="edge-edit-btn" data-type="${type}" title="Edit object property (name, comment)" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>`
@@ -3284,8 +3297,8 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       });
     }
     
-    // Show cardinality section if this is not subClassOf and the property supports cardinality
-    cardWrap.style.display = edgeType !== 'subClassOf' && getPropertyHasCardinality(edgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
+    // Show cardinality section only if this is a restriction (cardinality only makes sense for restrictions)
+    cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
@@ -3328,13 +3341,15 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   minCardInput.value = '';
   maxCardInput.value = '';
   const defaultTypeAdd = 'subClassOf';
-  cardWrap.style.display = defaultTypeAdd !== 'subClassOf' && getPropertyHasCardinality(defaultTypeAdd, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
-
+  
   // Reset isRestriction checkbox - default to true (restriction) for non-subClassOf edges
   const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
   if (isRestrictionCb) {
     isRestrictionCb.checked = defaultTypeAdd !== 'subClassOf';
   }
+  
+  // Show cardinality section only if this is a restriction (cardinality only makes sense for restrictions)
+  cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
   updateEditEdgeCommentDisplayLocal();
   modal.querySelector('h3')!.textContent = 'Add edge';
@@ -3398,7 +3413,13 @@ function confirmEditEdge(): void {
       hideEditEdgeModalWithCleanup();
       return;
     }
-    const card = newType !== 'subClassOf' ? cardinality : undefined;
+    
+    // Get isRestriction checkbox value - cardinality only applies to restrictions
+    const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+    const isRestriction = isRestrictionCb?.checked ?? false;
+    
+    // Only include cardinality if this is a restriction
+    const card = isRestriction ? cardinality : undefined;
     const ok = addEdgeToStore(ttlStore, from, to, newType, card);
     if (!ok) {
       alert('Failed to add edge. An edge may already exist between these nodes.');
@@ -3406,17 +3427,13 @@ function confirmEditEdge(): void {
       return;
     }
     
-    // Get isRestriction checkbox value
-    const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
-    const isRestriction = isRestrictionCb?.checked ?? (newType !== 'subClassOf' && card != null);
-    
     const newEdge: import('./types').GraphEdge = { 
       from, 
       to, 
       type: newType,
       isRestriction: isRestriction
     };
-    if (card) {
+    if (card && isRestriction) {
       newEdge.minCardinality = card.minCardinality ?? undefined;
       newEdge.maxCardinality = card.maxCardinality ?? undefined;
     }
@@ -3515,7 +3532,13 @@ function confirmEditEdge(): void {
   const newFrom = fromSel.value;
   const newTo = toSel.value;
   const oldEdge = rawData.edges.find((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
-  const card = newType !== 'subClassOf' ? cardinality : undefined;
+  
+  // Get isRestriction checkbox value - cardinality only applies to restrictions
+  const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
+  const isRestriction = isRestrictionCb?.checked ?? false;
+  
+  // Only include cardinality if this is a restriction
+  const card = isRestriction ? cardinality : undefined;
   const sameEdge = oldFrom === newFrom && oldTo === newTo && oldType === newType &&
     (card?.minCardinality ?? null) === (oldEdge?.minCardinality ?? null) &&
     (card?.maxCardinality ?? null) === (oldEdge?.maxCardinality ?? null);
@@ -3538,17 +3561,13 @@ function confirmEditEdge(): void {
   const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
   if (idx >= 0) rawData.edges.splice(idx, 1);
   
-  // Get isRestriction checkbox value
-  const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
-  const isRestriction = isRestrictionCb?.checked ?? (newType !== 'subClassOf' && card != null);
-  
   const newEdge: import('./types').GraphEdge = { 
     from: newFrom, 
     to: newTo, 
     type: newType,
     isRestriction: isRestriction
   };
-  if (card) {
+  if (card && isRestriction) {
     newEdge.minCardinality = card.minCardinality ?? undefined;
     newEdge.maxCardinality = card.maxCardinality ?? undefined;
   }
@@ -4217,7 +4236,7 @@ function renderApp(): void {
         <label style="display: flex; align-items: center; gap: 6px; margin-top: 12px;">
           <input type="checkbox" id="editEdgeIsRestriction" />
           <span style="font-size: 12px;">OWL restriction</span>
-          <span style="cursor: help; color: #666; font-size: 14px; line-height: 1;" title="When checked, creates an OWL restriction (thick continuous line). When unchecked, creates a normal object property connection (dashed line).">ⓘ</span>
+          <span style="cursor: help; color: #666; font-size: 14px; line-height: 1;" title="OWL Restriction: An OWL restriction defines constraints on how an object property can be used with a specific class. It allows you to specify cardinality constraints (min/max) that apply to instances of that class. When checked, creates an OWL restriction (displayed as a thick continuous line). When unchecked, creates a normal object property connection (displayed as a dashed line).">ⓘ</span>
         </label>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editEdgeCancel">Cancel</button>
@@ -5146,6 +5165,23 @@ function setupEventListeners(): void {
   document.getElementById('redoBtn')?.addEventListener('click', performRedo);
   document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModalWithCleanup);
   document.getElementById('editEdgeConfirm')?.addEventListener('click', confirmEditEdge);
+  
+  // Toggle cardinality visibility based on restriction checkbox
+  document.getElementById('editEdgeIsRestriction')?.addEventListener('change', (e) => {
+    const isRestrictionCb = e.target as HTMLInputElement;
+    const cardWrap = document.getElementById('editEdgeCardinalityWrap');
+    if (cardWrap) {
+      cardWrap.style.display = isRestrictionCb.checked ? 'block' : 'none';
+      // Clear cardinality values when unchecked (they don't apply to non-restrictions)
+      if (!isRestrictionCb.checked) {
+        const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
+        const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
+        if (minCardInput) minCardInput.value = '';
+        if (maxCardInput) maxCardInput.value = '';
+      }
+    }
+  });
+  
   let editEdgeTypeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   document.getElementById('editEdgeType')?.addEventListener('input', (e) => {
     const typeInput = e.target as HTMLInputElement;
@@ -5215,9 +5251,11 @@ function setupEventListeners(): void {
     textDisplayPopup && (textDisplayPopup.style.display = 'none');
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
-    getAllRelationshipTypes(rawData, objectProperties).forEach((type) => {
+    const types = getAllRelationshipTypes(rawData, objectProperties);
+    const defaultColors = getDefaultEdgeColors(types);
+    types.forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
-      if (colorEl) colorEl.value = getDefaultEdgeColors()[type] ?? getDefaultColor();
+      if (colorEl) colorEl.value = defaultColors[type] ?? getDefaultColor();
     });
     updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
     document.querySelectorAll('.ap-bool-show').forEach((cb) => ((cb as HTMLInputElement).checked = true));
