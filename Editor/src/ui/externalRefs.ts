@@ -31,7 +31,7 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
         // Try to find prefix from URL patterns
         const urlWithoutHash = importUrl.endsWith('#') ? importUrl.slice(0, -1) : importUrl;
         
-        // Try common prefixes based on URL patterns
+        // Try common prefixes based on URL patterns (so imported properties show e.g. geo:hasGeometry in the UI)
         let prefix: string | undefined;
         if (urlWithoutHash.includes('w3id.org/dano')) {
           prefix = 'dano';
@@ -39,6 +39,8 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
           prefix = 'schema';
         } else if (urlWithoutHash.includes('purl.org/dc')) {
           prefix = 'dc';
+        } else if (urlWithoutHash.includes('opengis.net/ont/geosparql')) {
+          prefix = 'geo';
         }
         
         refs.push({
@@ -110,10 +112,15 @@ export function getObjectPropertyPrefix(
   // Find matching external reference
   for (const ref of externalOntologyReferences) {
     const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
-    if (propertyName.startsWith(refUrl)) {
+    if (propertyName.startsWith(refUrl) || propertyName.startsWith(refUrl + '#')) {
       return ref.usePrefix && ref.prefix ? ref.prefix : null;
     }
   }
+  // Fallback: known namespaces when no ref (e.g. inlined without owl:imports)
+  if (propertyName.includes('opengis.net/ont/geosparql')) return 'geo';
+  if (propertyName.includes('w3.org/1999/02/22-rdf-syntax-ns#')) return 'rdf';
+  if (propertyName.includes('w3.org/2000/01/rdf-schema#')) return 'rdfs';
+  if (propertyName.includes('w3.org/2002/07/owl#')) return 'owl';
   return null;
 }
 

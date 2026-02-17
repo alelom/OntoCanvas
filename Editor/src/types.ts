@@ -31,6 +31,16 @@ export interface ObjectPropertyInfo {
   hasCardinality: boolean;
   /** rdfs:comment from the ontology */
   comment?: string | null;
+  /** Domain class local name (rdfs:domain). Empty/null means owl:Thing. */
+  domain?: string | null;
+  /** Range class local name (rdfs:range). Empty/null means owl:Thing. */
+  range?: string | null;
+  /** Full URI of the property (used to disambiguate when local name is shared, e.g. hasGeometry from GeoSPARQL vs DAnO). */
+  uri?: string;
+  /** rdfs:isDefinedBy (URI of defining ontology). Read-only in edit. */
+  isDefinedBy?: string | null;
+  /** rdfs:subPropertyOf (single parent object property URI or local name). */
+  subPropertyOf?: string | null;
 }
 
 export interface DataPropertyInfo {

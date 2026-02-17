@@ -3,7 +3,6 @@ import type { ExternalOntologyReference } from '../storage';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
 import { extractLocalName } from '../parser';
-import { formatRelationshipLabelWithPrefix } from './externalRefs';
 
 export const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
 
@@ -21,17 +20,8 @@ export function getAllRelationshipTypes(
   // Include subClassOf always
   usedTypes.add('subClassOf');
   
-  // Include local properties (not URIs) from objectProperties
-  const localProps = objectProperties
-    .filter((op) => !op.name.startsWith('http://') && !op.name.startsWith('https://'))
-    .map((op) => op.name);
-  localProps.forEach((prop) => usedTypes.add(prop));
-  
-  // Include external properties (URIs) only if they're used in edges
-  const externalProps = objectProperties
-    .filter((op) => (op.name.startsWith('http://') || op.name.startsWith('https://')) && usedTypes.has(op.name))
-    .map((op) => op.name);
-  externalProps.forEach((prop) => usedTypes.add(prop));
+  // Include all object properties so that duplicate local names (e.g. geo:hasGeometry vs dano:hasGeometry) appear as separate rows with prefixed labels
+  objectProperties.forEach((op) => usedTypes.add(op.name));
   
   return Array.from(usedTypes).sort();
 }
@@ -52,8 +42,11 @@ export function cleanupUnusedExternalProperties(
     if (!op.name.startsWith('http://') && !op.name.startsWith('https://')) {
       return true;
     }
-    // For external properties (URIs), only keep if used in edges
-    return edgeTypes.has(op.name);
+    // For external properties (URIs), keep if used in edges or if same local name as another prop (e.g. geo:hasGeometry vs dano:hasGeometry)
+    if (edgeTypes.has(op.name)) return true;
+    const thisLocal = extractLocalName(op.name);
+    const hasDuplicateLocalName = objectProperties.some((other) => other !== op && extractLocalName(other.name) === thisLocal);
+    return hasDuplicateLocalName;
   });
   
   const afterCount = filtered.length;

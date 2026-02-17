@@ -64,16 +64,34 @@ export interface ParseResult {
   dataProperties: DataPropertyInfo[];
 }
 
-function getObjectProperties(store: Store): ObjectPropertyInfo[] {
+/** Return the main ontology IRI with trailing # for prefix matching, or null if not found. */
+export function getMainOntologyBase(store: Store): string | null {
+  const ontQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Ontology'), null);
+  if (ontQuads.length === 0 || ontQuads[0].subject.termType !== 'NamedNode') return null;
+  const uri = (ontQuads[0].subject as { value: string }).value;
+  return uri.endsWith('#') ? uri : uri + '#';
+}
+
+export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
   const seen = new Set<string>();
+  const mainBase = getMainOntologyBase(store);
   const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
   for (const q of opQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
     const subjUri = (subj as { value: string }).value;
-    const name = extractLocalName(subjUri);
+    const localName = extractLocalName(subjUri);
+    const isFromMainOntology = mainBase != null
+      ? (subjUri === mainBase || subjUri.startsWith(mainBase) || subjUri === mainBase.slice(0, -1))
+      : subjUri.startsWith(BASE_IRI);
+    // External (imported) properties always use full URI so we can show e.g. geo:hasGeometry in the UI.
+    // Local (main ontology) properties use local name unless duplicate, then full URI so both appear in the list.
+    const name = isFromMainOntology
+      ? (seen.has(localName) ? subjUri : localName)
+      : subjUri;
     if (seen.has(name)) continue;
+    seen.add(localName);
     seen.add(name);
     const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
     const label = labelQuad?.object?.value ?? name;
@@ -85,7 +103,36 @@ function getObjectProperties(store: Store): ObjectPropertyInfo[] {
       const val = String((hasCardQuad.object as { value?: unknown }).value ?? '').toLowerCase();
       hasCardinality = val === 'true' || val === '"true"';
     }
-    result.push({ name, label: String(label), hasCardinality, comment: comment || undefined });
+    const OWL_THING = OWL + 'Thing';
+    const domainQuads = store.getQuads(subj, DataFactory.namedNode(RDFS + 'domain'), null, null);
+    const rangeQuads = store.getQuads(subj, DataFactory.namedNode(RDFS + 'range'), null, null);
+    let domain: string | null = null;
+    let range: string | null = null;
+    if (domainQuads.length > 0 && domainQuads[0].object.termType === 'NamedNode') {
+      const domainUri = (domainQuads[0].object as { value: string }).value;
+      if (domainUri !== OWL_THING) domain = extractLocalName(domainUri);
+    }
+    if (rangeQuads.length > 0 && rangeQuads[0].object.termType === 'NamedNode') {
+      const rangeUri = (rangeQuads[0].object as { value: string }).value;
+      if (rangeUri !== OWL_THING) range = extractLocalName(rangeUri);
+    }
+    const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
+    const subPropertyOfQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'subPropertyOf'), null, null)[0];
+    let isDefinedBy: string | null = null;
+    let subPropertyOf: string | null = null;
+    if (isDefinedByQuad?.object?.termType === 'NamedNode') isDefinedBy = (isDefinedByQuad.object as { value: string }).value;
+    if (subPropertyOfQuad?.object?.termType === 'NamedNode') subPropertyOf = (subPropertyOfQuad.object as { value: string }).value;
+    result.push({
+      name,
+      label: String(label),
+      hasCardinality,
+      comment: comment || undefined,
+      domain: domain ?? undefined,
+      range: range ?? undefined,
+      uri: subjUri,
+      isDefinedBy: isDefinedBy ?? undefined,
+      subPropertyOf: subPropertyOf ?? undefined
+    });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -360,24 +407,24 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   // This handles cases where properties are defined but not used in restrictions
   // (e.g., dano:describes with domain DescriptionElement and range DisplayElement)
   for (const op of objectProps) {
-    // Get the property URI - check if it's already a full URI or needs BASE_IRI
+    // Use explicit URI when set (disambiguates e.g. hasGeometry from GeoSPARQL vs DAnO), else name if full URI, else resolve from store
     let propUri: string;
-    if (op.name.startsWith('http://') || op.name.startsWith('https://')) {
+    if (op.uri) {
+      propUri = op.uri;
+    } else if (op.name.startsWith('http://') || op.name.startsWith('https://')) {
       propUri = op.name;
     } else {
-      // Try to find the actual URI in the store
       const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
-      let foundUri = BASE_IRI + op.name;
+      propUri = BASE_IRI + op.name;
       for (const q of opQuads) {
         if (q.subject.termType === 'NamedNode') {
           const uri = (q.subject as { value: string }).value;
           if (extractLocalName(uri) === op.name) {
-            foundUri = uri;
+            propUri = uri;
             break;
           }
         }
       }
-      propUri = foundUri;
     }
     
     const propNode = DataFactory.namedNode(propUri);
@@ -832,12 +879,14 @@ function ensureHasCardinalityAnnotationProperty(store: Store): void {
 /**
  * Add a new object property (relationship type) to the store.
  * Returns the property localName, or null on failure.
+ * Optional: comment, isDefinedBy (URI), subPropertyOf (name or URI).
  */
 export function addObjectPropertyToStore(
   store: Store,
   label: string,
   hasCardinality: boolean,
-  localName?: string
+  localName?: string,
+  options?: { comment?: string | null; isDefinedBy?: string | null; subPropertyOf?: string | null }
 ): string | null {
   const existingNames = new Set(getObjectProperties(store).map((op) => op.name));
   let name = localName ?? (extractLocalName(label) || 'newProperty').replace(/\s+/g, '');
@@ -861,6 +910,16 @@ export function addObjectPropertyToStore(
     DataFactory.literal(String(hasCardinality), DataFactory.namedNode(XSD + 'boolean')),
     graph
   );
+  if (options?.comment != null && options.comment.trim() !== '') {
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'comment'), DataFactory.literal(options.comment.trim()), graph);
+  }
+  if (options?.isDefinedBy != null && options.isDefinedBy.trim() !== '' && options.isDefinedBy.trim().startsWith('http')) {
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'isDefinedBy'), DataFactory.namedNode(options.isDefinedBy.trim()), graph);
+  }
+  if (options?.subPropertyOf != null && options.subPropertyOf.trim() !== '') {
+    const parentUri = resolveObjectPropertyUri(store, options.subPropertyOf.trim());
+    if (parentUri) store.addQuad(subject, DataFactory.namedNode(RDFS + 'subPropertyOf'), DataFactory.namedNode(parentUri), graph);
+  }
   return name;
 }
 
@@ -908,6 +967,123 @@ export function updateObjectPropertyCommentInStore(
   for (const cq of commentQuads) store.removeQuad(cq);
   if (comment !== null && comment.trim() !== '') {
     store.addQuad(subject, commentPred, DataFactory.literal(comment.trim()), graph);
+  }
+  return true;
+}
+
+const OWL_THING_URI = OWL + 'Thing';
+
+/**
+ * Resolve a class local name to full URI (from store or BASE_IRI).
+ */
+function resolveClassUri(store: Store, localName: string): string {
+  if (!localName || localName.trim() === '') return OWL_THING_URI;
+  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+  for (const cq of classQuads) {
+    if (cq.subject.termType === 'NamedNode') {
+      const currentUri = (cq.subject as { value: string }).value;
+      if (extractLocalName(currentUri) === localName.trim()) return currentUri;
+    }
+  }
+  return BASE_IRI + localName.trim();
+}
+
+/**
+ * Update rdfs:domain and rdfs:range for an object property in the store.
+ * domainName/rangeName are class local names; null or empty means owl:Thing.
+ * Returns false for subClassOf or if property not found.
+ */
+export function updateObjectPropertyDomainRangeInStore(
+  store: Store,
+  propertyName: string,
+  domainName: string | null,
+  rangeName: string | null
+): boolean {
+  if (propertyName === 'subClassOf') return false;
+  const propUri = getPropertyUri(propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+
+  const domainPred = DataFactory.namedNode(RDFS + 'domain');
+  const rangePred = DataFactory.namedNode(RDFS + 'range');
+  const domainQuads = store.getQuads(subject, domainPred, null, null);
+  const rangeQuads = store.getQuads(subject, rangePred, null, null);
+  const graph = domainQuads[0]?.graph ?? rangeQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+
+  for (const dq of domainQuads) store.removeQuad(dq);
+  for (const rq of rangeQuads) store.removeQuad(rq);
+
+  const domainUri = (domainName?.trim() ?? '') ? resolveClassUri(store, domainName!) : OWL_THING_URI;
+  const rangeUri = (rangeName?.trim() ?? '') ? resolveClassUri(store, rangeName!) : OWL_THING_URI;
+  store.addQuad(subject, domainPred, DataFactory.namedNode(domainUri), graph);
+  store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  return true;
+}
+
+/**
+ * Resolve object property name or URI to full URI (from store or BASE_IRI).
+ */
+function resolveObjectPropertyUri(store: Store, nameOrUri: string): string {
+  if (!nameOrUri || !nameOrUri.trim()) return '';
+  const trimmed = nameOrUri.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  const ops = getObjectProperties(store);
+  for (const op of ops) {
+    if (op.uri === trimmed || op.name === trimmed) return op.uri ?? BASE_IRI + trimmed;
+  }
+  return BASE_IRI + trimmed;
+}
+
+/**
+ * Update rdfs:subPropertyOf for an object property in the store.
+ * parentNameOrUri: object property local name or full URI; null/empty removes the triple.
+ * Returns false for subClassOf or if property not found.
+ */
+export function updateObjectPropertySubPropertyOfInStore(
+  store: Store,
+  propertyName: string,
+  parentNameOrUri: string | null
+): boolean {
+  if (propertyName === 'subClassOf') return false;
+  const propUri = getPropertyUri(propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+
+  const pred = DataFactory.namedNode(RDFS + 'subPropertyOf');
+  const existing = store.getQuads(subject, pred, null, null);
+  const graph = existing[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const q of existing) store.removeQuad(q);
+  if (parentNameOrUri != null && parentNameOrUri.trim() !== '') {
+    const parentUri = resolveObjectPropertyUri(store, parentNameOrUri);
+    if (parentUri) store.addQuad(subject, pred, DataFactory.namedNode(parentUri), graph);
+  }
+  return true;
+}
+
+/**
+ * Update rdfs:isDefinedBy for an object property in the store.
+ * uri: full URI of the defining ontology; null/empty removes the triple.
+ * Returns false for subClassOf or if property not found.
+ */
+export function updateObjectPropertyIsDefinedByInStore(
+  store: Store,
+  propertyName: string,
+  uri: string | null
+): boolean {
+  if (propertyName === 'subClassOf') return false;
+  const propUri = getPropertyUri(propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+
+  const pred = DataFactory.namedNode(RDFS + 'isDefinedBy');
+  const existing = store.getQuads(subject, pred, null, null);
+  const graph = existing[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const q of existing) store.removeQuad(q);
+  if (uri != null && uri.trim() !== '' && uri.trim().startsWith('http')) {
+    store.addQuad(subject, pred, DataFactory.namedNode(uri.trim()), graph);
   }
   return true;
 }

@@ -16,6 +16,11 @@ import {
   removeObjectPropertyFromStore,
   updateObjectPropertyLabelInStore,
   updateObjectPropertyCommentInStore,
+  updateObjectPropertyDomainRangeInStore,
+  updateObjectPropertySubPropertyOfInStore,
+  updateObjectPropertyIsDefinedByInStore,
+  getMainOntologyBase,
+  getObjectProperties,
   addDataPropertyToStore,
   removeDataPropertyFromStore,
   updateDataPropertyLabelInStore,
@@ -42,7 +47,7 @@ import {
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, BorderLineType } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
@@ -225,7 +230,7 @@ function scheduleDisplayConfigSave(): void {
 
 let rawData: GraphData = { nodes: [], edges: [] };
 let annotationProperties: AnnotationPropertyInfo[] = [];
-let objectProperties: { name: string; label: string; hasCardinality: boolean; comment?: string | null }[] = [];
+let objectProperties: ObjectPropertyInfo[] = [];
 let dataProperties: DataPropertyInfo[] = [];
 let network: Network | null = null;
 let addNodeMode = false;
@@ -539,9 +544,119 @@ const SPACING = getSpacing();
 
 let editRelationshipTypeHandlersInitialized = false;
 
+function setupClassSelector(inputId: string, resultsId: string): void {
+  const input = document.getElementById(inputId) as HTMLInputElement;
+  const resultsDiv = document.getElementById(resultsId) as HTMLElement;
+  if (!input || !resultsDiv) return;
+  let blurTimer: number | null = null;
+  const showResults = (query: string) => {
+    const q = (query || '').toLowerCase().trim();
+    const nodes = rawData.nodes.slice();
+    const filtered = q
+      ? nodes.filter((n) => n.id.toLowerCase().includes(q) || (n.label && n.label.toLowerCase().includes(q)))
+      : nodes;
+    const limit = 50;
+    resultsDiv.innerHTML = '';
+    filtered.slice(0, limit).forEach((n) => {
+      const div = document.createElement('div');
+      div.className = 'rel-type-class-option';
+      div.dataset.id = n.id;
+      div.textContent = n.label || n.id;
+      div.style.cssText = 'padding: 6px 8px; cursor: pointer; font-size: 12px; font-family: Consolas, monospace; border-bottom: 1px solid #eee;';
+      resultsDiv.appendChild(div);
+    });
+    resultsDiv.style.display = filtered.length > 0 ? 'block' : 'none';
+  };
+  const hideResults = () => {
+    resultsDiv.style.display = 'none';
+  };
+  input.addEventListener('focus', () => {
+    if (blurTimer != null) clearTimeout(blurTimer);
+    blurTimer = null;
+    showResults(input.value);
+  });
+  input.addEventListener('input', () => showResults(input.value));
+  input.addEventListener('blur', () => {
+    blurTimer = window.setTimeout(hideResults, 200);
+  });
+  resultsDiv.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (blurTimer != null) clearTimeout(blurTimer);
+    blurTimer = null;
+  });
+  resultsDiv.addEventListener('click', (e) => {
+    const opt = (e.target as HTMLElement).closest('.rel-type-class-option');
+    if (opt && opt instanceof HTMLElement && opt.dataset.id != null) {
+      input.value = opt.dataset.id;
+      hideResults();
+      input.focus();
+    }
+  });
+}
+
+function setupPropertySelector(inputId: string, resultsId: string, getExcludeType?: () => string | null): void {
+  const input = document.getElementById(inputId) as HTMLInputElement;
+  const resultsDiv = document.getElementById(resultsId) as HTMLElement;
+  if (!input || !resultsDiv) return;
+  let blurTimer: number | null = null;
+  const showResults = (query: string) => {
+    const excludeType = getExcludeType?.() ?? (document.getElementById('editRelationshipTypeModal') as HTMLElement)?.dataset?.type ?? null;
+    const types = getAllRelationshipTypes(rawData, objectProperties).filter((t) => t !== excludeType && t !== 'subClassOf');
+    const q = (query || '').toLowerCase().trim();
+    const filtered = q
+      ? types.filter((t) => {
+          const baseLabel = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
+          const display = formatRelationshipLabelWithPrefix(t, baseLabel, externalOntologyReferences);
+          return t.toLowerCase().includes(q) || baseLabel.toLowerCase().includes(q) || display.toLowerCase().includes(q);
+        })
+      : types;
+    const limit = 50;
+    resultsDiv.innerHTML = '';
+    filtered.slice(0, limit).forEach((type) => {
+      const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
+      const display = formatRelationshipLabelWithPrefix(type, baseLabel, externalOntologyReferences);
+      const div = document.createElement('div');
+      div.className = 'rel-type-property-option';
+      div.dataset.type = type;
+      div.textContent = display;
+      div.style.cssText = 'padding: 6px 8px; cursor: pointer; font-size: 12px; font-family: Consolas, monospace; border-bottom: 1px solid #eee;';
+      resultsDiv.appendChild(div);
+    });
+    resultsDiv.style.display = filtered.length > 0 ? 'block' : 'none';
+  };
+  const hideResults = () => {
+    resultsDiv.style.display = 'none';
+  };
+  input.addEventListener('focus', () => {
+    if (blurTimer != null) clearTimeout(blurTimer);
+    blurTimer = null;
+    showResults(input.value);
+  });
+  input.addEventListener('input', () => showResults(input.value));
+  input.addEventListener('blur', () => {
+    blurTimer = window.setTimeout(hideResults, 200);
+  });
+  resultsDiv.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    if (blurTimer != null) clearTimeout(blurTimer);
+    blurTimer = null;
+  });
+  resultsDiv.addEventListener('click', (e) => {
+    const opt = (e.target as HTMLElement).closest('.rel-type-property-option');
+    if (opt && opt instanceof HTMLElement && opt.dataset.type != null) {
+      input.value = opt.dataset.type;
+      hideResults();
+      input.focus();
+    }
+  });
+}
+
 function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onApply: () => void): void {
   if (editRelationshipTypeHandlersInitialized) return;
   editRelationshipTypeHandlersInitialized = true;
+  setupClassSelector('editRelTypeDomain', 'editRelTypeDomainResults');
+  setupClassSelector('editRelTypeRange', 'editRelTypeRangeResults');
+  setupPropertySelector('editRelTypeSubPropertyOf', 'editRelTypeSubPropertyOfResults');
   document.getElementById('editRelTypeCancel')?.addEventListener('click', () => {
     document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
   });
@@ -549,16 +664,28 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     const type = (document.getElementById('editRelationshipTypeModal') as HTMLElement).dataset.type!;
     const labelInput = document.getElementById('editRelTypeLabel') as HTMLInputElement;
     const commentInput = document.getElementById('editRelTypeComment') as HTMLTextAreaElement;
+    const domainInput = document.getElementById('editRelTypeDomain') as HTMLInputElement;
+    const rangeInput = document.getElementById('editRelTypeRange') as HTMLInputElement;
+    const subPropertyOfInput = document.getElementById('editRelTypeSubPropertyOf') as HTMLInputElement;
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
+    const newDomain = domainInput?.value?.trim() ?? '';
+    const newRange = rangeInput?.value?.trim() ?? '';
+    const newSubPropertyOf = subPropertyOfInput?.value?.trim() ?? '';
     if (!newLabel || !ttlStore) return;
     const op = objectProperties.find((p) => p.name === type);
     if (!op) return;
     const oldLabel = op.label;
     const oldComment = op.comment ?? '';
+    const oldDomain = op.domain ?? '';
+    const oldRange = op.range ?? '';
+    const oldSubPropertyOf = op.subPropertyOf ?? '';
     const labelChanged = oldLabel !== newLabel;
     const commentChanged = oldComment !== newComment;
-    if (!labelChanged && !commentChanged) {
+    const domainChanged = oldDomain !== newDomain;
+    const rangeChanged = oldRange !== newRange;
+    const subPropertyOfChanged = oldSubPropertyOf !== newSubPropertyOf;
+    if (!labelChanged && !commentChanged && !domainChanged && !rangeChanged && !subPropertyOfChanged) {
       document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
       return;
     }
@@ -569,6 +696,20 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     if (commentChanged) {
       updateObjectPropertyCommentInStore(ttlStore, type, newComment || null);
       op.comment = newComment || undefined;
+    }
+    if (domainChanged || rangeChanged) {
+      updateObjectPropertyDomainRangeInStore(
+        ttlStore,
+        type,
+        newDomain ? newDomain : null,
+        newRange ? newRange : null
+      );
+      op.domain = newDomain || undefined;
+      op.range = newRange || undefined;
+    }
+    if (subPropertyOfChanged) {
+      updateObjectPropertySubPropertyOfInStore(ttlStore, type, newSubPropertyOf ? newSubPropertyOf : null);
+      op.subPropertyOf = newSubPropertyOf || undefined;
     }
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
@@ -592,10 +733,41 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const nameEl = document.getElementById('editRelTypeName') as HTMLElement;
   const labelInput = document.getElementById('editRelTypeLabel') as HTMLInputElement;
   const commentInput = document.getElementById('editRelTypeComment') as HTMLTextAreaElement;
+  const domainInput = document.getElementById('editRelTypeDomain') as HTMLInputElement;
+  const rangeInput = document.getElementById('editRelTypeRange') as HTMLInputElement;
+  const domainResults = document.getElementById('editRelTypeDomainResults');
+  const rangeResults = document.getElementById('editRelTypeRangeResults');
+  const definedByRow = document.getElementById('editRelTypeDefinedByRow');
+  const definedByEl = document.getElementById('editRelTypeDefinedBy');
+  const subPropertyOfInput = document.getElementById('editRelTypeSubPropertyOf') as HTMLInputElement;
+  const subPropertyOfResults = document.getElementById('editRelTypeSubPropertyOfResults');
   if (nameEl) nameEl.textContent = `Identifier: ${type} (used in ontology, cannot be changed here)`;
   const op = objectProperties.find((p) => p.name === type);
   if (labelInput) labelInput.value = op?.label ?? type;
   if (commentInput) commentInput.value = op?.comment ?? '';
+  if (domainInput) domainInput.value = op?.domain ?? '';
+  if (rangeInput) rangeInput.value = op?.range ?? '';
+  if (definedByRow && definedByEl) {
+    if (op?.isDefinedBy) {
+      definedByRow.style.display = 'block';
+      definedByEl.textContent = op.isDefinedBy;
+    } else {
+      definedByRow.style.display = 'none';
+      definedByEl.textContent = '';
+    }
+  }
+  if (subPropertyOfInput) {
+    const subUri = op?.subPropertyOf ?? '';
+    if (subUri) {
+      const parentOp = objectProperties.find((p) => p.uri === subUri || p.name === subUri);
+      subPropertyOfInput.value = parentOp ? parentOp.name : subUri;
+    } else {
+      subPropertyOfInput.value = '';
+    }
+  }
+  if (domainResults) (domainResults as HTMLElement).style.display = 'none';
+  if (rangeResults) (rangeResults as HTMLElement).style.display = 'none';
+  if (subPropertyOfResults) (subPropertyOfResults as HTMLElement).style.display = 'none';
   modal.style.display = 'flex';
   labelInput?.focus();
 }
@@ -622,8 +794,10 @@ function initEdgeStylesMenu(
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     // HTML attributes can contain # without escaping, but we need to escape quotes
     const htmlEscapedType = type.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
+    const displayLabel = formatRelationshipLabelWithPrefix(type, baseLabel, externalOntologyReferences);
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${getRelationshipLabel(type, objectProperties, externalOntologyReferences)}</span>
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${displayLabel}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
         <input type="checkbox" class="edge-show-cb" data-type="${htmlEscapedType}" checked>
         <span>Show</span>
@@ -682,6 +856,7 @@ let addRelationshipTypeHandlersInitialized = false;
 function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
   if (addRelationshipTypeHandlersInitialized) return;
   addRelationshipTypeHandlersInitialized = true;
+  setupPropertySelector('addRelTypeSubPropertyOf', 'addRelTypeSubPropertyOfResults', () => null);
   const labelInput = document.getElementById('addRelTypeLabel') as HTMLInputElement;
   if (labelInput) {
     labelInput.addEventListener('input', () => {
@@ -696,9 +871,15 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
     const modal = document.getElementById('addRelationshipTypeModal')!;
     const li = document.getElementById('addRelTypeLabel') as HTMLInputElement;
     const hasCardCb = document.getElementById('addRelTypeHasCardinality') as HTMLInputElement;
+    const commentInput = document.getElementById('addRelTypeComment') as HTMLTextAreaElement;
+    const isDefinedByInput = document.getElementById('addRelTypeIsDefinedBy') as HTMLInputElement;
+    const subPropertyOfInput = document.getElementById('addRelTypeSubPropertyOf') as HTMLInputElement;
     const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
     li.value = '';
     hasCardCb.checked = true;
+    if (commentInput) commentInput.value = '';
+    if (isDefinedByInput) isDefinedByInput.value = '';
+    if (subPropertyOfInput) subPropertyOfInput.value = '';
     okBtn.disabled = true;
     li.focus();
     modal.style.display = 'flex';
@@ -709,15 +890,26 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
   document.getElementById('addRelTypeConfirm')?.addEventListener('click', () => {
     const li = document.getElementById('addRelTypeLabel') as HTMLInputElement;
     const hasCardCb = document.getElementById('addRelTypeHasCardinality') as HTMLInputElement;
+    const commentInput = document.getElementById('addRelTypeComment') as HTMLTextAreaElement;
+    const isDefinedByInput = document.getElementById('addRelTypeIsDefinedBy') as HTMLInputElement;
+    const subPropertyOfInput = document.getElementById('addRelTypeSubPropertyOf') as HTMLInputElement;
     const label = li.value.trim();
     if (!label || !ttlStore) return;
-    const name = addObjectPropertyToStore(ttlStore, label, hasCardCb.checked);
+    const comment = commentInput?.value?.trim() ?? null;
+    const isDefinedBy = isDefinedByInput?.value?.trim() ?? null;
+    const subPropertyOf = subPropertyOfInput?.value?.trim() ?? null;
+    const name = addObjectPropertyToStore(ttlStore, label, hasCardCb.checked, undefined, {
+      comment: comment || undefined,
+      isDefinedBy: isDefinedBy || undefined,
+      subPropertyOf: subPropertyOf || undefined
+    });
     if (name) {
-      objectProperties.push({ name, label, hasCardinality: hasCardCb.checked });
-      objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+      objectProperties = getObjectProperties(ttlStore);
+      objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       initEdgeStylesMenu(edgeStylesContent, applyFilter);
+      updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
       applyFilter(true);
     }
     document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
@@ -4102,12 +4294,30 @@ function renderApp(): void {
     <div id="addRelationshipTypeModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Add object property</h3>
-        <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" /></label>
+        <label style="display: block; margin-top: 8px;">
+          <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
         <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
           <input type="checkbox" id="addRelTypeHasCardinality" checked /> 
           <span>Has cardinality</span>
           <span style="cursor: help; color: #666; font-size: 14px; line-height: 1;" title="When checked, edges of this type can specify min/max cardinality (e.g. &quot;contains [0..3]&quot;).">ⓘ</span>
         </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
+          <textarea id="addRelTypeComment" rows="2" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
+        </label>
+        <label style="display: block; margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Defined by (rdfs:isDefinedBy, optional URI)</span>
+          <input type="text" id="addRelTypeIsDefinedBy" placeholder="e.g. https://www.opengis.net/ont/geosparql#" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
+        <div style="margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Subproperty of (rdfs:subPropertyOf, optional)</span>
+          <div style="position: relative;">
+            <input type="text" id="addRelTypeSubPropertyOf" placeholder="Type to search or enter object property..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+            <div id="addRelTypeSubPropertyOfResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="addRelTypeCancel">Cancel</button>
           <button type="button" id="addRelTypeConfirm" class="primary" disabled>OK</button>
@@ -4126,6 +4336,31 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="editRelTypeComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
+        <div style="margin-top: 12px;">
+          <span style="font-size: 11px; color: #666;">Domain (rdfs:domain)</span>
+          <div style="position: relative;">
+            <input type="text" id="editRelTypeDomain" placeholder="Type to search or enter class..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+            <div id="editRelTypeDomainResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <span style="font-size: 11px; color: #666;">Range (rdfs:range)</span>
+          <div style="position: relative;">
+            <input type="text" id="editRelTypeRange" placeholder="Type to search or enter class..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+            <div id="editRelTypeRangeResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
+        <div id="editRelTypeDefinedByRow" style="display: none; margin-top: 12px;">
+          <span style="font-size: 11px; color: #666;">Defined by (rdfs:isDefinedBy)</span>
+          <p id="editRelTypeDefinedBy" style="margin: 4px 0 0 0; font-size: 12px; color: #333; word-break: break-all;"></p>
+        </div>
+        <div style="margin-top: 12px;">
+          <span style="font-size: 11px; color: #666;">Subproperty of (rdfs:subPropertyOf)</span>
+          <div style="position: relative;">
+            <input type="text" id="editRelTypeSubPropertyOf" placeholder="Type to search or enter object property..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+            <div id="editRelTypeSubPropertyOfResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editRelTypeCancel">Cancel</button>
           <button type="button" id="editRelTypeConfirm" class="primary">OK</button>
@@ -4382,6 +4617,18 @@ async function loadTtlAndRender(
       if (!seenUrls.has(normalizedUrl)) {
         mergedRefs.push(extRef);
         seenUrls.add(normalizedUrl);
+      }
+    }
+    
+    // Add refs from TTL @prefix so inlined externals (e.g. geo:) get a prefix even without owl:imports
+    const mainBase = getMainOntologyBase(ttlStore);
+    for (const [prefix, url] of Object.entries(prefixMap)) {
+      const urlStr = String(url);
+      const normalized = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr;
+      const mainNormalized = mainBase != null ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase) : '';
+      if (normalized !== mainNormalized && !seenUrls.has(normalized)) {
+        mergedRefs.push({ url: urlStr.endsWith('#') ? urlStr : urlStr + '#', usePrefix: true, prefix });
+        seenUrls.add(normalized);
       }
     }
     
