@@ -10,6 +10,8 @@
 
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
 
+@prefix dano: <https://w3id.org/dano>.
+
 #################################################################
 #    Ontology
 #################################################################
@@ -17,7 +19,7 @@
 :Ontology rdf:type owl:Ontology;
     rdfs:comment "Ontology for AEC drawing elements - facade, structural, and drawing metadata. Based on schema rev02 (06.04.23).";
     rdfs:label "AEC Drawing Ontology";
-    owl:imports <https://w3id.org/dano> ;
+    owl:imports <https://w3id.org/dano>, <http://www.w3.org/2002/07/owl#>, <http://www.w3.org/1999/02/22-rdf-syntax-ns#>, <http://www.w3.org/XML/1998/namespace#>, <http://www.w3.org/2001/XMLSchema#>, <http://www.w3.org/2000/01/rdf-schema#> ;
     owl:imports <http://www.w3.org/2002/07/owl#> ;
     owl:imports <http://www.w3.org/1999/02/22-rdf-syntax-ns#> ;
     owl:imports <http://www.w3.org/XML/1998/namespace#> ;
@@ -201,7 +203,7 @@
     rdfs:subClassOf :FacadeComponent.
 
 :BreatherMembrane rdf:type owl:Class;
-    rdfs:label "Breather membrane";
+    rdfs:label "Breather";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :Membrane.
 
@@ -368,7 +370,8 @@
     :labellableRoot "false"^^xsd:boolean.
 
 :DGU rdf:type owl:Class;
-    rdfs:label "DGU (Double glazed unit)";
+    rdfs:comment "Double Glazed Unit";
+    rdfs:label "DGU";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :FacadeCladding.
 
@@ -388,7 +391,8 @@
     :labellableRoot "false"^^xsd:boolean.
 
 :DeadLoadBracket rdf:type owl:Class;
-    rdfs:label "Dead load bracket";
+    rdfs:comment "Dead load bracket";
+    rdfs:label "Dead load";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :Bracket.
 
@@ -535,7 +539,8 @@
     rdfs:subClassOf :DetailLocation.
 
 :HelpingHandBracket rdf:type owl:Class;
-    rdfs:label "Helping hand bracket";
+    rdfs:comment "Helping hand bracket";
+    rdfs:label "Helping hand";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :Bracket.
 
@@ -660,7 +665,8 @@
     rdfs:subClassOf :FacadeCladding.
 
 :PrecastRestraintBracket rdf:type owl:Class;
-    rdfs:label "Precast restraint bracket";
+    rdfs:comment "Precast restraint bracket";
+    rdfs:label "Precast restraint";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :Bracket.
 
@@ -710,7 +716,8 @@
     rdfs:subClassOf :StructuralProperties.
 
 :SFS rdf:type owl:Class;
-    rdfs:label "SFS (Steel frame system)";
+    rdfs:comment "Steel Frame System";
+    rdfs:label "SFS";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :BackingWall.
 
@@ -740,7 +747,8 @@
     rdfs:subClassOf :SectionShape.
 
 :SemiUnitisedCurtainWall rdf:type owl:Class;
-    rdfs:label "Semi-unitised curtain wall";
+    rdfs:comment "Semi-unitised curtain wall";
+    rdfs:label "Semi-unitised";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :CurtainWallSystem.
 
@@ -790,7 +798,8 @@
     rdfs:subClassOf :CWSystem.
 
 :StickCurtainWall rdf:type owl:Class;
-    rdfs:label "Stick curtain wall";
+    rdfs:comment "Stick curtain wall";
+    rdfs:label "Stick";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :CurtainWallSystem.
 
@@ -810,7 +819,8 @@
     rdfs:subClassOf :Symmetry.
 
 :TGU rdf:type owl:Class;
-    rdfs:label "TGU (Triple glazed unit)";
+    rdfs:comment "Triple Glazed Unit";
+    rdfs:label "TGU";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :FacadeCladding.
 
@@ -823,16 +833,6 @@
     rdfs:label "Text";
     :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :Note.
-
-#################################################################
-#    Data Properties
-#################################################################
-
-:refersToDrawingId rdf:type owl:DatatypeProperty;
-    rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
-    rdfs:label "refersToDrawingId";
-    rdfs:range xsd:string;
-    rdfs:domain owl:Thing.
 
 :Thermal rdf:type owl:Class;
     rdfs:label "Thermal";
@@ -879,7 +879,8 @@
     rdfs:subClassOf :CWSystem.
 
 :UnitisedCurtainWall rdf:type owl:Class;
-    rdfs:label "Unitised curtain wall";
+    rdfs:comment "Unitised curtain wall";
+    rdfs:label "Unitised";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :CurtainWallSystem.
 
@@ -914,7 +915,7 @@
     rdfs:subClassOf :Function.
 
 :WaterproofingMembrane rdf:type owl:Class;
-    rdfs:label "Waterproofing membrane";
+    rdfs:label "Waterproofing";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :Membrane.
 
@@ -947,3 +948,13 @@
     rdfs:label "Image";
     :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :Note.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+<http://example.org/aec-drawing-ontology#Ontology#referstodrawingid> rdf:type owl:DatatypeProperty;
+    rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
+    rdfs:label "refersToDrawingId";
+    rdfs:range xsd:string;
+    rdfs:domain :Note.
