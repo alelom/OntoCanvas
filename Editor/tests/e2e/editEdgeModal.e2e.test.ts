@@ -15,24 +15,25 @@ const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
 // Helper function to load test file into editor
 async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  // Make file input visible
   await page.evaluate(() => {
     const fileInput = document.getElementById('fileInput') as HTMLInputElement;
     if (fileInput) {
       fileInput.style.display = 'block';
+      fileInput.style.visibility = 'visible';
+      fileInput.style.position = 'absolute';
+      fileInput.style.left = '0';
+      fileInput.style.top = '0';
+      fileInput.style.width = '1px';
+      fileInput.style.height = '1px';
     }
   });
-  
-  // Set file
+  await page.waitForTimeout(50);
   const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath);
-  
-  // Wait for file to be processed
-  await page.waitForTimeout(500);
+  await fileInput.setInputFiles(filePath, { timeout: 5000 });
+  await page.waitForTimeout(150);
 }
 
-// Helper function to wait for graph to render
-async function waitForGraphRender(page: Page, timeout = 15000): Promise<void> {
+async function waitForGraphRender(page: Page, timeout = 4000): Promise<void> {
   await page.waitForFunction(
     () => {
       const nodeCountEl = document.getElementById('nodeCount');
@@ -43,7 +44,7 @@ async function waitForGraphRender(page: Page, timeout = 15000): Promise<void> {
     },
     { timeout }
   );
-  await page.waitForTimeout(500); // Additional wait for graph to stabilize
+  await page.waitForTimeout(100);
 }
 
 // Helper function to find edge in graph
@@ -75,9 +76,7 @@ async function openEditEdgeModal(page: Page, edgeId: string): Promise<boolean> {
     edgeId
   );
   
-  // Wait for modal to open
-  await page.waitForTimeout(300);
-  
+  await page.waitForTimeout(100);
   return result;
 }
 
@@ -96,10 +95,15 @@ async function getEditEdgeModalValues(page: Page): Promise<{
 
 // Helper function to close edit edge modal
 async function closeEditEdgeModal(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const testHook = (window as any).__EDITOR_TEST__;
+    if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
+  });
+  await page.waitForTimeout(50);
   const cancelBtn = page.locator('#editEdgeCancel');
-  if (await cancelBtn.isVisible()) {
-    await cancelBtn.click();
-    await page.waitForTimeout(200);
+  if (await cancelBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await cancelBtn.click({ timeout: 2000 });
+    await page.waitForTimeout(80);
   }
 }
 
@@ -108,26 +112,26 @@ describe('Edit Edge Modal E2E Tests', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: false });
+    browser = await chromium.launch({ headless: true });
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-    
-    // Navigate to editor
-    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    
-    // Wait for editor to initialize
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 10000 });
-    
-    // Clear display config for fresh state
+    page.setDefaultTimeout(8000);
+    page.setDefaultNavigationTimeout(8000);
+    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForTimeout(250);
+    await page.evaluate(() => {
+      const testHook = (window as any).__EDITOR_TEST__;
+      if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
+    });
+    await page.waitForTimeout(100);
     try {
       await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
-        if (testHook?.clearDisplayConfig) {
-          return testHook.clearDisplayConfig();
-        }
+        if (testHook?.clearDisplayConfig) testHook.clearDisplayConfig();
       });
-      await page.waitForTimeout(100);
-    } catch (e) {
-      // IndexedDB may not exist yet, ignore
+      await page.waitForTimeout(50);
+    } catch {
+      // IndexedDB may not exist yet
     }
   });
 

@@ -107,6 +107,7 @@ import {
 import {
   initOpenOntologyModal,
   showOpenOntologyModal,
+  hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import {
   extractExternalRefsFromStore,
@@ -6213,6 +6214,8 @@ setTimeout(() => {
 
 // Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
 (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
+  /** Hide the open-ontology modal so tests can use the file input. */
+  hideOpenOntologyModal: (): void => hideOpenOntologyModal(),
   selectNodeByLabel: (label: string): boolean => {
     const node = rawData.nodes.find((n) => (n.label || n.id) === label);
     if (node && network) {

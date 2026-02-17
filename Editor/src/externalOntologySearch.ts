@@ -1,5 +1,5 @@
 import { Parser, Store } from 'n3';
-import { extractLocalName } from './parser';
+import { extractLocalName, extractLocalNameFromUri } from './parser';
 
 export interface ExternalClassInfo {
   uri: string;
