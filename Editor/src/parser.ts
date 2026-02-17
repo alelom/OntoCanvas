@@ -1799,8 +1799,9 @@ export function renameDataPropertyInStore(
   newLocalName: string
 ): boolean {
   if (!newLocalName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newLocalName)) return false;
-  const mainBase = getMainOntologyBase(store) ?? BASE_IRI;
-  const base = mainBase.endsWith('#') ? mainBase : mainBase + '#';
+  // Use class namespace (default ontology #) so serialization uses :name not <...#Ontology#name>
+  const ns = getClassNamespace(store) ?? BASE_IRI;
+  const base = ns.endsWith('#') ? ns : ns + '#';
   const newUri = base + newLocalName;
   if (oldSubjectUri === newUri) return true;
   const oldSubject = DataFactory.namedNode(oldSubjectUri);

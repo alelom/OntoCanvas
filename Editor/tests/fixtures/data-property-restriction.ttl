@@ -1,0 +1,21 @@
+@prefix : <http://example.org/aec-drawing-ontology#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Ontology a owl:Ontology .
+
+:Note a owl:Class ;
+    rdfs:label "Note" .
+
+:myDataProp a owl:DatatypeProperty ;
+    rdfs:label "my data prop" ;
+    rdfs:range xsd:string .
+
+:Note rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :myDataProp ;
+    owl:onDataRange xsd:string ;
+    owl:minCardinality 0
+] .

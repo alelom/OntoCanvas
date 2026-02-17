@@ -1257,6 +1257,8 @@ function initEditDataPropertyHandlers(): void {
     }
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
+    dataProperties = getDataProperties(ttlStore);
+    applyFilter(true);
     const dataPropsContent = document.getElementById('dataPropsContent');
     if (dataPropsContent) initDataPropsMenu(dataPropsContent);
     document.getElementById('editDataPropertyModal')!.style.display = 'none';
@@ -2820,48 +2822,17 @@ function setupNetworkSelectionAndNavigation(
     const nodeAt = net.getNodeAt(domPos);
     if (nodeAt != null) {
       const nodeId = String(nodeAt);
-      // Check if this is a data property node
-      // Check if this is a data property restriction node (editable)
-      if (nodeId.startsWith('__dataproprestrict__')) {
-        // Parse the data property restriction node ID: __dataproprestrict__${classId}__${propertyName}
-        const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
-        if (match) {
-          const [, classId] = match;
-          showEditEdgeModal(nodeId, classId, 'dataprop');
-          return;
-        }
-      }
-      // Generic data property nodes (__dataprop__) are visual only and not editable
       const selectedIds = net.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(nodeId)) {
         showMultiEditModal(selectedIds);
       } else {
-        const node = rawData.nodes.find((n) => n.id === nodeId);
-        if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
+        openEditModalForNode(nodeId);
       }
       return;
     }
     const edgeAt = net.getEdgeAt(domPos);
     if (edgeAt != null) {
-      // Edge ID format: "from->to:type"
-      // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
-      const edgeIdStr = String(edgeAt);
-      const arrowIndex = edgeIdStr.indexOf('->');
-      if (arrowIndex !== -1) {
-        const from = edgeIdStr.substring(0, arrowIndex);
-        const afterArrow = edgeIdStr.substring(arrowIndex + 2);
-        const colonIndex = afterArrow.indexOf(':');
-        if (colonIndex !== -1) {
-          const to = afterArrow.substring(0, colonIndex);
-          const type = afterArrow.substring(colonIndex + 1);
-          // For data property restriction edges, use the from node and 'dataprop' type
-          if (type === 'dataproprestrict') {
-            showEditEdgeModal(from, to, 'dataprop');
-          } else {
-            showEditEdgeModal(from, to, type);
-          }
-        }
-      }
+      openEditModalForEdge(String(edgeAt));
       return;
     }
     const canvasPos = net.DOMtoCanvas(domPos);
@@ -3561,6 +3532,35 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
       });
     });
   }
+}
+
+/** Open the appropriate edit modal for a node (class rename or data property restriction). */
+function openEditModalForNode(nodeId: string): void {
+  if (nodeId.startsWith('__dataproprestrict__')) {
+    const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
+    if (match) {
+      const [, classId] = match;
+      showEditEdgeModal(nodeId, classId, 'dataprop');
+      return;
+    }
+  }
+  const node = rawData.nodes.find((n) => n.id === nodeId);
+  if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
+}
+
+/** Open the appropriate edit modal for an edge (object property or data property). Normalizes dataproprestrict -> dataprop. */
+function openEditModalForEdge(edgeId: string): void {
+  const edgeIdStr = String(edgeId);
+  const arrowIndex = edgeIdStr.indexOf('->');
+  if (arrowIndex === -1) return;
+  const from = edgeIdStr.substring(0, arrowIndex);
+  const afterArrow = edgeIdStr.substring(arrowIndex + 2);
+  const colonIndex = afterArrow.indexOf(':');
+  if (colonIndex === -1) return;
+  const to = afterArrow.substring(0, colonIndex);
+  const type = afterArrow.substring(colonIndex + 1);
+  const edgeType = type === 'dataproprestrict' || type === 'dataprop' ? 'dataprop' : type;
+  showEditEdgeModal(from, to, edgeType);
 }
 
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
@@ -5221,30 +5221,8 @@ function applyFilter(preserveView = false): void {
           // On copy callback - just log or show notification
           console.log(`Copied ${count} relationship(s)`);
         },
-        (nodeId) => {
-          // On edit node callback - open edit node modal
-          const node = rawData.nodes.find((n) => n.id === nodeId);
-          if (node) {
-            showRenameModal(nodeId, node.label, node.labellableRoot);
-          }
-        },
-        (edgeId) => {
-          // On edit edge callback - open edit edge modal
-          // Edge ID format: "from->to:type"
-          // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
-          const edgeIdStr = String(edgeId);
-          const arrowIndex = edgeIdStr.indexOf('->');
-          if (arrowIndex !== -1) {
-            const from = edgeIdStr.substring(0, arrowIndex);
-            const afterArrow = edgeIdStr.substring(arrowIndex + 2);
-            const colonIndex = afterArrow.indexOf(':');
-            if (colonIndex !== -1) {
-              const to = afterArrow.substring(0, colonIndex);
-              const type = afterArrow.substring(colonIndex + 1);
-              showEditEdgeModal(from, to, type);
-            }
-          }
-        }
+        (nodeId) => openEditModalForNode(nodeId),
+        (edgeId) => openEditModalForEdge(edgeId)
       );
       
       // Update context menu data after initialization
@@ -5268,24 +5246,18 @@ function applyFilter(preserveView = false): void {
     });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
       if (!network) return;
-      if (!params.nodes.length) return;
-      const clickedNodeId = params.nodes[0] as string;
-      // Check if this is a data property restriction node (editable)
-      if (clickedNodeId.startsWith('__dataproprestrict__')) {
-        const match = clickedNodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
-        if (match) {
-          const [, classId] = match;
-          showEditEdgeModal(clickedNodeId, classId, 'dataprop');
-          return;
+      if (params.nodes.length > 0) {
+        const clickedNodeId = params.nodes[0] as string;
+        const selectedIds = network.getSelectedNodes().map(String);
+        if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
+          showMultiEditModal(selectedIds);
+        } else {
+          openEditModalForNode(clickedNodeId);
         }
+        return;
       }
-      // Generic data property nodes (__dataprop__) are visual only and not editable
-      const selectedIds = network.getSelectedNodes().map(String);
-      if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
-        showMultiEditModal(selectedIds);
-      } else {
-        const node = rawData.nodes.find((n) => n.id === clickedNodeId);
-        if (node) showRenameModal(clickedNodeId, node.label, node.labellableRoot);
+      if (params.edges.length > 0) {
+        openEditModalForEdge(params.edges[0] as string);
       }
     });
   }
@@ -6334,5 +6306,31 @@ setTimeout(() => {
       duplicateErrorVisible: dupErr ? dupErr.style.display !== 'none' : false,
       duplicateErrorText: dupErr?.textContent?.trim() ?? '',
     };
+  },
+  /** Open edit modal for a node (class rename or data property restriction). For E2E. */
+  openEditModalForNode,
+  /** Open edit modal for an edge (object or data property). For E2E. */
+  openEditModalForEdge,
+  /** Get Edit Edge modal title (e.g. "Edit data property restriction"). */
+  getEditEdgeModalTitle: (): string | null => {
+    const modal = document.getElementById('editEdgeModal');
+    if (!modal || modal.style.display === 'none') return null;
+    const h3 = modal.querySelector('h3');
+    return h3?.textContent?.trim() ?? null;
+  },
+  /** Open Edit data property modal by property name (from Data Properties menu). */
+  openEditDataPropertyModal: (name: string): void => {
+    showEditDataPropertyModal(name);
+  },
+  /** Get data property info by name (for E2E domain assertions). */
+  getDataPropertyByName: (name: string): { domains: string[]; uri?: string } | null => {
+    const dp = dataProperties.find((p) => p.name === name);
+    if (!dp) return null;
+    return { domains: dp.domains ?? [], uri: dp.uri };
+  },
+  /** Serialized TTL from current store (for E2E). */
+  getSerializedTurtle: async (): Promise<string | null> => {
+    if (!ttlStore) return null;
+    return storeToTurtle(ttlStore, externalOntologyReferences);
   },
 };
