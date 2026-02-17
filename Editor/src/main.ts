@@ -6,7 +6,6 @@ import {
   updateLabelInStore,
   updateLabellableInStore,
   updateCommentInStore,
-  updateAnnotationPropertyValueInStore,
   updateEdgeInStore,
   addEdgeToStore,
   removeEdgeFromStore,
@@ -46,10 +45,6 @@ import {
   extractLocalName,
 } from './parser';
 import {
-  ensureExampleImageAnnotationProperty,
-  setExampleImageUrisForClass,
-} from './lib/exampleImageStore';
-import {
   getOrRequestImageDirectory,
   writeExampleImageFile,
   getSafeExampleImageFileName,
@@ -58,6 +53,13 @@ import {
   clearCachedImageDirectory,
 } from './lib/exampleImageFiles';
 import { initExampleImagesSection } from './ui/exampleImagesSection';
+import {
+  updateIdentifierDisplay,
+  isDuplicateIdentifier,
+  ADD_NODE_DUPLICATE_MESSAGE,
+  applyNodeFormToStore,
+  type NodeFormData,
+} from './ui/nodeModalForm';
 import { Store, DataFactory } from 'n3';
 import {
   searchExternalClasses,
@@ -273,6 +275,10 @@ let renameModalInitialDataProps: DataPropertyRestriction[] | null = null;
 let renameModalDataPropertyRestrictions: DataPropertyRestriction[] = [];
 /** Example image URIs while editing in rename modal (single-node mode). */
 let renameModalExampleImageUris: string[] = [];
+/** Example image URIs while adding a new node (custom tab). */
+let addNodeExampleImageUris: string[] = [];
+/** Data property restrictions while adding a new node (custom tab). */
+let addNodeDataPropertyRestrictions: DataPropertyRestriction[] = [];
 
 type UndoableAction = { undo: () => void; redo: () => void };
 let undoStack: UndoableAction[] = [];
@@ -3023,19 +3029,94 @@ function renderRenameModalAnnotationPropsList(nodeId: string): void {
   });
 }
 
+function renderAddNodeAnnotationPropsList(): void {
+  const listEl = document.getElementById('addNodeAnnotationPropsList');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  if (annotationProperties.length === 0) {
+    listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
+    return;
+  }
+  annotationProperties.forEach((ap) => {
+    const currentValue = null;
+    const item = document.createElement('div');
+    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
+    if (ap.isBoolean) {
+      const label = document.createElement('span');
+      label.style.cssText = 'font-size: 11px; min-width: 120px;';
+      label.textContent = ap.name;
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `addNodeAnnotProp_${ap.name}`;
+      checkbox.checked = currentValue === true;
+      checkbox.indeterminate = currentValue === null || currentValue === undefined;
+      checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
+      item.appendChild(label);
+      item.appendChild(checkbox);
+    } else {
+      const label = document.createElement('span');
+      label.style.cssText = 'font-size: 11px; min-width: 120px;';
+      label.textContent = ap.name + ':';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = `addNodeAnnotProp_${ap.name}`;
+      input.value = typeof currentValue === 'string' ? currentValue : '';
+      input.placeholder = 'Enter value';
+      input.style.cssText = 'flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;';
+      item.appendChild(label);
+      item.appendChild(input);
+    }
+    listEl.appendChild(item);
+  });
+}
+
+function updateAddNodeDataPropAddButtonState(): void {
+  const selectEl = document.getElementById('addNodeDataPropSelect') as HTMLSelectElement;
+  const addBtn = document.getElementById('addNodeDataPropAdd') as HTMLButtonElement;
+  if (!selectEl || !addBtn) return;
+  const hasSelection = selectEl.value.trim() !== '';
+  addBtn.disabled = !hasSelection;
+  addBtn.style.display = hasSelection ? '' : 'none';
+}
+
+function renderAddNodeDataPropsList(): void {
+  const listEl = document.getElementById('addNodeDataPropsList');
+  const selectEl = document.getElementById('addNodeDataPropSelect') as HTMLSelectElement;
+  if (!listEl || !selectEl) return;
+  const assignedNames = new Set(addNodeDataPropertyRestrictions.map((r) => r.propertyName));
+  listEl.innerHTML = addNodeDataPropertyRestrictions
+    .map((r) => {
+      const dp = dataProperties.find((p) => p.name === r.propertyName);
+      const label = dp?.label ?? r.propertyName;
+      const card =
+        r.minCardinality != null || r.maxCardinality != null
+          ? ` [${r.minCardinality ?? 0}..${r.maxCardinality ?? '*'}]`
+          : '';
+      return `<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span>${label}${card}</span>
+        <button type="button" class="add-node-data-prop-remove" data-name="${r.propertyName}" style="font-size: 11px; padding: 2px 6px;">Remove</button>
+      </div>`;
+    })
+    .join('');
+  selectEl.innerHTML = '<option value="">-- data property --</option>' + dataProperties.filter((p) => !assignedNames.has(p.name)).map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
+  updateAddNodeDataPropAddButtonState();
+  listEl.querySelectorAll('.add-node-data-prop-remove').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = (btn as HTMLElement).dataset.name!;
+      addNodeDataPropertyRestrictions = addNodeDataPropertyRestrictions.filter((r) => r.propertyName !== name);
+      renderAddNodeDataPropsList();
+    });
+  });
+}
+
 function updateRenameModalIdentifier(): void {
   const modal = document.getElementById('renameModal');
   if (!modal || (modal as HTMLElement).style.display === 'none') return;
   if (modal.dataset.mode !== 'single') return;
   const input = document.getElementById('renameInput') as HTMLInputElement;
-  const identifierEl = document.getElementById('renameIdentifier') as HTMLElement;
   const nodeId = input?.dataset.nodeId;
-  if (!nodeId || !identifierEl) return;
-  const lbl = input?.value?.trim() ?? '';
-  const derived = labelToCamelCaseIdentifier(lbl) || nodeId;
-  const displayBase = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
-  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
-  identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
+  if (!nodeId) return;
+  updateIdentifierDisplay('rename', input?.value?.trim() ?? '', ttlStore, nodeId);
 }
 
 function showRenameModal(
@@ -3188,6 +3269,51 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   
   if (customInput) customInput.value = '';
   if (externalInput) externalInput.value = '';
+  const addNodeComment = document.getElementById('addNodeComment') as HTMLTextAreaElement;
+  if (addNodeComment) addNodeComment.value = '';
+  const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
+  const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
+  if (dupErr) { dupErr.style.display = 'none'; dupErr.textContent = ''; }
+  if (extDupErr) { extDupErr.style.display = 'none'; extDupErr.textContent = ''; }
+  addNodeExampleImageUris = [];
+  addNodeDataPropertyRestrictions = [];
+  const addNodeAnnotationPropsSection = document.getElementById('addNodeAnnotationPropsSection');
+  if (addNodeAnnotationPropsSection) {
+    if (annotationProperties.length === 0) {
+      addNodeAnnotationPropsSection.style.display = 'none';
+    } else {
+      addNodeAnnotationPropsSection.style.display = 'block';
+      renderAddNodeAnnotationPropsList();
+    }
+  }
+  const addNodeDataPropsSection = document.getElementById('addNodeDataPropsSection');
+  if (addNodeDataPropsSection) {
+    if (dataProperties.length === 0) {
+      addNodeDataPropsSection.style.display = 'none';
+    } else {
+      addNodeDataPropsSection.style.display = 'block';
+      renderAddNodeDataPropsList();
+    }
+  }
+  const addNodeExampleImagesContainer = document.getElementById('addNodeExampleImagesSection');
+  if (addNodeExampleImagesContainer && ttlStore) {
+    addNodeExampleImagesContainer.style.display = 'block';
+    initExampleImagesSection(addNodeExampleImagesContainer, {
+      nodeId: '__new',
+      isLocal: !!fileHandle,
+      initialUris: [],
+      onAddImage: async (file: File) => {
+        const dir = await getOrRequestImageDirectory(fileHandle);
+        if (!dir || !ttlStore) return null;
+        const relativePath = getSafeExampleImageFileName('__new', addNodeExampleImageUris, file.name);
+        await writeExampleImageFile(dir, relativePath, file);
+        return relativePath;
+      },
+      onDelete: () => {},
+      onOpen: (uri: string) => openExampleImageUri(uri, getCachedImageDirectory()),
+      onUrisChange: (uris: string[]) => { addNodeExampleImageUris = uris; },
+    });
+  }
   const resultsDiv = document.getElementById('addNodeExternalResults');
   const descDiv = document.getElementById('addNodeExternalDescription');
   if (resultsDiv) resultsDiv.style.display = 'none';
@@ -3203,6 +3329,8 @@ function hideAddNodeModalWithCleanup(): void {
   pendingAddNodePosition = null;
   addNodeMode = false;
   selectedExternalClass = null;
+  addNodeExampleImageUris = [];
+  addNodeDataPropertyRestrictions = [];
   if (addNodeSearchTimeout) {
     clearTimeout(addNodeSearchTimeout);
     addNodeSearchTimeout = null;
@@ -3212,17 +3340,46 @@ function hideAddNodeModalWithCleanup(): void {
 
 function updateAddNodeOkButton(): void {
   const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
-  const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
   const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
   const customTabContent = document.getElementById('addNodeCustomTab');
   const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
-  
-  if (okBtn) {
-    if (isCustomTab) {
-      okBtn.disabled = !customInput?.value.trim();
-    } else {
-      okBtn.disabled = !selectedExternalClass;
+  const existingIds = new Set(rawData.nodes.map((n) => n.id));
+  const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
+  const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
+
+  if (dupErr) dupErr.style.display = 'none';
+  if (extDupErr) extDupErr.style.display = 'none';
+
+  if (isCustomTab) {
+    const label = customInput?.value?.trim() ?? '';
+    updateIdentifierDisplay('addNode', label, ttlStore);
+    if (!label) {
+      if (okBtn) okBtn.disabled = true;
+      return;
     }
+    if (isDuplicateIdentifier(label, existingIds)) {
+      if (dupErr) {
+        dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+        dupErr.style.display = 'block';
+      }
+      if (okBtn) okBtn.disabled = true;
+      return;
+    }
+    if (okBtn) okBtn.disabled = false;
+  } else {
+    if (!selectedExternalClass) {
+      if (okBtn) okBtn.disabled = true;
+      return;
+    }
+    if (isDuplicateIdentifier(selectedExternalClass.label, existingIds)) {
+      if (extDupErr) {
+        extDupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+        extDupErr.style.display = 'block';
+      }
+      if (okBtn) okBtn.disabled = true;
+      return;
+    }
+    if (okBtn) okBtn.disabled = false;
   }
 }
 
@@ -3326,43 +3483,82 @@ async function handleExternalClassSearch(query: string): Promise<void> {
 function confirmAddNode(): void {
   if (!pendingAddNodePosition) return;
   const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
-  const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
   const customTabContent = document.getElementById('addNodeCustomTab');
   const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
-  
+  const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
+  const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
+
   const { x, y } = pendingAddNodePosition;
-  
+
   if (isCustomTab) {
     const label = customInput?.value?.trim();
     if (!label) return;
     const result = addNewNodeAtPosition(x, y, label);
-    if (result) {
-      applyFilter(true);
-    }
-  } else {
-    // Add from external ontology
-    if (!selectedExternalClass || !ttlStore) return;
-    
-    // Use the local name as the node ID, but we need to import the class from external ontology
-    // For now, we'll create a local class with the same name and add a comment indicating it's from external
-    const localName = selectedExternalClass.localName;
-    const label = selectedExternalClass.label;
-    const comment = selectedExternalClass.comment 
-      ? `${selectedExternalClass.comment}\n\n(Imported from ${selectedExternalClass.ontologyUrl})`
-      : `(Imported from ${selectedExternalClass.ontologyUrl})`;
-    
-    const result = addNewNodeAtPosition(x, y, label);
-    if (result && ttlStore) {
-      // Update the comment to include external reference info
-      if (comment) {
-        updateCommentInStore(ttlStore, result.id, comment);
-        const node = rawData.nodes.find((n) => n.id === result.id);
-        if (node) node.comment = comment;
+    if (result === null) {
+      if (dupErr) {
+        dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+        dupErr.style.display = 'block';
       }
-      applyFilter(true);
+      return;
     }
+    const node = rawData.nodes.find((n) => n.id === result.id);
+    if (!node) {
+      applyFilter(true);
+      hideAddNodeModalWithCleanup();
+      return;
+    }
+    const commentInput = document.getElementById('addNodeComment') as HTMLTextAreaElement;
+    const newComment = commentInput?.value?.trim() ?? '';
+    const annotationValues: Record<string, boolean | string | null> = {};
+    annotationProperties.forEach((ap) => {
+      if (ap.isBoolean) {
+        const checkbox = document.getElementById(`addNodeAnnotProp_${ap.name}`) as HTMLInputElement;
+        annotationValues[ap.name] = checkbox ? (checkbox.indeterminate ? null : checkbox.checked) : null;
+      } else {
+        const inputEl = document.getElementById(`addNodeAnnotProp_${ap.name}`) as HTMLInputElement;
+        annotationValues[ap.name] = inputEl?.value?.trim() || null;
+      }
+    });
+    const addNodeFormData: NodeFormData = {
+      comment: newComment,
+      exampleImageUris: addNodeExampleImageUris,
+      annotationValues,
+      dataPropertyRestrictions: addNodeDataPropertyRestrictions,
+    };
+    if (ttlStore) {
+      const baseIri = getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI;
+      applyNodeFormToStore(result.id, addNodeFormData, ttlStore, node, baseIri, annotationProperties);
+    } else {
+      node.comment = addNodeFormData.comment.trim() || undefined;
+      node.exampleImages = addNodeFormData.exampleImageUris.length > 0 ? addNodeFormData.exampleImageUris : undefined;
+      node.dataPropertyRestrictions = addNodeFormData.dataPropertyRestrictions.length > 0 ? addNodeFormData.dataPropertyRestrictions : undefined;
+    }
+    applyFilter(true);
+    hideAddNodeModalWithCleanup();
+    return;
   }
-  
+
+  // Add from external ontology
+  if (!selectedExternalClass || !ttlStore) return;
+  const label = selectedExternalClass.label;
+  const comment = selectedExternalClass.comment
+    ? `${selectedExternalClass.comment}\n\n(Imported from ${selectedExternalClass.ontologyUrl})`
+    : `(Imported from ${selectedExternalClass.ontologyUrl})`;
+
+  const result = addNewNodeAtPosition(x, y, label);
+  if (result === null) {
+    if (extDupErr) {
+      extDupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+      extDupErr.style.display = 'block';
+    }
+    return;
+  }
+  if (comment) {
+    updateCommentInStore(ttlStore, result.id, comment);
+    const node = rawData.nodes.find((n) => n.id === result.id);
+    if (node) node.comment = comment;
+  }
+  applyFilter(true);
   hideAddNodeModalWithCleanup();
 }
 
@@ -4219,71 +4415,33 @@ function confirmRename(): void {
   const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
   const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
+  const newFormData: NodeFormData = {
+    comment: newComment,
+    exampleImageUris: newExampleImages,
+    annotationValues: {},
+    dataPropertyRestrictions: currentDataProps,
+  };
+  annotationProperties.forEach((ap) => {
+    newFormData.annotationValues[ap.name] = newAnnotationValues[ap.name] ?? oldAnnotationValues[ap.name] ?? null;
+  });
+  const oldFormData: NodeFormData = {
+    comment: oldComment,
+    exampleImageUris: oldExampleImages,
+    annotationValues: oldAnnotationValuesCopy,
+    dataPropertyRestrictions: oldDataProps,
+  };
+
   if (labelChanged) {
     node.label = newLabel;
     if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
   }
-  
-  // Update annotation properties
-  if (annotationPropsChanged && ttlStore) {
-    if (!node.annotations) node.annotations = {};
-    annotationProperties.forEach((ap) => {
-      const newValue = newAnnotationValues[ap.name];
-      const oldValue = oldAnnotationValues[ap.name];
-      
-      if (newValue !== oldValue) {
-        if (!node.annotations) node.annotations = {};
-        node.annotations[ap.name] = newValue;
-        
-        // Update labellableRoot field if this is the labellableRoot property
-        if (ap.name === 'labellableRoot' && typeof newValue === 'boolean') {
-          node.labellableRoot = newValue;
-        } else if (ap.name === 'labellableRoot' && newValue === null) {
-          node.labellableRoot = null;
-        }
-        
-        if (ttlStore) {
-          updateAnnotationPropertyValueInStore(ttlStore, nodeId, ap.name, newValue, ap.isBoolean);
-        }
-      }
-    });
-  }
-  
-  if (commentChanged && ttlStore) {
-    node.comment = newComment || undefined;
-    updateCommentInStore(ttlStore, nodeId, newComment || null);
-  }
 
-  if (dataPropsChanged) {
-    if (ttlStore) {
-      const toRemove = initialDataProps.filter(
-        (i) => !currentDataProps.some((c) => c.propertyName === i.propertyName && c.minCardinality === i.minCardinality && c.maxCardinality === i.maxCardinality)
-      );
-      const toAdd = currentDataProps.filter(
-        (c) => !initialDataProps.some((i) => i.propertyName === c.propertyName && i.minCardinality === c.minCardinality && i.maxCardinality === c.maxCardinality)
-      );
-      console.log('[confirmRename] dataPropsChanged - toRemove:', toRemove, 'toAdd:', toAdd);
-      for (const r of toRemove) {
-        console.log('[confirmRename] Removing restriction:', r);
-        removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
-      }
-      for (const r of toAdd) {
-        console.log('[confirmRename] Adding restriction:', r);
-        const result = addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
-        console.log('[confirmRename] addDataPropertyRestrictionToClass result:', result);
-      }
-      const readBack = getDataPropertyRestrictionsForClass(ttlStore, nodeId);
-      console.log('[confirmRename] Read back restrictions from store:', readBack);
-      rawData.nodes[nodeIndex].dataPropertyRestrictions = readBack;
-    } else {
-      rawData.nodes[nodeIndex].dataPropertyRestrictions = [...currentDataProps];
-    }
-  }
-
-  if (exampleImagesChanged && ttlStore) {
-    ensureExampleImageAnnotationProperty(ttlStore, baseIri);
-    setExampleImageUrisForClass(ttlStore, nodeId, newExampleImages, baseIri);
-    node.exampleImages = newExampleImages.length > 0 ? newExampleImages : undefined;
+  if (ttlStore) {
+    applyNodeFormToStore(nodeId, newFormData, ttlStore, node, baseIri, annotationProperties);
+  } else {
+    node.comment = newFormData.comment.trim() || undefined;
+    node.exampleImages = newFormData.exampleImageUris.length > 0 ? newFormData.exampleImageUris : undefined;
+    node.dataPropertyRestrictions = [...currentDataProps];
   }
 
   pushUndoable(
@@ -4292,43 +4450,12 @@ function confirmRename(): void {
         node.label = oldLabel;
         if (ttlStore) updateLabelInStore(ttlStore, nodeId, oldLabel);
       }
-      if (annotationPropsChanged && ttlStore) {
-        if (!node.annotations) node.annotations = {};
-        annotationProperties.forEach((ap) => {
-          const oldValue = oldAnnotationValuesCopy[ap.name];
-          if (!node.annotations) node.annotations = {};
-          node.annotations[ap.name] = oldValue ?? null;
-          
-          // Update labellableRoot field if this is the labellableRoot property
-          if (ap.name === 'labellableRoot') {
-            node.labellableRoot = typeof oldValue === 'boolean' ? oldValue : null;
-          }
-          
-          if (ttlStore) {
-            updateAnnotationPropertyValueInStore(ttlStore, nodeId, ap.name, oldValue ?? null, ap.isBoolean);
-          }
-        });
-      }
-      if (commentChanged && ttlStore) {
-        node.comment = oldComment || undefined;
-        updateCommentInStore(ttlStore, nodeId, oldComment || null);
-      }
-      if (dataPropsChanged) {
-        rawData.nodes[nodeIndex].dataPropertyRestrictions = [...oldDataProps];
-        if (ttlStore) {
-          const toRemove = currentDataProps.filter(
-          (c) => !oldDataProps.some((i) => i.propertyName === c.propertyName && i.minCardinality === c.minCardinality && i.maxCardinality === c.maxCardinality)
-        );
-        const toAdd = oldDataProps.filter(
-          (i) => !currentDataProps.some((c) => c.propertyName === i.propertyName && c.minCardinality === i.minCardinality && c.maxCardinality === i.maxCardinality)
-        );
-        for (const r of toRemove) removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
-        for (const r of toAdd) addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
-        }
-      }
-      if (exampleImagesChanged && ttlStore) {
-        setExampleImageUrisForClass(ttlStore, nodeId, oldExampleImages, baseIri);
-        node.exampleImages = oldExampleImages.length > 0 ? oldExampleImages : undefined;
+      if (ttlStore) {
+        applyNodeFormToStore(nodeId, oldFormData, ttlStore, node, baseIri, annotationProperties);
+      } else {
+        node.comment = oldFormData.comment.trim() || undefined;
+        node.exampleImages = oldFormData.exampleImageUris.length > 0 ? oldFormData.exampleImageUris : undefined;
+        node.dataPropertyRestrictions = [...oldDataProps];
       }
     },
     () => {
@@ -4336,47 +4463,12 @@ function confirmRename(): void {
         node.label = newLabel;
         if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
       }
-      if (annotationPropsChanged && ttlStore) {
-        if (!node.annotations) node.annotations = {};
-        annotationProperties.forEach((ap) => {
-          const newValue = newAnnotationValues[ap.name];
-          if (!node.annotations) node.annotations = {};
-          node.annotations[ap.name] = newValue ?? null;
-          
-          // Update labellableRoot field if this is the labellableRoot property
-          if (ap.name === 'labellableRoot' && typeof newValue === 'boolean') {
-            node.labellableRoot = newValue;
-          } else if (ap.name === 'labellableRoot' && newValue === null) {
-            node.labellableRoot = null;
-          }
-          
-          if (ttlStore) {
-            updateAnnotationPropertyValueInStore(ttlStore, nodeId, ap.name, newValue ?? null, ap.isBoolean);
-          }
-        });
-      }
-      if (commentChanged && ttlStore) {
-        node.comment = newComment || undefined;
-        updateCommentInStore(ttlStore, nodeId, newComment || null);
-      }
-      if (dataPropsChanged) {
-        if (ttlStore) {
-          const toRemove = oldDataProps.filter(
-          (i) => !currentDataProps.some((c) => c.propertyName === i.propertyName && c.minCardinality === i.minCardinality && c.maxCardinality === i.maxCardinality)
-        );
-        const toAdd = currentDataProps.filter(
-          (c) => !oldDataProps.some((i) => i.propertyName === c.propertyName && i.minCardinality === c.minCardinality && i.maxCardinality === c.maxCardinality)
-        );
-        for (const r of toRemove) removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
-        for (const r of toAdd) addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
-          rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, nodeId);
-        } else {
-          rawData.nodes[nodeIndex].dataPropertyRestrictions = [...currentDataProps];
-        }
-      }
-      if (exampleImagesChanged && ttlStore) {
-        setExampleImageUrisForClass(ttlStore, nodeId, newExampleImages, baseIri);
-        node.exampleImages = newExampleImages.length > 0 ? newExampleImages : undefined;
+      if (ttlStore) {
+        applyNodeFormToStore(nodeId, newFormData, ttlStore, node, baseIri, annotationProperties);
+      } else {
+        node.comment = newFormData.comment.trim() || undefined;
+        node.exampleImages = newFormData.exampleImageUris.length > 0 ? newFormData.exampleImageUris : undefined;
+        node.dataPropertyRestrictions = [...currentDataProps];
       }
     }
   );
@@ -4574,9 +4666,39 @@ function renderApp(): void {
         </div>
         <div id="addNodeCustomTab" class="add-node-tab-content">
           <label>Label: <input type="text" id="addNodeInput" placeholder="Enter node label" /></label>
+          <p id="addNodeIdentifierLabel" style="font-size: 11px; color: #666; margin: 6px 0 4px 0;">Identifier (derived from label):</p>
+          <p id="addNodeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin: 0 0 8px 0;"></p>
+          <p id="addNodeDuplicateError" style="display: none; color: #c00; font-size: 12px; margin: 6px 0 0 0;"></p>
+          <label style="display: block; margin-top: 10px;">
+            <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
+            <textarea id="addNodeComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
+          </label>
+          <div id="addNodeExampleImagesSection"></div>
+          <div id="addNodeAnnotationPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+            <strong style="font-size: 12px;">Set annotation properties</strong>
+            <div id="addNodeAnnotationPropsList" style="margin-top: 8px;"></div>
+          </div>
+          <div id="addNodeDataPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 12px;">Assign data property restriction</strong>
+              <span id="addNodeDataPropRestrictionInfoIcon" style="cursor: help; color: #3498db; font-size: 14px;" title="Data Property Restriction: set min/max cardinality for this class.">ⓘ</span>
+            </div>
+            <div id="addNodeDataPropsList" style="margin-top: 6px; margin-bottom: 8px; font-size: 11px;"></div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <select id="addNodeDataPropSelect" style="padding: 4px 8px; font-size: 11px; min-width: 120px;">
+                <option value="">-- data property --</option>
+              </select>
+              <span style="font-size: 11px;">Min:</span>
+              <input type="number" id="addNodeDataPropMin" min="0" placeholder="0" style="width: 48px; padding: 4px; font-size: 11px;">
+              <span style="font-size: 11px;">Max:</span>
+              <input type="number" id="addNodeDataPropMax" min="0" placeholder="*" style="width: 48px; padding: 4px; font-size: 11px;" title="Leave empty for unbounded">
+              <button type="button" id="addNodeDataPropAdd" style="font-size: 11px; padding: 4px 8px; display: none;" disabled>Add</button>
+            </div>
+          </div>
         </div>
         <div id="addNodeExternalTabContent" class="add-node-tab-content" style="display: none;">
           <label>Search class: <input type="text" id="addNodeExternalInput" placeholder="Type to search referenced ontologies..." /></label>
+          <p id="addNodeExternalDuplicateError" style="display: none; color: #c00; font-size: 12px; margin: 6px 0 0 0;"></p>
           <div id="addNodeExternalResults" style="margin-top: 12px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; display: none;"></div>
           <div id="addNodeExternalDescription" style="margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px; font-size: 11px; color: #666; display: none;"></div>
         </div>
@@ -6018,6 +6140,31 @@ function setupEventListeners(): void {
   document.getElementById('renameDataPropSelect')?.addEventListener('change', () => {
     updateRenameDataPropAddButtonState();
   });
+  document.getElementById('addNodeDataPropAdd')?.addEventListener('click', () => {
+    const selectEl = document.getElementById('addNodeDataPropSelect') as HTMLSelectElement;
+    const minEl = document.getElementById('addNodeDataPropMin') as HTMLInputElement;
+    const maxEl = document.getElementById('addNodeDataPropMax') as HTMLInputElement;
+    const propName = selectEl?.value?.trim();
+    if (!propName) return;
+    const min = minEl?.value?.trim();
+    const max = maxEl?.value?.trim();
+    const minCardinality = min === '' ? undefined : parseInt(min, 10);
+    const maxCardinality = max === '' ? undefined : parseInt(max, 10);
+    if (min !== '' && (Number.isNaN(minCardinality!) || minCardinality! < 0)) return;
+    if (max !== '' && (Number.isNaN(maxCardinality!) || maxCardinality! < 0)) return;
+    addNodeDataPropertyRestrictions.push({
+      propertyName: propName,
+      ...(minCardinality !== undefined && { minCardinality: minCardinality! }),
+      ...(maxCardinality !== undefined && { maxCardinality: maxCardinality! }),
+    });
+    if (selectEl) selectEl.value = '';
+    renderAddNodeDataPropsList();
+    if (minEl) minEl.value = '';
+    if (maxEl) maxEl.value = '';
+  });
+  document.getElementById('addNodeDataPropSelect')?.addEventListener('change', () => {
+    updateAddNodeDataPropAddButtonState();
+  });
   document.getElementById('renameModal')?.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).closest('#renameModal') && (e.key === 'Enter' || e.key === 'Escape')) {
       if (e.key === 'Enter') confirmRename();
@@ -6331,15 +6478,29 @@ setTimeout(() => {
   getEditEdgeModalValues: (): { minCardinality: string; maxCardinality: string; isRestrictionChecked: boolean } | null => {
     const modal = document.getElementById('editEdgeModal');
     if (!modal || modal.style.display === 'none') return null;
-    
+
     const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
     const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
     const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
-    
+
     return {
       minCardinality: minCardInput?.value || '',
       maxCardinality: maxCardInput?.value || '',
       isRestrictionChecked: isRestrictionCb?.checked || false,
+    };
+  },
+  /** Open Add Node modal (for E2E). */
+  openAddNodeModal: (x?: number, y?: number): void => {
+    showAddNodeModal(x ?? 100, y ?? 100);
+  },
+  /** Get Add Node modal state: OK disabled, duplicate error visible/text (for E2E). */
+  getAddNodeModalState: (): { okDisabled: boolean; duplicateErrorVisible: boolean; duplicateErrorText: string } => {
+    const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
+    const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
+    return {
+      okDisabled: okBtn?.disabled ?? true,
+      duplicateErrorVisible: dupErr ? dupErr.style.display !== 'none' : false,
+      duplicateErrorText: dupErr?.textContent?.trim() ?? '',
     };
   },
 };

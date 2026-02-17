@@ -1,6 +1,7 @@
 import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
 import { postProcessTurtle } from './turtlePostProcess';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
+import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
@@ -866,29 +867,33 @@ export function updateEdgeInStore(
 }
 
 /**
+ * Derive the identifier that would be used for a new node with the given label.
+ * Used by the editor to validate before adding. Must stay in sync with addNodeToStore.
+ */
+export function deriveNewNodeIdentifier(label: string): string {
+  const raw = labelToCamelCaseIdentifier(label) || extractLocalName(label) || 'NewClass';
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(raw) ? raw : 'NewClass';
+}
+
+/**
  * Add a new OWL class (node) to the store.
- * Returns the new localName, or null on failure.
+ * Returns the new localName, or null if a node with that identifier already exists.
  */
 export function addNodeToStore(
   store: Store,
   label: string,
   localName?: string
 ): string | null {
-  const existingIds = new Set<string>();
+  const existingIdsLower = new Set<string>();
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType === 'NamedNode') {
-      existingIds.add(extractLocalName((subj as { value: string }).value));
+      existingIdsLower.add(extractLocalName((subj as { value: string }).value).toLowerCase());
     }
   }
-  let id = localName ?? (extractLocalName(label) || 'NewClass');
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(id)) id = 'NewClass';
-  let base = id;
-  let n = 0;
-  while (existingIds.has(id)) {
-    id = `${base}${++n}`;
-  }
+  const id = localName ?? deriveNewNodeIdentifier(label);
+  if (existingIdsLower.has(id.toLowerCase())) return null;
   const subjUri = toClassUri(id);
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();

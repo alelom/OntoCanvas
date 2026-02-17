@@ -262,19 +262,29 @@ describe('updateLabelInStore (edit)', () => {
   it('adds edge with cardinality and round-trips', async () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
-    addNodeToStore(store, 'CardinalityTestContainer');
-    const ok = addEdgeToStore(store, 'CardinalityTestContainer', 'Layout', 'contains', {
+    const fromId = addNodeToStore(store, 'CardinalityTestContainer');
+    expect(fromId).toBe('cardinalitytestcontainer');
+    const ok = addEdgeToStore(store, fromId!, 'Layout', 'contains', {
       minCardinality: 0,
       maxCardinality: 3,
     });
     expect(ok).toBe(true);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
     const containsEdge = graphData.edges.find(
-      (e) => e.from === 'CardinalityTestContainer' && e.to === 'Layout' && e.type === 'contains'
+      (e) => e.from === 'cardinalitytestcontainer' && e.to === 'Layout' && e.type === 'contains'
     );
     expect(containsEdge).toBeDefined();
     expect(containsEdge!.minCardinality).toBe(0);
     expect(containsEdge!.maxCardinality).toBe(3);
+  });
+
+  it('rejects addNodeToStore when identifier already exists', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const id1 = addNodeToStore(store, 'Axis Line');
+    expect(id1).toBe('axisLine');
+    const id2 = addNodeToStore(store, 'axis line');
+    expect(id2).toBeNull();
   });
 
   it('adds and removes hasFunction edge (non-partOf/contains restriction)', async () => {
