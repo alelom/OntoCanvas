@@ -118,7 +118,8 @@ export function openExampleImageUri(uri: string, dirHandle: FileSystemDirectoryH
           const file = await f.getFile();
           const url = URL.createObjectURL(file);
           window.open(url, '_blank', 'noopener');
-          URL.revokeObjectURL(url);
+          // Defer revoke so the new tab has time to fetch the blob; revoking immediately can cause a blank/error page
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
         } else {
           current = await (current as FileSystemDirectoryHandle).getDirectoryHandle(parts[i]);
         }

@@ -3055,8 +3055,8 @@ function showRenameModal(
         if (!dir || !ttlStore) return null;
         const relativePath = getSafeExampleImageFileName(nodeId, renameModalExampleImageUris, file.name);
         await writeExampleImageFile(dir, relativePath, file);
-        ensureExampleImageAnnotationProperty(ttlStore, baseIri);
-        setExampleImageUrisForClass(ttlStore, nodeId, [...renameModalExampleImageUris, relativePath], baseIri);
+        // Do not mutate the store here; confirmRename will apply the final list on Save.
+        // Otherwise cancelling the modal would leave phantom image refs in the store.
         return relativePath;
       },
       onDelete: () => {},
