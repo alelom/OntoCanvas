@@ -1,5 +1,5 @@
 /**
- * Edit node modal subsection: Example images list, Add button, drop zone.
+ * Edit node modal subsection: Example images list and Add button.
  * Stateless UI: receives callbacks for add, delete, open, uris change. No store/files imports.
  */
 
@@ -21,7 +21,6 @@ const SECTION_STYLE = 'margin-top: 12px; padding: 8px; background: #f9f9f9; bord
 const WARNING_STYLE = 'font-size: 11px; color: #b8860b; margin-bottom: 8px;';
 const LIST_ITEM_STYLE = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px;';
 const LINK_STYLE = 'color: #3498db; cursor: pointer; text-decoration: none; word-break: break-all;';
-const DROP_ZONE_STYLE = 'border: 2px dashed #ccc; border-radius: 4px; padding: 12px; text-align: center; font-size: 11px; color: #666; margin-top: 8px; background: #fafafa;';
 
 function renderList(
   listEl: HTMLElement,
@@ -49,7 +48,7 @@ function renderList(
       const bin = document.createElement('button');
       bin.type = 'button';
       bin.textContent = '\u2715';
-      bin.title = 'Remove example image';
+      bin.title = 'Remove example image (this won\'t delete the image from disk)';
       bin.style.cssText = 'background: none; border: none; cursor: pointer; color: #c0392b; font-size: 14px; padding: 0 4px; line-height: 1;';
       bin.addEventListener('click', () => {
         onDelete(uri);
@@ -63,7 +62,7 @@ function renderList(
 
 /**
  * Initialize the Example images subsection inside the given container.
- * Renders heading, warning when !isLocal, list, Add button, drop zone.
+ * Renders warning when !isLocal, list, and Add button.
  * Returns getCurrentUris so main can read the list on OK.
  */
 export function initExampleImagesSection(
@@ -75,11 +74,6 @@ export function initExampleImagesSection(
 
   container.style.cssText = SECTION_STYLE;
   container.innerHTML = '';
-
-  const heading = document.createElement('strong');
-  heading.style.fontSize = '12px';
-  heading.textContent = 'Example images';
-  container.appendChild(heading);
 
   if (!isLocal) {
     const warning = document.createElement('p');
@@ -125,31 +119,7 @@ export function initExampleImagesSection(
       }
     });
 
-    const dropZone = document.createElement('div');
-    dropZone.style.cssText = DROP_ZONE_STYLE;
-    dropZone.textContent = 'Drop image file here';
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.style.background = '#eee';
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.style.background = '#fafafa';
-    });
-    dropZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.style.background = '#fafafa';
-      const file = e.dataTransfer?.files?.[0];
-      if (!file || !file.type.startsWith('image/')) return;
-      const newUri = await onAddImage(file);
-      if (newUri) {
-        updateList([...currentUris, newUri]);
-      }
-    });
-
     container.appendChild(addRow);
-    container.appendChild(dropZone);
   }
 
   return {
