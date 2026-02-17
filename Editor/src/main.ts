@@ -54,13 +54,12 @@ import {
 } from './lib/exampleImageFiles';
 import { initExampleImagesSection } from './ui/exampleImagesSection';
 import {
-  updateIdentifierDisplay,
-  isDuplicateIdentifier,
   isDuplicateIdentifierForRename,
   ADD_NODE_DUPLICATE_MESSAGE,
   applyNodeFormToStore,
   type NodeFormData,
 } from './ui/nodeModalForm';
+import * as nodeModalFormUi from './ui/nodeModalFormUi';
 import { Store, DataFactory } from 'n3';
 import {
   searchExternalClasses,
@@ -2938,219 +2937,6 @@ function updateFilePathDisplay(): void {
   updateStatusBarFilePath(loadedFilePath);
 }
 
-function updateRenameDataPropAddButtonState(): void {
-  const selectEl = document.getElementById('renameDataPropSelect') as HTMLSelectElement;
-  const addBtn = document.getElementById('renameDataPropAdd') as HTMLButtonElement;
-  if (!selectEl || !addBtn) return;
-  const hasSelection = selectEl.value.trim() !== '';
-  addBtn.disabled = !hasSelection;
-  addBtn.style.display = hasSelection ? '' : 'none';
-}
-
-function renderRenameModalDataPropsList(): void {
-  const listEl = document.getElementById('renameDataPropsList');
-  const selectEl = document.getElementById('renameDataPropSelect') as HTMLSelectElement;
-  if (!listEl || !selectEl) return;
-  const assignedNames = new Set(renameModalDataPropertyRestrictions.map((r) => r.propertyName));
-  listEl.innerHTML = renameModalDataPropertyRestrictions
-    .map((r) => {
-      const dp = dataProperties.find((p) => p.name === r.propertyName);
-      const label = dp?.label ?? r.propertyName;
-      const card =
-        r.minCardinality != null || r.maxCardinality != null
-          ? ` [${r.minCardinality ?? 0}..${r.maxCardinality ?? '*'}]`
-          : '';
-      return `<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-        <span>${label}${card}</span>
-        <button type="button" class="rename-data-prop-remove" data-name="${r.propertyName}" style="font-size: 11px; padding: 2px 6px;">Remove</button>
-      </div>`;
-    })
-    .join('');
-  selectEl.innerHTML = '<option value="">-- data property --</option>' + dataProperties.filter((p) => !assignedNames.has(p.name)).map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
-  updateRenameDataPropAddButtonState();
-  listEl.querySelectorAll('.rename-data-prop-remove').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      renameModalDataPropertyRestrictions = renameModalDataPropertyRestrictions.filter((r) => r.propertyName !== name);
-      renderRenameModalDataPropsList();
-    });
-  });
-}
-
-function renderRenameModalAnnotationPropsList(nodeId: string): void {
-  const listEl = document.getElementById('renameAnnotationPropsList');
-  if (!listEl) return;
-  
-  const node = rawData.nodes.find((n) => n.id === nodeId);
-  listEl.innerHTML = '';
-  
-  if (annotationProperties.length === 0) {
-    listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
-    return;
-  }
-  
-  annotationProperties.forEach((ap) => {
-    const currentValue = node?.annotations?.[ap.name];
-    const item = document.createElement('div');
-    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
-    
-    if (ap.isBoolean) {
-      // Boolean annotation property - show checkbox
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name;
-      
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `renameAnnotProp_${ap.name}`;
-      checkbox.checked = currentValue === true;
-      checkbox.indeterminate = currentValue === null || currentValue === undefined;
-      checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
-      
-      item.appendChild(label);
-      item.appendChild(checkbox);
-    } else {
-      // Non-boolean annotation property - show text input
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name + ':';
-      
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.id = `renameAnnotProp_${ap.name}`;
-      input.value = typeof currentValue === 'string' ? currentValue : '';
-      input.placeholder = 'Enter value';
-      input.style.cssText = 'flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;';
-      
-      item.appendChild(label);
-      item.appendChild(input);
-    }
-    
-    listEl.appendChild(item);
-  });
-}
-
-function renderAddNodeAnnotationPropsList(): void {
-  const listEl = document.getElementById('addNodeAnnotationPropsList');
-  if (!listEl) return;
-  listEl.innerHTML = '';
-  if (annotationProperties.length === 0) {
-    listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
-    return;
-  }
-  annotationProperties.forEach((ap) => {
-    const currentValue = null;
-    const item = document.createElement('div');
-    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
-    if (ap.isBoolean) {
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name;
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `addNodeAnnotProp_${ap.name}`;
-      checkbox.checked = currentValue === true;
-      checkbox.indeterminate = currentValue === null || currentValue === undefined;
-      checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
-      item.appendChild(label);
-      item.appendChild(checkbox);
-    } else {
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name + ':';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.id = `addNodeAnnotProp_${ap.name}`;
-      input.value = typeof currentValue === 'string' ? currentValue : '';
-      input.placeholder = 'Enter value';
-      input.style.cssText = 'flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;';
-      item.appendChild(label);
-      item.appendChild(input);
-    }
-    listEl.appendChild(item);
-  });
-}
-
-function updateAddNodeDataPropAddButtonState(): void {
-  const selectEl = document.getElementById('addNodeDataPropSelect') as HTMLSelectElement;
-  const addBtn = document.getElementById('addNodeDataPropAdd') as HTMLButtonElement;
-  if (!selectEl || !addBtn) return;
-  const hasSelection = selectEl.value.trim() !== '';
-  addBtn.disabled = !hasSelection;
-  addBtn.style.display = hasSelection ? '' : 'none';
-}
-
-function renderAddNodeDataPropsList(): void {
-  const listEl = document.getElementById('addNodeDataPropsList');
-  const selectEl = document.getElementById('addNodeDataPropSelect') as HTMLSelectElement;
-  if (!listEl || !selectEl) return;
-  const assignedNames = new Set(addNodeDataPropertyRestrictions.map((r) => r.propertyName));
-  listEl.innerHTML = addNodeDataPropertyRestrictions
-    .map((r) => {
-      const dp = dataProperties.find((p) => p.name === r.propertyName);
-      const label = dp?.label ?? r.propertyName;
-      const card =
-        r.minCardinality != null || r.maxCardinality != null
-          ? ` [${r.minCardinality ?? 0}..${r.maxCardinality ?? '*'}]`
-          : '';
-      return `<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-        <span>${label}${card}</span>
-        <button type="button" class="add-node-data-prop-remove" data-name="${r.propertyName}" style="font-size: 11px; padding: 2px 6px;">Remove</button>
-      </div>`;
-    })
-    .join('');
-  selectEl.innerHTML = '<option value="">-- data property --</option>' + dataProperties.filter((p) => !assignedNames.has(p.name)).map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
-  updateAddNodeDataPropAddButtonState();
-  listEl.querySelectorAll('.add-node-data-prop-remove').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      addNodeDataPropertyRestrictions = addNodeDataPropertyRestrictions.filter((r) => r.propertyName !== name);
-      renderAddNodeDataPropsList();
-    });
-  });
-}
-
-function updateRenameModalIdentifier(): void {
-  const modal = document.getElementById('renameModal');
-  if (!modal || (modal as HTMLElement).style.display === 'none') return;
-  if (modal.dataset.mode !== 'single') return;
-  const input = document.getElementById('renameInput') as HTMLInputElement;
-  const nodeId = input?.dataset.nodeId;
-  if (!nodeId) return;
-  updateIdentifierDisplay('rename', input?.value?.trim() ?? '', ttlStore, nodeId);
-  updateRenameModalDuplicateCheck();
-}
-
-function updateRenameModalDuplicateCheck(): void {
-  const modal = document.getElementById('renameModal');
-  if (!modal || (modal as HTMLElement).style.display === 'none') return;
-  if (modal.dataset.mode !== 'single') return;
-  const input = document.getElementById('renameInput') as HTMLInputElement;
-  const okBtn = document.getElementById('renameConfirm') as HTMLButtonElement;
-  const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
-  const nodeId = input?.dataset.nodeId;
-  if (!nodeId || !okBtn) return;
-  if (dupErr) {
-    dupErr.style.display = 'none';
-    dupErr.textContent = '';
-  }
-  const label = input?.value?.trim() ?? '';
-  if (!label) {
-    okBtn.disabled = false;
-    return;
-  }
-  const existingIds = new Set(rawData.nodes.map((n) => n.id));
-  if (isDuplicateIdentifierForRename(label, existingIds, nodeId)) {
-    if (dupErr) {
-      dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
-      dupErr.style.display = 'block';
-    }
-    okBtn.disabled = true;
-    return;
-  }
-  okBtn.disabled = false;
-}
-
 function showRenameModal(
   nodeId: string,
   currentLabel: string,
@@ -3168,7 +2954,7 @@ function showRenameModal(
   input.dataset.nodeId = nodeId;
   const renameDupErr = document.getElementById('renameDuplicateError') as HTMLElement;
   if (renameDupErr) { renameDupErr.style.display = 'none'; renameDupErr.textContent = ''; }
-  updateRenameModalIdentifier();
+  refreshRenameModalFromInput();
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
@@ -3209,7 +2995,7 @@ function showRenameModal(
       annotPropsSection.style.display = 'none';
     } else {
       annotPropsSection.style.display = 'block';
-      renderRenameModalAnnotationPropsList(nodeId);
+      nodeModalFormUi.renderRenameModalAnnotationPropsList(nodeId, node, annotationProperties);
     }
   }
   
@@ -3221,8 +3007,8 @@ function showRenameModal(
       dataPropsSection.style.display = 'block';
       renameModalInitialDataProps = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
       renameModalDataPropertyRestrictions = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
-      renderRenameModalDataPropsList();
-      updateRenameDataPropAddButtonState();
+      nodeModalFormUi.renderRenameModalDataPropsList(renameModalDataPropertyRestrictions, dataProperties, onRemoveRenameDataProp);
+      nodeModalFormUi.updateRenameDataPropAddButtonState();
     }
   }
   modal.style.display = 'flex';
@@ -3264,6 +3050,34 @@ function showMultiEditModal(nodeIds: string[]): void {
 
 let addNodeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 let selectedExternalClass: ExternalClassInfo | null = null;
+
+function onRemoveRenameDataProp(name: string): void {
+  renameModalDataPropertyRestrictions = renameModalDataPropertyRestrictions.filter((r) => r.propertyName !== name);
+  nodeModalFormUi.renderRenameModalDataPropsList(renameModalDataPropertyRestrictions, dataProperties, onRemoveRenameDataProp);
+}
+function onRemoveAddNodeDataProp(name: string): void {
+  addNodeDataPropertyRestrictions = addNodeDataPropertyRestrictions.filter((r) => r.propertyName !== name);
+  nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
+}
+function refreshRenameModalFromInput(): void {
+  const modal = document.getElementById('renameModal');
+  if (!modal || (modal as HTMLElement).style.display === 'none') return;
+  const input = document.getElementById('renameInput') as HTMLInputElement;
+  const nodeId = input?.dataset.nodeId ?? '';
+  nodeModalFormUi.syncRenameModal({ store: ttlStore, nodeId, label: input?.value?.trim() ?? '', existingIds: new Set(rawData.nodes.map((n) => n.id)) });
+}
+function refreshAddNodeOkButton(): void {
+  const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
+  const customTabContent = document.getElementById('addNodeCustomTab');
+  const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
+  nodeModalFormUi.syncAddNodeModal({
+    store: ttlStore,
+    existingIds: new Set(rawData.nodes.map((n) => n.id)),
+    label: customInput?.value?.trim() ?? '',
+    externalLabel: selectedExternalClass?.label ?? null,
+    isCustomTab: !!isCustomTab,
+  });
+}
 
 function showAddNodeModal(canvasX: number, canvasY: number): void {
   pendingAddNodePosition = { x: canvasX, y: canvasY };
@@ -3317,7 +3131,7 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
       addNodeAnnotationPropsSection.style.display = 'none';
     } else {
       addNodeAnnotationPropsSection.style.display = 'block';
-      renderAddNodeAnnotationPropsList();
+      nodeModalFormUi.renderAddNodeAnnotationPropsList(annotationProperties);
     }
   }
   const addNodeDataPropsSection = document.getElementById('addNodeDataPropsSection');
@@ -3326,7 +3140,7 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
       addNodeDataPropsSection.style.display = 'none';
     } else {
       addNodeDataPropsSection.style.display = 'block';
-      renderAddNodeDataPropsList();
+      nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
     }
   }
   const addNodeExampleImagesContainer = document.getElementById('addNodeExampleImagesSection');
@@ -3372,51 +3186,6 @@ function hideAddNodeModalWithCleanup(): void {
   hideAddNodeModal();
 }
 
-function updateAddNodeOkButton(): void {
-  const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
-  const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
-  const customTabContent = document.getElementById('addNodeCustomTab');
-  const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
-  const existingIds = new Set(rawData.nodes.map((n) => n.id));
-  const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
-  const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
-
-  if (dupErr) dupErr.style.display = 'none';
-  if (extDupErr) extDupErr.style.display = 'none';
-
-  if (isCustomTab) {
-    const label = customInput?.value?.trim() ?? '';
-    updateIdentifierDisplay('addNode', label, ttlStore);
-    if (!label) {
-      if (okBtn) okBtn.disabled = true;
-      return;
-    }
-    if (isDuplicateIdentifier(label, existingIds)) {
-      if (dupErr) {
-        dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
-        dupErr.style.display = 'block';
-      }
-      if (okBtn) okBtn.disabled = true;
-      return;
-    }
-    if (okBtn) okBtn.disabled = false;
-  } else {
-    if (!selectedExternalClass) {
-      if (okBtn) okBtn.disabled = true;
-      return;
-    }
-    if (isDuplicateIdentifier(selectedExternalClass.label, existingIds)) {
-      if (extDupErr) {
-        extDupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
-        extDupErr.style.display = 'block';
-      }
-      if (okBtn) okBtn.disabled = true;
-      return;
-    }
-    if (okBtn) okBtn.disabled = false;
-  }
-}
-
 async function handleExternalClassSearch(query: string): Promise<void> {
   const resultsDiv = document.getElementById('addNodeExternalResults');
   const descDiv = document.getElementById('addNodeExternalDescription');
@@ -3425,7 +3194,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
     if (resultsDiv) resultsDiv.style.display = 'none';
     if (descDiv) descDiv.style.display = 'none';
     selectedExternalClass = null;
-    updateAddNodeOkButton();
+    refreshAddNodeOkButton();
     return;
   }
   
@@ -3440,7 +3209,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
     }
     if (descDiv) descDiv.style.display = 'none';
     selectedExternalClass = null;
-    updateAddNodeOkButton();
+    refreshAddNodeOkButton();
     return;
   }
   
@@ -3493,7 +3262,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
             descDiv.style.display = 'block';
           }
           if (resultsDiv) resultsDiv.style.display = 'none';
-          updateAddNodeOkButton();
+          refreshAddNodeOkButton();
         });
       });
     }
@@ -3501,7 +3270,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
     selectedExternalClass = results[0]; // Auto-select first result
     }
     
-    updateAddNodeOkButton();
+    refreshAddNodeOkButton();
   } catch (err) {
     console.error('Search error:', err);
     if (resultsDiv) {
@@ -3510,7 +3279,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
     }
     if (descDiv) descDiv.style.display = 'none';
     selectedExternalClass = null;
-    updateAddNodeOkButton();
+    refreshAddNodeOkButton();
   }
 }
 
@@ -6159,7 +5928,7 @@ function setupEventListeners(): void {
 
   document.getElementById('renameCancel')?.addEventListener('click', hideRenameModal);
   document.getElementById('renameConfirm')?.addEventListener('click', confirmRename);
-  document.getElementById('renameInput')?.addEventListener('input', updateRenameModalIdentifier);
+  document.getElementById('renameInput')?.addEventListener('input', refreshRenameModalFromInput);
   document.getElementById('renameDataPropAdd')?.addEventListener('click', () => {
     const modal = document.getElementById('renameModal')!;
     if (modal.dataset.mode !== 'single') return;
@@ -6180,12 +5949,12 @@ function setupEventListeners(): void {
       ...(maxCardinality !== undefined && { maxCardinality: maxCardinality! }),
     });
     if (selectEl) selectEl.value = '';
-    renderRenameModalDataPropsList();
+    nodeModalFormUi.renderRenameModalDataPropsList(renameModalDataPropertyRestrictions, dataProperties, onRemoveRenameDataProp);
     if (minEl) minEl.value = '';
     if (maxEl) maxEl.value = '';
   });
   document.getElementById('renameDataPropSelect')?.addEventListener('change', () => {
-    updateRenameDataPropAddButtonState();
+    nodeModalFormUi.updateRenameDataPropAddButtonState();
   });
   document.getElementById('addNodeDataPropAdd')?.addEventListener('click', () => {
     const selectEl = document.getElementById('addNodeDataPropSelect') as HTMLSelectElement;
@@ -6205,12 +5974,12 @@ function setupEventListeners(): void {
       ...(maxCardinality !== undefined && { maxCardinality: maxCardinality! }),
     });
     if (selectEl) selectEl.value = '';
-    renderAddNodeDataPropsList();
+    nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
     if (minEl) minEl.value = '';
     if (maxEl) maxEl.value = '';
   });
   document.getElementById('addNodeDataPropSelect')?.addEventListener('change', () => {
-    updateAddNodeDataPropAddButtonState();
+    nodeModalFormUi.updateAddNodeDataPropAddButtonState();
   });
   document.getElementById('renameModal')?.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).closest('#renameModal') && (e.key === 'Enter' || e.key === 'Escape')) {
@@ -6256,11 +6025,11 @@ function setupEventListeners(): void {
         if (externalInput) externalInput.focus();
       }
       
-      updateAddNodeOkButton();
+      refreshAddNodeOkButton();
     });
   });
   
-  document.getElementById('addNodeInput')?.addEventListener('input', updateAddNodeOkButton);
+  document.getElementById('addNodeInput')?.addEventListener('input', refreshAddNodeOkButton);
   document.getElementById('addNodeExternalInput')?.addEventListener('input', (e) => {
     const query = (e.target as HTMLInputElement).value.trim();
     
@@ -6276,7 +6045,7 @@ function setupEventListeners(): void {
       });
     }, 300);
     
-    updateAddNodeOkButton();
+    refreshAddNodeOkButton();
   });
   
   document.getElementById('addNodeCancel')?.addEventListener('click', hideAddNodeModal);
