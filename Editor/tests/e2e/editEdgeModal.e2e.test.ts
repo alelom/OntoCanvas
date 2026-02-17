@@ -263,4 +263,49 @@ describe('Edit Edge Modal E2E Tests', () => {
       await closeEditEdgeModal(page);
     });
   });
+
+  describe('Add Node duplicate identifier', () => {
+    it('disables OK and shows error when label would derive to an existing identifier', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'duplicate-add-node.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await page.waitForFunction(
+        () => {
+          const nodeCountEl = document.getElementById('nodeCount');
+          const n = nodeCountEl?.textContent?.trim();
+          return n !== undefined && n !== '' && parseInt(n, 10) >= 1;
+        },
+        { timeout: 5000 }
+      );
+      await page.waitForTimeout(100);
+
+      const nodeCountBefore = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getNodeCount?.() ?? 0);
+      expect(nodeCountBefore).toBe(1);
+
+      await page.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        if (testHook?.openAddNodeModal) testHook.openAddNodeModal(100, 100);
+      });
+      await page.waitForTimeout(150);
+
+      const modalVisible = await page.locator('#addNodeModal').isVisible();
+      expect(modalVisible).toBe(true);
+
+      await page.locator('#addNodeInput').fill('DGU');
+      await page.waitForTimeout(100);
+
+      const state = await page.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        return testHook?.getAddNodeModalState?.() ?? null;
+      });
+      expect(state).not.toBeNull();
+      expect(state?.okDisabled).toBe(true);
+      expect(state?.duplicateErrorVisible).toBe(true);
+      expect(state?.duplicateErrorText).toContain('same identifier');
+
+      const nodeCountAfter = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getNodeCount?.() ?? 0);
+      expect(nodeCountAfter).toBe(1);
+    });
+  });
 });
