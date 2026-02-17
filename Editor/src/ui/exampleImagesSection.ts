@@ -28,6 +28,7 @@ function renderList(
   uris: string[],
   isLocal: boolean,
   onOpen: (uri: string) => void,
+  onDelete: (uri: string) => void,
   changeCallback: (uris: string[]) => void
 ): void {
   listEl.innerHTML = '';
@@ -51,6 +52,7 @@ function renderList(
       bin.title = 'Remove example image';
       bin.style.cssText = 'background: none; border: none; cursor: pointer; color: #c0392b; font-size: 14px; padding: 0 4px; line-height: 1;';
       bin.addEventListener('click', () => {
+        onDelete(uri);
         changeCallback(uris.filter((u) => u !== uri));
       });
       row.appendChild(bin);
@@ -93,9 +95,9 @@ export function initExampleImagesSection(
   const updateList = (uris: string[]) => {
     currentUris = uris;
     onUrisChange(uris);
-    renderList(listEl, uris, isLocal, onOpen, updateList);
+    renderList(listEl, uris, isLocal, onOpen, onDelete, updateList);
   };
-  renderList(listEl, currentUris, isLocal, onOpen, updateList);
+  renderList(listEl, currentUris, isLocal, onOpen, onDelete, updateList);
 
   if (isLocal) {
     const addRow = document.createElement('div');
