@@ -3023,6 +3023,21 @@ function renderRenameModalAnnotationPropsList(nodeId: string): void {
   });
 }
 
+function updateRenameModalIdentifier(): void {
+  const modal = document.getElementById('renameModal');
+  if (!modal || (modal as HTMLElement).style.display === 'none') return;
+  if (modal.dataset.mode !== 'single') return;
+  const input = document.getElementById('renameInput') as HTMLInputElement;
+  const identifierEl = document.getElementById('renameIdentifier') as HTMLElement;
+  const nodeId = input?.dataset.nodeId;
+  if (!nodeId || !identifierEl) return;
+  const lbl = input?.value?.trim() ?? '';
+  const derived = labelToCamelCaseIdentifier(lbl) || nodeId;
+  const displayBase = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
+}
+
 function showRenameModal(
   nodeId: string,
   currentLabel: string,
@@ -3038,10 +3053,15 @@ function showRenameModal(
   input.disabled = false;
   input.style.color = '';
   input.dataset.nodeId = nodeId;
+  updateRenameModalIdentifier();
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
 
+  const renameIdentifierLabel = document.getElementById('renameIdentifierLabel');
+  const renameIdentifier = document.getElementById('renameIdentifier');
+  if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = '';
+  if (renameIdentifier) (renameIdentifier as HTMLElement).style.display = '';
   renameModalExampleImageUris = node?.exampleImages ?? [];
   const exampleImagesContainer = document.getElementById('renameExampleImagesSection');
   if (exampleImagesContainer && ttlStore) {
@@ -3117,6 +3137,10 @@ function showMultiEditModal(nodeIds: string[]): void {
   if (dataPropsSection) dataPropsSection.style.display = 'none';
   const exampleImagesSection = document.getElementById('renameExampleImagesSection');
   if (exampleImagesSection) exampleImagesSection.style.display = 'none';
+  const renameIdentifierLabel = document.getElementById('renameIdentifierLabel');
+  const renameIdentifier = document.getElementById('renameIdentifier');
+  if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = 'none';
+  if (renameIdentifier) (renameIdentifier as HTMLElement).style.display = 'none';
   modal.style.display = 'flex';
   commentInput?.focus();
 }
@@ -4507,6 +4531,8 @@ function renderApp(): void {
           <span style="font-size: 12px;">Label:</span>
           <input type="text" id="renameInput" style="flex: 1;" />
         </label>
+        <p id="renameIdentifierLabel" style="font-size: 11px; color: #666; margin-bottom: 4px;">Identifier (derived from label):</p>
+        <p id="renameIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
@@ -5964,6 +5990,7 @@ function setupEventListeners(): void {
 
   document.getElementById('renameCancel')?.addEventListener('click', hideRenameModal);
   document.getElementById('renameConfirm')?.addEventListener('click', confirmRename);
+  document.getElementById('renameInput')?.addEventListener('input', updateRenameModalIdentifier);
   document.getElementById('renameDataPropAdd')?.addEventListener('click', () => {
     const modal = document.getElementById('renameModal')!;
     if (modal.dataset.mode !== 'single') return;
