@@ -44,6 +44,19 @@ import {
   storeToTurtle,
   extractLocalName,
 } from './parser';
+import {
+  ensureExampleImageAnnotationProperty,
+  setExampleImageUrisForClass,
+} from './lib/exampleImageStore';
+import {
+  getOrRequestImageDirectory,
+  writeExampleImageFile,
+  getSafeExampleImageFileName,
+  openExampleImageUri,
+  getCachedImageDirectory,
+  clearCachedImageDirectory,
+} from './lib/exampleImageFiles';
+import { initExampleImagesSection } from './ui/exampleImagesSection';
 import { Store, DataFactory } from 'n3';
 import {
   searchExternalClasses,
@@ -256,6 +269,8 @@ let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: str
 let renameModalInitialDataProps: DataPropertyRestriction[] | null = null;
 /** Current data property restrictions while editing in rename modal (single-node mode). */
 let renameModalDataPropertyRestrictions: DataPropertyRestriction[] = [];
+/** Example image URIs while editing in rename modal (single-node mode). */
+let renameModalExampleImageUris: string[] = [];
 
 type UndoableAction = { undo: () => void; redo: () => void };
 let undoStack: UndoableAction[] = [];
@@ -3024,6 +3039,32 @@ function showRenameModal(
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
+
+  const baseIri = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  renameModalExampleImageUris = node?.exampleImages ?? [];
+  const exampleImagesContainer = document.getElementById('renameExampleImagesSection');
+  if (exampleImagesContainer && ttlStore) {
+    exampleImagesContainer.style.display = 'block';
+    initExampleImagesSection(exampleImagesContainer, {
+      nodeId,
+      isLocal: !!fileHandle,
+      initialUris: renameModalExampleImageUris,
+      onAddImage: async (file: File) => {
+        const dir = await getOrRequestImageDirectory(fileHandle);
+        if (!dir || !ttlStore) return null;
+        const relativePath = getSafeExampleImageFileName(nodeId, renameModalExampleImageUris, file.name);
+        await writeExampleImageFile(dir, relativePath, file);
+        ensureExampleImageAnnotationProperty(ttlStore, baseIri);
+        setExampleImageUrisForClass(ttlStore, nodeId, [...renameModalExampleImageUris, relativePath], baseIri);
+        return relativePath;
+      },
+      onDelete: () => {},
+      onOpen: (uri: string) => openExampleImageUri(uri, getCachedImageDirectory()),
+      onUrisChange: (uris: string[]) => { renameModalExampleImageUris = uris; },
+    });
+  } else if (exampleImagesContainer) {
+    exampleImagesContainer.style.display = 'none';
+  }
   
   // Render annotation properties
   const annotPropsSection = document.getElementById('renameAnnotationPropsSection');
@@ -3073,6 +3114,8 @@ function showMultiEditModal(nodeIds: string[]): void {
   if (annotPropsSection) annotPropsSection.style.display = 'none';
   const dataPropsSection = document.getElementById('renameDataPropsSection');
   if (dataPropsSection) dataPropsSection.style.display = 'none';
+  const exampleImagesSection = document.getElementById('renameExampleImagesSection');
+  if (exampleImagesSection) exampleImagesSection.style.display = 'none';
   modal.style.display = 'flex';
   commentInput?.focus();
 }
@@ -4134,8 +4177,14 @@ function confirmRename(): void {
     currentDataProps.every((b) => initialDataProps.some((a) => a.propertyName === b.propertyName));
   const dataPropsChanged = !dataPropsEqual;
 
+  const oldExampleImages = node.exampleImages ?? [];
+  const newExampleImages = renameModalExampleImageUris;
+  const exampleImagesEqual =
+    oldExampleImages.length === newExampleImages.length &&
+    oldExampleImages.every((u, i) => u === newExampleImages[i]);
+  const exampleImagesChanged = !exampleImagesEqual;
 
-  if (!labelChanged && !annotationPropsChanged && !commentChanged && !dataPropsChanged) {
+  if (!labelChanged && !annotationPropsChanged && !commentChanged && !dataPropsChanged && !exampleImagesChanged) {
     hideRenameModal();
     return;
   }
@@ -4143,6 +4192,7 @@ function confirmRename(): void {
   const oldLabel = node.label;
   const oldAnnotationValuesCopy = { ...oldAnnotationValues };
   const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
+  const baseIri = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
   if (labelChanged) {
     node.label = newLabel;
@@ -4205,6 +4255,12 @@ function confirmRename(): void {
     }
   }
 
+  if (exampleImagesChanged && ttlStore) {
+    ensureExampleImageAnnotationProperty(ttlStore, baseIri);
+    setExampleImageUrisForClass(ttlStore, nodeId, newExampleImages, baseIri);
+    node.exampleImages = newExampleImages.length > 0 ? newExampleImages : undefined;
+  }
+
   pushUndoable(
     () => {
       if (labelChanged) {
@@ -4244,6 +4300,10 @@ function confirmRename(): void {
         for (const r of toRemove) removeDataPropertyRestrictionFromClass(ttlStore, nodeId, r.propertyName);
         for (const r of toAdd) addDataPropertyRestrictionToClass(ttlStore, nodeId, r.propertyName, { minCardinality: r.minCardinality ?? undefined, maxCardinality: r.maxCardinality ?? undefined });
         }
+      }
+      if (exampleImagesChanged && ttlStore) {
+        setExampleImageUrisForClass(ttlStore, nodeId, oldExampleImages, baseIri);
+        node.exampleImages = oldExampleImages.length > 0 ? oldExampleImages : undefined;
       }
     },
     () => {
@@ -4288,6 +4348,10 @@ function confirmRename(): void {
         } else {
           rawData.nodes[nodeIndex].dataPropertyRestrictions = [...currentDataProps];
         }
+      }
+      if (exampleImagesChanged && ttlStore) {
+        setExampleImageUrisForClass(ttlStore, nodeId, newExampleImages, baseIri);
+        node.exampleImages = newExampleImages.length > 0 ? newExampleImages : undefined;
       }
     }
   );
@@ -4446,6 +4510,7 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
+        <div id="renameExampleImagesSection"></div>
         <div id="renameAnnotationPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
           <strong style="font-size: 12px;">Set annotation properties</strong>
           <div id="renameAnnotationPropsList" style="margin-top: 8px;"></div>
@@ -4759,6 +4824,7 @@ async function loadTtlAndRender(
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
+    if (!fileHandle) clearCachedImageDirectory();
     hasUnsavedChanges = false;
     clearUndoRedo();
     updateFilePathDisplay();

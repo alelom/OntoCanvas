@@ -131,6 +131,27 @@ describe('parseTtlToGraph (load)', () => {
     expect(containsProp?.comment).toBeDefined();
     expect(containsProp!.comment).toContain('containment');
   });
+
+  it('populates node.exampleImages from exampleImage annotation triples', async () => {
+    const ttl = `
+@prefix : <http://example.org/aec-drawing-ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+: a owl:Ontology .
+:ImageTestClass rdf:type owl:Class ;
+  rdfs:label "Image test" ;
+  :exampleImage <img/one.png> , <img/two.png> .
+`;
+    const { graphData } = await parseTtlToGraph(ttl);
+    const node = graphData.nodes.find((n) => n.id === 'ImageTestClass');
+    expect(node).toBeDefined();
+    expect(node!.exampleImages).toBeDefined();
+    expect(node!.exampleImages).toHaveLength(2);
+    expect(node!.exampleImages).toContain('img/one.png');
+    expect(node!.exampleImages).toContain('img/two.png');
+  });
 });
 
 describe('updateLabelInStore (edit)', () => {
