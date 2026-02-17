@@ -937,7 +937,7 @@
 #    Data Properties
 #################################################################
 
-:refersToDrawingId rdf:type owl:DatatypeProperty;
+<http://example.org/aec-drawing-ontology#Ontology#referstodrawingid> rdf:type owl:DatatypeProperty;
     rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
     rdfs:label "refersToDrawingId";
     rdfs:range xsd:string;

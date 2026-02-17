@@ -2667,6 +2667,9 @@ function setupNetworkSelectionAndNavigation(
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
   let selectionBeforeClick: string[] = [];
+  /** Node/edge under cursor at right mousedown (so context menu uses exact click target, not mouseup). */
+  let rightClickNodeId: string | null = null;
+  let rightClickEdgeId: string | null = null;
 
   // Prevent browser's default context menu on the container
   container.oncontextmenu = (e: MouseEvent) => {
@@ -2701,12 +2704,16 @@ function setupNetworkSelectionAndNavigation(
       const nodeAt = net.getNodeAt(coords);
       const edgeAt = net.getEdgeAt(coords);
       
-      // If clicking on node/edge, don't start panning (context menu will handle it)
+      // If clicking on node/edge, don't start panning; store target for context menu (exact click position)
       if (nodeAt != null || edgeAt != null) {
         rightPanStart = null;
+        rightClickNodeId = nodeAt != null ? String(nodeAt) : null;
+        rightClickEdgeId = edgeAt != null ? String(edgeAt) : null;
         return;
       }
-      
+      rightClickNodeId = null;
+      rightClickEdgeId = null;
+
       // Otherwise, start panning on empty canvas
       const viewPos = net.getViewPosition();
       const scale = net.getScale();
@@ -2750,17 +2757,12 @@ function setupNetworkSelectionAndNavigation(
       
       // Check if we were panning (rightPanStart exists) or if we should show context menu
       if (!rightPanStart && isInContainer) {
-        // Show context menu if we didn't pan
-        const coords = getContainerCoords(e);
-        const nodeAt = net.getNodeAt(coords);
-        const edgeAt = net.getEdgeAt(coords);
-        
-        // Show context menu if clicking on node/edge or empty canvas
-        if (nodeAt != null || edgeAt != null || true) {
-          showContextMenu(e, net, container);
-        }
+        // Show context menu; use node/edge stored at mousedown so target is exact (e.g. data property node)
+        showContextMenu(e, net, container, rightClickNodeId, rightClickEdgeId);
       }
       rightPanStart = null;
+      rightClickNodeId = null;
+      rightClickEdgeId = null;
     }
   };
 
