@@ -7,12 +7,15 @@ import {
   updateLabelInStore,
   storeToTurtle,
   extractLocalName,
+  getClassNamespace,
+  getMainOntologyBase,
   addEdgeToStore,
   addNodeToStore,
   removeEdgeFromStore,
   removeNodeFromStore,
   addObjectPropertyToStore,
 } from './parser';
+import { setExampleImageUrisForClass, ensureExampleImageAnnotationProperty } from './lib/exampleImageStore';
 import type { GraphData } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -153,6 +156,34 @@ describe('parseTtlToGraph (load)', () => {
     expect(node!.exampleImages).toHaveLength(2);
     expect(node!.exampleImages).toContain('img/one.png');
     expect(node!.exampleImages).toContain('img/two.png');
+  });
+
+  it('getClassNamespace returns class namespace (not ontology subject) so exampleImage associates with class', async () => {
+    const ttl = `
+@prefix : <http://example.org/aec-drawing-ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:Ontology a owl:Ontology .
+:DGU rdf:type owl:Class ;
+  rdfs:label "DGU (Double glazed unit)" ;
+  rdfs:subClassOf :FacadeCladding .
+`;
+    const { store } = await parseTtlToGraph(ttl);
+    const mainBase = getMainOntologyBase(store);
+    const classNs = getClassNamespace(store);
+    expect(mainBase).toBe('http://example.org/aec-drawing-ontology#Ontology#');
+    expect(classNs).toBe('http://example.org/aec-drawing-ontology#');
+    ensureExampleImageAnnotationProperty(store, classNs!);
+    const set = setExampleImageUrisForClass(store, 'DGU', ['img/dgu.png'], classNs!);
+    expect(set).toBe(true);
+    const out = await storeToTurtle(store);
+    expect(out).toContain('img/dgu.png');
+    expect(out).toContain('exampleImage');
+    const { graphData } = await parseTtlToGraph(out);
+    const dgu = graphData.nodes.find((n) => n.id === 'DGU');
+    expect(dgu?.exampleImages).toEqual(['img/dgu.png']);
   });
 });
 

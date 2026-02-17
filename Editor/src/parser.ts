@@ -73,6 +73,24 @@ export function getMainOntologyBase(store: Store): string | null {
   return uri.endsWith('#') ? uri : uri + '#';
 }
 
+/**
+ * Return the namespace (base IRI with trailing #) used for class URIs in this store.
+ * Used for exampleImage so the predicate lives in the same namespace as classes (e.g. :exampleImage not :Ontology#exampleImage).
+ */
+export function getClassNamespace(store: Store): string | null {
+  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+  for (const q of classQuads) {
+    if (q.subject.termType !== 'NamedNode') continue;
+    const uri = (q.subject as { value: string }).value;
+    const localName = extractLocalName(uri);
+    if (!localName) continue;
+    if (uri.includes('#')) return uri.slice(0, uri.lastIndexOf('#') + 1);
+    if (uri.includes('/')) return uri.slice(0, uri.lastIndexOf('/') + 1);
+    return null;
+  }
+  return null;
+}
+
 export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
   const seen = new Set<string>();
@@ -228,7 +246,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       }
     }
 
-    const exampleImages = getExampleImageUrisForClass(store, localName, getMainOntologyBase(store) ?? BASE_IRI);
+    const exampleImages = getExampleImageUrisForClass(store, localName, getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI);
 
     nodes.push({
       id: localName,

@@ -20,6 +20,7 @@ import {
   updateObjectPropertySubPropertyOfInStore,
   updateObjectPropertyIsDefinedByInStore,
   getMainOntologyBase,
+  getClassNamespace,
   getObjectProperties,
   renameObjectPropertyInStore,
   renameDataPropertyInStore,
@@ -4192,7 +4193,7 @@ function confirmRename(): void {
   const oldLabel = node.label;
   const oldAnnotationValuesCopy = { ...oldAnnotationValues };
   const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
-  const baseIri = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
   if (labelChanged) {
     node.label = newLabel;
