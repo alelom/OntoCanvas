@@ -3041,7 +3041,6 @@ function showRenameModal(
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
 
-  const baseIri = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
   renameModalExampleImageUris = node?.exampleImages ?? [];
   const exampleImagesContainer = document.getElementById('renameExampleImagesSection');
   if (exampleImagesContainer && ttlStore) {
