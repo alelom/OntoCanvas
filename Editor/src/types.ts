@@ -14,6 +14,8 @@ export interface GraphNode {
   annotations?: Record<string, string | boolean | null>;
   /** Data property restrictions (owl:Restriction with owl:onDataRange) on this class */
   dataPropertyRestrictions?: DataPropertyRestriction[];
+  /** Example image URIs (multi-valued annotation property exampleImage); relative e.g. img/foo.png or absolute */
+  exampleImages?: string[];
   x?: number;
   y?: number;
 }

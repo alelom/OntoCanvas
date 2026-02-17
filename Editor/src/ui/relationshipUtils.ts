@@ -20,8 +20,15 @@ export function getAllRelationshipTypes(
   // Include subClassOf always
   usedTypes.add('subClassOf');
   
-  // Include all object properties so that duplicate local names (e.g. geo:hasGeometry vs dano:hasGeometry) appear as separate rows with prefixed labels
-  objectProperties.forEach((op) => usedTypes.add(op.name));
+  // Local properties: always include. External (URI) properties: only include if used in edges
+  objectProperties.forEach((op) => {
+    const isExternal = op.name.startsWith('http://') || op.name.startsWith('https://');
+    if (!isExternal) {
+      usedTypes.add(op.name);
+    } else if (usedTypes.has(op.name)) {
+      usedTypes.add(op.name); // already in from edges; ensure we keep it
+    }
+  });
   
   return Array.from(usedTypes).sort();
 }

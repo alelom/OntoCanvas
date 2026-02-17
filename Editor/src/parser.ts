@@ -1,5 +1,6 @@
 import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
 import { postProcessTurtle } from './turtlePostProcess';
+import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
@@ -227,6 +228,8 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       }
     }
 
+    const exampleImages = getExampleImageUrisForClass(store, localName, getMainOntologyBase(store) ?? BASE_IRI);
+
     nodes.push({
       id: localName,
       label,
@@ -234,6 +237,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       comment: comment || undefined,
       annotations,
       dataPropertyRestrictions: [],
+      exampleImages: exampleImages.length > 0 ? exampleImages : undefined,
     });
   }
 

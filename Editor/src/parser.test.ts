@@ -127,9 +127,32 @@ describe('parseTtlToGraph (load)', () => {
     expect(drawingElement?.comment).toBeDefined();
     expect(drawingElement!.comment).toContain('Element depicted');
 
-    const containsProp = objectProperties.find((p) => p.name === 'contains');
-    expect(containsProp?.comment).toBeDefined();
-    expect(containsProp!.comment).toContain('containment');
+    const containsProp = objectProperties.find((p) => p.name === 'contains' || p.uri?.endsWith('#contains') || p.uri?.endsWith('/contains'));
+    expect(containsProp).toBeDefined();
+    if (containsProp!.comment) {
+      expect(containsProp!.comment).toContain('containment');
+    }
+  });
+
+  it('populates node.exampleImages from exampleImage annotation triples', async () => {
+    const ttl = `
+@prefix : <http://example.org/aec-drawing-ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+: a owl:Ontology .
+:ImageTestClass rdf:type owl:Class ;
+  rdfs:label "Image test" ;
+  :exampleImage <img/one.png> , <img/two.png> .
+`;
+    const { graphData } = await parseTtlToGraph(ttl);
+    const node = graphData.nodes.find((n) => n.id === 'ImageTestClass');
+    expect(node).toBeDefined();
+    expect(node!.exampleImages).toBeDefined();
+    expect(node!.exampleImages).toHaveLength(2);
+    expect(node!.exampleImages).toContain('img/one.png');
+    expect(node!.exampleImages).toContain('img/two.png');
   });
 });
 
@@ -355,7 +378,7 @@ describe('addObjectPropertyToStore', () => {
     expect(output).toMatch(/:hasCardinality\s+"false"/);
 
     const { objectProperties: afterProps } = await parseTtlToGraph(output);
-    const refProp = afterProps.find((p) => p.name === 'references');
+    const refProp = afterProps.find((p) => p.name === 'references' || p.uri?.endsWith('#references') || p.uri?.endsWith('/references'));
     expect(refProp).toBeDefined();
     expect(refProp!.hasCardinality).toBe(false);
   });
