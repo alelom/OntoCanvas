@@ -57,12 +57,17 @@ export function renderRenameModalDataPropsList(
     .join('');
   selectEl.innerHTML = '<option value="">-- data property --</option>' + dataProperties.filter((p) => !assignedNames.has(p.name)).map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
   updateRenameDataPropAddButtonState();
-  listEl.querySelectorAll('.rename-data-prop-remove').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      onRemove(name);
+  (listEl as HTMLElement & { _renameDataPropOnRemove?: (name: string) => void })._renameDataPropOnRemove = onRemove;
+  if (!(listEl as HTMLElement & { _renameDataPropDelegationBound?: boolean })._renameDataPropDelegationBound) {
+    (listEl as HTMLElement & { _renameDataPropDelegationBound?: boolean })._renameDataPropDelegationBound = true;
+    listEl.addEventListener('click', (e: Event) => {
+      const btn = (e.target as HTMLElement).closest('.rename-data-prop-remove');
+      if (!btn) return;
+      const name = (btn as HTMLElement).dataset.name;
+      const cb = (listEl as HTMLElement & { _renameDataPropOnRemove?: (name: string) => void })._renameDataPropOnRemove;
+      if (name && typeof cb === 'function') cb(name);
     });
-  });
+  }
 }
 
 export function renderRenameModalAnnotationPropsList(
@@ -185,12 +190,17 @@ export function renderAddNodeDataPropsList(
     .join('');
   selectEl.innerHTML = '<option value="">-- data property --</option>' + dataProperties.filter((p) => !assignedNames.has(p.name)).map((p) => `<option value="${p.name}">${p.label}</option>`).join('');
   updateAddNodeDataPropAddButtonState();
-  listEl.querySelectorAll('.add-node-data-prop-remove').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      onRemove(name);
+  (listEl as HTMLElement & { _addNodeDataPropOnRemove?: (name: string) => void })._addNodeDataPropOnRemove = onRemove;
+  if (!(listEl as HTMLElement & { _addNodeDataPropDelegationBound?: boolean })._addNodeDataPropDelegationBound) {
+    (listEl as HTMLElement & { _addNodeDataPropDelegationBound?: boolean })._addNodeDataPropDelegationBound = true;
+    listEl.addEventListener('click', (e: Event) => {
+      const btn = (e.target as HTMLElement).closest('.add-node-data-prop-remove');
+      if (!btn) return;
+      const name = (btn as HTMLElement).dataset.name;
+      const cb = (listEl as HTMLElement & { _addNodeDataPropOnRemove?: (name: string) => void })._addNodeDataPropOnRemove;
+      if (name && typeof cb === 'function') cb(name);
     });
-  });
+  }
 }
 
 export interface SyncRenameModalParams {

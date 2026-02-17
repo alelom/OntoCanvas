@@ -19,12 +19,7 @@
 :Ontology rdf:type owl:Ontology;
     rdfs:comment "Ontology for AEC drawing elements - facade, structural, and drawing metadata. Based on schema rev02 (06.04.23).";
     rdfs:label "AEC Drawing Ontology";
-    owl:imports <https://w3id.org/dano>, <http://www.w3.org/2002/07/owl#>, <http://www.w3.org/1999/02/22-rdf-syntax-ns#>, <http://www.w3.org/XML/1998/namespace#>, <http://www.w3.org/2001/XMLSchema#>, <http://www.w3.org/2000/01/rdf-schema#> ;
-    owl:imports <http://www.w3.org/2002/07/owl#> ;
-    owl:imports <http://www.w3.org/1999/02/22-rdf-syntax-ns#> ;
-    owl:imports <http://www.w3.org/XML/1998/namespace#> ;
-    owl:imports <http://www.w3.org/2001/XMLSchema#> ;
-    owl:imports <http://www.w3.org/2000/01/rdf-schema#> .
+    owl:imports <https://w3id.org/dano>, <http://www.w3.org/2002/07/owl#>, <http://www.w3.org/1999/02/22-rdf-syntax-ns#>, <http://www.w3.org/XML/1998/namespace#>, <http://www.w3.org/2001/XMLSchema#>, <http://www.w3.org/2000/01/rdf-schema#> .
 
 #################################################################
 #    Annotation properties
@@ -953,8 +948,8 @@
 #    Data Properties
 #################################################################
 
-<http://example.org/aec-drawing-ontology#Ontology#referstodrawingid> rdf:type owl:DatatypeProperty;
+:refersToDrawingId rdf:type owl:DatatypeProperty;
     rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
     rdfs:label "refersToDrawingId";
     rdfs:range xsd:string;
-    rdfs:domain :Note.
+    rdfs:domain owl:Thing.

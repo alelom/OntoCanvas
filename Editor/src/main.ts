@@ -3296,20 +3296,23 @@ function confirmAddNode(): void {
   if (isCustomTab) {
     const label = customInput?.value?.trim();
     if (!label) return;
-    const result = addNewNodeAtPosition(x, y, label);
-    if (result === null) {
+    if (!ttlStore) return;
+    const displayLabel = label.trim() || 'New class';
+    const id = addNodeToStore(ttlStore, displayLabel);
+    if (!id) {
       if (dupErr) {
         dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
         dupErr.style.display = 'block';
       }
       return;
     }
-    const node = rawData.nodes.find((n) => n.id === result.id);
-    if (!node) {
-      applyFilter(true);
-      hideAddNodeModalWithCleanup();
-      return;
-    }
+    const node: GraphNode = {
+      id,
+      label: displayLabel,
+      labellableRoot: null,
+      ...(x != null && y != null && { x, y }),
+    };
+    rawData.nodes.push(node);
     const commentInput = document.getElementById('addNodeComment') as HTMLTextAreaElement;
     const newComment = commentInput?.value?.trim() ?? '';
     const annotationValues: Record<string, boolean | string | null> = {};
@@ -3328,14 +3331,25 @@ function confirmAddNode(): void {
       annotationValues,
       dataPropertyRestrictions: addNodeDataPropertyRestrictions,
     };
-    if (ttlStore) {
-      const baseIri = getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI;
-      applyNodeFormToStore(result.id, addNodeFormData, ttlStore, node, baseIri, annotationProperties);
-    } else {
-      node.comment = addNodeFormData.comment.trim() || undefined;
-      node.exampleImages = addNodeFormData.exampleImageUris.length > 0 ? addNodeFormData.exampleImageUris : undefined;
-      node.dataPropertyRestrictions = addNodeFormData.dataPropertyRestrictions.length > 0 ? addNodeFormData.dataPropertyRestrictions : undefined;
-    }
+    const baseIri = getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI;
+    applyNodeFormToStore(id, addNodeFormData, ttlStore, node, baseIri, annotationProperties);
+    pushUndoable(
+      () => {
+        for (const r of addNodeFormData.dataPropertyRestrictions) {
+          removeDataPropertyRestrictionFromClass(ttlStore!, id, r.propertyName);
+        }
+        removeNodeFromStore(ttlStore!, id);
+        const i = rawData.nodes.findIndex((n) => n.id === id);
+        if (i >= 0) rawData.nodes.splice(i, 1);
+      },
+      () => {
+        addNodeToStore(ttlStore!, displayLabel, id);
+        rawData.nodes.push(node);
+        applyNodeFormToStore(id, addNodeFormData, ttlStore!, node, baseIri, annotationProperties);
+      }
+    );
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
     applyFilter(true);
     hideAddNodeModalWithCleanup();
     return;
@@ -5943,6 +5957,7 @@ function setupEventListeners(): void {
     const maxCardinality = max === '' ? undefined : parseInt(max, 10);
     if (min !== '' && (Number.isNaN(minCardinality!) || minCardinality! < 0)) return;
     if (max !== '' && (Number.isNaN(maxCardinality!) || maxCardinality! < 0)) return;
+    if (minCardinality !== undefined && maxCardinality !== undefined && minCardinality! > maxCardinality!) return;
     renameModalDataPropertyRestrictions.push({
       propertyName: propName,
       ...(minCardinality !== undefined && { minCardinality: minCardinality! }),
@@ -5968,6 +5983,7 @@ function setupEventListeners(): void {
     const maxCardinality = max === '' ? undefined : parseInt(max, 10);
     if (min !== '' && (Number.isNaN(minCardinality!) || minCardinality! < 0)) return;
     if (max !== '' && (Number.isNaN(maxCardinality!) || maxCardinality! < 0)) return;
+    if (minCardinality !== undefined && maxCardinality !== undefined && minCardinality! > maxCardinality!) return;
     addNodeDataPropertyRestrictions.push({
       propertyName: propName,
       ...(minCardinality !== undefined && { minCardinality: minCardinality! }),
