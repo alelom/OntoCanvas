@@ -8,7 +8,7 @@ const XSD_BOOLEAN = XSD + 'boolean';
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
-const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
+export const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 const HAS_CARDINALITY_PROP = BASE_IRI + 'hasCardinality';
 
 export function extractLocalName(uri: string): string {
@@ -507,7 +507,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 
-function getDataProperties(store: Store): DataPropertyInfo[] {
+export function getDataProperties(store: Store): DataPropertyInfo[] {
   const result: DataPropertyInfo[] = [];
   const seen = new Set<string>();
   const dpQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
@@ -545,8 +545,20 @@ function getDataProperties(store: Store): DataPropertyInfo[] {
       }
     }
     // If no explicit domain or only owl:Thing, domains array is empty (meaning all classes)
-    
-    result.push({ name, label: String(label), comment: comment || undefined, range, domains });
+    const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
+    const isDefinedBy =
+      isDefinedByQuad?.object?.termType === 'NamedNode'
+        ? (isDefinedByQuad.object as { value: string }).value
+        : null;
+    result.push({
+      name,
+      label: String(label),
+      comment: comment || undefined,
+      range,
+      domains,
+      uri: subjUri,
+      isDefinedBy: isDefinedBy ?? undefined
+    });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -750,6 +762,14 @@ function getPropertyUri(edgeType: string): string {
   return BASE_IRI + edgeType;
 }
 
+/** Resolve object property name to full URI from store (so loaded ontologies use their base). */
+function getObjectPropertyUriFromStore(store: Store, name: string): string {
+  if (name.startsWith('http://') || name.startsWith('https://')) return name;
+  const ops = getObjectProperties(store);
+  const op = ops.find((p) => p.name === name || p.uri === name);
+  return op?.uri ?? BASE_IRI + name;
+}
+
 function findRestrictionBlank(
   store: Store,
   classLocalName: string,
@@ -933,7 +953,7 @@ export function updateObjectPropertyLabelInStore(
   newLabel: string
 ): boolean {
   if (propertyName === 'subClassOf') return false;
-  const propUri = getPropertyUri(propertyName);
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -956,7 +976,7 @@ export function updateObjectPropertyCommentInStore(
   comment: string | null
 ): boolean {
   if (propertyName === 'subClassOf') return false;
-  const propUri = getPropertyUri(propertyName);
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -1000,7 +1020,7 @@ export function updateObjectPropertyDomainRangeInStore(
   rangeName: string | null
 ): boolean {
   if (propertyName === 'subClassOf') return false;
-  const propUri = getPropertyUri(propertyName);
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -1046,7 +1066,7 @@ export function updateObjectPropertySubPropertyOfInStore(
   parentNameOrUri: string | null
 ): boolean {
   if (propertyName === 'subClassOf') return false;
-  const propUri = getPropertyUri(propertyName);
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -1073,7 +1093,7 @@ export function updateObjectPropertyIsDefinedByInStore(
   uri: string | null
 ): boolean {
   if (propertyName === 'subClassOf') return false;
-  const propUri = getPropertyUri(propertyName);
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -1258,6 +1278,14 @@ export function removeAnnotationPropertyFromStore(store: Store, propertyName: st
   return true;
 }
 
+/** Resolve data property name to full URI from store. */
+function getDataPropertyUriFromStore(store: Store, name: string): string {
+  if (name.startsWith('http://') || name.startsWith('https://')) return name;
+  const dps = getDataProperties(store);
+  const dp = dps.find((p) => p.name === name || p.uri === name);
+  return dp?.uri ?? BASE_IRI + name;
+}
+
 /**
  * Update rdfs:label for a data property in the store.
  */
@@ -1266,7 +1294,7 @@ export function updateDataPropertyLabelInStore(
   propertyName: string,
   newLabel: string
 ): boolean {
-  const propUri = BASE_IRI + propertyName;
+  const propUri = getDataPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -1286,7 +1314,7 @@ export function updateDataPropertyCommentInStore(
   propertyName: string,
   comment: string | null
 ): boolean {
-  const propUri = BASE_IRI + propertyName;
+  const propUri = getDataPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
@@ -1301,6 +1329,28 @@ export function updateDataPropertyCommentInStore(
 }
 
 /**
+ * Update rdfs:isDefinedBy for a data property in the store.
+ */
+export function updateDataPropertyIsDefinedByInStore(
+  store: Store,
+  propertyName: string,
+  uri: string | null
+): boolean {
+  const propUri = getDataPropertyUriFromStore(store, propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  const pred = DataFactory.namedNode(RDFS + 'isDefinedBy');
+  const existing = store.getQuads(subject, pred, null, null);
+  const graph = existing[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
+  for (const q of existing) store.removeQuad(q);
+  if (uri != null && uri.trim() !== '' && uri.trim().startsWith('http')) {
+    store.addQuad(subject, pred, DataFactory.namedNode(uri.trim()), graph);
+  }
+  return true;
+}
+
+/**
  * Update rdfs:range for a data property in the store (datatype URI).
  */
 export function updateDataPropertyRangeInStore(
@@ -1308,7 +1358,7 @@ export function updateDataPropertyRangeInStore(
   propertyName: string,
   rangeUri: string
 ): boolean {
-  const propUri = BASE_IRI + propertyName;
+  const propUri = getDataPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const rangePred = DataFactory.namedNode(RDFS + 'range');
   const rangeQuads = store.getQuads(subject, rangePred, null, null);
@@ -1664,6 +1714,91 @@ export function removeEdgeFromStore(
   for (const q of blankQuads) store.removeQuad(q);
   const blankAsObjQuads = store.getQuads(null, null, blank, null);
   for (const q of blankAsObjQuads) store.removeQuad(q);
+  return true;
+}
+
+/**
+ * Rename an object property in the store (change its subject URI).
+ * Updates all quads that have the old subject or old URI as object (e.g. rdfs:subPropertyOf).
+ * @param oldSubjectUri Full URI of the property (e.g. from ObjectPropertyInfo.uri).
+ * @param newLocalName New local name (identifier) for the property.
+ * @returns true if rename succeeded.
+ */
+export function renameObjectPropertyInStore(
+  store: Store,
+  oldSubjectUri: string,
+  newLocalName: string
+): boolean {
+  if (!newLocalName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newLocalName)) return false;
+  const mainBase = getMainOntologyBase(store) ?? BASE_IRI;
+  const base = mainBase.endsWith('#') ? mainBase : mainBase + '#';
+  const newUri = base + newLocalName;
+  if (oldSubjectUri === newUri) return true;
+  const oldSubject = DataFactory.namedNode(oldSubjectUri);
+  const newSubject = DataFactory.namedNode(newUri);
+  const quadsWithOldSubject = store.getQuads(oldSubject, null, null, null);
+  const quadsWithOldObject = store.getQuads(null, null, oldSubject, null);
+  const graph = quadsWithOldSubject[0]?.graph ?? quadsWithOldObject[0]?.graph ?? DataFactory.defaultGraph();
+  for (const q of quadsWithOldSubject) {
+    store.addQuad(
+      newSubject,
+      q.predicate,
+      q.object,
+      q.graph.termType === 'DefaultGraph' ? graph : q.graph
+    );
+  }
+  for (const q of quadsWithOldObject) {
+    store.addQuad(
+      q.subject,
+      q.predicate,
+      newSubject,
+      q.graph.termType === 'DefaultGraph' ? graph : q.graph
+    );
+  }
+  for (const q of quadsWithOldSubject) store.removeQuad(q);
+  for (const q of quadsWithOldObject) store.removeQuad(q);
+  return true;
+}
+
+/**
+ * Rename a data property in the store (change its subject URI).
+ * @param oldSubjectUri Full URI of the property (e.g. from DataPropertyInfo.uri).
+ * @param newLocalName New local name (identifier) for the property.
+ * @returns true if rename succeeded.
+ */
+export function renameDataPropertyInStore(
+  store: Store,
+  oldSubjectUri: string,
+  newLocalName: string
+): boolean {
+  if (!newLocalName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newLocalName)) return false;
+  const mainBase = getMainOntologyBase(store) ?? BASE_IRI;
+  const base = mainBase.endsWith('#') ? mainBase : mainBase + '#';
+  const newUri = base + newLocalName;
+  if (oldSubjectUri === newUri) return true;
+  const oldSubject = DataFactory.namedNode(oldSubjectUri);
+  const newSubject = DataFactory.namedNode(newUri);
+  const quadsWithOldSubject = store.getQuads(oldSubject, null, null, null);
+  const quadsWithOldObject = store.getQuads(null, null, oldSubject, null);
+  const graph = quadsWithOldSubject[0]?.graph ?? quadsWithOldObject[0]?.graph ?? DataFactory.defaultGraph();
+  for (const q of quadsWithOldSubject) {
+    store.addQuad(
+      newSubject,
+      q.predicate,
+      q.object,
+      q.graph.termType === 'DefaultGraph' ? graph : q.graph
+    );
+  }
+  for (const q of quadsWithOldObject) {
+    store.addQuad(
+      q.subject,
+      q.predicate,
+      newSubject,
+      q.graph.termType === 'DefaultGraph' ? graph : q.graph
+    );
+  }
+  for (const q of quadsWithOldSubject) store.removeQuad(q);
+  for (const q of quadsWithOldObject) store.removeQuad(q);
   return true;
 }
 

@@ -21,12 +21,17 @@ import {
   updateObjectPropertyIsDefinedByInStore,
   getMainOntologyBase,
   getObjectProperties,
+  renameObjectPropertyInStore,
+  renameDataPropertyInStore,
+  BASE_IRI,
   addDataPropertyToStore,
   removeDataPropertyFromStore,
   updateDataPropertyLabelInStore,
   updateDataPropertyCommentInStore,
   updateDataPropertyRangeInStore,
   updateDataPropertyDomainsInStore,
+  updateDataPropertyIsDefinedByInStore,
+  getDataProperties,
   addDataPropertyRestrictionToClass,
   removeDataPropertyRestrictionFromClass,
   getDataPropertyRestrictionsForClass,
@@ -131,6 +136,10 @@ import {
 } from './ui/edgeStyleUtils';
 import { getNetworkOptions } from './ui/networkConfig';
 import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
+import {
+  labelToCamelCaseIdentifier,
+  validateLabelForIdentifier,
+} from './lib/identifierFromLabel';
 import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
@@ -651,65 +660,157 @@ function setupPropertySelector(inputId: string, resultsId: string, getExcludeTyp
   });
 }
 
+function updateEditRelTypeIdentifierAndValidation(): void {
+  const modal = document.getElementById('editRelationshipTypeModal');
+  if (!modal || (modal as HTMLElement).style.display === 'none') return;
+  const type = (modal as HTMLElement).dataset.type;
+  if (!type) return;
+  const labelInput = document.getElementById('editRelTypeLabel') as HTMLInputElement;
+  const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
+  const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
+  const okBtn = document.getElementById('editRelTypeConfirm') as HTMLButtonElement;
+  const op = objectProperties.find((p) => p.name === type);
+  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const isImported = !!(op?.isDefinedBy);
+  const lbl = labelInput?.value?.trim() ?? '';
+  if (identifierEl) {
+    if (isImported) {
+      identifierEl.textContent = op?.uri ?? baseWithHash + (op?.name ?? type);
+    } else {
+      const derived = labelToCamelCaseIdentifier(lbl) || (op?.name ?? type);
+      identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
+    }
+  }
+  if (labelValidationEl && okBtn) {
+    if (isImported) {
+      labelValidationEl.style.display = 'none';
+      okBtn.disabled = false;
+      return;
+    }
+    if (!lbl) {
+      labelValidationEl.style.display = 'block';
+      labelValidationEl.style.color = '#c0392b';
+      labelValidationEl.textContent = 'Label is required.';
+      okBtn.disabled = true;
+      return;
+    }
+    const result = validateLabelForIdentifier(lbl);
+    if (!result.valid) {
+      labelValidationEl.style.display = 'block';
+      labelValidationEl.style.color = '#c0392b';
+      labelValidationEl.textContent = result.error ?? 'Invalid label.';
+      okBtn.disabled = true;
+      return;
+    }
+    if (result.warning) {
+      labelValidationEl.style.display = 'block';
+      labelValidationEl.style.color = '#b8860b';
+      labelValidationEl.textContent = result.warning;
+    } else {
+      labelValidationEl.style.display = 'none';
+      labelValidationEl.textContent = '';
+    }
+    okBtn.disabled = false;
+  }
+}
+
 function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onApply: () => void): void {
   if (editRelationshipTypeHandlersInitialized) return;
   editRelationshipTypeHandlersInitialized = true;
   setupClassSelector('editRelTypeDomain', 'editRelTypeDomainResults');
   setupClassSelector('editRelTypeRange', 'editRelTypeRangeResults');
   setupPropertySelector('editRelTypeSubPropertyOf', 'editRelTypeSubPropertyOfResults');
+  document.getElementById('editRelTypeLabel')?.addEventListener('input', updateEditRelTypeIdentifierAndValidation);
   document.getElementById('editRelTypeCancel')?.addEventListener('click', () => {
     document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
   });
   document.getElementById('editRelTypeConfirm')?.addEventListener('click', () => {
-    const type = (document.getElementById('editRelationshipTypeModal') as HTMLElement).dataset.type!;
+    const modal = document.getElementById('editRelationshipTypeModal') as HTMLElement;
+    const type = modal.dataset.type!;
     const labelInput = document.getElementById('editRelTypeLabel') as HTMLInputElement;
     const commentInput = document.getElementById('editRelTypeComment') as HTMLTextAreaElement;
     const domainInput = document.getElementById('editRelTypeDomain') as HTMLInputElement;
     const rangeInput = document.getElementById('editRelTypeRange') as HTMLInputElement;
     const subPropertyOfInput = document.getElementById('editRelTypeSubPropertyOf') as HTMLInputElement;
+    const definedByInput = document.getElementById('editRelTypeDefinedBy') as HTMLInputElement;
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
     const newDomain = domainInput?.value?.trim() ?? '';
     const newRange = rangeInput?.value?.trim() ?? '';
     const newSubPropertyOf = subPropertyOfInput?.value?.trim() ?? '';
-    if (!newLabel || !ttlStore) return;
+    const newDefinedBy = definedByInput?.value?.trim() ?? null;
+    if (!ttlStore) return;
     const op = objectProperties.find((p) => p.name === type);
     if (!op) return;
+    const isImported = !!op.isDefinedBy;
+    if (!isImported && !newLabel) return;
+    if (!isImported) {
+      const validation = validateLabelForIdentifier(newLabel);
+      if (!validation.valid) return;
+    }
     const oldLabel = op.label;
     const oldComment = op.comment ?? '';
     const oldDomain = op.domain ?? '';
     const oldRange = op.range ?? '';
     const oldSubPropertyOf = op.subPropertyOf ?? '';
+    const oldDefinedBy = op.isDefinedBy ?? '';
     const labelChanged = oldLabel !== newLabel;
     const commentChanged = oldComment !== newComment;
     const domainChanged = oldDomain !== newDomain;
     const rangeChanged = oldRange !== newRange;
     const subPropertyOfChanged = oldSubPropertyOf !== newSubPropertyOf;
-    if (!labelChanged && !commentChanged && !domainChanged && !rangeChanged && !subPropertyOfChanged) {
+    const definedByChanged = (oldDefinedBy || '') !== (newDefinedBy || '');
+    const derivedId = !isImported && newLabel ? labelToCamelCaseIdentifier(newLabel) : null;
+    const identifierChanged = !!derivedId && derivedId !== (op.uri ? extractLocalName(op.uri) : op.name);
+    if (!labelChanged && !commentChanged && !domainChanged && !rangeChanged && !subPropertyOfChanged && !definedByChanged && !identifierChanged) {
       document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
       return;
     }
+    let effectiveType = type;
+    if (identifierChanged && op.uri && !op.isDefinedBy) {
+      const renamed = renameObjectPropertyInStore(ttlStore, op.uri, derivedId!);
+      if (renamed) {
+        for (const e of rawData.edges) {
+          if (e.type === type) e.type = derivedId!;
+        }
+        objectProperties = getObjectProperties(ttlStore);
+        objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
+        effectiveType = derivedId!;
+      }
+    }
     if (labelChanged) {
-      updateObjectPropertyLabelInStore(ttlStore, type, newLabel);
-      op.label = newLabel;
+      updateObjectPropertyLabelInStore(ttlStore, effectiveType, newLabel);
+      const o = objectProperties.find((p) => p.name === effectiveType);
+      if (o) o.label = newLabel;
     }
     if (commentChanged) {
-      updateObjectPropertyCommentInStore(ttlStore, type, newComment || null);
-      op.comment = newComment || undefined;
+      updateObjectPropertyCommentInStore(ttlStore, effectiveType, newComment || null);
+      const o = objectProperties.find((p) => p.name === effectiveType);
+      if (o) o.comment = newComment || undefined;
     }
     if (domainChanged || rangeChanged) {
       updateObjectPropertyDomainRangeInStore(
         ttlStore,
-        type,
+        effectiveType,
         newDomain ? newDomain : null,
         newRange ? newRange : null
       );
-      op.domain = newDomain || undefined;
-      op.range = newRange || undefined;
+      const o = objectProperties.find((p) => p.name === effectiveType);
+      if (o) {
+        o.domain = newDomain || undefined;
+        o.range = newRange || undefined;
+      }
     }
     if (subPropertyOfChanged) {
-      updateObjectPropertySubPropertyOfInStore(ttlStore, type, newSubPropertyOf ? newSubPropertyOf : null);
-      op.subPropertyOf = newSubPropertyOf || undefined;
+      updateObjectPropertySubPropertyOfInStore(ttlStore, effectiveType, newSubPropertyOf ? newSubPropertyOf : null);
+      const o = objectProperties.find((p) => p.name === effectiveType);
+      if (o) o.subPropertyOf = newSubPropertyOf || undefined;
+    }
+    if (definedByChanged) {
+      updateObjectPropertyIsDefinedByInStore(ttlStore, effectiveType, newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null);
+      const o = objectProperties.find((p) => p.name === effectiveType);
+      if (o) o.isDefinedBy = (newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null) ?? undefined;
     }
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
@@ -737,25 +838,13 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const rangeInput = document.getElementById('editRelTypeRange') as HTMLInputElement;
   const domainResults = document.getElementById('editRelTypeDomainResults');
   const rangeResults = document.getElementById('editRelTypeRangeResults');
-  const definedByRow = document.getElementById('editRelTypeDefinedByRow');
-  const definedByEl = document.getElementById('editRelTypeDefinedBy');
   const subPropertyOfInput = document.getElementById('editRelTypeSubPropertyOf') as HTMLInputElement;
   const subPropertyOfResults = document.getElementById('editRelTypeSubPropertyOfResults');
-  if (nameEl) nameEl.textContent = `Identifier: ${type} (used in ontology, cannot be changed here)`;
   const op = objectProperties.find((p) => p.name === type);
   if (labelInput) labelInput.value = op?.label ?? type;
   if (commentInput) commentInput.value = op?.comment ?? '';
   if (domainInput) domainInput.value = op?.domain ?? '';
   if (rangeInput) rangeInput.value = op?.range ?? '';
-  if (definedByRow && definedByEl) {
-    if (op?.isDefinedBy) {
-      definedByRow.style.display = 'block';
-      definedByEl.textContent = op.isDefinedBy;
-    } else {
-      definedByRow.style.display = 'none';
-      definedByEl.textContent = '';
-    }
-  }
   if (subPropertyOfInput) {
     const subUri = op?.subPropertyOf ?? '';
     if (subUri) {
@@ -765,6 +854,27 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
       subPropertyOfInput.value = '';
     }
   }
+  const definedByInput = document.getElementById('editRelTypeDefinedBy') as HTMLInputElement;
+  const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
+  const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
+  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const isImported = !!(op?.isDefinedBy);
+  if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
+  if (identifierEl) {
+    const currentId = isImported ? (op?.uri ?? op?.name ?? type) : (op?.uri ?? baseWithHash + (op?.name ?? type));
+    identifierEl.textContent = (currentId.startsWith('http') ? currentId : baseWithHash + currentId);
+  }
+  if (definedByInput) definedByInput.value = op?.isDefinedBy ?? '';
+  if (labelInput) {
+    labelInput.disabled = isImported;
+    labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
+  }
+  if (labelValidationEl) {
+    labelValidationEl.style.display = 'none';
+    labelValidationEl.textContent = '';
+  }
+  updateEditRelTypeIdentifierAndValidation();
   if (domainResults) (domainResults as HTMLElement).style.display = 'none';
   if (rangeResults) (rangeResults as HTMLElement).style.display = 'none';
   if (subPropertyOfResults) (subPropertyOfResults as HTMLElement).style.display = 'none';
@@ -994,39 +1104,114 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   });
 }
 
+function updateEditDataPropIdentifierAndValidation(): void {
+  const modal = document.getElementById('editDataPropertyModal');
+  if (!modal || (modal as HTMLElement).style.display === 'none') return;
+  const name = (modal as HTMLElement).dataset.dataPropName;
+  if (!name) return;
+  const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
+  const identifierEl = document.getElementById('editDataPropIdentifier') as HTMLElement;
+  const labelValidationEl = document.getElementById('editDataPropLabelValidation') as HTMLElement;
+  const okBtn = document.getElementById('editDataPropConfirm') as HTMLButtonElement;
+  const dp = dataProperties.find((p) => p.name === name);
+  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const isImported = !!(dp?.isDefinedBy);
+  const lbl = labelInput?.value?.trim() ?? '';
+  if (identifierEl) {
+    if (isImported) {
+      identifierEl.textContent = dp?.uri ?? baseWithHash + (dp?.name ?? name);
+    } else {
+      const derived = labelToCamelCaseIdentifier(lbl) || (dp?.name ?? name);
+      identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
+    }
+  }
+  if (labelValidationEl && okBtn) {
+    if (isImported) {
+      labelValidationEl.style.display = 'none';
+      okBtn.disabled = false;
+      return;
+    }
+    if (!lbl) {
+      labelValidationEl.style.display = 'block';
+      labelValidationEl.style.color = '#c0392b';
+      labelValidationEl.textContent = 'Label is required.';
+      okBtn.disabled = true;
+      return;
+    }
+    const result = validateLabelForIdentifier(lbl);
+    if (!result.valid) {
+      labelValidationEl.style.display = 'block';
+      labelValidationEl.style.color = '#c0392b';
+      labelValidationEl.textContent = result.error ?? 'Invalid label.';
+      okBtn.disabled = true;
+      return;
+    }
+    if (result.warning) {
+      labelValidationEl.style.display = 'block';
+      labelValidationEl.style.color = '#b8860b';
+      labelValidationEl.textContent = result.warning;
+    } else {
+      labelValidationEl.style.display = 'none';
+      labelValidationEl.textContent = '';
+    }
+    okBtn.disabled = false;
+  }
+}
+
 let editDataPropertyHandlersInitialized = false;
 
 function initEditDataPropertyHandlers(): void {
   if (editDataPropertyHandlersInitialized) return;
   editDataPropertyHandlersInitialized = true;
+  document.getElementById('editDataPropLabel')?.addEventListener('input', updateEditDataPropIdentifierAndValidation);
   document.getElementById('editDataPropCancel')?.addEventListener('click', () => {
     document.getElementById('editDataPropertyModal')!.style.display = 'none';
   });
   document.getElementById('editDataPropConfirm')?.addEventListener('click', () => {
     const modal = document.getElementById('editDataPropertyModal')!;
-    const name = (modal as HTMLElement).dataset.dataPropName!;
+    let name = (modal as HTMLElement).dataset.dataPropName!;
     const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
     const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
     const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
+    const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
     const newRange = rangeSel?.value ?? XSD_NS + 'string';
-    if (!newLabel || !ttlStore) return;
-    const dp = dataProperties.find((p) => p.name === name);
+    const newDefinedBy = definedByInput?.value?.trim() ?? null;
+    if (!ttlStore) return;
+    let dp = dataProperties.find((p) => p.name === name);
     if (!dp) return;
+    const isImported = !!dp.isDefinedBy;
+    if (!isImported && !newLabel) return;
+    if (!isImported) {
+      const validation = validateLabelForIdentifier(newLabel);
+      if (!validation.valid) return;
+    }
+    const derivedId = !isImported && newLabel ? labelToCamelCaseIdentifier(newLabel) : null;
+    const currentLocalName = dp.uri ? extractLocalName(dp.uri) : dp.name;
+    const identifierChanged = !!derivedId && derivedId !== currentLocalName;
     const labelChanged = dp.label !== newLabel;
     const commentChanged = (dp.comment ?? '') !== newComment;
     const rangeChanged = dp.range !== newRange;
-    
-    // Check if domains changed by comparing with original
+    const oldDefinedBy = dp.isDefinedBy ?? '';
+    const definedByChanged = (oldDefinedBy || '') !== (newDefinedBy || '');
     const originalDomainsJson = (modal as HTMLElement).dataset.originalDomains || '[]';
     const originalDomains = JSON.parse(originalDomainsJson) as string[];
     const currentDomains = dp.domains || [];
-    const domainsChanged = JSON.stringify(originalDomains.sort()) !== JSON.stringify(currentDomains.sort());
-    
-    if (!labelChanged && !commentChanged && !rangeChanged && !domainsChanged) {
+    const domainsChanged = JSON.stringify(originalDomains.sort()) !== JSON.stringify([...currentDomains].sort());
+    if (!labelChanged && !commentChanged && !rangeChanged && !domainsChanged && !definedByChanged && !identifierChanged) {
       document.getElementById('editDataPropertyModal')!.style.display = 'none';
       return;
+    }
+    if (identifierChanged && dp.uri && !dp.isDefinedBy) {
+      const renamed = renameDataPropertyInStore(ttlStore, dp.uri, derivedId!);
+      if (renamed) {
+        dataProperties = getDataProperties(ttlStore);
+        name = derivedId!;
+        (modal as HTMLElement).dataset.dataPropName = name;
+        dp = dataProperties.find((p) => p.name === name)!;
+      }
     }
     if (labelChanged) {
       updateDataPropertyLabelInStore(ttlStore, name, newLabel);
@@ -1042,7 +1227,10 @@ function initEditDataPropertyHandlers(): void {
     }
     if (domainsChanged) {
       updateDataPropertyDomainsInStore(ttlStore, name, currentDomains);
-      // dp.domains is already updated by the UI handlers
+    }
+    if (definedByChanged) {
+      updateDataPropertyIsDefinedByInStore(ttlStore, name, newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null);
+      dp.isDefinedBy = (newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null) ?? undefined;
     }
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
@@ -1187,29 +1375,44 @@ function showEditDataPropertyModal(name: string): void {
   const modal = document.getElementById('editDataPropertyModal')!;
   (modal as HTMLElement).dataset.dataPropName = name;
   const nameEl = document.getElementById('editDataPropName') as HTMLElement;
+  const identifierEl = document.getElementById('editDataPropIdentifier') as HTMLElement;
+  const labelValidationEl = document.getElementById('editDataPropLabelValidation') as HTMLElement;
+  const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
   const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
   const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
   const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
   const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
   const dp = dataProperties.find((p) => p.name === name);
-  if (nameEl) nameEl.textContent = `Identifier: ${name} (used in ontology)`;
-  if (labelInput) labelInput.value = dp?.label ?? name;
+  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const isImported = !!(dp?.isDefinedBy);
+  if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
+  if (identifierEl) {
+    const fullUri = dp?.uri ?? baseWithHash + (dp?.name ?? name);
+    identifierEl.textContent = fullUri;
+  }
+  if (labelValidationEl) {
+    labelValidationEl.style.display = 'none';
+    labelValidationEl.textContent = '';
+  }
+  if (definedByInput) definedByInput.value = dp?.isDefinedBy ?? '';
+  if (labelInput) {
+    labelInput.value = dp?.label ?? name;
+    labelInput.disabled = isImported;
+    labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
+  }
   if (commentInput) commentInput.value = dp?.comment ?? '';
   const rangeOptions = [...DATA_PROPERTY_RANGE_OPTIONS];
   if (dp?.range && !rangeOptions.some((o) => o.value === dp.range)) {
     rangeOptions.push({ value: dp.range, label: dp.range.includes('#') ? dp.range.split('#').pop()! : dp.range });
   }
   rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${dp?.range === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
-  
-  // Store original domains for change detection
   const originalDomains = dp ? [...(dp.domains || [])] : [];
   (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
-  
-  // Render domains list
   if (domainsListEl && dp) {
     renderDomainsList(domainsListEl, dp.domains || []);
   }
-  
+  updateEditDataPropIdentifierAndValidation();
   modal.style.display = 'flex';
   labelInput?.focus();
 }
@@ -4327,9 +4530,12 @@ function renderApp(): void {
     <div id="editRelationshipTypeModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Edit object property</h3>
-        <p id="editRelTypeName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
+        <p id="editRelTypeName" style="font-size: 11px; color: #666; margin-bottom: 4px;"></p>
+        <p id="editRelTypeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
+        <p id="editRelTypeLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The human-readable name of the property. Setting it automatically derives the ontology identifier (local name) in camelCase; the identifier is shown above and used in the ontology URI.">ⓘ</span>
           <input type="text" id="editRelTypeLabel" placeholder="e.g. contains" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
         </label>
         <label style="display: block; margin-top: 10px;">
@@ -4338,6 +4544,7 @@ function renderApp(): void {
         </label>
         <div style="margin-top: 12px;">
           <span style="font-size: 11px; color: #666;">Domain (rdfs:domain)</span>
+          <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The class that is the subject of this property in the ontology (global domain). This is not a restriction on a specific edge. To add a restriction (e.g. cardinality or target class) for a specific relationship in the graph, select that edge in the graph and edit its properties.">ⓘ</span>
           <div style="position: relative;">
             <input type="text" id="editRelTypeDomain" placeholder="Type to search or enter class..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
             <div id="editRelTypeDomainResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
@@ -4345,17 +4552,20 @@ function renderApp(): void {
         </div>
         <div style="margin-top: 12px;">
           <span style="font-size: 11px; color: #666;">Range (rdfs:range)</span>
+          <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The class that is the object of this property in the ontology (global range). This is not a restriction on a specific edge. To add a restriction for a specific relationship in the graph, select that edge in the graph and edit its properties.">ⓘ</span>
           <div style="position: relative;">
             <input type="text" id="editRelTypeRange" placeholder="Type to search or enter class..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
             <div id="editRelTypeRangeResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
           </div>
         </div>
-        <div id="editRelTypeDefinedByRow" style="display: none; margin-top: 12px;">
+        <div style="margin-top: 12px;">
           <span style="font-size: 11px; color: #666;">Defined by (rdfs:isDefinedBy)</span>
-          <p id="editRelTypeDefinedBy" style="margin: 4px 0 0 0; font-size: 12px; color: #333; word-break: break-all;"></p>
+          <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The URI of the ontology that defines this property (e.g. an external or imported vocabulary). Setting it marks the property as imported: its label cannot be edited here, and it may be displayed with a prefix (e.g. geo:hasGeometry) in the Object Properties list.">ⓘ</span>
+          <input type="text" id="editRelTypeDefinedBy" placeholder="e.g. https://www.opengis.net/ont/geosparql#" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
         </div>
         <div style="margin-top: 12px;">
           <span style="font-size: 11px; color: #666;">Subproperty of (rdfs:subPropertyOf)</span>
+          <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The parent object property in the RDFS/OWL hierarchy. This property will be inferred as a subproperty of the one you select (e.g. for specializing relationships).">ⓘ</span>
           <div style="position: relative;">
             <input type="text" id="editRelTypeSubPropertyOf" placeholder="Type to search or enter object property..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
             <div id="editRelTypeSubPropertyOfResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
@@ -4384,7 +4594,9 @@ function renderApp(): void {
     <div id="editDataPropertyModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Edit data property</h3>
-        <p id="editDataPropName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
+        <p id="editDataPropName" style="font-size: 11px; color: #666; margin-bottom: 4px;"></p>
+        <p id="editDataPropIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
+        <p id="editDataPropLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
           <input type="text" id="editDataPropLabel" placeholder="e.g. refers to drawing ID" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
@@ -4393,6 +4605,10 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="editDataPropComment" rows="2" placeholder="Optional" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
+        <div style="margin-top: 10px;">
+          <span style="font-size: 11px; color: #666;">Defined by (rdfs:isDefinedBy)</span>
+          <input type="text" id="editDataPropDefinedBy" placeholder="e.g. https://w3id.org/dano#" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </div>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Range (rdfs:range datatype)</span>
           <select id="editDataPropRange" style="display: block; margin-top: 4px; padding: 8px; width: 100%; box-sizing: border-box;"></select>

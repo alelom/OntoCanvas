@@ -52,6 +52,10 @@ export interface DataPropertyInfo {
   range: string;
   /** Domain class local names (extracted from rdfs:domain). Empty array means owl:Thing (all classes). */
   domains: string[];
+  /** Full URI of the property (for display and rename). */
+  uri?: string;
+  /** rdfs:isDefinedBy (URI of defining ontology). If set, label is read-only (imported). */
+  isDefinedBy?: string | null;
 }
 
 export interface GraphEdge {
