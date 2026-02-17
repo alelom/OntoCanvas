@@ -88,7 +88,20 @@ export function getSafeExampleImageFileName(
     const m = originalName.match(IMAGE_EXT_RE);
     if (m) ext = m[1].toLowerCase().replace('jpeg', 'jpg');
   }
-  const existingPaths = new Set(existingUris.map((u) => (u.includes('/') ? u : u)));
+  const pathKey = (u: string): string => {
+    const trimmed = u.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      try {
+        const p = new URL(trimmed).pathname.replace(/^\//, '');
+        const i = p.indexOf('img/');
+        return i >= 0 ? p.slice(i) : p;
+      } catch {
+        return u;
+      }
+    }
+    return u;
+  };
+  const existingPaths = new Set(existingUris.map(pathKey));
   let index = 0;
   let candidate: string;
   do {
