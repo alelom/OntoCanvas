@@ -74,6 +74,22 @@ export function isDuplicateIdentifier(
   return existingLower.has(id.toLowerCase());
 }
 
+/**
+ * Returns true if the label would derive to an identifier that clashes with another node (case-insensitive).
+ * Used when renaming: excludes currentNodeId so the current node's own id is not treated as a duplicate.
+ */
+export function isDuplicateIdentifierForRename(
+  label: string,
+  existingIds: Set<string>,
+  currentNodeId: string
+): boolean {
+  const trimmed = (label ?? '').trim();
+  if (!trimmed) return false;
+  const currentLower = currentNodeId.toLowerCase();
+  const others = new Set([...existingIds].filter((id) => id.toLowerCase() !== currentLower));
+  return isDuplicateIdentifier(label, others);
+}
+
 /** Form data for a node (comment, example images, annotation values, data property restrictions). */
 export interface NodeFormData {
   comment: string;

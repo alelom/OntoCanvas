@@ -56,6 +56,7 @@ import { initExampleImagesSection } from './ui/exampleImagesSection';
 import {
   updateIdentifierDisplay,
   isDuplicateIdentifier,
+  isDuplicateIdentifierForRename,
   ADD_NODE_DUPLICATE_MESSAGE,
   applyNodeFormToStore,
   type NodeFormData,
@@ -3117,6 +3118,37 @@ function updateRenameModalIdentifier(): void {
   const nodeId = input?.dataset.nodeId;
   if (!nodeId) return;
   updateIdentifierDisplay('rename', input?.value?.trim() ?? '', ttlStore, nodeId);
+  updateRenameModalDuplicateCheck();
+}
+
+function updateRenameModalDuplicateCheck(): void {
+  const modal = document.getElementById('renameModal');
+  if (!modal || (modal as HTMLElement).style.display === 'none') return;
+  if (modal.dataset.mode !== 'single') return;
+  const input = document.getElementById('renameInput') as HTMLInputElement;
+  const okBtn = document.getElementById('renameConfirm') as HTMLButtonElement;
+  const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
+  const nodeId = input?.dataset.nodeId;
+  if (!nodeId || !okBtn) return;
+  if (dupErr) {
+    dupErr.style.display = 'none';
+    dupErr.textContent = '';
+  }
+  const label = input?.value?.trim() ?? '';
+  if (!label) {
+    okBtn.disabled = false;
+    return;
+  }
+  const existingIds = new Set(rawData.nodes.map((n) => n.id));
+  if (isDuplicateIdentifierForRename(label, existingIds, nodeId)) {
+    if (dupErr) {
+      dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+      dupErr.style.display = 'block';
+    }
+    okBtn.disabled = true;
+    return;
+  }
+  okBtn.disabled = false;
 }
 
 function showRenameModal(
@@ -3134,6 +3166,8 @@ function showRenameModal(
   input.disabled = false;
   input.style.color = '';
   input.dataset.nodeId = nodeId;
+  const renameDupErr = document.getElementById('renameDuplicateError') as HTMLElement;
+  if (renameDupErr) { renameDupErr.style.display = 'none'; renameDupErr.textContent = ''; }
   updateRenameModalIdentifier();
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
@@ -4343,6 +4377,18 @@ function confirmRename(): void {
   const newLabel = input.value.trim();
   if (!nodeId || !newLabel) return;
 
+  const existingIds = new Set(rawData.nodes.map((n) => n.id));
+  if (isDuplicateIdentifierForRename(newLabel, existingIds, nodeId)) {
+    const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
+    if (dupErr) {
+      dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+      dupErr.style.display = 'block';
+    }
+    const okBtn = document.getElementById('renameConfirm') as HTMLButtonElement;
+    if (okBtn) okBtn.disabled = true;
+    return;
+  }
+
   const nodeIndex = rawData.nodes.findIndex((n) => n.id === nodeId);
   if (nodeIndex < 0) {
     hideRenameModal();
@@ -4625,6 +4671,7 @@ function renderApp(): void {
         </label>
         <p id="renameIdentifierLabel" style="font-size: 11px; color: #666; margin-bottom: 4px;">Identifier (derived from label):</p>
         <p id="renameIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
+        <p id="renameDuplicateError" style="display: none; color: #c00; font-size: 12px; margin: 6px 0 0 0;"></p>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
