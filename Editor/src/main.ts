@@ -2491,11 +2491,14 @@ function buildNetworkData(filter: {
         id: dataProp.id,
         label: wrapText(dataProp.label, wrapChars),
           shape: 'box',
-          size: 15,
+          size: 25, // Increased from 20 to make nodes more clickable
           color: { background: '#e8f4f8', border: '#4a90a4' },
         font: { size: dataPropertyFontSize, color: '#2c3e50' },
           margin: 4,
           physics: false,
+          // Make nodes more interactive/clickable - increase border width for better visibility
+          borderWidth: 2,
+          borderWidthSelected: 3,
         x: finalDataPropPos.x,
         y: finalDataPropPos.y,
           ...(dp?.comment && { title: dp.comment }),
@@ -2705,10 +2708,14 @@ function setupNetworkSelectionAndNavigation(
       const edgeAt = net.getEdgeAt(coords);
       
       // If clicking on node/edge, don't start panning; store target for context menu (exact click position)
+      // Priority: if both node and edge are detected, prefer the node (data property nodes might have edges on top)
       if (nodeAt != null || edgeAt != null) {
         rightPanStart = null;
+        // If we have a node, use it (even if there's also an edge) - this ensures data property nodes work
         rightClickNodeId = nodeAt != null ? String(nodeAt) : null;
-        rightClickEdgeId = edgeAt != null ? String(edgeAt) : null;
+        // Only set edge if there's no node (to avoid conflicts)
+        rightClickEdgeId = (nodeAt == null && edgeAt != null) ? String(edgeAt) : null;
+        console.log('[handleMouseDown] Right-click detected:', { nodeAt: rightClickNodeId, edgeAt: rightClickEdgeId });
         return;
       }
       rightClickNodeId = null;
@@ -2821,9 +2828,11 @@ function setupNetworkSelectionAndNavigation(
     if (target.closest?.('.vis-manipulation')) return;
     const rect = container.getBoundingClientRect();
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // Check for node first (data property nodes might be small, so check node before edge)
     const nodeAt = net.getNodeAt(domPos);
     if (nodeAt != null) {
       const nodeId = String(nodeAt);
+      console.log('[handleNativeDblclick] Node detected:', nodeId);
       const selectedIds = net.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(nodeId)) {
         showMultiEditModal(selectedIds);
@@ -2832,9 +2841,12 @@ function setupNetworkSelectionAndNavigation(
       }
       return;
     }
+    // Only check for edge if no node was found
     const edgeAt = net.getEdgeAt(domPos);
     if (edgeAt != null) {
-      openEditModalForEdge(String(edgeAt));
+      const edgeId = String(edgeAt);
+      console.log('[handleNativeDblclick] Edge detected:', edgeId);
+      openEditModalForEdge(edgeId);
       return;
     }
     const canvasPos = net.DOMtoCanvas(domPos);
@@ -3536,38 +3548,74 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   }
 }
 
-/** Open the appropriate edit modal for a node (class rename or data property restriction). */
+/** Open the appropriate edit modal for a node (class rename, data property restriction, or normal data property). */
 function openEditModalForNode(nodeId: string): void {
+  console.log('[openEditModalForNode] Called with nodeId:', nodeId);
+  // Handle data property restriction nodes
   if (nodeId.startsWith('__dataproprestrict__')) {
     const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (match) {
       const [, classId, propertyName] = match;
+      console.log('[openEditModalForNode] Data property restriction detected:', { nodeId, classId, propertyName });
       // Always open the modal - showEditEdgeModal will handle missing restrictions gracefully
       showEditEdgeModal(nodeId, classId, 'dataprop');
       return;
+    } else {
+      console.warn('[openEditModalForNode] Data property restriction node ID format invalid:', nodeId);
     }
   }
+  // Handle normal data property nodes (not restrictions)
+  if (nodeId.startsWith('__dataprop__')) {
+    const match = nodeId.match(/^__dataprop__(.+)__(.+)$/);
+    if (match) {
+      const [, classId, propertyName] = match;
+      console.log('[openEditModalForNode] Normal data property detected:', { nodeId, classId, propertyName });
+      // Open the "Edit Data Property" modal (not the restriction modal)
+      showEditDataPropertyModal(propertyName);
+      return;
+    } else {
+      console.warn('[openEditModalForNode] Normal data property node ID format invalid:', nodeId);
+    }
+  }
+  // Handle regular class nodes
   const node = rawData.nodes.find((n) => n.id === nodeId);
-  if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
+  if (node) {
+    console.log('[openEditModalForNode] Regular node, opening rename modal:', nodeId);
+    showRenameModal(nodeId, node.label, node.labellableRoot);
+  } else {
+    console.warn('[openEditModalForNode] Node not found in rawData:', nodeId);
+  }
 }
 
 /** Open the appropriate edit modal for an edge (object property or data property). Normalizes dataproprestrict -> dataprop. */
 function openEditModalForEdge(edgeId: string): void {
+  console.log('[openEditModalForEdge] Called with edgeId:', edgeId);
   const edgeIdStr = String(edgeId);
   const arrowIndex = edgeIdStr.indexOf('->');
-  if (arrowIndex === -1) return;
+  if (arrowIndex === -1) {
+    console.warn('[openEditModalForEdge] Invalid edge ID format (no ->):', edgeId);
+    return;
+  }
   const from = edgeIdStr.substring(0, arrowIndex);
   const afterArrow = edgeIdStr.substring(arrowIndex + 2);
   const colonIndex = afterArrow.indexOf(':');
-  if (colonIndex === -1) return;
+  if (colonIndex === -1) {
+    console.warn('[openEditModalForEdge] Invalid edge ID format (no :):', edgeId);
+    return;
+  }
   const to = afterArrow.substring(0, colonIndex);
   const type = afterArrow.substring(colonIndex + 1);
   const edgeType = type === 'dataproprestrict' || type === 'dataprop' ? 'dataprop' : type;
+  console.log('[openEditModalForEdge] Parsed:', { from, to, type, edgeType });
   showEditEdgeModal(from, to, edgeType);
 }
 
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
-  const modal = document.getElementById('editEdgeModal')!;
+  const modal = document.getElementById('editEdgeModal');
+  if (!modal) {
+    console.error('[showEditEdgeModal] editEdgeModal element not found!');
+    return;
+  }
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
@@ -3576,16 +3624,22 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
   const isDataPropertyEdge = edgeType === 'dataprop';
+  console.log('[showEditEdgeModal] Called with:', { edgeFrom, edgeTo, edgeType, isDataPropertyEdge });
   
   if (isDataPropertyEdge) {
     // For data property edges, parse the data property node ID to get the class and property
     // Handle both restriction nodes (__dataproprestrict__) and generic property nodes (__dataprop__)
     let match = edgeFrom.match(/^__dataproprestrict__(.+)__(.+)$/);
+    let isRestriction = true;
     if (!match) {
       match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
-      // Generic data properties are not editable
+      isRestriction = false;
+      // For normal data properties (not restrictions), open the "Edit Data Property" modal instead
       if (match) {
+        const [, classId, propertyName] = match;
+        console.log('[showEditEdgeModal] Normal data property edge detected, opening Edit Data Property modal:', { edgeFrom, classId, propertyName });
         hideEditEdgeModalWithCleanup();
+        showEditDataPropertyModal(propertyName);
         return;
       }
       // If we can't parse the edgeFrom, it's not a valid data property node/edge
@@ -3673,6 +3727,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     
     modal.querySelector('h3')!.textContent = 'Edit data property restriction';
+    console.log('[showEditEdgeModal] Data property modal configured, showing modal');
   } else {
     // Regular object property edge
     // Find all matching edges first
@@ -3796,7 +3851,9 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
   }
   
+  console.log('[showEditEdgeModal] Setting modal display to flex, edgeType:', edgeType);
   modal.style.display = 'flex';
+  console.log('[showEditEdgeModal] Modal display set, current style:', modal.style.display, 'modal element:', modal);
 }
 
 function showAddEdgeModal(from: string, to: string, callback: (data: { from: string; to: string; id?: string } | null) => void): void {
@@ -5256,8 +5313,10 @@ function applyFilter(preserveView = false): void {
     });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
       if (!network) return;
+      // Priority: nodes before edges (data property nodes might trigger both)
       if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0] as string;
+        console.log('[network.on doubleClick] Node detected:', clickedNodeId);
         const selectedIds = network.getSelectedNodes().map(String);
         if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
           showMultiEditModal(selectedIds);
@@ -5266,8 +5325,11 @@ function applyFilter(preserveView = false): void {
         }
         return;
       }
+      // Only handle edge if no node was clicked
       if (params.edges.length > 0) {
-        openEditModalForEdge(params.edges[0] as string);
+        const clickedEdgeId = params.edges[0] as string;
+        console.log('[network.on doubleClick] Edge detected:', clickedEdgeId);
+        openEditModalForEdge(clickedEdgeId);
       }
     });
   }
