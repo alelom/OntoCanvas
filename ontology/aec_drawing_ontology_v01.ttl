@@ -19,7 +19,12 @@
 :Ontology rdf:type owl:Ontology;
     rdfs:comment "Ontology for AEC drawing elements - facade, structural, and drawing metadata. Based on schema rev02 (06.04.23).";
     rdfs:label "AEC Drawing Ontology";
-    owl:imports <https://w3id.org/dano>, <http://www.w3.org/2002/07/owl#>, <http://www.w3.org/1999/02/22-rdf-syntax-ns#>, <http://www.w3.org/XML/1998/namespace#>, <http://www.w3.org/2001/XMLSchema#>, <http://www.w3.org/2000/01/rdf-schema#> .
+    owl:imports <https://w3id.org/dano>, <http://www.w3.org/2002/07/owl#>, <http://www.w3.org/1999/02/22-rdf-syntax-ns#>, <http://www.w3.org/XML/1998/namespace#>, <http://www.w3.org/2001/XMLSchema#>, <http://www.w3.org/2000/01/rdf-schema#> ;
+    owl:imports <http://www.w3.org/2002/07/owl#> ;
+    owl:imports <http://www.w3.org/1999/02/22-rdf-syntax-ns#> ;
+    owl:imports <http://www.w3.org/XML/1998/namespace#> ;
+    owl:imports <http://www.w3.org/2001/XMLSchema#> ;
+    owl:imports <http://www.w3.org/2000/01/rdf-schema#> .
 
 #################################################################
 #    Annotation properties
@@ -292,7 +297,7 @@
     rdfs:comment "Facade system - part of support type; a type of drawing element";
     rdfs:label "Facade system";
     :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf :DrawingElement.
+    rdfs:subClassOf :DrawingElement, [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ].
 
 :Cementboard rdf:type owl:Class;
     rdfs:label "Cementboard";
@@ -364,12 +369,6 @@
     rdfs:label "Geometric properties";
     :labellableRoot "false"^^xsd:boolean.
 
-:DGU rdf:type owl:Class;
-    rdfs:comment "Double Glazed Unit";
-    rdfs:label "DGU";
-    :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf :FacadeCladding.
-
 :FacadeCladding rdf:type owl:Class;
     rdfs:label "Facade cladding";
     :labellableRoot "false"^^xsd:boolean;
@@ -394,7 +393,14 @@
 :Detail rdf:type owl:Class;
     rdfs:comment "Detail drawing";
     rdfs:label "Detail";
-    :labellableRoot "false"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean;
+    rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Orientation ].
+
+:DrawingType rdf:type owl:Class;
+    rdfs:comment "Type of drawing view";
+    rdfs:label "Drawing type";
+    :labellableRoot "false"^^xsd:boolean;
+    rdfs:subClassOf owl:Thing.
 
 :DoubleLaminated rdf:type owl:Class;
     rdfs:label "Double laminated";
@@ -410,24 +416,12 @@
     rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
     rdfs:label "Drawing sheet";
     :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ].
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Orientation ].
 
 :Note rdf:type owl:Class;
     rdfs:label "Note";
     :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :Metadata.
-
-:has rdf:type owl:ObjectProperty;
-    rdfs:comment "Subject is characterised by a property.";
-    rdfs:label "hasProperty";
-    rdfs:range owl:Thing;
-    rdfs:domain owl:Thing.
-
-:Orientation rdf:type owl:Class;
-    rdfs:comment "Can be standalone label - drawing orientation";
-    rdfs:label "Orientation";
-    :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf owl:Thing.
 
 :RevisionTable rdf:type owl:Class;
     rdfs:label "Revision table";
@@ -438,11 +432,17 @@
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
     rdfs:label "Layout";
     :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :Annotation ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :Annotation ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:integer ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ].
 
-:DrawingType rdf:type owl:Class;
-    rdfs:comment "Type of drawing view";
-    rdfs:label "Drawing type";
+:has rdf:type owl:ObjectProperty;
+    rdfs:comment "Subject is characterised by a property.";
+    rdfs:label "hasProperty";
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:Orientation rdf:type owl:Class;
+    rdfs:comment "Can be standalone label - drawing orientation";
+    rdfs:label "Detail Orientation";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf owl:Thing.
 
@@ -464,7 +464,7 @@
 
 :Elevation rdf:type owl:Class;
     rdfs:label "Elevation";
-    :labellableRoot "false"^^xsd:boolean;
+    :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :DrawingType.
 
 :Extruded rdf:type owl:Class;
@@ -506,12 +506,6 @@
     rdfs:label "Flipper";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :Gasket.
-
-:GA rdf:type owl:Class;
-    rdfs:comment "General arrangement drawing";
-    rdfs:label "GA (General Arrangement)";
-    :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf :DrawingType.
 
 :GRC rdf:type owl:Class;
     rdfs:label "GRC";
@@ -626,12 +620,12 @@
 
 :Perspective rdf:type owl:Class;
     rdfs:label "Perspective";
-    :labellableRoot "false"^^xsd:boolean;
+    :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :DrawingType.
 
 :Plan rdf:type owl:Class;
     rdfs:label "Plan";
-    :labellableRoot "false"^^xsd:boolean;
+    :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :DrawingType.
 
 :Planar rdf:type owl:Class;
@@ -732,8 +726,8 @@
     rdfs:subClassOf :LinearComponent.
 
 :Section rdf:type owl:Class;
-    rdfs:label "Section";
-    :labellableRoot "false"^^xsd:boolean;
+    rdfs:label "Vertical Section";
+    :labellableRoot "true"^^xsd:boolean;
     rdfs:subClassOf :DrawingType.
 
 :SectionChannel rdf:type owl:Class;
@@ -802,11 +796,6 @@
     rdfs:label "Stone";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf :FacingMaterial.
-
-:SupportType rdf:type owl:Class;
-    rdfs:comment "Support type - contains facade and structural systems";
-    rdfs:label "Support type";
-    :labellableRoot "false"^^xsd:boolean.
 
 :Symmetrical rdf:type owl:Class;
     rdfs:label "Symmetrical";
@@ -952,4 +941,18 @@
     rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
     rdfs:label "refersToDrawingId";
     rdfs:range xsd:string;
-    rdfs:domain owl:Thing.
+    rdfs:domain :Note.
+
+:exampleImage rdf:type owl:AnnotationProperty;
+    rdfs:comment "Links a class or concept to an example image illustrating it."@en;
+    rdfs:label "example image"@en.
+
+:drawingorientation rdf:type owl:Class;
+    rdfs:label "DrawingOrientation";
+    rdfs:subClassOf :portrait, :landscape.
+
+:portrait rdf:type owl:Class;
+    rdfs:label "Portrait".
+
+:landscape rdf:type owl:Class;
+    rdfs:label "Landscape".
