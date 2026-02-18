@@ -109,6 +109,92 @@ describe('Data Property Edit E2E Tests', () => {
       expect(title).not.toBeNull();
       expect(title).toContain('data property');
     });
+
+    it('double-clicking data property restriction node opens edit modal', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'data-property-restriction.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Use test hook to simulate double-click (which calls openEditModalForNode)
+      // This tests the same code path that double-click would trigger
+      await page.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        if (testHook?.openEditModalForNode) testHook.openEditModalForNode('__dataproprestrict__Note__myDataProp');
+      });
+
+      await page.waitForTimeout(300);
+
+      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
+      expect(title).not.toBeNull();
+      expect(title).toContain('data property');
+    });
+
+    it('context menu "Edit properties" on data property restriction node opens edit modal', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'data-property-restriction.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Use test hook to simulate context menu edit
+      await page.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        if (testHook?.openEditModalForNode) testHook.openEditModalForNode('__dataproprestrict__Note__myDataProp');
+      });
+      await page.waitForTimeout(200);
+
+      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
+      expect(title).not.toBeNull();
+      expect(title).toContain('data property');
+    });
+
+    it('double-clicking data property restriction edge opens edit modal', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'data-property-restriction.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Use test hook to simulate edge double-click
+      const edgeId = '__dataproprestrict__Note__myDataProp->Note:dataproprestrict';
+      await page.evaluate(
+        (id) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (testHook?.openEditModalForEdge) testHook.openEditModalForEdge(id);
+        },
+        edgeId
+      );
+      await page.waitForTimeout(200);
+
+      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
+      expect(title).not.toBeNull();
+      expect(title).toContain('data property');
+    });
+
+    it('context menu "Edit properties" on data property restriction edge opens edit modal', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'data-property-restriction.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Use test hook to simulate context menu edit on edge
+      const edgeId = '__dataproprestrict__Note__myDataProp->Note:dataproprestrict';
+      await page.evaluate(
+        (id) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (testHook?.openEditModalForEdge) testHook.openEditModalForEdge(id);
+        },
+        edgeId
+      );
+      await page.waitForTimeout(200);
+
+      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
+      expect(title).not.toBeNull();
+      expect(title).toContain('data property');
+    });
   });
 
   describe('Edit data property domain', () => {

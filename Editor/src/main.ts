@@ -3541,7 +3541,8 @@ function openEditModalForNode(nodeId: string): void {
   if (nodeId.startsWith('__dataproprestrict__')) {
     const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (match) {
-      const [, classId] = match;
+      const [, classId, propertyName] = match;
+      // Always open the modal - showEditEdgeModal will handle missing restrictions gracefully
       showEditEdgeModal(nodeId, classId, 'dataprop');
       return;
     }
@@ -3587,12 +3588,19 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
         hideEditEdgeModalWithCleanup();
         return;
       }
+      // If we can't parse the edgeFrom, it's not a valid data property node/edge
+      console.warn('[showEditEdgeModal] Could not parse data property node ID:', edgeFrom);
       hideEditEdgeModalWithCleanup();
       return;
     }
     const [, classId, propertyName] = match;
     const classNode = rawData.nodes.find((n) => n.id === classId);
     const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
+    
+    // If restriction not found, log a warning but still show the modal (might be a timing issue)
+    if (!restriction) {
+      console.warn('[showEditEdgeModal] Data property restriction not found:', { edgeFrom, classId, propertyName, classNode, restrictions: classNode?.dataPropertyRestrictions });
+    }
     
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
