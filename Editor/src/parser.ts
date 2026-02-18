@@ -96,15 +96,17 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
   const seen = new Set<string>();
   const mainBase = getMainOntologyBase(store);
+  const classNs = getClassNamespace(store);
   const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
   for (const q of opQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
     const subjUri = (subj as { value: string }).value;
     const localName = extractLocalName(subjUri);
-    const isFromMainOntology = mainBase != null
-      ? (subjUri === mainBase || subjUri.startsWith(mainBase) || subjUri === mainBase.slice(0, -1))
-      : subjUri.startsWith(BASE_IRI);
+    const isFromMainOntology =
+      (mainBase != null && (subjUri === mainBase || subjUri.startsWith(mainBase) || subjUri === mainBase.slice(0, -1))) ||
+      (classNs != null && subjUri.startsWith(classNs)) ||
+      (mainBase == null && classNs == null && subjUri.startsWith(BASE_IRI));
     // External (imported) properties always use full URI so we can show e.g. geo:hasGeometry in the UI.
     // Local (main ontology) properties use local name unless duplicate, then full URI so both appear in the list.
     const name = isFromMainOntology
@@ -926,31 +928,36 @@ function ensureHasCardinalityAnnotationProperty(store: Store): void {
 /**
  * Add a new object property (relationship type) to the store.
  * Returns the property localName, or null on failure.
- * Optional: comment, isDefinedBy (URI), subPropertyOf (name or URI).
+ * Optional: comment, isDefinedBy (URI), subPropertyOf (name or URI), domain (class local name), range (class local name).
  */
 export function addObjectPropertyToStore(
   store: Store,
   label: string,
   hasCardinality: boolean,
   localName?: string,
-  options?: { comment?: string | null; isDefinedBy?: string | null; subPropertyOf?: string | null }
+  options?: { comment?: string | null; isDefinedBy?: string | null; subPropertyOf?: string | null; domain?: string | null; range?: string | null }
 ): string | null {
   const existingNames = new Set(getObjectProperties(store).map((op) => op.name));
-  let name = localName ?? (extractLocalName(label) || 'newProperty').replace(/\s+/g, '');
+  let name = localName ?? (labelToCamelCaseIdentifier(label) || extractLocalName(label) || 'newProperty').replace(/\s+/g, '');
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) name = 'newProperty';
-  let base = name;
+  const baseName = name;
   let n = 0;
   while (existingNames.has(name)) {
-    name = `${base}${++n}`;
+    name = `${baseName}${++n}`;
   }
   ensureHasCardinalityAnnotationProperty(store);
-  const subjUri = BASE_IRI + name;
+  const ns = getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI;
+  const base = ns.endsWith('#') ? ns : ns + '#';
+  const subjUri = base + name;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  const OWL_THING_URI = OWL + 'Thing';
+  const domainUri = (options?.domain?.trim() ?? '') ? resolveClassUri(store, options.domain!.trim()) : OWL_THING_URI;
+  const rangeUri = (options?.range?.trim() ?? '') ? resolveClassUri(store, options.range!.trim()) : OWL_THING_URI;
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'ObjectProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(OWL + 'Thing'), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(OWL + 'Thing'), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(domainUri), graph);
+  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri), graph);
   store.addQuad(
     subject,
     DataFactory.namedNode(HAS_CARDINALITY_PROP),
@@ -1146,14 +1153,16 @@ export function addDataPropertyToStore(
   localName?: string
 ): string | null {
   const existingNames = new Set(getDataProperties(store).map((dp) => dp.name));
-  let name = localName ?? (extractLocalName(label) || 'newDataProperty').replace(/\s+/g, '');
+  let name = localName ?? (labelToCamelCaseIdentifier(label) || extractLocalName(label) || 'newDataProperty').replace(/\s+/g, '');
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) name = 'newDataProperty';
-  let base = name;
+  const baseName = name;
   let n = 0;
   while (existingNames.has(name)) {
-    name = `${base}${++n}`;
+    name = `${baseName}${++n}`;
   }
-  const subjUri = BASE_IRI + name;
+  const ns = getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI;
+  const base = ns.endsWith('#') ? ns : ns + '#';
+  const subjUri = base + name;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   const rangeNode = DataFactory.namedNode(rangeUri);

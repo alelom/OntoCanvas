@@ -1,0 +1,14 @@
+@prefix : <http://example.org/test-ontology#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+:Ontology a owl:Ontology .
+
+:Thing a owl:Class ;
+    rdfs:label "Thing" .
+
+:contains a owl:ObjectProperty ;
+    rdfs:label "contains" ;
+    rdfs:domain owl:Thing ;
+    rdfs:range owl:Thing .

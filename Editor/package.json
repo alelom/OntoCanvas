@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run tests/e2e",
-    "test:e2e:watch": "vitest tests/e2e"
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
+    "test:e2e:watch": "vitest -c vitest.e2e.config.ts"
   },
   "dependencies": {
     "n3": "^1.17.0",
