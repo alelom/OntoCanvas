@@ -4091,14 +4091,20 @@ function confirmEditEdge(): void {
   
   // Only include cardinality if this is a restriction
   const card = isRestriction ? cardinality : undefined;
+  const oldWasRestriction = oldEdge?.isRestriction === true;
   const sameEdge = oldFrom === newFrom && oldTo === newTo && oldType === newType &&
+    oldWasRestriction === isRestriction &&
     (card?.minCardinality ?? null) === (oldEdge?.minCardinality ?? null) &&
     (card?.maxCardinality ?? null) === (oldEdge?.maxCardinality ?? null);
   if (!ttlStore || sameEdge) {
     hideEditEdgeModalWithCleanup();
     return;
   }
-  const removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+  let removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+  // Edge may exist only in rawData (e.g. from object property domain/range) with no restriction in store
+  if (!removeOk && oldEdge) {
+    removeOk = true; // Proceed: we will remove from rawData and add the new restriction to the store
+  }
   if (!removeOk) {
     hideEditEdgeModalWithCleanup();
     return;
