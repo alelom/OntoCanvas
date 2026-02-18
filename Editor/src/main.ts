@@ -3536,18 +3536,31 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   }
 }
 
-/** Open the appropriate edit modal for a node (class rename or data property restriction). */
+/** Open the appropriate edit modal for a node (class rename, data property restriction, or normal data property). */
 function openEditModalForNode(nodeId: string): void {
+  // Handle data property restriction nodes
   if (nodeId.startsWith('__dataproprestrict__')) {
     const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (match) {
-      const [, classId] = match;
+      const [, classId, propertyName] = match;
       showEditEdgeModal(nodeId, classId, 'dataprop');
       return;
     }
   }
+  // Handle normal data property nodes (not restrictions)
+  if (nodeId.startsWith('__dataprop__')) {
+    const match = nodeId.match(/^__dataprop__(.+)__(.+)$/);
+    if (match) {
+      const [, classId, propertyName] = match;
+      showEditDataPropertyModal(propertyName);
+      return;
+    }
+  }
+  // Handle regular class nodes
   const node = rawData.nodes.find((n) => n.id === nodeId);
-  if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
+  if (node) {
+    showRenameModal(nodeId, node.label, node.labellableRoot);
+  }
 }
 
 /** Open the appropriate edit modal for an edge (object property or data property). Normalizes dataproprestrict -> dataprop. */
@@ -3566,7 +3579,11 @@ function openEditModalForEdge(edgeId: string): void {
 }
 
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
-  const modal = document.getElementById('editEdgeModal')!;
+  const modal = document.getElementById('editEdgeModal');
+  if (!modal) {
+    console.error('[showEditEdgeModal] editEdgeModal element not found!');
+    return;
+  }
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
@@ -3582,17 +3599,17 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     let match = edgeFrom.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (!match) {
       match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
-      // Generic data properties are not editable
+      // For normal data properties (not restrictions), open the "Edit Data Property" modal instead
       if (match) {
+        const [, classId, propertyName] = match;
         hideEditEdgeModalWithCleanup();
+        showEditDataPropertyModal(propertyName);
         return;
       }
       hideEditEdgeModalWithCleanup();
       return;
     }
     const [, classId, propertyName] = match;
-    const classNode = rawData.nodes.find((n) => n.id === classId);
-    const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;

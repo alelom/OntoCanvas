@@ -1,0 +1,27 @@
+@prefix : <http://example.org/test#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Ontology a owl:Ontology .
+
+:TestClass a owl:Class ;
+    rdfs:label "TestClass" .
+
+:testDataPropWithRestr a owl:DatatypeProperty ;
+    rdfs:label "test data prop" ;
+    rdfs:range xsd:string .
+
+:referstodrawingid rdf:type owl:DatatypeProperty;
+    rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
+    rdfs:label "refersToDrawingId";
+    rdfs:range xsd:string;
+    rdfs:domain owl:Thing.
+
+:TestClass rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :testDataPropWithRestr ;
+    owl:onDataRange xsd:string ;
+    owl:minCardinality 0
+] .
