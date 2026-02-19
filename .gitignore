@@ -12,3 +12,4 @@ wheels/
 # Editor (Node/npm)
 Editor/node_modules/
 Editor/dist/
+Editor/.e2e-dev-server-pid

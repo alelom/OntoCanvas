@@ -112,11 +112,15 @@ export function initContextMenu(
 
 /**
  * Show context menu at the given position.
+ * Optional nodeId/edgeId use the exact target from the right-click (e.g. from mousedown);
+ * if omitted, target is resolved from event position via getNodeAt/getEdgeAt.
  */
 export function showContextMenu(
   event: MouseEvent,
   network: Network,
-  container: HTMLElement
+  container: HTMLElement,
+  nodeId?: string | null,
+  edgeId?: string | null
 ): void {
   if (!contextMenuElement) {
     console.warn('Context menu element not found. Initializing...');
@@ -147,20 +151,30 @@ export function showContextMenu(
   event.stopPropagation();
   event.stopImmediatePropagation();
 
-  // Get click position
-  const rect = container.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
+  // Use provided node/edge from right-click target, or resolve from event position
+  const resolvedNodeId =
+    nodeId !== undefined && nodeId !== null
+      ? nodeId
+      : (() => {
+          const rect = container.getBoundingClientRect();
+          const domPos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+          const at = network.getNodeAt(domPos);
+          return at != null ? String(at) : null;
+        })();
+  const resolvedEdgeId =
+    edgeId !== undefined && edgeId !== null
+      ? edgeId
+      : (() => {
+          const rect = container.getBoundingClientRect();
+          const domPos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+          const at = network.getEdgeAt(domPos);
+          return at != null ? String(at) : null;
+        })();
 
-  // Check what was clicked
-  const domPos = { x, y };
-  const nodeAt = network.getNodeAt(domPos);
-  const edgeAt = network.getEdgeAt(domPos);
-
-  currentTargetNodeId = nodeAt ? String(nodeAt) : null;
+  currentTargetNodeId = resolvedNodeId;
 
   // Update menu items based on what was clicked
-  updateContextMenuItems(nodeAt ? String(nodeAt) : null, edgeAt ? String(edgeAt) : null);
+  updateContextMenuItems(resolvedNodeId, resolvedEdgeId);
 
   // Position and show menu
   contextMenuElement.style.left = `${event.clientX}px`;

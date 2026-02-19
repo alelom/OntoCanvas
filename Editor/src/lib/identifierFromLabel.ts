@@ -83,3 +83,33 @@ export function validateLabelForIdentifier(label: string): ValidateIdentifierRes
 
   return { valid: true, identifier, warning };
 }
+
+export interface ValidateIdentifierWithUniquenessResult extends ValidateIdentifierResult {
+  duplicate?: boolean;
+}
+
+/**
+ * Validate label for identifier and check uniqueness against existing identifiers.
+ * For edit flows, pass excludeIdentifier so the current entity's id is not treated as duplicate.
+ */
+export function validateLabelForIdentifierWithUniqueness(
+  label: string,
+  existingIdentifiers: Set<string>,
+  options?: { excludeIdentifier?: string; duplicateMessage?: string }
+): ValidateIdentifierWithUniquenessResult {
+  const result = validateLabelForIdentifier(label) as ValidateIdentifierWithUniquenessResult;
+  if (!result.valid || result.identifier == null) return result;
+  const exclude = options?.excludeIdentifier?.trim().toLowerCase();
+  const existingLower = new Set([...existingIdentifiers].map((x) => x.toLowerCase()));
+  if (exclude) existingLower.delete(exclude);
+  const isDuplicate = existingLower.has(result.identifier.toLowerCase());
+  if (isDuplicate) {
+    return {
+      valid: false,
+      identifier: result.identifier,
+      error: options?.duplicateMessage ?? 'An entity with this identifier already exists.',
+      duplicate: true,
+    };
+  }
+  return result;
+}

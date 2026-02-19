@@ -308,4 +308,46 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(nodeCountAfter).toBe(1);
     });
   });
+
+  describe('Edit edge to OWL restriction with cardinality', () => {
+    it('ticking OWL restriction and setting cardinality then OK reflects in graph and TTL', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'edit-edge-to-restriction.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      const edgeId = await findEdgeInGraph(page, 'Source', 'Target', 'contains');
+      expect(edgeId).not.toBeNull();
+
+      const opened = await openEditEdgeModal(page, edgeId!);
+      expect(opened).toBe(true);
+      await page.waitForTimeout(150);
+
+      const isRestrictionCb = page.locator('#editEdgeIsRestriction');
+      await isRestrictionCb.check();
+      await page.waitForTimeout(80);
+
+      await page.locator('#editEdgeMinCard').fill('0');
+      await page.locator('#editEdgeMaxCard').fill('3');
+      await page.waitForTimeout(80);
+
+      await page.locator('#editEdgeConfirm').click();
+      await page.waitForTimeout(300);
+
+      const edgeData = await page.evaluate(
+        (id) => (window as any).__EDITOR_TEST__?.getEdgeData?.(id) ?? null,
+        edgeId!
+      );
+      expect(edgeData).not.toBeNull();
+      expect(edgeData?.isRestriction).toBe(true);
+      expect(edgeData?.minCardinality).toBe(0);
+      expect(edgeData?.maxCardinality).toBe(3);
+
+      const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());
+      expect(ttl).not.toBeNull();
+      expect(ttl).toContain('minQualifiedCardinality');
+      expect(ttl).toContain('maxQualifiedCardinality');
+    });
+  });
 });

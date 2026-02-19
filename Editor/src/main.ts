@@ -156,7 +156,11 @@ import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
 import {
   labelToCamelCaseIdentifier,
   validateLabelForIdentifier,
+  validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
+import { getDisplayBase } from './lib/displayBase';
+import { updateAddRelTypeIdentifierAndValidation as updateAddRelTypeIdentifierAndValidationFromModal } from './ui/objectPropertyModal';
+import { updateAddDataPropIdentifierAndValidation as updateAddDataPropIdentifierAndValidationFromModal } from './ui/dataPropertyModal';
 import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
@@ -693,8 +697,7 @@ function updateEditRelTypeIdentifierAndValidation(): void {
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
   const okBtn = document.getElementById('editRelTypeConfirm') as HTMLButtonElement;
   const op = objectProperties.find((p) => p.name === type);
-  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
-  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const baseWithHash = getDisplayBase(ttlStore);
   const isImported = !!(op?.isDefinedBy);
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
@@ -880,8 +883,7 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const definedByInput = document.getElementById('editRelTypeDefinedBy') as HTMLInputElement;
   const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
-  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
-  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const baseWithHash = getDisplayBase(ttlStore);
   const isImported = !!(op?.isDefinedBy);
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
@@ -986,16 +988,19 @@ function initEdgeStylesMenu(
 
 let addRelationshipTypeHandlersInitialized = false;
 
+function updateAddRelTypeIdentifierAndValidation(): void {
+  updateAddRelTypeIdentifierAndValidationFromModal(ttlStore, objectProperties);
+}
+
 function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
   if (addRelationshipTypeHandlersInitialized) return;
   addRelationshipTypeHandlersInitialized = true;
+  setupClassSelector('addRelTypeDomain', 'addRelTypeDomainResults');
+  setupClassSelector('addRelTypeRange', 'addRelTypeRangeResults');
   setupPropertySelector('addRelTypeSubPropertyOf', 'addRelTypeSubPropertyOfResults', () => null);
   const labelInput = document.getElementById('addRelTypeLabel') as HTMLInputElement;
   if (labelInput) {
-    labelInput.addEventListener('input', () => {
-      const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
-      okBtn.disabled = !labelInput.value.trim();
-    });
+    labelInput.addEventListener('input', updateAddRelTypeIdentifierAndValidation);
     labelInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('addRelTypeConfirm')?.click();
     });
@@ -1005,15 +1010,26 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
     const li = document.getElementById('addRelTypeLabel') as HTMLInputElement;
     const hasCardCb = document.getElementById('addRelTypeHasCardinality') as HTMLInputElement;
     const commentInput = document.getElementById('addRelTypeComment') as HTMLTextAreaElement;
+    const domainInput = document.getElementById('addRelTypeDomain') as HTMLInputElement;
+    const rangeInput = document.getElementById('addRelTypeRange') as HTMLInputElement;
     const isDefinedByInput = document.getElementById('addRelTypeIsDefinedBy') as HTMLInputElement;
     const subPropertyOfInput = document.getElementById('addRelTypeSubPropertyOf') as HTMLInputElement;
     const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
+    const labelValidationEl = document.getElementById('addRelTypeLabelValidation') as HTMLElement;
     li.value = '';
     hasCardCb.checked = true;
     if (commentInput) commentInput.value = '';
+    if (domainInput) domainInput.value = '';
+    if (rangeInput) rangeInput.value = '';
     if (isDefinedByInput) isDefinedByInput.value = '';
     if (subPropertyOfInput) subPropertyOfInput.value = '';
+    if (labelValidationEl) {
+      labelValidationEl.style.display = 'none';
+      labelValidationEl.textContent = '';
+    }
     okBtn.disabled = true;
+    const identifierEl = document.getElementById('addRelTypeIdentifier') as HTMLElement;
+    if (identifierEl) identifierEl.textContent = '';
     li.focus();
     modal.style.display = 'flex';
   });
@@ -1024,17 +1040,36 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
     const li = document.getElementById('addRelTypeLabel') as HTMLInputElement;
     const hasCardCb = document.getElementById('addRelTypeHasCardinality') as HTMLInputElement;
     const commentInput = document.getElementById('addRelTypeComment') as HTMLTextAreaElement;
+    const domainInput = document.getElementById('addRelTypeDomain') as HTMLInputElement;
+    const rangeInput = document.getElementById('addRelTypeRange') as HTMLInputElement;
     const isDefinedByInput = document.getElementById('addRelTypeIsDefinedBy') as HTMLInputElement;
     const subPropertyOfInput = document.getElementById('addRelTypeSubPropertyOf') as HTMLInputElement;
+    const labelValidationEl = document.getElementById('addRelTypeLabelValidation') as HTMLElement;
     const label = li.value.trim();
-    if (!label || !ttlStore) return;
+    if (!ttlStore) return;
+    const existingNames = new Set(objectProperties.map((op) => extractLocalName(op.name) || op.name));
+    const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
+      duplicateMessage: 'An object property with this identifier already exists.',
+    });
+    if (!validation.valid || !validation.identifier) {
+      if (labelValidationEl) {
+        labelValidationEl.style.display = 'block';
+        labelValidationEl.style.color = '#c0392b';
+        labelValidationEl.textContent = validation.error ?? 'Label is required.';
+      }
+      return;
+    }
     const comment = commentInput?.value?.trim() ?? null;
+    const domain = domainInput?.value?.trim() ?? null;
+    const range = rangeInput?.value?.trim() ?? null;
     const isDefinedBy = isDefinedByInput?.value?.trim() ?? null;
     const subPropertyOf = subPropertyOfInput?.value?.trim() ?? null;
-    const name = addObjectPropertyToStore(ttlStore, label, hasCardCb.checked, undefined, {
+    const name = addObjectPropertyToStore(ttlStore, label, hasCardCb.checked, validation.identifier, {
       comment: comment || undefined,
       isDefinedBy: isDefinedBy || undefined,
-      subPropertyOf: subPropertyOf || undefined
+      subPropertyOf: subPropertyOf || undefined,
+      domain: domain || undefined,
+      range: range || undefined,
     });
     if (name) {
       objectProperties = getObjectProperties(ttlStore);
@@ -1044,8 +1079,8 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
       initEdgeStylesMenu(edgeStylesContent, applyFilter);
       updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
       applyFilter(true);
+      document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
     }
-    document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
   });
 }
 
@@ -1137,8 +1172,7 @@ function updateEditDataPropIdentifierAndValidation(): void {
   const labelValidationEl = document.getElementById('editDataPropLabelValidation') as HTMLElement;
   const okBtn = document.getElementById('editDataPropConfirm') as HTMLButtonElement;
   const dp = dataProperties.find((p) => p.name === name);
-  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
-  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const baseWithHash = getDisplayBase(ttlStore);
   const isImported = !!(dp?.isDefinedBy);
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
@@ -1408,8 +1442,7 @@ function showEditDataPropertyModal(name: string): void {
   const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
   const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
   const dp = dataProperties.find((p) => p.name === name);
-  const displayBase = ttlStore ? (getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
-  const baseWithHash = displayBase.endsWith('#') ? displayBase : displayBase + '#';
+  const baseWithHash = getDisplayBase(ttlStore);
   const isImported = !!(dp?.isDefinedBy);
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
@@ -1637,6 +1670,10 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
 
 let addDataPropertyHandlersInitialized = false;
 
+function updateAddDataPropIdentifierAndValidation(): void {
+  updateAddDataPropIdentifierAndValidationFromModal(ttlStore, dataProperties);
+}
+
 function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
   if (addDataPropertyHandlersInitialized) return;
   addDataPropertyHandlersInitialized = true;
@@ -1646,10 +1683,7 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     rangeSel.innerHTML = DATA_PROPERTY_RANGE_OPTIONS.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
   }
   if (labelInput) {
-    labelInput.addEventListener('input', () => {
-      const okBtn = document.getElementById('addDataPropConfirm') as HTMLButtonElement;
-      okBtn.disabled = !labelInput.value.trim();
-    });
+    labelInput.addEventListener('input', updateAddDataPropIdentifierAndValidation);
     labelInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('addDataPropConfirm')?.click();
     });
@@ -1658,8 +1692,15 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     const modal = document.getElementById('addDataPropertyModal')!;
     const li = document.getElementById('addDataPropLabel') as HTMLInputElement;
     const okBtn = document.getElementById('addDataPropConfirm') as HTMLButtonElement;
+    const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
     li.value = '';
+    if (labelValidationEl) {
+      labelValidationEl.style.display = 'none';
+      labelValidationEl.textContent = '';
+    }
     okBtn.disabled = true;
+    const identifierEl = document.getElementById('addDataPropIdentifier') as HTMLElement;
+    if (identifierEl) identifierEl.textContent = '';
     li.focus();
     modal.style.display = 'flex';
   });
@@ -1669,19 +1710,32 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
   document.getElementById('addDataPropConfirm')?.addEventListener('click', () => {
     const li = document.getElementById('addDataPropLabel') as HTMLInputElement;
     const rangeEl = document.getElementById('addDataPropRange') as HTMLSelectElement;
+    const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
     const label = li.value.trim();
     const rangeUri = rangeEl?.value ?? XSD_NS + 'string';
-    if (!label || !ttlStore) return;
-    const name = addDataPropertyToStore(ttlStore, label, rangeUri);
+    if (!ttlStore) return;
+    const existingNames = new Set(dataProperties.map((dp) => dp.name));
+    const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
+      duplicateMessage: 'A data property with this identifier already exists.',
+    });
+    if (!validation.valid || !validation.identifier) {
+      if (labelValidationEl) {
+        labelValidationEl.style.display = 'block';
+        labelValidationEl.style.color = '#c0392b';
+        labelValidationEl.textContent = validation.error ?? 'Label is required.';
+      }
+      return;
+    }
+    const name = addDataPropertyToStore(ttlStore, label, rangeUri, validation.identifier);
     if (name) {
-      dataProperties.push({ name, label, range: rangeUri, domains: [] }); // Default to empty domains (owl:Thing)
-      dataProperties.sort((a, b) => a.name.localeCompare(b.name));
+      dataProperties = getDataProperties(ttlStore);
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       const content = document.getElementById('dataPropsContent');
       if (content) initDataPropsMenu(content);
+      applyFilter(true);
+      document.getElementById('addDataPropertyModal')!.style.display = 'none';
     }
-    document.getElementById('addDataPropertyModal')!.style.display = 'none';
   });
 }
 
@@ -2667,6 +2721,9 @@ function setupNetworkSelectionAndNavigation(
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
   let selectionBeforeClick: string[] = [];
+  /** Node/edge under cursor at right mousedown (so context menu uses exact click target, not mouseup). */
+  let rightClickNodeId: string | null = null;
+  let rightClickEdgeId: string | null = null;
 
   // Prevent browser's default context menu on the container
   container.oncontextmenu = (e: MouseEvent) => {
@@ -2701,12 +2758,16 @@ function setupNetworkSelectionAndNavigation(
       const nodeAt = net.getNodeAt(coords);
       const edgeAt = net.getEdgeAt(coords);
       
-      // If clicking on node/edge, don't start panning (context menu will handle it)
+      // If clicking on node/edge, don't start panning; store target for context menu (exact click position)
       if (nodeAt != null || edgeAt != null) {
         rightPanStart = null;
+        rightClickNodeId = nodeAt != null ? String(nodeAt) : null;
+        rightClickEdgeId = edgeAt != null ? String(edgeAt) : null;
         return;
       }
-      
+      rightClickNodeId = null;
+      rightClickEdgeId = null;
+
       // Otherwise, start panning on empty canvas
       const viewPos = net.getViewPosition();
       const scale = net.getScale();
@@ -2750,17 +2811,12 @@ function setupNetworkSelectionAndNavigation(
       
       // Check if we were panning (rightPanStart exists) or if we should show context menu
       if (!rightPanStart && isInContainer) {
-        // Show context menu if we didn't pan
-        const coords = getContainerCoords(e);
-        const nodeAt = net.getNodeAt(coords);
-        const edgeAt = net.getEdgeAt(coords);
-        
-        // Show context menu if clicking on node/edge or empty canvas
-        if (nodeAt != null || edgeAt != null || true) {
-          showContextMenu(e, net, container);
-        }
+        // Show context menu; use node/edge stored at mousedown so target is exact (e.g. data property node)
+        showContextMenu(e, net, container, rightClickNodeId, rightClickEdgeId);
       }
       rightPanStart = null;
+      rightClickNodeId = null;
+      rightClickEdgeId = null;
     }
   };
 
@@ -3534,18 +3590,31 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   }
 }
 
-/** Open the appropriate edit modal for a node (class rename or data property restriction). */
+/** Open the appropriate edit modal for a node (class rename, data property restriction, or normal data property). */
 function openEditModalForNode(nodeId: string): void {
+  // Handle data property restriction nodes
   if (nodeId.startsWith('__dataproprestrict__')) {
     const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (match) {
-      const [, classId] = match;
+      const [, classId, propertyName] = match;
       showEditEdgeModal(nodeId, classId, 'dataprop');
       return;
     }
   }
+  // Handle normal data property nodes (not restrictions)
+  if (nodeId.startsWith('__dataprop__')) {
+    const match = nodeId.match(/^__dataprop__(.+)__(.+)$/);
+    if (match) {
+      const [, classId, propertyName] = match;
+      showEditDataPropertyModal(propertyName);
+      return;
+    }
+  }
+  // Handle regular class nodes
   const node = rawData.nodes.find((n) => n.id === nodeId);
-  if (node) showRenameModal(nodeId, node.label, node.labellableRoot);
+  if (node) {
+    showRenameModal(nodeId, node.label, node.labellableRoot);
+  }
 }
 
 /** Open the appropriate edit modal for an edge (object property or data property). Normalizes dataproprestrict -> dataprop. */
@@ -3564,7 +3633,11 @@ function openEditModalForEdge(edgeId: string): void {
 }
 
 function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): void {
-  const modal = document.getElementById('editEdgeModal')!;
+  const modal = document.getElementById('editEdgeModal');
+  if (!modal) {
+    console.error('[showEditEdgeModal] editEdgeModal element not found!');
+    return;
+  }
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
   const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
@@ -3580,17 +3653,17 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     let match = edgeFrom.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (!match) {
       match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
-      // Generic data properties are not editable
+      // For normal data properties (not restrictions), open the "Edit Data Property" modal instead
       if (match) {
+        const [, classId, propertyName] = match;
         hideEditEdgeModalWithCleanup();
+        showEditDataPropertyModal(propertyName);
         return;
       }
       hideEditEdgeModalWithCleanup();
       return;
     }
     const [, classId, propertyName] = match;
-    const classNode = rawData.nodes.find((n) => n.id === classId);
-    const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
@@ -3598,6 +3671,9 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     modal.dataset.oldType = edgeType;
     modal.dataset.dataPropertyName = propertyName;
     modal.dataset.classId = classId;
+    
+    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     
     // For data properties, show the data property name and class, but disable editing
     fromSel.disabled = true;
@@ -4015,14 +4091,20 @@ function confirmEditEdge(): void {
   
   // Only include cardinality if this is a restriction
   const card = isRestriction ? cardinality : undefined;
+  const oldWasRestriction = oldEdge?.isRestriction === true;
   const sameEdge = oldFrom === newFrom && oldTo === newTo && oldType === newType &&
+    oldWasRestriction === isRestriction &&
     (card?.minCardinality ?? null) === (oldEdge?.minCardinality ?? null) &&
     (card?.maxCardinality ?? null) === (oldEdge?.maxCardinality ?? null);
   if (!ttlStore || sameEdge) {
     hideEditEdgeModalWithCleanup();
     return;
   }
-  const removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+  let removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+  // Edge may exist only in rawData (e.g. from object property domain/range) with no restriction in store
+  if (!removeOk && oldEdge) {
+    removeOk = true; // Proceed: we will remove from rawData and add the new restriction to the store
+  }
   if (!removeOk) {
     hideEditEdgeModalWithCleanup();
     return;
@@ -4543,8 +4625,12 @@ function renderApp(): void {
         <h3>Add object property</h3>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The human-readable name. The ontology identifier (local name) is derived in camelCase and shown below.">ⓘ</span>
           <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
         </label>
+        <p id="addRelTypeIdentifierLabel" style="font-size: 11px; color: #666; margin: 6px 0 4px 0;">Identifier (derived from label):</p>
+        <p id="addRelTypeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin: 0 0 8px 0;"></p>
+        <p id="addRelTypeLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
           <input type="checkbox" id="addRelTypeHasCardinality" checked /> 
           <span>Has cardinality</span>
@@ -4554,6 +4640,20 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="addRelTypeComment" rows="2" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
+        <div style="margin-top: 12px;">
+          <span style="font-size: 11px; color: #666;">Domain (rdfs:domain)</span>
+          <div style="position: relative;">
+            <input type="text" id="addRelTypeDomain" placeholder="Type to search or enter class..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+            <div id="addRelTypeDomainResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <span style="font-size: 11px; color: #666;">Range (rdfs:range)</span>
+          <div style="position: relative;">
+            <input type="text" id="addRelTypeRange" placeholder="Type to search or enter class..." autocomplete="off" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+            <div id="addRelTypeRangeResults" style="max-height: 160px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 2px; display: none; background: #fff; position: absolute; z-index: 1000; left: 0; right: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Defined by (rdfs:isDefinedBy, optional URI)</span>
           <input type="text" id="addRelTypeIsDefinedBy" placeholder="e.g. https://www.opengis.net/ont/geosparql#" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
@@ -4624,7 +4724,13 @@ function renderApp(): void {
     <div id="addDataPropertyModal" class="modal" style="display: none;">
       <div class="modal-content">
         <h3>Add data property</h3>
-        <label style="display: block; margin-top: 8px;">Label: <input type="text" id="addDataPropLabel" placeholder="e.g. refersToDrawingId" /></label>
+        <label style="display: block; margin-top: 8px;">
+          <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
+          <input type="text" id="addDataPropLabel" placeholder="e.g. refers to drawing ID" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+        </label>
+        <p id="addDataPropIdentifierLabel" style="font-size: 11px; color: #666; margin: 6px 0 4px 0;">Identifier (derived from label):</p>
+        <p id="addDataPropIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin: 0 0 8px 0;"></p>
+        <p id="addDataPropLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Range (datatype)</span>
           <select id="addDataPropRange" style="display: block; margin-top: 4px; padding: 6px; width: 100%; box-sizing: border-box;"></select>
@@ -6332,5 +6438,39 @@ setTimeout(() => {
   getSerializedTurtle: async (): Promise<string | null> => {
     if (!ttlStore) return null;
     return storeToTurtle(ttlStore, externalOntologyReferences);
+  },
+  /** Open Add Object Property modal (for E2E). */
+  openAddObjectPropertyModal: (): void => {
+    document.getElementById('addRelationshipTypeBtn')?.click();
+  },
+  /** Get Add Object Property modal state (for E2E). */
+  getAddObjectPropertyModalState: (): { okDisabled: boolean; validationText: string } => {
+    const modal = document.getElementById('addRelationshipTypeModal');
+    if (!modal || (modal as HTMLElement).style.display === 'none') {
+      return { okDisabled: true, validationText: '' };
+    }
+    const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
+    const validationEl = document.getElementById('addRelTypeLabelValidation') as HTMLElement;
+    return {
+      okDisabled: okBtn?.disabled ?? true,
+      validationText: validationEl?.textContent?.trim() ?? '',
+    };
+  },
+  /** Get Object Properties list text (for E2E). */
+  getObjectPropertiesListText: (): string => {
+    const el = document.getElementById('edgeStylesContent');
+    return el?.textContent?.trim() ?? '';
+  },
+  /** Open Edit Object Property modal by type (for E2E). */
+  openEditObjectPropertyModal: (type: string): void => {
+    const edgeStylesContent = document.getElementById('edgeStylesContent');
+    if (edgeStylesContent) showEditRelationshipTypeModal(type, edgeStylesContent as HTMLElement, applyFilter);
+  },
+  /** Get Edit Object Property identifier text (for E2E - assert no #Ontology#). */
+  getEditObjectPropertyIdentifierText: (): string | null => {
+    const modal = document.getElementById('editRelationshipTypeModal');
+    if (!modal || (modal as HTMLElement).style.display === 'none') return null;
+    const el = document.getElementById('editRelTypeIdentifier');
+    return el?.textContent?.trim() ?? null;
   },
 };
