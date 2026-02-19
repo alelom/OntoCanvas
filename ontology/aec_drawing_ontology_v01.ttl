@@ -393,7 +393,7 @@
 
 :DrawingType rdf:type owl:Class;
     rdfs:comment "Type of drawing view";
-    rdfs:label "Layout content type";
+    rdfs:label "Drawing type";
     :labellableRoot "false"^^xsd:boolean;
     rdfs:subClassOf owl:Thing.
 
@@ -417,7 +417,12 @@
     rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
     rdfs:label "Drawing sheet";
     :labellableRoot "false"^^xsd:boolean;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Note ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], :drawingorientation.
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :drawingorientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
+
+:Note rdf:type owl:Class;
+    rdfs:label "Note";
+    :labellableRoot "true"^^xsd:boolean;
+    rdfs:subClassOf :Metadata.
 
 :RevisionTable rdf:type owl:Class;
     rdfs:label "Revision table";
@@ -440,6 +445,18 @@
     rdfs:label "hasProperty";
     rdfs:range owl:Thing;
     rdfs:domain owl:Thing.
+
+:drawingorientation rdf:type owl:Class;
+    rdfs:label "DrawingOrientation";
+    rdfs:subClassOf :portrait, :landscape.
+
+:portrait rdf:type owl:Class;
+    rdfs:label "Portrait";
+    :labellableRoot "true"^^xsd:boolean.
+
+:landscape rdf:type owl:Class;
+    rdfs:label "Landscape";
+    :labellableRoot "true"^^xsd:boolean.
 
 :Legend rdf:type owl:Class;
     rdfs:comment "A legend containing mapping information between symbols and a text signifier.";
@@ -940,19 +957,3 @@
 :exampleImage rdf:type owl:AnnotationProperty;
     rdfs:comment "Links a class or concept to an example image illustrating it."@en;
     rdfs:label "example image"@en.
-
-:drawingorientation rdf:type owl:Class;
-    rdfs:label "DrawingOrientation";
-    rdfs:subClassOf :portrait, :landscape.
-
-:portrait rdf:type owl:Class;
-    rdfs:label "Portrait".
-
-:landscape rdf:type owl:Class;
-    rdfs:label "Landscape".
-
-:table rdf:type owl:Class;
-    rdfs:comment "Some drawings may contain a table instead of an actual drawing.";
-    rdfs:label "Table";
-    :labellableRoot "true"^^xsd:boolean;
-    rdfs:subClassOf :DrawingType.
