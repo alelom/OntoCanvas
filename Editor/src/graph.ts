@@ -110,6 +110,8 @@ export interface FilterState {
   includeNeighbors: boolean;
   edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: string }>;
   layoutMode: string;
+  displayMode: 'labels' | 'identifiers';
+  labelLanguage: string;
 }
 
 export function wrapText(text: string, maxChars: number): string {

@@ -24,6 +24,8 @@ export interface DisplayConfig {
   includeNeighbors: boolean;
   annotationStyleConfig?: unknown;
   viewState?: { scale: number; position: { x: number; y: number } };
+  displayMode?: 'labels' | 'identifiers';
+  labelLanguage?: string;
 }
 
 export interface ExternalOntologyReference {

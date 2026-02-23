@@ -2,7 +2,10 @@ import type { GraphEdge, GraphData, ObjectPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
-import { extractLocalName } from '../parser';
+import { extractLocalName, getObjectPropertyUriFromStore } from '../parser';
+import { getObjectPropertyPrefix } from './externalRefs';
+import type { Store } from 'n3';
+import { DataFactory } from 'n3';
 
 export const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
 
@@ -115,6 +118,102 @@ export function getRelationshipComment(
   if (type === 'subClassOf') return SUBCLASSOF_COMMENT;
   const op = objectProperties.find((p) => p.name === type);
   return op?.comment ?? null;
+}
+
+/**
+ * Get relationship identifier with prefix if external
+ */
+export function getRelationshipIdentifier(
+  type: string,
+  objectProperties: ObjectPropertyInfo[],
+  externalOntologyReferences: ExternalOntologyReference[]
+): string {
+  if (type === 'subClassOf') return 'subClassOf';
+  const prefix = getObjectPropertyPrefix(type, externalOntologyReferences);
+  if (prefix) {
+    const localName = extractLocalName(type);
+    return `${prefix}:${localName}`;
+  }
+  return type;
+}
+
+/**
+ * Get relationship label for a specific language, with fallback to 'en', then to identifier.
+ * Requires store to query language-tagged labels.
+ */
+export function getRelationshipLabelForLanguage(
+  type: string,
+  objectProperties: ObjectPropertyInfo[],
+  language: string,
+  externalOntologyReferences: ExternalOntologyReference[],
+  store: Store | null
+): string {
+  if (type === 'subClassOf') return 'subClassOf';
+  
+  if (!store) {
+    // Fallback to regular label if no store
+    return getRelationshipLabel(type, objectProperties, externalOntologyReferences);
+  }
+  
+  const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+  
+  // Get property URI
+  let propertyUri: string | null = null;
+  if (type.startsWith('http://') || type.startsWith('https://')) {
+    propertyUri = type;
+  } else {
+    // Try to get URI from store
+    try {
+      propertyUri = getObjectPropertyUriFromStore(store, type);
+    } catch {
+      // If not found, fallback to regular label
+      return getRelationshipLabel(type, objectProperties, externalOntologyReferences);
+    }
+  }
+  
+  if (!propertyUri) {
+    // Fallback to regular label if URI not found
+    return getRelationshipLabel(type, objectProperties, externalOntologyReferences);
+  }
+  
+  const subject = DataFactory.namedNode(propertyUri);
+  const labelPred = DataFactory.namedNode(RDFS + 'label');
+  
+  // Try to get label for requested language
+  const labelQuads = store.getQuads(subject, labelPred, null, null);
+  for (const quad of labelQuads) {
+    const object = quad.object;
+    if (object.termType === 'Literal') {
+      const literal = object as { value: string; language?: string };
+      if (literal.language === language) {
+        const prefix = getObjectPropertyPrefix(type, externalOntologyReferences);
+        if (prefix) {
+          return `${prefix}: ${literal.value}`;
+        }
+        return literal.value;
+      }
+    }
+  }
+  
+  // Fallback to 'en' if requested language not found
+  if (language !== 'en') {
+    for (const quad of labelQuads) {
+      const object = quad.object;
+      if (object.termType === 'Literal') {
+        const literal = object as { value: string; language?: string };
+        if (literal.language === 'en' || !literal.language) {
+          const prefix = getObjectPropertyPrefix(type, externalOntologyReferences);
+          if (prefix) {
+            return `${prefix}: ${literal.value}`;
+          }
+          return literal.value;
+        }
+      }
+    }
+  }
+  
+  // Fallback to identifier
+  return getRelationshipIdentifier(type, objectProperties, externalOntologyReferences);
 }
 
 /**

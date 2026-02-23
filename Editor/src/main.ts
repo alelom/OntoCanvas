@@ -4,6 +4,7 @@ import 'vis-network/styles/vis-network.css';
 import {
   parseTtlToGraph,
   updateLabelInStore,
+  updateLabelsInStore,
   updateLabellableInStore,
   updateCommentInStore,
   updateEdgeInStore,
@@ -14,6 +15,7 @@ import {
   addObjectPropertyToStore,
   removeObjectPropertyFromStore,
   updateObjectPropertyLabelInStore,
+  updateObjectPropertyLabelsInStore,
   updateObjectPropertyCommentInStore,
   updateObjectPropertyDomainRangeInStore,
   updateObjectPropertySubPropertyOfInStore,
@@ -27,6 +29,7 @@ import {
   addDataPropertyToStore,
   removeDataPropertyFromStore,
   updateDataPropertyLabelInStore,
+  updateDataPropertyLabelsInStore,
   updateDataPropertyCommentInStore,
   updateDataPropertyRangeInStore,
   updateDataPropertyDomainsInStore,
@@ -60,7 +63,12 @@ import {
   type NodeFormData,
 } from './ui/nodeModalForm';
 import * as nodeModalFormUi from './ui/nodeModalFormUi';
+import { detectAvailableLanguages, getLabelsForResource } from './ui/labelLanguageDetection';
 import { Store, DataFactory } from 'n3';
+
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+const OWL = 'http://www.w3.org/2002/07/owl#';
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 import {
   searchExternalClasses,
   searchExternalObjectProperties,
@@ -116,6 +124,8 @@ import {
   extractExternalRefsFromStore,
   extractPrefixesFromTtl,
   formatNodeLabelWithPrefix,
+  formatNodeIdentifierWithPrefix,
+  getNodeLabelForLanguage,
   formatRelationshipLabelWithPrefix,
   renderExternalRefsList,
   showExternalRefsModal,
@@ -128,6 +138,8 @@ import {
   getRelationshipLabel,
   getEdgeDisplayLabel,
   getRelationshipComment,
+  getRelationshipIdentifier,
+  getRelationshipLabelForLanguage,
   getAllEdgeTypes,
   getPropertyHasCardinality,
   updateEditEdgeCommentDisplay,
@@ -173,6 +185,10 @@ function collectDisplayConfig(): DisplayConfig | null {
   rawData.nodes.forEach((n) => {
     if (n.x != null && n.y != null) nodePositions[n.id] = { x: n.x, y: n.y };
   });
+  const displayModeLabels = document.getElementById('displayModeLabels') as HTMLInputElement;
+  const displayModeIdentifiers = document.getElementById('displayModeIdentifiers') as HTMLInputElement;
+  const displayMode = displayModeLabels?.checked ? 'labels' : (displayModeIdentifiers?.checked ? 'identifiers' : 'labels');
+  const labelLanguage = (document.getElementById('labelLanguage') as HTMLSelectElement)?.value || 'en';
   return {
     version: DISPLAY_CONFIG_VERSION,
     nodePositions,
@@ -189,6 +205,8 @@ function collectDisplayConfig(): DisplayConfig | null {
     viewState: network
       ? { scale: network.getScale(), position: network.getViewPosition() }
       : undefined,
+    displayMode,
+    labelLanguage,
   };
 }
 
@@ -208,6 +226,21 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('layoutMode') as HTMLSelectElement).value = config.layoutMode ?? 'weighted';
   (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
+  const displayMode = config.displayMode ?? 'labels';
+  const displayModeLabels = document.getElementById('displayModeLabels') as HTMLInputElement;
+  const displayModeIdentifiers = document.getElementById('displayModeIdentifiers') as HTMLInputElement;
+  if (displayModeLabels) displayModeLabels.checked = displayMode === 'labels';
+  if (displayModeIdentifiers) displayModeIdentifiers.checked = displayMode === 'identifiers';
+  const labelLanguage = config.labelLanguage ?? 'en';
+  const labelLanguageSelect = document.getElementById('labelLanguage') as HTMLSelectElement;
+  if (labelLanguageSelect) {
+    labelLanguageSelect.value = labelLanguage;
+    // Update visibility of language dropdown based on display mode
+    const languageSelectionWrap = document.getElementById('languageSelectionWrap');
+    if (languageSelectionWrap) {
+      languageSelectionWrap.style.display = displayMode === 'labels' ? 'block' : 'none';
+    }
+  }
   const edgeStyleConfig = config.edgeStyleConfig || {};
   if (document.getElementById('edgeStylesContent')) {
     const types = getAllRelationshipTypes(rawData, objectProperties);
@@ -246,6 +279,41 @@ function applyDisplayConfig(config: DisplayConfig): void {
 
 let displayConfigSaveTimer: number | null = null;
 
+function populateLanguageDropdown(): void {
+  const labelLanguageSelect = document.getElementById('labelLanguage') as HTMLSelectElement;
+  if (!labelLanguageSelect || !ttlStore) return;
+  
+  const languages = detectAvailableLanguages(ttlStore);
+  labelLanguageSelect.innerHTML = languages.map(lang => `<option value="${lang}">${lang}</option>`).join('');
+  
+  // Set default to 'en' if available, otherwise first language
+  if (languages.includes('en')) {
+    labelLanguageSelect.value = 'en';
+  } else if (languages.length > 0) {
+    labelLanguageSelect.value = languages[0];
+  }
+}
+
+/**
+ * Populate a language dropdown in a modal with available languages
+ */
+function populateModalLanguageDropdown(selectId: string, currentLanguage: string = 'en'): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement;
+  if (!select || !ttlStore) return;
+  
+  const languages = detectAvailableLanguages(ttlStore);
+  select.innerHTML = languages.map(lang => `<option value="${lang}">${lang}</option>`).join('');
+  
+  // Set to current language if available, otherwise 'en', otherwise first language
+  if (languages.includes(currentLanguage)) {
+    select.value = currentLanguage;
+  } else if (languages.includes('en')) {
+    select.value = 'en';
+  } else if (languages.length > 0) {
+    select.value = languages[0];
+  }
+}
+
 function scheduleDisplayConfigSave(): void {
   if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
   displayConfigSaveTimer = window.setTimeout(() => {
@@ -283,6 +351,31 @@ let renameModalExampleImageUris: string[] = [];
 let addNodeExampleImageUris: string[] = [];
 /** Data property restrictions while adding a new node (custom tab). */
 let addNodeDataPropertyRestrictions: DataPropertyRestriction[] = [];
+/** Multi-language labels for rename modal (language -> label value) */
+let renameModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for add node modal (language -> label value) */
+let addNodeModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for edit object property modal (language -> label value) */
+let editRelTypeModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for add object property modal (language -> label value) */
+let addRelTypeModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for edit data property modal (language -> label value) */
+let editDataPropModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for add data property modal (language -> label value) */
+let addDataPropModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for edit annotation property modal (language -> label value) */
+let editAnnotationPropModalLabels: Map<string, string> = new Map();
+/** Multi-language labels for add annotation property modal (language -> label value) */
+let addAnnotationPropModalLabels: Map<string, string> = new Map();
+/** Current language selection for each modal */
+let renameModalCurrentLanguage = 'en';
+let addNodeModalCurrentLanguage = 'en';
+let editRelTypeModalCurrentLanguage = 'en';
+let addRelTypeModalCurrentLanguage = 'en';
+let editDataPropModalCurrentLanguage = 'en';
+let addDataPropModalCurrentLanguage = 'en';
+let editAnnotationPropModalCurrentLanguage = 'en';
+let addAnnotationPropModalCurrentLanguage = 'en';
 
 type UndoableAction = { undo: () => void; redo: () => void };
 let undoStack: UndoableAction[] = [];
@@ -805,10 +898,28 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
         effectiveType = derivedId!;
       }
     }
-    if (labelChanged) {
-      updateObjectPropertyLabelInStore(ttlStore, effectiveType, newLabel);
+    // Save current input value to map for current language before processing
+    const labelLanguageSelect = document.getElementById('editRelTypeLabelLanguage') as HTMLSelectElement;
+    const currentLang = labelLanguageSelect?.value || editRelTypeModalCurrentLanguage;
+    const currentValue = labelInput?.value?.trim() || '';
+    if (currentValue) {
+      editRelTypeModalLabels.set(currentLang, currentValue);
+    } else {
+      editRelTypeModalLabels.delete(currentLang);
+    }
+    
+    // Use the 'en' label as the primary label for op.label (fallback to first available)
+    const primaryLabel = editRelTypeModalLabels.get('en') || (editRelTypeModalLabels.size > 0 ? Array.from(editRelTypeModalLabels.values())[0] : newLabel);
+    const finalLabel = primaryLabel || newLabel;
+    
+    if (labelChanged || editRelTypeModalLabels.size > 0) {
+      if (editRelTypeModalLabels.size > 0) {
+        updateObjectPropertyLabelsInStore(ttlStore, effectiveType, editRelTypeModalLabels);
+      } else {
+        updateObjectPropertyLabelInStore(ttlStore, effectiveType, finalLabel);
+      }
       const o = objectProperties.find((p) => p.name === effectiveType);
-      if (o) o.label = newLabel;
+      if (o) o.label = finalLabel;
     }
     if (commentChanged) {
       updateObjectPropertyCommentInStore(ttlStore, effectiveType, newComment || null);
@@ -888,7 +999,55 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
     const currentId = isImported ? (op?.uri ?? op?.name ?? type) : (op?.uri ?? baseWithHash + (op?.name ?? type));
-    identifierEl.textContent = (currentId.startsWith('http') ? currentId : baseWithHash + currentId);
+    (identifierEl as HTMLInputElement).value = (currentId.startsWith('http') ? currentId : baseWithHash + currentId);
+  }
+  
+  // Initialize multi-language labels from store
+  editRelTypeModalLabels = new Map();
+  if (ttlStore && op) {
+    const propUri = op.uri || getObjectPropertyUriFromStore(ttlStore, type);
+    if (propUri) {
+      editRelTypeModalLabels = getLabelsForResource(ttlStore, propUri);
+    }
+  }
+  
+  // Populate language dropdown and set current language
+  editRelTypeModalCurrentLanguage = 'en';
+  populateModalLanguageDropdown('editRelTypeLabelLanguage', editRelTypeModalCurrentLanguage);
+  const labelLanguageSelect = document.getElementById('editRelTypeLabelLanguage') as HTMLSelectElement;
+  if (labelLanguageSelect) {
+    editRelTypeModalCurrentLanguage = labelLanguageSelect.value;
+    // Remove existing listener if any, then add new one
+    const newSelect = labelLanguageSelect.cloneNode(true) as HTMLSelectElement;
+    labelLanguageSelect.parentNode?.replaceChild(newSelect, labelLanguageSelect);
+    newSelect.addEventListener('change', () => {
+      // Save current input value to map for current language
+      const currentValue = labelInput.value.trim();
+      if (currentValue) {
+        editRelTypeModalLabels.set(editRelTypeModalCurrentLanguage, currentValue);
+      } else {
+        editRelTypeModalLabels.delete(editRelTypeModalCurrentLanguage);
+      }
+      
+      // Update current language
+      editRelTypeModalCurrentLanguage = newSelect.value;
+      
+      // Load label for newly selected language
+      labelInput.value = editRelTypeModalLabels.get(editRelTypeModalCurrentLanguage) || '';
+      
+      // Refresh identifier display
+      updateEditRelTypeIdentifierAndValidation();
+    });
+    // Update reference
+    const updatedSelect = document.getElementById('editRelTypeLabelLanguage') as HTMLSelectElement;
+    if (updatedSelect) {
+      editRelTypeModalCurrentLanguage = updatedSelect.value;
+    }
+  }
+  
+  // Load label for current language
+  if (labelInput) {
+    labelInput.value = editRelTypeModalLabels.get(editRelTypeModalCurrentLanguage) || (op?.label ?? type);
   }
   if (definedByInput) definedByInput.value = op?.isDefinedBy ?? '';
   if (labelInput) {
@@ -1270,9 +1429,27 @@ function initEditDataPropertyHandlers(): void {
         dp = dataProperties.find((p) => p.name === name)!;
       }
     }
-    if (labelChanged) {
-      updateDataPropertyLabelInStore(ttlStore, name, newLabel);
-      dp.label = newLabel;
+    // Save current input value to map for current language before processing
+    const labelLanguageSelect = document.getElementById('editDataPropLabelLanguage') as HTMLSelectElement;
+    const currentLang = labelLanguageSelect?.value || editDataPropModalCurrentLanguage;
+    const currentValue = labelInput?.value?.trim() || '';
+    if (currentValue) {
+      editDataPropModalLabels.set(currentLang, currentValue);
+    } else {
+      editDataPropModalLabels.delete(currentLang);
+    }
+    
+    // Use the 'en' label as the primary label for dp.label (fallback to first available)
+    const primaryLabel = editDataPropModalLabels.get('en') || (editDataPropModalLabels.size > 0 ? Array.from(editDataPropModalLabels.values())[0] : newLabel);
+    const finalLabel = primaryLabel || newLabel;
+    
+    if (labelChanged || editDataPropModalLabels.size > 0) {
+      if (editDataPropModalLabels.size > 0) {
+        updateDataPropertyLabelsInStore(ttlStore, name, editDataPropModalLabels);
+      } else {
+        updateDataPropertyLabelInStore(ttlStore, name, finalLabel);
+      }
+      dp.label = finalLabel;
     }
     if (commentChanged) {
       updateDataPropertyCommentInStore(ttlStore, name, newComment || null);
@@ -1447,15 +1624,59 @@ function showEditDataPropertyModal(name: string): void {
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
     const fullUri = dp?.uri ?? baseWithHash + (dp?.name ?? name);
-    identifierEl.textContent = fullUri;
+    (identifierEl as HTMLInputElement).value = fullUri;
   }
+  
+  // Initialize multi-language labels from store
+  editDataPropModalLabels = new Map();
+  if (ttlStore && dp) {
+    const propUri = dp.uri || (baseWithHash + (dp.name ?? name));
+    if (propUri) {
+      editDataPropModalLabels = getLabelsForResource(ttlStore, propUri);
+    }
+  }
+  
+  // Populate language dropdown and set current language
+  editDataPropModalCurrentLanguage = 'en';
+  populateModalLanguageDropdown('editDataPropLabelLanguage', editDataPropModalCurrentLanguage);
+  const labelLanguageSelect = document.getElementById('editDataPropLabelLanguage') as HTMLSelectElement;
+  if (labelLanguageSelect) {
+    editDataPropModalCurrentLanguage = labelLanguageSelect.value;
+    // Remove existing listener if any, then add new one
+    const newSelect = labelLanguageSelect.cloneNode(true) as HTMLSelectElement;
+    labelLanguageSelect.parentNode?.replaceChild(newSelect, labelLanguageSelect);
+    newSelect.addEventListener('change', () => {
+      // Save current input value to map for current language
+      const currentValue = labelInput.value.trim();
+      if (currentValue) {
+        editDataPropModalLabels.set(editDataPropModalCurrentLanguage, currentValue);
+      } else {
+        editDataPropModalLabels.delete(editDataPropModalCurrentLanguage);
+      }
+      
+      // Update current language
+      editDataPropModalCurrentLanguage = newSelect.value;
+      
+      // Load label for newly selected language
+      labelInput.value = editDataPropModalLabels.get(editDataPropModalCurrentLanguage) || '';
+      
+      // Refresh identifier display
+      updateEditDataPropIdentifierAndValidation();
+    });
+    // Update reference
+    const updatedSelect = document.getElementById('editDataPropLabelLanguage') as HTMLSelectElement;
+    if (updatedSelect) {
+      editDataPropModalCurrentLanguage = updatedSelect.value;
+    }
+  }
+  
   if (labelValidationEl) {
     labelValidationEl.style.display = 'none';
     labelValidationEl.textContent = '';
   }
   if (definedByInput) definedByInput.value = dp?.isDefinedBy ?? '';
   if (labelInput) {
-    labelInput.value = dp?.label ?? name;
+    labelInput.value = editDataPropModalLabels.get(editDataPropModalCurrentLanguage) || (dp?.label ?? name);
     labelInput.disabled = isImported;
     labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
   }
@@ -2128,6 +2349,8 @@ function buildNetworkData(filter: {
   edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
   annotationStyleConfig: AnnotationStyleConfig;
   layoutMode: string;
+  displayMode: 'labels' | 'identifiers';
+  labelLanguage: string;
 }): { nodes: DataSet; edges: DataSet } {
   let filteredNodes = rawData.nodes.filter((n) =>
     shouldShowNodeByAnnotations(n, filter.annotationStyleConfig)
@@ -2309,7 +2532,12 @@ function buildNetworkData(filter: {
           )
         : maxFontSize;
     const style = getNodeStyleFromAnnotations(n, filter.annotationStyleConfig);
-    const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
+    let displayLabel: string;
+    if (filter.displayMode === 'identifiers') {
+      displayLabel = formatNodeIdentifierWithPrefix(n, externalOntologyReferences);
+    } else {
+      displayLabel = getNodeLabelForLanguage(n, filter.labelLanguage, externalOntologyReferences, ttlStore);
+    }
     const node: Record<string, unknown> = {
       id: n.id,
       label: wrapText(displayLabel, wrapChars),
@@ -2619,12 +2847,30 @@ function buildNetworkData(filter: {
       });
     }
     
+    let edgeLabel = '';
+    if (style.showLabel) {
+      let baseLabel: string;
+      if (filter.displayMode === 'identifiers') {
+        baseLabel = getRelationshipIdentifier(e.type, objectProperties, externalOntologyReferences);
+      } else {
+        baseLabel = getRelationshipLabelForLanguage(e.type, objectProperties, filter.labelLanguage, externalOntologyReferences, ttlStore);
+      }
+      const min = e.minCardinality;
+      const max = e.maxCardinality;
+      if (min == null && max == null) {
+        edgeLabel = baseLabel;
+      } else {
+        const minStr = min != null ? String(min) : '0';
+        const maxStr = max != null ? String(max) : '*';
+        edgeLabel = `${baseLabel} [${minStr}..${maxStr}]`;
+      }
+    }
     return {
       id: `${e.from}->${e.to}:${e.type}`,
       from: e.from,
       to: e.to,
       arrows: 'to',
-      label: style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '',
+      label: edgeLabel,
       font: { size: relationshipFontSize, color: '#2c3e50' },
       color: { color: style.color, highlight: style.color },
       dashes,
@@ -2975,21 +3221,81 @@ function showRenameModal(
   if (titleEl) titleEl.textContent = 'Edit node';
   modal.dataset.mode = 'single';
   delete modal.dataset.nodeIds;
-  input.value = currentLabel;
   input.disabled = false;
   input.style.color = '';
   input.dataset.nodeId = nodeId;
   const renameDupErr = document.getElementById('renameDuplicateError') as HTMLElement;
   if (renameDupErr) { renameDupErr.style.display = 'none'; renameDupErr.textContent = ''; }
+  
+  // Initialize multi-language labels from store
+  renameModalLabels = new Map();
+  if (ttlStore) {
+    const node = rawData.nodes.find((n) => n.id === nodeId);
+    if (node) {
+      // Get node URI
+      const classQuads = ttlStore.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+      for (const q of classQuads) {
+        const subj = q.subject;
+        if (subj.termType !== 'NamedNode') continue;
+        const localName = extractLocalName(subj.value);
+        if (localName === nodeId) {
+          renameModalLabels = getLabelsForResource(ttlStore, subj.value);
+          break;
+        }
+      }
+    }
+  }
+  
+  // Populate language dropdown and set current language
+  renameModalCurrentLanguage = 'en';
+  populateModalLanguageDropdown('renameLabelLanguage', renameModalCurrentLanguage);
+  const labelLanguageSelect = document.getElementById('renameLabelLanguage') as HTMLSelectElement;
+  if (labelLanguageSelect) {
+    renameModalCurrentLanguage = labelLanguageSelect.value;
+  }
+  
+  // Load label for current language
+  input.value = renameModalLabels.get(renameModalCurrentLanguage) || '';
+  
+  // Add event listener for language dropdown change
+  if (labelLanguageSelect) {
+    labelLanguageSelect.addEventListener('change', () => {
+      // Save current input value to map for current language
+      const currentValue = input.value.trim();
+      if (currentValue) {
+        renameModalLabels.set(renameModalCurrentLanguage, currentValue);
+      } else {
+        renameModalLabels.delete(renameModalCurrentLanguage);
+      }
+      
+      // Update current language
+      renameModalCurrentLanguage = labelLanguageSelect.value;
+      
+      // Load label for newly selected language
+      input.value = renameModalLabels.get(renameModalCurrentLanguage) || '';
+      
+      // Refresh identifier display
+      refreshRenameModalFromInput();
+    });
+  }
+  
   refreshRenameModalFromInput();
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   if (commentInput) commentInput.value = node?.comment ?? '';
 
   const renameIdentifierLabel = document.getElementById('renameIdentifierLabel');
-  const renameIdentifier = document.getElementById('renameIdentifier');
+  const renameIdentifier = document.getElementById('renameIdentifier') as HTMLInputElement;
   if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = '';
-  if (renameIdentifier) (renameIdentifier as HTMLElement).style.display = '';
+  if (renameIdentifier) {
+    (renameIdentifier as HTMLElement).style.display = '';
+    // Set the current identifier value
+    const baseWithHash = ttlStore
+      ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI)
+      : BASE_IRI;
+    const base = baseWithHash.endsWith('#') ? baseWithHash : baseWithHash + '#';
+    renameIdentifier.value = base + nodeId;
+  }
   renameModalExampleImageUris = node?.exampleImages ?? [];
   const exampleImagesContainer = document.getElementById('renameExampleImagesSection');
   if (exampleImagesContainer && ttlStore) {
@@ -3116,6 +3422,35 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   const externalTabBtn = document.getElementById('addNodeExternalTabBtn');
   const externalTabContent = document.getElementById('addNodeExternalTabContent');
   const customTabContent = document.getElementById('addNodeCustomTab');
+  
+  // Initialize multi-language labels (empty for new node)
+  addNodeModalLabels = new Map();
+  addNodeModalCurrentLanguage = 'en';
+  populateModalLanguageDropdown('addNodeLabelLanguage', addNodeModalCurrentLanguage);
+  const labelLanguageSelect = document.getElementById('addNodeLabelLanguage') as HTMLSelectElement;
+  if (labelLanguageSelect) {
+    addNodeModalCurrentLanguage = labelLanguageSelect.value;
+    // Add event listener for language dropdown change
+    labelLanguageSelect.addEventListener('change', () => {
+      // Save current input value to map for current language
+      const currentValue = customInput.value.trim();
+      if (currentValue) {
+        addNodeModalLabels.set(addNodeModalCurrentLanguage, currentValue);
+      } else {
+        addNodeModalLabels.delete(addNodeModalCurrentLanguage);
+      }
+      
+      // Update current language
+      addNodeModalCurrentLanguage = labelLanguageSelect.value;
+      
+      // Load label for newly selected language
+      customInput.value = addNodeModalLabels.get(addNodeModalCurrentLanguage) || '';
+      
+      // Refresh identifier display
+      refreshAddNodeOkButton();
+    });
+  }
+  customInput.value = '';
   
   // Show/hide external tab based on whether we have external references
   if (externalTabBtn && externalOntologyReferences.length > 0) {
@@ -4239,8 +4574,30 @@ function confirmRename(): void {
   }
 
   const nodeId = input.dataset.nodeId;
-  const newLabel = input.value.trim();
-  if (!nodeId || !newLabel) return;
+  if (!nodeId) return;
+  
+  // Save current input value to map for current language before processing
+  const labelLanguageSelect = document.getElementById('renameLabelLanguage') as HTMLSelectElement;
+  const currentLang = labelLanguageSelect?.value || renameModalCurrentLanguage;
+  const currentValue = input.value.trim();
+  if (currentValue) {
+    renameModalLabels.set(currentLang, currentValue);
+  } else {
+    renameModalLabels.delete(currentLang);
+  }
+  
+  // Use the 'en' label as the primary label for node.label (fallback to first available)
+  const primaryLabel = renameModalLabels.get('en') || (renameModalLabels.size > 0 ? Array.from(renameModalLabels.values())[0] : '');
+  const newLabel = primaryLabel;
+  if (!newLabel) {
+    // No labels at all - this is invalid
+    const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
+    if (dupErr) {
+      dupErr.textContent = 'At least one language label is required.';
+      dupErr.style.display = 'block';
+    }
+    return;
+  }
 
   const existingIds = new Set(rawData.nodes.map((n) => n.id));
   if (isDuplicateIdentifierForRename(newLabel, existingIds, nodeId)) {
@@ -4342,9 +4699,28 @@ function confirmRename(): void {
     dataPropertyRestrictions: oldDataProps,
   };
 
-  if (labelChanged) {
+  if (labelChanged || renameModalLabels.size > 0) {
     node.label = newLabel;
-    if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
+    if (ttlStore) {
+      // Get node URI
+      const classQuads = ttlStore.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+      let nodeUri: string | null = null;
+      for (const q of classQuads) {
+        const subj = q.subject;
+        if (subj.termType !== 'NamedNode') continue;
+        const localName = extractLocalName(subj.value);
+        if (localName === nodeId) {
+          nodeUri = subj.value;
+          break;
+        }
+      }
+      if (nodeUri) {
+        updateLabelsInStore(ttlStore, nodeUri, renameModalLabels);
+      } else {
+        // Fallback to old method if URI not found
+        updateLabelInStore(ttlStore, nodeId, newLabel);
+      }
+    }
   }
 
   if (ttlStore) {
@@ -4483,6 +4859,27 @@ function renderApp(): void {
             <input type="number" id="dataPropertyFontSize" min="8" max="48" value="18" style="width: 45px; margin-left: 6px;">
             <span style="font-size: 11px;">px</span>
           </div>
+          <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
+            <strong style="font-size: 12px;">Display mode:</strong>
+            <div style="margin-top: 6px;">
+              <label style="display: flex; align-items: center; margin-bottom: 4px;">
+                <input type="radio" name="displayMode" value="labels" checked id="displayModeLabels">
+                <span style="margin-left: 6px;">Display labels</span>
+                <span class="info-icon" title="Show rdfs:label values. If no label exists for the selected language, falls back to English, then to identifier." style="cursor: help; color: #3498db; font-size: 14px; margin-left: 4px;">ℹ️</span>
+              </label>
+              <label style="display: flex; align-items: center;">
+                <input type="radio" name="displayMode" value="identifiers" id="displayModeIdentifiers">
+                <span style="margin-left: 6px;">Display identifiers</span>
+                <span class="info-icon" title="Show the resource identifier (local name). For external resources, shows with prefix (e.g., 'dano:contains')." style="cursor: help; color: #3498db; font-size: 14px; margin-left: 4px;">ℹ️</span>
+              </label>
+            </div>
+            <div id="languageSelectionWrap" style="margin-top: 8px;">
+              <label style="font-size: 11px;">Language:</label>
+              <select id="labelLanguage" style="margin-left: 6px; width: 80px;">
+                <!-- Populated dynamically, includes 'en' as option -->
+              </select>
+            </div>
+          </div>
         </div>
       </div>
       <div>
@@ -4532,10 +4929,13 @@ function renderApp(): void {
         <h3>Edit node</h3>
         <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
           <span style="font-size: 12px;">Label:</span>
+          <select id="renameLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+            <!-- Populated dynamically, default 'en' -->
+          </select>
           <input type="text" id="renameInput" style="flex: 1;" />
         </label>
         <p id="renameIdentifierLabel" style="font-size: 11px; color: #666; margin-bottom: 4px;">Identifier (derived from label):</p>
-        <p id="renameIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
+        <input type="text" id="renameIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; width: 100%; padding: 4px; margin-bottom: 8px; box-sizing: border-box;" />
         <p id="renameDuplicateError" style="display: none; color: #c00; font-size: 12px; margin: 6px 0 0 0;"></p>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
@@ -4577,9 +4977,15 @@ function renderApp(): void {
           <button type="button" class="add-node-tab" data-tab="external" id="addNodeExternalTabBtn" style="padding: 8px 16px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 12px; color: #666; display: none;">Add from referenced ontology</button>
         </div>
         <div id="addNodeCustomTab" class="add-node-tab-content">
-          <label>Label: <input type="text" id="addNodeInput" placeholder="Enter node label" /></label>
+          <label style="display: flex; align-items: center; gap: 8px;">
+            <span>Label:</span>
+            <select id="addNodeLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+              <!-- Populated dynamically, default 'en' -->
+            </select>
+            <input type="text" id="addNodeInput" placeholder="Enter node label" style="flex: 1;" />
+          </label>
           <p id="addNodeIdentifierLabel" style="font-size: 11px; color: #666; margin: 6px 0 4px 0;">Identifier (derived from label):</p>
-          <p id="addNodeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin: 0 0 8px 0;"></p>
+          <input type="text" id="addNodeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; width: 100%; padding: 4px; margin: 0 0 8px 0; box-sizing: border-box;" />
           <p id="addNodeDuplicateError" style="display: none; color: #c00; font-size: 12px; margin: 6px 0 0 0;"></p>
           <label style="display: block; margin-top: 10px;">
             <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
@@ -4626,10 +5032,15 @@ function renderApp(): void {
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
           <span style="cursor: help; color: #3498db; font-size: 14px; line-height: 1; margin-left: 4px; vertical-align: middle;" title="The human-readable name. The ontology identifier (local name) is derived in camelCase and shown below.">ⓘ</span>
-          <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <select id="addRelTypeLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+              <!-- Populated dynamically, default 'en' -->
+            </select>
+            <input type="text" id="addRelTypeLabel" placeholder="e.g. contains" style="flex: 1; padding: 8px; box-sizing: border-box;" />
+          </div>
         </label>
         <p id="addRelTypeIdentifierLabel" style="font-size: 11px; color: #666; margin: 6px 0 4px 0;">Identifier (derived from label):</p>
-        <p id="addRelTypeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin: 0 0 8px 0;"></p>
+        <input type="text" id="addRelTypeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; width: 100%; padding: 4px; margin: 0 0 8px 0; box-sizing: border-box;" />
         <p id="addRelTypeLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: flex; align-items: center; margin-top: 10px; gap: 6px;">
           <input type="checkbox" id="addRelTypeHasCardinality" checked /> 
@@ -4675,7 +5086,7 @@ function renderApp(): void {
       <div class="modal-content">
         <h3>Edit object property</h3>
         <p id="editRelTypeName" style="font-size: 11px; color: #666; margin-bottom: 4px;"></p>
-        <p id="editRelTypeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
+        <input type="text" id="editRelTypeIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; width: 100%; padding: 4px; margin-bottom: 8px; box-sizing: border-box;" />
         <p id="editRelTypeLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
@@ -4726,10 +5137,15 @@ function renderApp(): void {
         <h3>Add data property</h3>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
-          <input type="text" id="addDataPropLabel" placeholder="e.g. refers to drawing ID" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <select id="addDataPropLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+              <!-- Populated dynamically, default 'en' -->
+            </select>
+            <input type="text" id="addDataPropLabel" placeholder="e.g. refers to drawing ID" style="flex: 1; padding: 8px; box-sizing: border-box;" />
+          </div>
         </label>
         <p id="addDataPropIdentifierLabel" style="font-size: 11px; color: #666; margin: 6px 0 4px 0;">Identifier (derived from label):</p>
-        <p id="addDataPropIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin: 0 0 8px 0;"></p>
+        <input type="text" id="addDataPropIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; width: 100%; padding: 4px; margin: 0 0 8px 0; box-sizing: border-box;" />
         <p id="addDataPropLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Range (datatype)</span>
@@ -4749,7 +5165,12 @@ function renderApp(): void {
         <p id="editDataPropLabelValidation" style="font-size: 11px; margin-top: 4px; margin-bottom: 0; display: none;"></p>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
-          <input type="text" id="editDataPropLabel" placeholder="e.g. refers to drawing ID" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <select id="editDataPropLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+              <!-- Populated dynamically, default 'en' -->
+            </select>
+            <input type="text" id="editDataPropLabel" placeholder="e.g. refers to drawing ID" style="flex: 1; padding: 8px; box-sizing: border-box;" />
+          </div>
         </label>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
@@ -4781,7 +5202,12 @@ function renderApp(): void {
         <h3>Add annotation property</h3>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
-          <input type="text" id="addAnnotationPropLabel" placeholder="e.g. isVisible" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <select id="addAnnotationPropLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+              <!-- Populated dynamically, default 'en' -->
+            </select>
+            <input type="text" id="addAnnotationPropLabel" placeholder="e.g. isVisible" style="flex: 1; padding: 8px; box-sizing: border-box;" />
+          </div>
         </label>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Range (rdfs:range datatype)</span>
@@ -4801,7 +5227,12 @@ function renderApp(): void {
         <p id="editAnnotationPropName" style="font-size: 11px; color: #666; margin-bottom: 8px;"></p>
         <label style="display: block; margin-top: 8px;">
           <span style="font-size: 11px; color: #666;">Label (rdfs:label)</span>
-          <input type="text" id="editAnnotationPropLabel" placeholder="e.g. isVisible" style="width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box;" />
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <select id="editAnnotationPropLabelLanguage" style="width: 70px; padding: 4px; font-size: 11px;">
+              <!-- Populated dynamically, default 'en' -->
+            </select>
+            <input type="text" id="editAnnotationPropLabel" placeholder="e.g. isVisible" style="flex: 1; padding: 8px; box-sizing: border-box;" />
+          </div>
         </label>
         <label style="display: block; margin-top: 10px;">
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
@@ -5051,12 +5482,42 @@ async function loadTtlAndRender(
     initAddRelationshipTypeHandlers(edgeStylesContent);
     initAddDataPropertyHandlers(dataPropsContent ?? undefined);
     initAddAnnotationPropertyHandlers(annotationPropsContent ?? undefined);
+    
+    // Populate language dropdown
+    populateLanguageDropdown();
+    
+    // Ensure default display mode respects HTML checked attribute
+    const displayModeLabelsEl = document.getElementById('displayModeLabels') as HTMLInputElement;
+    const displayModeIdentifiersEl = document.getElementById('displayModeIdentifiers') as HTMLInputElement;
+    const languageSelectionWrap = document.getElementById('languageSelectionWrap');
+    
+    // If neither radio is checked, respect the HTML checked attribute (which defaults to labels)
+    if (displayModeLabelsEl && displayModeIdentifiersEl && !displayModeLabelsEl.checked && !displayModeIdentifiersEl.checked) {
+      // HTML has checked="checked" on displayModeLabels, so set it
+      displayModeLabelsEl.checked = true;
+      if (languageSelectionWrap) languageSelectionWrap.style.display = 'block';
+    } else if (displayModeLabelsEl?.checked && languageSelectionWrap) {
+      // Ensure language dropdown is visible if labels is checked
+      languageSelectionWrap.style.display = 'block';
+    }
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     const displayConfig = await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
     if (displayConfig) {
       applyDisplayConfig(displayConfig);
       if (displayConfig.viewState) savedViewState = displayConfig.viewState;
+    } else {
+      // If no config, ensure default is 'labels' (respecting HTML checked attribute)
+      if (displayModeLabelsEl && displayModeIdentifiersEl) {
+        // Only set if neither is checked (shouldn't happen due to HTML checked, but safety check)
+        if (!displayModeLabelsEl.checked && !displayModeIdentifiersEl.checked) {
+          displayModeLabelsEl.checked = true;
+          displayModeIdentifiersEl.checked = false;
+        }
+        if (displayModeLabelsEl.checked && languageSelectionWrap) {
+          languageSelectionWrap.style.display = 'block';
+        }
+      }
     }
 
     // Allow layout to settle after vizControls appears, then render
@@ -5122,7 +5583,12 @@ function applyFilter(preserveView = false): void {
   const edgeStylesContent = document.getElementById('edgeStylesContent')!;
 
   const annotationPropsContent = document.getElementById('annotationPropsContent');
-  const currentFilter = {
+  const displayModeLabels = document.getElementById('displayModeLabels') as HTMLInputElement;
+  const displayModeIdentifiers = document.getElementById('displayModeIdentifiers') as HTMLInputElement;
+  // Default to 'labels' if neither is checked (initial state)
+  const displayMode = displayModeLabels?.checked ? 'labels' : (displayModeIdentifiers?.checked ? 'identifiers' : 'labels');
+  const labelLanguage = (document.getElementById('labelLanguage') as HTMLSelectElement)?.value || 'en';
+const currentFilter = {
     wrapChars,
     minFontSize,
     maxFontSize,
@@ -5133,6 +5599,8 @@ function applyFilter(preserveView = false): void {
     edgeStyleConfig: getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences),
     annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent),
     layoutMode,
+    displayMode,
+    labelLanguage,
   };
 
   const data = buildNetworkData(currentFilter);
@@ -5728,12 +6196,54 @@ function setupEventListeners(): void {
   textDisplayToggle?.addEventListener('click', (e) => {
     e.stopPropagation();
     const isVisible = textDisplayPopup?.style.display === 'block';
-    if (textDisplayPopup) textDisplayPopup.style.display = isVisible ? 'none' : 'block';
+    if (textDisplayPopup) {
+      textDisplayPopup.style.display = isVisible ? 'none' : 'block';
+      // When opening, ensure language dropdown visibility matches radio button state
+      if (!isVisible && languageSelectionWrap) {
+        const labelsRadio = document.getElementById('displayModeLabels') as HTMLInputElement;
+        if (labelsRadio?.checked) {
+          languageSelectionWrap.style.display = 'block';
+        } else {
+          languageSelectionWrap.style.display = 'none';
+        }
+      }
+    }
   });
   document.addEventListener('click', (e) => {
     if (textDisplayPopup?.style.display === 'block' && textDisplayWrap && !textDisplayWrap.contains(e.target as Node)) {
       textDisplayPopup.style.display = 'none';
     }
+  });
+
+  // Display mode radio buttons
+  const displayModeLabels = document.getElementById('displayModeLabels') as HTMLInputElement;
+  const displayModeIdentifiers = document.getElementById('displayModeIdentifiers') as HTMLInputElement;
+  const languageSelectionWrap = document.getElementById('languageSelectionWrap');
+  
+  // Set initial state based on checked radio
+  if (languageSelectionWrap) {
+    if (displayModeLabels?.checked) {
+      languageSelectionWrap.style.display = 'block';
+    } else if (displayModeIdentifiers?.checked) {
+      languageSelectionWrap.style.display = 'none';
+    }
+  }
+  
+  displayModeLabels?.addEventListener('change', () => {
+    if (languageSelectionWrap) languageSelectionWrap.style.display = 'block';
+    // Call applyFilter directly - the radio button state is already updated by the browser
+    applyFilter();
+  });
+  displayModeIdentifiers?.addEventListener('change', () => {
+    if (languageSelectionWrap) languageSelectionWrap.style.display = 'none';
+    // Call applyFilter directly - the radio button state is already updated by the browser
+    applyFilter();
+  });
+  
+  // Language dropdown
+  document.getElementById('labelLanguage')?.addEventListener('change', () => {
+    // Ensure applyFilter is called after a short delay to allow UI to update
+    setTimeout(() => applyFilter(), 0);
   });
 
   document.getElementById('wrapChars')?.addEventListener('input', () => applyFilter());
@@ -6300,6 +6810,8 @@ setTimeout(() => {
 (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
   /** Hide the open-ontology modal so tests can use the file input. */
   hideOpenOntologyModal: (): void => hideOpenOntologyModal(),
+  /** Expose rawData for testing (getter to always get current value). */
+  get rawData() { return rawData; },
   selectNodeByLabel: (label: string): boolean => {
     const node = rawData.nodes.find((n) => (n.label || n.id) === label);
     if (node && network) {
@@ -6428,6 +6940,10 @@ setTimeout(() => {
   openEditDataPropertyModal: (name: string): void => {
     showEditDataPropertyModal(name);
   },
+  /** Load TTL string directly (for E2E tests). */
+  loadTtlString: async (ttlString: string, fileName: string = 'test.ttl'): Promise<void> => {
+    await loadTtlAndRender(ttlString, fileName, null);
+  },
   /** Get data property info by name (for E2E domain assertions). */
   getDataPropertyByName: (name: string): { domains: string[]; uri?: string } | null => {
     const dp = dataProperties.find((p) => p.name === name);
@@ -6470,7 +6986,76 @@ setTimeout(() => {
   getEditObjectPropertyIdentifierText: (): string | null => {
     const modal = document.getElementById('editRelationshipTypeModal');
     if (!modal || (modal as HTMLElement).style.display === 'none') return null;
-    const el = document.getElementById('editRelTypeIdentifier');
-    return el?.textContent?.trim() ?? null;
+    const el = document.getElementById('editRelTypeIdentifier') as HTMLInputElement;
+    return el?.value?.trim() ?? null;
+  },
+  /** Get the display text for a node by its ID (for E2E testing). */
+  getNodeDisplayText: (nodeId: string): string | null => {
+    console.log('getNodeDisplayText: Called with nodeId:', nodeId);
+    if (!network) {
+      console.log('getNodeDisplayText: network is null');
+      // Fallback: try to get from rawData
+      const node = rawData.nodes.find((n) => n.id === nodeId);
+      if (node) {
+        console.log('getNodeDisplayText: Found in rawData, label:', node.label);
+        return node.label || null;
+      }
+      return null;
+    }
+    try {
+      const nodes = network.body.data.nodes;
+      if (!nodes) {
+        console.log('getNodeDisplayText: nodes is null');
+        // Fallback: try rawData
+        const node = rawData.nodes.find((n) => n.id === nodeId);
+        return node?.label || null;
+      }
+      // Debug: log all node IDs
+      const allIds: string[] = [];
+      nodes.forEach((n: any, id: string) => allIds.push(id));
+      console.log('getNodeDisplayText: Available node IDs in network:', allIds);
+      console.log('getNodeDisplayText: Looking for:', nodeId);
+      console.log('getNodeDisplayText: rawData.nodes IDs:', rawData.nodes.map((n) => n.id));
+      
+      // Try direct get first
+      let node = nodes.get(nodeId);
+      if (!node) {
+        // Try to find by iterating if direct get fails
+        nodes.forEach((n: any, id: string) => {
+          if (id === nodeId && !node) {
+            console.log('getNodeDisplayText: Found node by iteration:', id);
+            node = n;
+          }
+        });
+      }
+      if (!node) {
+        console.log('getNodeDisplayText: Node not found in network, trying rawData');
+        // Fallback to rawData
+        const rawNode = rawData.nodes.find((n) => n.id === nodeId);
+        if (rawNode) {
+          console.log('getNodeDisplayText: Found in rawData, label:', rawNode.label);
+          return rawNode.label || null;
+        }
+        console.log('getNodeDisplayText: Node not found in rawData either');
+        return null;
+      }
+      // The label is stored in node.options.label (may be wrapped with \n)
+      const label = node.options?.label;
+      console.log('getNodeDisplayText: Found label in network:', label);
+      if (!label) {
+        console.log('getNodeDisplayText: No label in network node, trying rawData');
+        const rawNode = rawData.nodes.find((n) => n.id === nodeId);
+        return rawNode?.label || null;
+      }
+      // Remove wrapping characters if present
+      const cleanedLabel = label.replace(/\n/g, ' ').trim();
+      console.log('getNodeDisplayText: Returning cleaned label:', cleanedLabel);
+      return cleanedLabel || null;
+    } catch (e) {
+      console.error('getNodeDisplayText: Error:', e);
+      // Fallback to rawData on error
+      const node = rawData.nodes.find((n) => n.id === nodeId);
+      return node?.label || null;
+    }
   },
 };

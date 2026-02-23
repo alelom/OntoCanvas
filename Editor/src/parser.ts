@@ -618,6 +618,43 @@ export function updateLabelInStore(
   return false;
 }
 
+/**
+ * Update all rdfs:label quads for a resource with multi-language labels.
+ * Removes all existing label quads and adds new ones for each non-empty label.
+ * @param store The RDF store
+ * @param resourceUri The full URI of the resource
+ * @param labelsByLanguage Map of language code -> label value (empty strings are skipped)
+ */
+export function updateLabelsInStore(
+  store: Store,
+  resourceUri: string,
+  labelsByLanguage: Map<string, string>
+): void {
+  const subject = DataFactory.namedNode(resourceUri);
+  const labelPred = DataFactory.namedNode(RDFS + 'label');
+  
+  // Get existing label quads to determine graph
+  const existingLabelQuads = store.getQuads(subject, labelPred, null, null);
+  const graph = existingLabelQuads[0]?.graph ?? DataFactory.defaultGraph();
+  
+  // Remove all existing label quads
+  for (const quad of existingLabelQuads) {
+    store.removeQuad(quad);
+  }
+  
+  // Add new label quads for each non-empty label
+  for (const [language, label] of labelsByLanguage.entries()) {
+    if (label.trim()) {
+      store.addQuad(
+        subject,
+        labelPred,
+        DataFactory.literal(label.trim(), language),
+        graph
+      );
+    }
+  }
+}
+
 function findLabellablePredicate(store: Store): string | null {
   for (const q of store) {
     if (q.predicate.value.endsWith('labellableRoot')) {
@@ -788,7 +825,7 @@ function getPropertyUri(edgeType: string): string {
 }
 
 /** Resolve object property name to full URI from store (so loaded ontologies use their base). */
-function getObjectPropertyUriFromStore(store: Store, name: string): string {
+export function getObjectPropertyUriFromStore(store: Store, name: string): string {
   if (name.startsWith('http://') || name.startsWith('https://')) return name;
   const ops = getObjectProperties(store);
   const op = ops.find((p) => p.name === name || p.uri === name);
@@ -997,6 +1034,28 @@ export function updateObjectPropertyLabelInStore(
   const graph = labelQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
   for (const lq of labelQuads) store.removeQuad(lq);
   store.addQuad(subject, labelPred, DataFactory.literal(newLabel.trim()), graph);
+  return true;
+}
+
+/**
+ * Update all rdfs:label quads for an object property with multi-language labels.
+ * Removes all existing label quads and adds new ones for each non-empty label.
+ * @param store The RDF store
+ * @param propertyName The object property name (local name or URI)
+ * @param labelsByLanguage Map of language code -> label value (empty strings are skipped)
+ */
+export function updateObjectPropertyLabelsInStore(
+  store: Store,
+  propertyName: string,
+  labelsByLanguage: Map<string, string>
+): boolean {
+  if (propertyName === 'subClassOf') return false;
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  
+  updateLabelsInStore(store, propUri, labelsByLanguage);
   return true;
 }
 
@@ -1339,6 +1398,27 @@ export function updateDataPropertyLabelInStore(
   const graph = labelQuads[0]?.graph ?? quads[0]?.graph ?? DataFactory.defaultGraph();
   for (const lq of labelQuads) store.removeQuad(lq);
   store.addQuad(subject, labelPred, DataFactory.literal(newLabel.trim()), graph);
+  return true;
+}
+
+/**
+ * Update all rdfs:label quads for a data property with multi-language labels.
+ * Removes all existing label quads and adds new ones for each non-empty label.
+ * @param store The RDF store
+ * @param propertyName The data property name (local name or URI)
+ * @param labelsByLanguage Map of language code -> label value (empty strings are skipped)
+ */
+export function updateDataPropertyLabelsInStore(
+  store: Store,
+  propertyName: string,
+  labelsByLanguage: Map<string, string>
+): boolean {
+  const propUri = getDataPropertyUriFromStore(store, propertyName);
+  const subject = DataFactory.namedNode(propUri);
+  const quads = store.getQuads(subject, null, null, null);
+  if (quads.length === 0) return false;
+  
+  updateLabelsInStore(store, propUri, labelsByLanguage);
   return true;
 }
 

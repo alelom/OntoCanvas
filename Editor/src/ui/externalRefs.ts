@@ -2,14 +2,17 @@ import { Store, DataFactory } from 'n3';
 import type { GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { saveExternalRefsToIndexedDB } from '../storage';
+import { extractLocalName } from '../parser';
+
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+const OWL = 'http://www.w3.org/2002/07/owl#';
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 
 /**
  * Extract external ontology references from owl:imports statements in the store
  */
 export function extractExternalRefsFromStore(store: Store): ExternalOntologyReference[] {
   const refs: ExternalOntologyReference[] = [];
-  const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
-  const OWL = 'http://www.w3.org/2002/07/owl#';
   const OWL_IMPORTS = OWL + 'imports';
   
   // Find ontology declaration
@@ -159,6 +162,85 @@ export function formatRelationshipLabelWithPrefix(
     return `${prefix}: ${label}`;
   }
   return label;
+}
+
+/**
+ * Format node identifier with prefix if available
+ */
+export function formatNodeIdentifierWithPrefix(
+  node: GraphNode,
+  externalOntologyReferences: ExternalOntologyReference[]
+): string {
+  const prefix = getNodePrefix(node, externalOntologyReferences);
+  if (prefix) {
+    return `${prefix}:${node.id}`;
+  }
+  return node.id;
+}
+
+/**
+ * Get node label for a specific language, with fallback to 'en', then to identifier.
+ * Requires store to query language-tagged labels.
+ */
+export function getNodeLabelForLanguage(
+  node: GraphNode,
+  language: string,
+  externalOntologyReferences: ExternalOntologyReference[],
+  store: Store | null
+): string {
+  if (!store) {
+    // Fallback to node.label if no store
+    return formatNodeLabelWithPrefix(node, externalOntologyReferences);
+  }
+  
+  // Get node URI - need to find it from the store
+  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+  let nodeUri: string | null = null;
+  for (const q of classQuads) {
+    const subj = q.subject;
+    if (subj.termType !== 'NamedNode') continue;
+    const localName = extractLocalName(subj.value);
+    if (localName === node.id) {
+      nodeUri = subj.value;
+      break;
+    }
+  }
+  
+  if (!nodeUri) {
+    // Fallback to node.label if URI not found
+    return formatNodeLabelWithPrefix(node, externalOntologyReferences);
+  }
+  
+  const subject = DataFactory.namedNode(nodeUri);
+  const labelPred = DataFactory.namedNode(RDFS + 'label');
+  
+  // Try to get label for requested language
+  const labelQuads = store.getQuads(subject, labelPred, null, null);
+  for (const quad of labelQuads) {
+    const object = quad.object;
+    if (object.termType === 'Literal') {
+      const literal = object as { value: string; language?: string };
+      if (literal.language === language) {
+        return formatNodeLabelWithPrefix({ ...node, label: literal.value }, externalOntologyReferences);
+      }
+    }
+  }
+  
+  // Fallback to 'en' if requested language not found
+  if (language !== 'en') {
+    for (const quad of labelQuads) {
+      const object = quad.object;
+      if (object.termType === 'Literal') {
+        const literal = object as { value: string; language?: string };
+        if (literal.language === 'en' || !literal.language) {
+          return formatNodeLabelWithPrefix({ ...node, label: literal.value }, externalOntologyReferences);
+        }
+      }
+    }
+  }
+  
+  // Fallback to identifier
+  return formatNodeIdentifierWithPrefix(node, externalOntologyReferences);
 }
 
 /**

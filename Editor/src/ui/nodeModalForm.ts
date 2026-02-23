@@ -50,14 +50,20 @@ export function updateIdentifierDisplay(
   store?: Store | null,
   fallbackId?: string
 ): void {
-  const el = document.getElementById(IDENTIFIER_ELEMENT_IDS[formKind]) as HTMLElement | null;
+  const el = document.getElementById(IDENTIFIER_ELEMENT_IDS[formKind]) as HTMLInputElement | null;
   if (!el) return;
   const trimmed = (label ?? '').trim();
   const derived = trimmed
     ? deriveNewNodeIdentifier(trimmed)
     : (fallbackId ?? '');
   const baseWithHash = getDisplayBase(store);
-  el.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
+  const identifierValue = derived.startsWith('http') ? derived : baseWithHash + derived;
+  // Set value for input elements, textContent for other elements
+  if (el.tagName === 'INPUT') {
+    (el as HTMLInputElement).value = identifierValue;
+  } else {
+    el.textContent = identifierValue;
+  }
 }
 
 /**

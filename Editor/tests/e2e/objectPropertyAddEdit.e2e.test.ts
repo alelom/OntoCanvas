@@ -144,8 +144,13 @@ describe('Object Property Add/Edit E2E Tests', () => {
       });
       await page.waitForTimeout(200);
 
-      const identifierText = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditObjectPropertyIdentifierText?.());
+      // Identifier is now an input field, so read its value directly
+      const identifierText = await page.evaluate(() => {
+        const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLInputElement;
+        return identifierEl?.value || '';
+      });
       expect(identifierText).not.toBeNull();
+      expect(identifierText).not.toBe('');
       expect(identifierText).not.toContain('Ontology#');
       expect(identifierText).toContain('contains');
       expect(identifierText).toMatch(/http:\/\//);

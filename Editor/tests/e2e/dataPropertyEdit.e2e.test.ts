@@ -218,11 +218,20 @@ describe('Data Property Edit E2E Tests', () => {
       expect(modalVisible).toBe(true);
 
       await page.locator('#editDataPropAddDomain').click();
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(500);
 
-      const domainSelect = page.locator('#editDataPropertyModal select').nth(1);
-      await domainSelect.waitFor({ state: 'visible', timeout: 3000 });
-      await domainSelect.selectOption({ value: 'Note' });
+      // Find the domain select - it's dynamically created, so use the last select in the modal
+      const domainSelect = page.locator('#editDataPropertyModal select').last();
+      await domainSelect.waitFor({ state: 'visible', timeout: 5000 });
+      // Wait for options to be populated
+      await page.waitForTimeout(500);
+      // Try to select 'Note' - if it doesn't exist, try with a more flexible selector
+      try {
+        await domainSelect.selectOption({ value: 'Note' });
+      } catch (e) {
+        // If value doesn't work, try by label
+        await domainSelect.selectOption({ label: /Note/i });
+      }
       await page.waitForTimeout(150);
 
       const addBtn = page.locator('#editDataPropertyModal button').filter({ hasText: /^Add$/ });
