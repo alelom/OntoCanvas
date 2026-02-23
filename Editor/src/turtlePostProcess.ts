@@ -281,12 +281,15 @@ function convertBlanksToInline(raw: string, externalRefs?: Array<{ url: string; 
   return output;
 }
 
-// --- Section dividers ---
+// --- Section dividers and reorganization ---
 
-function addSectionDividers(raw: string): string {
-  const lines = raw.split('\n');
-  const result: string[] = [];
-  const seenSections = new Set<string>();
+interface Block {
+  lines: string[];
+  sectionType: string | null;
+  subject: string | null; // For sorting within sections
+}
+
+function detectSectionType(line: string): string | null {
   const sectionPatterns = [
     { type: 'Ontology', re: /(owl:Ontology|owl#Ontology|Ontology>)/ },
     { type: 'AnnotationProperty', re: /(owl:AnnotationProperty|owl#AnnotationProperty|AnnotationProperty>)/ },
@@ -295,37 +298,214 @@ function addSectionDividers(raw: string): string {
     { type: 'Class', re: /(owl:Class|owl#Class|owl\/Class|Class>)/ },
   ];
 
+  for (const { type, re } of sectionPatterns) {
+    if (re.test(line)) {
+      return type;
+    }
+  }
+  return null;
+}
+
+function extractSubject(line: string): string | null {
+  // Extract the subject (first token) from a Turtle statement
+  // Handles :subject, <uri>, or prefix:localName
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('@')) {
+    return null;
+  }
+  
+  // Match subject patterns: :name, <uri>, prefix:name, or blank node _:b1
+  const subjectMatch = trimmed.match(/^([:<_][^\s;.,]+|[\w-]+:[^\s;.,]+)/);
+  if (subjectMatch) {
+    return subjectMatch[1];
+  }
+  return null;
+}
+
+function parseBlocks(lines: string[]): Block[] {
+  const blocks: Block[] = [];
+  let currentBlock: Block | null = null;
+  let headerBlock: Block | null = null;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trimStart();
     const isNewBlock = trimmed.length > 0 && !line.startsWith(' ') && !line.startsWith('\t');
-
-    if (isNewBlock) {
-      let addedSectionDivider = false;
-      for (const { type, re } of sectionPatterns) {
-        if (re.test(line)) {
-          if (!seenSections.has(type)) {
-            seenSections.add(type);
-            const config = SECTION_ORDER.find((s) => s.type === type);
-            if (config) {
-              if (result.length > 0) result.push('');
-              result.push(SECTION_DIVIDER);
-              result.push(`#    ${config.label}`);
-              result.push(SECTION_DIVIDER);
-              result.push('');
-              addedSectionDivider = true;
+    
+    // Handle header lines (prefixes, @base, comments)
+    // Skip section dividers (they'll be re-added in correct places)
+    const isSectionDivider = trimmed === SECTION_DIVIDER || (trimmed.startsWith('#') && trimmed.length > 50 && trimmed.match(/^#+$/));
+    if (trimmed.startsWith('@') || (trimmed.startsWith('#') && !isSectionDivider) || trimmed === '') {
+      if (currentBlock) {
+        // End current block before header content
+        // Finalize section type detection for the block
+        if (!currentBlock.sectionType) {
+          for (const blockLine of currentBlock.lines) {
+            const sectionType = detectSectionType(blockLine);
+            if (sectionType) {
+              currentBlock.sectionType = sectionType;
+              break;
             }
           }
+        }
+        blocks.push(currentBlock);
+        currentBlock = null;
+      }
+      // Skip section dividers - they'll be re-added in correct places
+      if (isSectionDivider) {
+        continue;
+      }
+      if (!headerBlock) {
+        headerBlock = {
+          lines: [],
+          sectionType: null,
+          subject: null,
+        };
+      }
+      headerBlock.lines.push(line);
+      continue;
+    }
+    
+    // Start a new content block
+    if (isNewBlock) {
+      // Save previous block if exists
+      if (currentBlock && currentBlock.lines.length > 0) {
+        // Finalize section type detection for the previous block
+        if (!currentBlock.sectionType) {
+          for (const blockLine of currentBlock.lines) {
+            const sectionType = detectSectionType(blockLine);
+            if (sectionType) {
+              currentBlock.sectionType = sectionType;
+              break;
+            }
+          }
+        }
+        blocks.push(currentBlock);
+      }
+      
+      // Detect section type from this line
+      const sectionType = detectSectionType(line);
+      const subject = extractSubject(line);
+      
+      currentBlock = {
+        lines: [line],
+        sectionType,
+        subject,
+      };
+    } else if (currentBlock) {
+      // Continue current block (indented line or continuation)
+      currentBlock.lines.push(line);
+      
+      // Check if this continuation line has section type info we missed
+      if (!currentBlock.sectionType) {
+        const sectionType = detectSectionType(line);
+        if (sectionType) {
+          currentBlock.sectionType = sectionType;
+        }
+      }
+    }
+  }
+  
+  // Finalize last block
+  if (currentBlock && currentBlock.lines.length > 0) {
+    // Finalize section type detection
+    if (!currentBlock.sectionType) {
+      for (const blockLine of currentBlock.lines) {
+        const sectionType = detectSectionType(blockLine);
+        if (sectionType) {
+          currentBlock.sectionType = sectionType;
           break;
         }
       }
-      if (!addedSectionDivider && result.length > 0 && result[result.length - 1].trim() !== '') {
+    }
+    blocks.push(currentBlock);
+  }
+  
+  // Save header block if exists (at the beginning)
+  if (headerBlock && headerBlock.lines.length > 0) {
+    // Insert header at the beginning
+    blocks.unshift(headerBlock);
+  }
+  
+  return blocks;
+}
+
+function addSectionDividers(raw: string): string {
+  const lines = raw.split('\n');
+  const blocks = parseBlocks(lines);
+  
+  // Separate header (prefixes, comments) from content blocks
+  const headerBlocks: Block[] = [];
+  const contentBlocks: Block[] = [];
+  
+  for (const block of blocks) {
+    if (block.sectionType === null) {
+      headerBlocks.push(block);
+    } else {
+      contentBlocks.push(block);
+    }
+  }
+  
+  // Group content blocks by section type
+  const blocksBySection = new Map<string, Block[]>();
+  for (const block of contentBlocks) {
+    const sectionType = block.sectionType || 'Other';
+    const list = blocksBySection.get(sectionType) || [];
+    list.push(block);
+    blocksBySection.set(sectionType, list);
+  }
+  
+  // Sort blocks within each section by subject (alphabetically)
+  for (const [sectionType, sectionBlocks] of blocksBySection.entries()) {
+    sectionBlocks.sort((a, b) => {
+      const aSubj = a.subject || '';
+      const bSubj = b.subject || '';
+      return aSubj.localeCompare(bSubj);
+    });
+  }
+  
+  // Build output in SECTION_ORDER
+  const result: string[] = [];
+  
+  // First, output header blocks (prefixes, @base, etc.)
+  for (const block of headerBlocks) {
+    result.push(...block.lines);
+  }
+  
+  // Then output sections in order
+  for (const sectionConfig of SECTION_ORDER) {
+    const sectionBlocks = blocksBySection.get(sectionConfig.type);
+    if (sectionBlocks && sectionBlocks.length > 0) {
+      if (result.length > 0 && result[result.length - 1].trim() !== '') {
         result.push('');
       }
+      result.push(SECTION_DIVIDER);
+      result.push(`#    ${sectionConfig.label}`);
+      result.push(SECTION_DIVIDER);
+      result.push('');
+      
+      for (const block of sectionBlocks) {
+        result.push(...block.lines);
+        // Add blank line after each block for readability
+        if (result[result.length - 1].trim() !== '') {
+          result.push('');
+        }
+      }
     }
-    result.push(line);
   }
-  return result.join('\n').replace(/\n{3,}/g, '\n\n');
+  
+  // Handle any blocks that don't match known section types
+  const otherBlocks = blocksBySection.get('Other');
+  if (otherBlocks && otherBlocks.length > 0) {
+    if (result.length > 0 && result[result.length - 1].trim() !== '') {
+      result.push('');
+    }
+    for (const block of otherBlocks) {
+      result.push(...block.lines);
+    }
+  }
+  
+  return result.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
 
 // --- Main export ---
