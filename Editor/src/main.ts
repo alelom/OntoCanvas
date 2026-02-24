@@ -1095,6 +1095,33 @@ const DATA_PROPERTY_RANGE_OPTIONS: { value: string; label: string }[] = [
   { value: XSD_NS + 'anyURI', label: 'xsd:anyURI' },
 ];
 
+/**
+ * Format a range URI to short format (e.g., "http://www.w3.org/2001/XMLSchema#string" → "xsd:string").
+ * Uses DATA_PROPERTY_RANGE_OPTIONS for known URIs, otherwise extracts local name after '#'.
+ */
+function formatRangeUri(rangeUri: string): string {
+  // Check if it's in the known options
+  const knownOption = DATA_PROPERTY_RANGE_OPTIONS.find((opt) => opt.value === rangeUri);
+  if (knownOption) {
+    return knownOption.label;
+  }
+  
+  // Extract local name after '#'
+  const hashIndex = rangeUri.indexOf('#');
+  if (hashIndex !== -1 && hashIndex < rangeUri.length - 1) {
+    const localName = rangeUri.substring(hashIndex + 1);
+    // Try to detect namespace prefix
+    if (rangeUri.startsWith(XSD_NS)) {
+      return `xsd:${localName}`;
+    }
+    // For other namespaces, just return the local name
+    return localName;
+  }
+  
+  // Fallback: return as-is if no '#' found
+  return rangeUri;
+}
+
 function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
   dataProperties.forEach((dp) => {
@@ -2540,10 +2567,16 @@ function buildNetworkData(filter: {
       };
       
       const dp = dataProperties.find((p) => p.name === dataProp.propertyName);
+      
+      // Format the range URI to short format (e.g., "xsd:string")
+      const rangeLabel = dp?.range ? formatRangeUri(dp.range) : 'xsd:string';
+      
+      // Debug: Log the actual label being set for the node
+      console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
         
         dataPropertyNodes.push({
         id: dataProp.id,
-        label: wrapText(dataProp.label, wrapChars),
+        label: wrapText(rangeLabel, wrapChars),
           shape: 'box',
           size: 15,
           color: { background: '#e8f4f8', border: '#4a90a4' },
@@ -2557,27 +2590,34 @@ function buildNetworkData(filter: {
         
       propIndex++;
       
+      // Format the property label for the edge (wrapped if needed)
+      const edgeLabel = wrapText(dataProp.label, wrapChars);
+      
+      // Debug: Log the actual label being set for the edge
+      console.log(`[DEBUG] Setting data property edge label: propertyName="${dataProp.propertyName}", classId="${classId}", edgeLabel="${edgeLabel}", isRestriction=${dataProp.isRestriction}`);
+      
       // Create edge - thicker for restrictions, thinner dashed for normal
+      // Arrow points from class (domain) to data property node (range type)
       if (dataProp.isRestriction) {
         dataPropertyEdges.push({
-          id: `${dataProp.id}->${classId}:dataproprestrict`,
-          from: dataProp.id,
-          to: classId,
+          id: `${classId}->${dataProp.id}:dataproprestrict`,
+          from: classId,
+          to: dataProp.id,
           arrows: 'to',
-          label: '',
-          font: { size: 10, color: '#666' },
+          label: edgeLabel,
+          font: { size: relationshipFontSize, color: '#666' },
           color: { color: '#4a90a4', highlight: '#4a90a4' },
           dashes: false, // Solid line
           width: 3, // Thicker line for restrictions
         });
       } else {
         dataPropertyEdges.push({
-          id: `${dataProp.id}->${classId}:dataprop`,
-          from: dataProp.id,
-          to: classId,
+          id: `${classId}->${dataProp.id}:dataprop`,
+          from: classId,
+          to: dataProp.id,
           arrows: 'to',
-          label: '',
-          font: { size: 10, color: '#666' },
+          label: edgeLabel,
+          font: { size: relationshipFontSize, color: '#666' },
           color: { color: '#4a90a4', highlight: '#4a90a4' },
           dashes: [5, 5], // Dashed line
           width: 1, // Thinner line for normal data properties
@@ -3629,6 +3669,23 @@ function openEditModalForEdge(edgeId: string): void {
   const to = afterArrow.substring(0, colonIndex);
   const type = afterArrow.substring(colonIndex + 1);
   const edgeType = type === 'dataproprestrict' || type === 'dataprop' ? 'dataprop' : type;
+  
+  // For data property edges, extract the property name and open the data property modal
+  // Edge direction: classId -> dataProp.id (arrow points to range type node)
+  if (edgeType === 'dataprop') {
+    // Parse the 'to' node ID to extract property name (since arrow now points to the data property node)
+    // Pattern: __dataproprestrict__${classId}__${propertyName} or __dataprop__${classId}__${propertyName}
+    let match = to.match(/^__dataproprestrict__(.+)__(.+)$/);
+    if (!match) {
+      match = to.match(/^__dataprop__(.+)__(.+)$/);
+    }
+    if (match) {
+      const [, , propertyName] = match;
+      showEditDataPropertyModal(propertyName);
+      return;
+    }
+  }
+  
   showEditEdgeModal(from, to, edgeType);
 }
 
@@ -6472,5 +6529,35 @@ setTimeout(() => {
     if (!modal || (modal as HTMLElement).style.display === 'none') return null;
     const el = document.getElementById('editRelTypeIdentifier');
     return el?.textContent?.trim() ?? null;
+  },
+  /** Get rendered node label by node ID (for E2E - to verify actual displayed label). */
+  getRenderedNodeLabel: (nodeId: string): string | null => {
+    if (!network) return null;
+    try {
+      // Access the network's internal data structure
+      const networkAny = network as any;
+      const nodes = networkAny.body?.data?.nodes;
+      if (!nodes) return null;
+      const node = nodes.get(nodeId);
+      return node?.label ?? null;
+    } catch (e) {
+      console.error('[getRenderedNodeLabel] Error accessing network data:', e);
+      return null;
+    }
+  },
+  /** Get rendered edge label by edge ID (for E2E - to verify actual displayed label). */
+  getRenderedEdgeLabel: (edgeId: string): string | null => {
+    if (!network) return null;
+    try {
+      // Access the network's internal data structure
+      const networkAny = network as any;
+      const edges = networkAny.body?.data?.edges;
+      if (!edges) return null;
+      const edge = edges.get(edgeId);
+      return edge?.label ?? null;
+    } catch (e) {
+      console.error('[getRenderedEdgeLabel] Error accessing network data:', e);
+      return null;
+    }
   },
 };
