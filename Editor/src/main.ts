@@ -2144,6 +2144,39 @@ function getNodeStyleFromAnnotations(
   return { background: COLORS.default, border: '#2c3e50' };
 }
 
+/**
+ * Convert hex color to rgba with opacity.
+ * @param color Hex color string (e.g., "#3498db" or "#2c3e50")
+ * @param opacity Opacity value between 0 and 1
+ * @returns rgba color string (e.g., "rgba(52, 152, 219, 0.65)")
+ */
+function applyOpacityToColor(color: string, opacity: number): string {
+  // Remove # if present
+  const hex = color.replace('#', '');
+  // Parse RGB values
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
+/**
+ * Get opacity value based on search category.
+ * @param nodeId Node ID to check
+ * @param matchingIds Set of matching node IDs
+ * @param neighborIds Set of neighbor node IDs
+ * @returns Opacity value: 1.0 for matching, 0.65 for neighbors, 0.25 for others
+ */
+function getSearchOpacity(nodeId: string, matchingIds: Set<string>, neighborIds: Set<string>): number {
+  if (matchingIds.has(nodeId)) {
+    return 1.0; // 100% opacity for matching
+  }
+  if (neighborIds.has(nodeId)) {
+    return 0.65; // 60-70% opacity for neighbors (using 65%)
+  }
+  return 0.25; // 20-30% opacity for others (using 25%)
+}
+
 function buildNetworkData(filter: {
   wrapChars: number;
   minFontSize: number;
@@ -2206,8 +2239,14 @@ function buildNetworkData(filter: {
   console.log(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
 
   const searchQuery = (filter.searchQuery || '').trim();
+  // Track search categories for transparency styling
+  let matchingNodeIds = new Set<string>();
+  let neighborNodeIds = new Set<string>();
+  let matchingEdgeIds = new Set<string>();
+  let neighborEdgeIds = new Set<string>();
+  
   if (searchQuery) {
-    const matchingNodeIds = new Set<string>();
+    // Find matching nodes and edges
     filteredNodes.forEach((n) => {
       if (matchesSearch(n, null, searchQuery)) matchingNodeIds.add(n.id);
     });
@@ -2215,22 +2254,29 @@ function buildNetworkData(filter: {
       if (matchesSearch(null, e, searchQuery)) {
         matchingNodeIds.add(e.from);
         matchingNodeIds.add(e.to);
+        matchingEdgeIds.add(`${e.from}->${e.to}:${e.type}`);
       }
     });
-    let searchMatchNodeIds = new Set(matchingNodeIds);
+    
+    // Find neighbor nodes and edges (if includeNeighbors is enabled)
     if (filter.includeNeighbors) {
       filteredEdges.forEach((e) => {
-        if (matchingNodeIds.has(e.from) || matchingNodeIds.has(e.to)) {
-          searchMatchNodeIds.add(e.from);
-          searchMatchNodeIds.add(e.to);
+        const fromMatches = matchingNodeIds.has(e.from);
+        const toMatches = matchingNodeIds.has(e.to);
+        if (fromMatches || toMatches) {
+          // Add neighbor nodes (connected to matching nodes but not matching themselves)
+          if (!matchingNodeIds.has(e.from)) neighborNodeIds.add(e.from);
+          if (!matchingNodeIds.has(e.to)) neighborNodeIds.add(e.to);
+          // Add neighbor edges (connected to matching nodes but not matching themselves)
+          const edgeId = `${e.from}->${e.to}:${e.type}`;
+          if (!matchingEdgeIds.has(edgeId)) neighborEdgeIds.add(edgeId);
         }
       });
     }
-    filteredNodes = filteredNodes.filter((n) => searchMatchNodeIds.has(n.id));
-    nodeIds = new Set(filteredNodes.map((n) => n.id));
-    filteredEdges = rawData.edges.filter(
-      (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
-    );
+    
+    // Keep ALL nodes and edges - don't filter them out
+    // All nodes remain in filteredNodes, all edges remain in filteredEdges
+    // We'll apply opacity styling based on their category
   }
 
   const edgeStyleConfig = filter.edgeStyleConfig;
@@ -2337,15 +2383,37 @@ function buildNetworkData(filter: {
         : maxFontSize;
     const style = getNodeStyleFromAnnotations(n, filter.annotationStyleConfig);
     const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
+    
+    // Apply search transparency if search query is active
+    let nodeOpacity = 1.0;
+    let backgroundColor = style.background;
+    let borderColor = style.border;
+    let fontColor = '#2c3e50';
+    
+    if (searchQuery) {
+      nodeOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
+      if (nodeOpacity < 1.0) {
+        backgroundColor = applyOpacityToColor(style.background, nodeOpacity);
+        borderColor = applyOpacityToColor(style.border, nodeOpacity);
+        fontColor = applyOpacityToColor('#2c3e50', nodeOpacity);
+      }
+    }
+    
     const node: Record<string, unknown> = {
       id: n.id,
       label: wrapText(displayLabel, wrapChars),
       labellableRoot: n.labellableRoot,
-      color: { background: style.background, border: style.border },
-      font: { size: fontSize, color: '#2c3e50' },
+      color: { background: backgroundColor, border: borderColor },
+      font: { size: fontSize, color: fontColor },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
       ...(n.comment && { title: n.comment }),
     };
+    
+    // Apply opacity property if less than 1.0
+    if (nodeOpacity < 1.0) {
+      node.opacity = nodeOpacity;
+    }
+    
     if (pos) {
       node.x = pos.x;
       node.y = pos.y;
@@ -2571,27 +2639,65 @@ function buildNetworkData(filter: {
       // Format the range URI to short format (e.g., "xsd:string")
       const rangeLabel = dp?.range ? formatRangeUri(dp.range) : 'xsd:string';
       
+      // Apply search transparency if search query is active
+      // Data property nodes inherit opacity from their associated class node
+      let dataPropNodeOpacity = 1.0;
+      let dataPropBackgroundColor = '#e8f4f8';
+      let dataPropBorderColor = '#4a90a4';
+      let dataPropFontColor = '#2c3e50';
+      
+      if (searchQuery) {
+        // Use the class node's opacity category
+        dataPropNodeOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
+        if (dataPropNodeOpacity < 1.0) {
+          dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', dataPropNodeOpacity);
+          dataPropBorderColor = applyOpacityToColor('#4a90a4', dataPropNodeOpacity);
+          dataPropFontColor = applyOpacityToColor('#2c3e50', dataPropNodeOpacity);
+        }
+      }
+      
       // Debug: Log the actual label being set for the node
       console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
         
-        dataPropertyNodes.push({
+      const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
         label: wrapText(rangeLabel, wrapChars),
-          shape: 'box',
-          size: 15,
-          color: { background: '#e8f4f8', border: '#4a90a4' },
-        font: { size: dataPropertyFontSize, color: '#2c3e50' },
-          margin: 4,
-          physics: false,
+        shape: 'box',
+        size: 15,
+        color: { background: dataPropBackgroundColor, border: dataPropBorderColor },
+        font: { size: dataPropertyFontSize, color: dataPropFontColor },
+        margin: 4,
+        physics: false,
         x: finalDataPropPos.x,
         y: finalDataPropPos.y,
-          ...(dp?.comment && { title: dp.comment }),
-        });
+        ...(dp?.comment && { title: dp.comment }),
+      };
+      
+      // Apply opacity property if less than 1.0
+      if (dataPropNodeOpacity < 1.0) {
+        dataPropNode.opacity = dataPropNodeOpacity;
+      }
+      
+      dataPropertyNodes.push(dataPropNode);
         
       propIndex++;
       
       // Format the property label for the edge (wrapped if needed)
       const edgeLabel = wrapText(dataProp.label, wrapChars);
+      
+      // Apply search transparency if search query is active
+      // Data property edges inherit opacity from their associated class node
+      let dataPropEdgeColor = '#4a90a4';
+      let dataPropEdgeFontColor = '#666';
+      
+      if (searchQuery) {
+        // Use the class node's opacity category
+        const dataPropEdgeOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
+        if (dataPropEdgeOpacity < 1.0) {
+          dataPropEdgeColor = applyOpacityToColor('#4a90a4', dataPropEdgeOpacity);
+          dataPropEdgeFontColor = applyOpacityToColor('#666', dataPropEdgeOpacity);
+        }
+      }
       
       // Debug: Log the actual label being set for the edge
       console.log(`[DEBUG] Setting data property edge label: propertyName="${dataProp.propertyName}", classId="${classId}", edgeLabel="${edgeLabel}", isRestriction=${dataProp.isRestriction}`);
@@ -2605,8 +2711,8 @@ function buildNetworkData(filter: {
           to: dataProp.id,
           arrows: 'to',
           label: edgeLabel,
-          font: { size: relationshipFontSize, color: '#666' },
-          color: { color: '#4a90a4', highlight: '#4a90a4' },
+          font: { size: relationshipFontSize, color: dataPropEdgeFontColor },
+          color: { color: dataPropEdgeColor, highlight: dataPropEdgeColor },
           dashes: false, // Solid line
           width: 3, // Thicker line for restrictions
         });
@@ -2617,8 +2723,8 @@ function buildNetworkData(filter: {
           to: dataProp.id,
           arrows: 'to',
           label: edgeLabel,
-          font: { size: relationshipFontSize, color: '#666' },
-          color: { color: '#4a90a4', highlight: '#4a90a4' },
+          font: { size: relationshipFontSize, color: dataPropEdgeFontColor },
+          color: { color: dataPropEdgeColor, highlight: dataPropEdgeColor },
           dashes: [5, 5], // Dashed line
           width: 1, // Thinner line for normal data properties
         });
@@ -2647,6 +2753,31 @@ function buildNetworkData(filter: {
     const width = isRestriction ? 3 : 1; // Thick for restrictions, thin for normal
     const dashes = isRestriction ? false : [5, 5]; // Continuous for restrictions, dashed for normal
     
+    // Apply search transparency if search query is active
+    let edgeColor = style.color;
+    let edgeFontColor = '#2c3e50';
+    
+    if (searchQuery) {
+      const edgeId = `${e.from}->${e.to}:${e.type}`;
+      // Determine edge opacity based on whether it's matching, neighbor, or other
+      let edgeOpacity = 1.0;
+      if (matchingEdgeIds.has(edgeId)) {
+        edgeOpacity = 1.0; // Matching edge
+      } else if (neighborEdgeIds.has(edgeId)) {
+        edgeOpacity = 0.65; // Neighbor edge
+      } else {
+        // Check if either endpoint is matching or neighbor
+        const fromOpacity = getSearchOpacity(e.from, matchingNodeIds, neighborNodeIds);
+        const toOpacity = getSearchOpacity(e.to, matchingNodeIds, neighborNodeIds);
+        edgeOpacity = Math.max(fromOpacity, toOpacity); // Use the higher opacity of the two endpoints
+      }
+      
+      if (edgeOpacity < 1.0) {
+        edgeColor = applyOpacityToColor(style.color, edgeOpacity);
+        edgeFontColor = applyOpacityToColor('#2c3e50', edgeOpacity);
+      }
+    }
+    
     // Debug: Log describes edge mapping
     if (e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')) {
       console.log(`[DEBUG] Mapping describes edge to vis-network:`, {
@@ -2665,8 +2796,8 @@ function buildNetworkData(filter: {
       to: e.to,
       arrows: 'to',
       label: style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '',
-      font: { size: relationshipFontSize, color: '#2c3e50' },
-      color: { color: style.color, highlight: style.color },
+      font: { size: relationshipFontSize, color: edgeFontColor },
+      color: { color: edgeColor, highlight: edgeColor },
       dashes,
       width,
       ...(edgeComment && { title: edgeComment }),
