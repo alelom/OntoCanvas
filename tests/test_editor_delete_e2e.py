@@ -5,7 +5,7 @@ E2E test for Editor delete and undo behavior.
 Reproduces: Delete "Drawing content" -> Interface should remain floating -> Undo should restore both.
 
 Requires: dev server running (npm run dev) and ontology file at ontology/aec_drawing_ontology.ttl
-Run: uv run python Editor/tests/test_editor_delete_e2e.py
+Run: uv run python tests/test_editor_delete_e2e.py
 """
 
 from pathlib import Path

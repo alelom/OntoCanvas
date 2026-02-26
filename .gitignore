@@ -10,6 +10,6 @@ wheels/
 .venv
 
 # Editor (Node/npm)
-Editor/node_modules/
-Editor/dist/
-Editor/.e2e-dev-server-pid
+node_modules/
+dist/
+.e2e-dev-server-pid
