@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/alelom/OntoCanvas/compare/v1.0.1...v1.0.2) (2026-02-26)
+
+
+### Bug Fixes
+
+* add workflow_run trigger to deploy workflow for reliable release deployments ([d433056](https://github.com/alelom/OntoCanvas/commit/d433056f3d57fde13bfa3eb3b3ff3fabac8a375b))
+
 ## [1.0.1](https://github.com/alelom/OntoCanvas/compare/v1.0.0...v1.0.1) (2026-02-26)
 
 
