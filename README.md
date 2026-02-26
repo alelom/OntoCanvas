@@ -1,4 +1,7 @@
-# Ontology Editor
+<div align="center">
+  <img src="OntoCanvas.png" alt="OntoCanvas" width="200"/>
+  <h1>OntoCanvas</h1>
+</div>
 
 Interactive ontology visualizer with TTL file support. Same visualization features as the [Visualizer](./Visualizer/), plus the ability to load any Turtle (.ttl) ontology file.
 
