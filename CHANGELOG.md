@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/alelom/OntoCanvas/compare/v1.0.3...v1.0.4) (2026-02-26)
+
+
+### Bug Fixes
+
+* add @semantic-release/npm plugin to update package.json version ([381e7f2](https://github.com/alelom/OntoCanvas/commit/381e7f2e0548d19cbd662098d3f797c16cfe9f9d))
+
 ## [1.0.3](https://github.com/alelom/OntoCanvas/compare/v1.0.2...v1.0.3) (2026-02-26)
 
 
