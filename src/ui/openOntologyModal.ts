@@ -68,12 +68,21 @@ export function initOpenOntologyModal(
     `;
 
     const title = document.createElement('h2');
-    title.textContent = 'Open ontology';
     title.style.cssText = `
       margin: 0 0 20px 0;
       font-size: 20px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     `;
+    const icon = document.createElement('img');
+    icon.src = '/OntoCanvas.png';
+    icon.alt = 'OntoCanvas';
+    icon.style.cssText = 'width: 24px; height: 24px;';
+    title.appendChild(icon);
+    const titleText = document.createTextNode('Open ontology');
+    title.appendChild(titleText);
 
     const buttonContainer = document.createElement('div');
     buttonContainer.style.cssText = `

@@ -4617,7 +4617,10 @@ function renderApp(): void {
   app.innerHTML = `
     <div id="controls">
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <button type="button" id="openOntologyBtn" class="primary" style="width: fit-content;">Open ontology</button>
+        <button type="button" id="openOntologyBtn" class="primary" style="width: fit-content; display: flex; align-items: center; gap: 8px;">
+          <img src="/OntoCanvas.png" alt="OntoCanvas" style="width: 20px; height: 20px;" />
+          Open ontology
+        </button>
         <input type="file" id="fileInput" accept=".ttl,.turtle" style="display: none;" />
       </div>
       <div id="vizControls" style="display: none;">
