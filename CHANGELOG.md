@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/alelom/OntoCanvas/compare/v1.0.2...v1.0.3) (2026-02-26)
+
+
+### Bug Fixes
+
+* update deploy workflow to fetch specific branch for releases ([1895396](https://github.com/alelom/OntoCanvas/commit/1895396f95c350fa5eccb6e0ba0fa5b95dd4c428))
+
 ## [1.0.2](https://github.com/alelom/OntoCanvas/compare/v1.0.1...v1.0.2) (2026-02-26)
 
 
