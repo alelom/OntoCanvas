@@ -5,6 +5,7 @@
 
 import { Parser } from 'n3';
 import type { Quad, Term, BlankNode, NamedNode, Literal } from 'n3';
+import { getAppVersion } from './utils/version';
 
 // --- Constants (aligned with parser.ts) ---
 
@@ -508,10 +509,175 @@ function addSectionDividers(raw: string): string {
   return result.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
 
+// --- Attribution ---
+
+/**
+ * Add attribution comment line and rdfs:comment to ontology declaration.
+ */
+function addAttribution(raw: string): string {
+  const version = getAppVersion();
+  const attributionText = `Created/edited with https://alelom.github.io/OntoCanvas/ version ${version}`;
+  
+  // Add comment line after prefixes but before content
+  let output = addAttributionCommentLine(raw, attributionText);
+  
+  // Add rdfs:comment to ontology declaration
+  output = addAttributionRdfsComment(output, attributionText);
+  
+  return output;
+}
+
+/**
+ * Add attribution comment line after prefixes but before content.
+ */
+function addAttributionCommentLine(raw: string, attributionText: string): string {
+  const commentLine = `# ${attributionText}`;
+  
+  // Find where prefixes end (last @prefix or @base)
+  const prefixMatches = raw.match(/@prefix[^\n]+\n?/g);
+  const baseMatch = raw.match(/@base[^\n]+\n?/);
+  
+  let insertPos = 0;
+  if (prefixMatches && prefixMatches.length > 0) {
+    const lastPrefix = prefixMatches[prefixMatches.length - 1];
+    insertPos = raw.indexOf(lastPrefix) + lastPrefix.length;
+  } else if (baseMatch) {
+    insertPos = raw.indexOf(baseMatch[0]) + baseMatch[0].length;
+  }
+  
+  // Check if comment already exists
+  if (raw.includes(commentLine)) {
+    return raw;
+  }
+  
+  // Insert comment after prefixes/base, before content
+  const before = raw.slice(0, insertPos);
+  const after = raw.slice(insertPos);
+  
+  // If there's already content after prefixes, add newline before comment
+  const needsNewline = before.trim().length > 0 && !before.endsWith('\n');
+  const newline = needsNewline ? '\n' : '';
+  
+  return `${before}${newline}${commentLine}\n${after}`;
+}
+
+/**
+ * Add rdfs:comment to ontology declaration.
+ */
+function addAttributionRdfsComment(raw: string, attributionText: string): string {
+  // Find the ontology declaration - match just the start: :Ontology rdf:type owl:Ontology
+  const ontologyPattern = /(:\w+|<[^>]+>)\s+rdf:type\s+owl:Ontology\s*[;]/;
+  const match = raw.match(ontologyPattern);
+  
+  if (!match) {
+    // No ontology declaration found, skip adding rdfs:comment
+    return raw;
+  }
+  
+  // Check if rdfs:comment with attribution already exists
+  const existingCommentPattern = new RegExp(`rdfs:comment\\s+"${attributionText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`);
+  if (existingCommentPattern.test(raw)) {
+    return raw;
+  }
+  
+  // Found ontology declaration, add rdfs:comment to it
+  const ontologyStart = match.index!;
+  const afterStart = raw.slice(ontologyStart);
+  
+  // Find the final period that closes the ontology statement
+  let inString = false;
+  let stringChar = '';
+  let ontologyEnd = ontologyStart;
+  let foundFinalPeriod = false;
+  
+  const candidatePeriods: Array<{ pos: number; afterText: string }> = [];
+  
+  for (let i = 0; i < afterStart.length; i++) {
+    const char = afterStart[i];
+    const prevChar = i > 0 ? afterStart[i - 1] : '';
+    
+    // Track string literals
+    if ((char === '"' || char === "'") && prevChar !== '\\') {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+        stringChar = '';
+      }
+      continue;
+    }
+    
+    // Skip everything inside strings
+    if (inString) continue;
+    
+    // When we find a period, check what comes after it
+    if (char === '.') {
+      const afterPeriod = afterStart.slice(i + 1);
+      const trimmedAfter = afterPeriod.trim();
+      
+      // Check if this period is followed by newline and then a section divider or new statement
+      if (/^\s*[\n\r]/.test(afterPeriod)) {
+        const afterNewline = trimmedAfter;
+        if (afterNewline.startsWith('#################################################################') ||
+            afterNewline.startsWith('#') ||
+            /^[:\<@]/.test(afterNewline)) {
+          candidatePeriods.push({ pos: i, afterText: afterNewline });
+        }
+      }
+    }
+  }
+  
+  // The first candidate period that's followed by a section divider is likely the end of ontology declaration
+  for (const candidate of candidatePeriods) {
+    if (candidate.afterText.startsWith('#################################################################')) {
+      ontologyEnd = ontologyStart + candidate.pos + 1;
+      foundFinalPeriod = true;
+      break;
+    }
+  }
+  
+  // If we didn't find one with a section divider, use the first candidate
+  if (!foundFinalPeriod && candidatePeriods.length > 0) {
+    ontologyEnd = ontologyStart + candidatePeriods[0].pos + 1;
+    foundFinalPeriod = true;
+  }
+  
+  if (!foundFinalPeriod) {
+    // Fallback: look for first period after match that's on its own line
+    const fallbackMatch = afterStart.match(/\.\s*[\n\r]\s*(#|$|[\n\r])/);
+    if (fallbackMatch && fallbackMatch.index != null) {
+      ontologyEnd = ontologyStart + fallbackMatch.index + 1;
+      foundFinalPeriod = true;
+    } else {
+      // Last resort: assume ontology declaration ends within first 500 chars
+      ontologyEnd = ontologyStart + Math.min(500, afterStart.length);
+    }
+  }
+  
+  const ontologyBlock = raw.slice(ontologyStart, ontologyEnd);
+  const before = raw.slice(0, ontologyStart);
+  const after = raw.slice(ontologyEnd);
+  
+  // Check if it already has properties (contains semicolon)
+  const hasSemicolon = ontologyBlock.includes(';');
+  const rdfsComment = `    rdfs:comment "${attributionText}"`;
+  
+  if (hasSemicolon) {
+    // Add rdfs:comment before the final period
+    const blockWithoutPeriod = ontologyBlock.replace(/\s*\.\s*$/, '');
+    return `${before}${blockWithoutPeriod} ;\n${rdfsComment} .\n${after}`;
+  } else {
+    // Replace period with semicolon and add rdfs:comment
+    const blockWithoutPeriod = ontologyBlock.replace(/\s*\.\s*$/, '');
+    return `${before}${blockWithoutPeriod} ;\n${rdfsComment} .\n${after}`;
+  }
+}
+
 // --- Main export ---
 
 /**
- * Post-process raw Turtle output: style fixes, @base, blank node inlining, section dividers, owl:imports.
+ * Post-process raw Turtle output: style fixes, @base, blank node inlining, section dividers, owl:imports, attribution.
  */
 export function postProcessTurtle(raw: string, externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
   let output = raw;
@@ -525,6 +691,10 @@ export function postProcessTurtle(raw: string, externalRefs?: Array<{ url: strin
   }
   
   output = addSectionDividers(output);
+  
+  // Add attribution comment and rdfs:comment
+  output = addAttribution(output);
+  
   return output;
 }
 

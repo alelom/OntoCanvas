@@ -122,6 +122,7 @@ import {
   hideExternalRefsModal,
   type ExternalRefsModalCallbacks,
 } from './ui/externalRefs';
+import { getAppVersion } from './utils/version';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
@@ -4710,7 +4711,8 @@ function renderApp(): void {
       <button type="button" id="resetView">Reset view</button>
     </div>
     <div id="info">
-      Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span>
+      <span id="versionDisplay" style="margin-right: 12px; font-size: 11px; color: #666;"></span>
+      Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span>
       <span id="filePathDisplay" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>
@@ -5697,6 +5699,12 @@ async function loadLastOpenedUrl(): Promise<void> {
 function setupEventListeners(): void {
   // Initialize status bar after DOM is ready
   initStatusBar();
+  
+  // Initialize version display
+  const versionDisplay = document.getElementById('versionDisplay');
+  if (versionDisplay) {
+    versionDisplay.textContent = `OntoCanvas v${getAppVersion()} |`;
+  }
   
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
 
