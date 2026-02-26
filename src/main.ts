@@ -112,6 +112,7 @@ import {
   showOpenOntologyModal,
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
+import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import {
   extractExternalRefsFromStore,
   extractPrefixesFromTtl,
@@ -6490,9 +6491,13 @@ document.addEventListener('click', (e) => {
 
 renderApp();
 setupEventListeners();
-// Show the open ontology modal on page load
-setTimeout(() => {
-  showOpenOntologyModal();
+// Check for URL parameter and load ontology if present, otherwise show modal
+setTimeout(async () => {
+  const loadedFromParam = await handleUrlParameterLoad(loadFromUrl, showOpenOntologyModal);
+  if (!loadedFromParam) {
+    // No URL parameter found, show modal as usual
+    showOpenOntologyModal();
+  }
 }, 100);
 
 // Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
