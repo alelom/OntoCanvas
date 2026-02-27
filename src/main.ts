@@ -2831,9 +2831,55 @@ function buildNetworkData(filter: {
   });
   const uniqueEdges = Array.from(edgeMap.values());
   
+  // Separate self-loops (from === to) from regular edges
+  const selfLoops: Array<Record<string, unknown>> = [];
+  const regularEdges: Array<Record<string, unknown>> = [];
+  uniqueEdges.forEach((edgeObj) => {
+    if (edgeObj.from === edgeObj.to) {
+      selfLoops.push(edgeObj);
+    } else {
+      regularEdges.push(edgeObj);
+    }
+  });
+
+  // Handle multiple self-loops on the same node - space them out using different sizes and angles
+  // When multiple object properties have the same domain and range (self-loops), they overlap completely.
+  // We use different selfReferenceSize values to create concentric loops that don't overlap.
+  // The spacing scales with relationshipFontSize to prevent label overlap with larger fonts.
+  const nodeToSelfLoops = new Map<string, Array<Record<string, unknown>>>();
+  selfLoops.forEach((edgeObj) => {
+    const nodeId = edgeObj.from as string;
+    if (!nodeToSelfLoops.has(nodeId)) nodeToSelfLoops.set(nodeId, []);
+    nodeToSelfLoops.get(nodeId)!.push(edgeObj);
+  });
+  nodeToSelfLoops.forEach((list) => {
+    if (list.length >= 2) {
+      // For multiple self-loops, space them out using different sizes to create concentric circles
+      // Scale spacing with relationshipFontSize to accommodate larger labels
+      // Base size: 2x font size (minimum 30) to ensure adequate spacing
+      // Increment: 1.5x font size (minimum 20) to maintain proportional spacing
+      const baseSize = Math.max(30, relationshipFontSize * 2);
+      const sizeIncrement = Math.max(20, relationshipFontSize * 1.5);
+      
+      list.forEach((edgeObj, i) => {
+        edgeObj.selfReferenceSize = baseSize + i * sizeIncrement;
+        
+        // Try to distribute angles evenly around the node (0 to 2π)
+        // Note: selfReferenceAngle may not be supported in all vis-network versions
+        // The size difference alone should prevent complete overlap
+        const angleStep = (2 * Math.PI) / list.length;
+        const angle = i * angleStep;
+        edgeObj.selfReferenceAngle = angle;
+      });
+    } else if (list.length === 1) {
+      // Single self-loop - scale with font size (minimum 30)
+      list[0].selfReferenceSize = Math.max(30, relationshipFontSize * 2);
+    }
+  });
+
   // Assign smooth curves to overlapping edges (same node pair) to avoid label/line overlap
   const pairToEdges = new Map<string, Array<Record<string, unknown>>>();
-  uniqueEdges.forEach((edgeObj) => {
+  regularEdges.forEach((edgeObj) => {
     const pairKey = [edgeObj.from, edgeObj.to].sort().join('|');
     if (!pairToEdges.has(pairKey)) pairToEdges.set(pairKey, []);
     pairToEdges.get(pairKey)!.push(edgeObj);
@@ -2851,10 +2897,13 @@ function buildNetworkData(filter: {
     }
   });
 
+  // Combine regular edges with self-loops
+  const processedEdges = [...regularEdges, ...selfLoops];
+
   // Combine regular nodes with data property nodes
   const allNodes = [...nodes, ...dataPropertyNodes];
-  // Combine regular edges with data property edges (use deduplicated edges)
-  const allEdges = [...uniqueEdges, ...dataPropertyEdges];
+  // Combine processed edges (regular + self-loops) with data property edges
+  const allEdges = [...processedEdges, ...dataPropertyEdges];
   
   // Debug: Final check for describes edges
   const describesEdgesFinal = allEdges.filter((e) => 
