@@ -276,34 +276,60 @@ export function computeWeightedLayout(
   const minGap = 12;
   const getNodeWidth = (id: string) =>
     nodeDimensions?.get(id)?.width ?? spacing * 0.45;
-  const subtreeWidth = (id: string): number => {
-    const ch = (children[id] || []).filter((c) => nodeIds.has(c));
-    if (ch.length === 0) return getNodeWidth(id);
-    const totalChildWidth = ch.reduce((sum, c) => sum + subtreeWidth(c), 0);
-    return Math.max(getNodeWidth(id), totalChildWidth + (ch.length - 1) * minGap);
-  };
 
   const positions: Record<string, { x: number; y: number }> = {};
+  
+  // Improved layout function that centers parent based on actual children span
+  // Returns childrenRight separately to prevent parent extensions from adding spacing between siblings
   const layoutSubtree = (
     id: string,
     left: number,
     top: number
-  ): { left: number; width: number } => {
+  ): { left: number; width: number; childrenRight: number } => {
     const ch = (children[id] || []).filter((c) => nodeIds.has(c));
     if (ch.length === 0) {
       const w = getNodeWidth(id);
       positions[id] = { x: left + w / 2, y: top };
-      return { left, width: w };
+      return { left, width: w, childrenRight: left + w };
     }
+    
+    // First, layout all children and collect their actual widths
+    const childLayouts: Array<{ left: number; width: number; childrenRight: number }> = [];
     let x = left;
     ch.forEach((c) => {
       const r = layoutSubtree(c, x, top + spacing);
-      x = r.left + r.width + minGap;
+      childLayouts.push(r);
+      // Use childrenRight (actual right edge of children) instead of full width
+      // This prevents parent extensions from adding extra spacing between siblings
+      x = r.childrenRight + minGap;
     });
-    const totalW = x - left - minGap;
-    const parentX = left + totalW / 2;
+    
+    // Calculate the actual span of children (from first child's left to last child's right)
+    const firstChildLeft = childLayouts[0].left;
+    const lastChildRight = childLayouts[childLayouts.length - 1].childrenRight;
+    const childrenSpan = lastChildRight - firstChildLeft;
+    
+    // Parent width
+    const parentWidth = getNodeWidth(id);
+    
+    // Center parent above children based on actual children span
+    // This prevents excessive spacing when parent is wider than children
+    const parentX = firstChildLeft + childrenSpan / 2;
+    
     positions[id] = { x: parentX, y: top };
-    return { left, width: totalW };
+    
+    // Return the actual bounds of this subtree
+    // If parent extends beyond children, include that in the width
+    const subtreeLeft = Math.min(firstChildLeft, parentX - parentWidth / 2);
+    const subtreeRight = Math.max(lastChildRight, parentX + parentWidth / 2);
+    
+    // Return childrenRight separately so siblings can use it for positioning
+    // This is the actual right edge of children, not including parent extension
+    return { 
+      left: subtreeLeft, 
+      width: subtreeRight - subtreeLeft,
+      childrenRight: lastChildRight
+    };
   };
 
   const rootGap = spacing * 0.2;

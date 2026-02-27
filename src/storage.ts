@@ -120,6 +120,35 @@ export async function saveDisplayConfigToIndexedDB(config: DisplayConfig, filePa
   }
 }
 
+export async function deleteDisplayConfigFromIndexedDB(filePath: string | null, fileName: string | null): Promise<void> {
+  const keysToTry = [
+    getDisplayConfigKeyNormalized(filePath, fileName),
+    getDisplayConfigKey(filePath, fileName),
+  ].filter((k): k is string => !!k);
+  if (keysToTry.length === 0) return;
+  try {
+    const db = await openDisplayConfigDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_DISPLAY_STORE);
+      // Delete all possible key variants
+      keysToTry.forEach((key) => {
+        store.delete(key);
+      });
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  } catch {
+    // ignore
+  }
+}
+
 async function openExternalRefsDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_EXTERNAL_REFS_NAME, 1);

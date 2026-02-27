@@ -74,6 +74,7 @@ import {
   type ExternalOntologyReference,
   loadDisplayConfigFromIndexedDB,
   saveDisplayConfigToIndexedDB,
+  deleteDisplayConfigFromIndexedDB,
   loadExternalRefsFromIndexedDB,
   saveExternalRefsToIndexedDB,
   getLastFileFromIndexedDB,
@@ -4703,6 +4704,7 @@ function renderApp(): void {
       <span id="displayConfigGroup" style="display: none; gap: 4px; align-items: center; flex-direction: column;">
         <button type="button" id="saveDisplayConfig" title="Save display config to a .display.json file (e.g. next to your ontology)">Save display config</button>
         <button type="button" id="loadDisplayConfig" title="Load display config from a .display.json file">Load display config</button>
+        <button type="button" id="resetDisplayConfig" title="Reset display config and regenerate layout from scratch">Reset display config</button>
       </span>
       <span id="externalRefsGroup" style="display: none; gap: 8px; align-items: center;">
         <button type="button" id="manageExternalRefs" title="Manage external ontology references">Manage external references</button>
@@ -6196,6 +6198,22 @@ function setupEventListeners(): void {
         errorMsg.style.display = 'block';
       }
     }
+  });
+
+  document.getElementById('resetDisplayConfig')?.addEventListener('click', async () => {
+    if (rawData.nodes.length === 0) return;
+    
+    // Clear all node positions
+    rawData.nodes.forEach((node) => {
+      delete node.x;
+      delete node.y;
+    });
+    
+    // Delete display config from IndexedDB
+    await deleteDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName).catch(() => {});
+    
+    // Regenerate layout by applying filter
+    applyFilter();
   });
 
   const redrawNetworkOnMenuToggle = (): void => {
