@@ -18,7 +18,8 @@ export function getNetworkOptions(layoutMode: string): Record<string, unknown> {
       multiselect: true,
     },
   };
-  if (layoutMode === 'weighted') {
+  // Hierarchical layouts (hierarchical01, hierarchical02, weighted for backward compatibility) don't use physics
+  if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'weighted') {
     base.physics = { enabled: false };
   } else if (layoutMode === 'force') {
     base.physics = {

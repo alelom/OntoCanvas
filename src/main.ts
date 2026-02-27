@@ -90,11 +90,11 @@ import {
   getDefaultColor,
   getSpacing,
   computeNodeDepths,
-  computeWeightedLayout,
   estimateNodeDimensions,
   resolveOverlaps,
   matchesSearch,
   COLORS,
+  getLayoutAlgorithm,
 } from './graph';
 import {
   initStatusBar,
@@ -185,7 +185,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
     relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
     dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 18,
-    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'weighted',
+    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical01',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent) : undefined,
@@ -208,7 +208,10 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 80);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 18);
-  (document.getElementById('layoutMode') as HTMLSelectElement).value = config.layoutMode ?? 'weighted';
+  // Handle backward compatibility: 'weighted' maps to 'hierarchical01'
+  const layoutMode = config.layoutMode ?? 'hierarchical01';
+  const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
+  (document.getElementById('layoutMode') as HTMLSelectElement).value = normalizedLayoutMode;
   (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
   const edgeStyleConfig = config.edgeStyleConfig || {};
@@ -2343,7 +2346,9 @@ function buildNetworkData(filter: {
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
-  if (layoutMode === 'weighted') {
+  // Use layout registry for hierarchical layouts
+  const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+  if (layoutAlgorithm) {
     const nodeDimensions = new Map<string, { width: number; height: number }>();
     filteredNodes.forEach((n) => {
       const fontSize =
@@ -2359,7 +2364,7 @@ function buildNetworkData(filter: {
         estimateNodeDimensions(n.label, wrapChars, fontSize)
       );
     });
-    nodePositions = computeWeightedLayout(
+    nodePositions = layoutAlgorithm(
       nodeIds,
       filteredEdges,
       SPACING,
@@ -4629,7 +4634,8 @@ function renderApp(): void {
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <strong>Layout:</strong>
         <select id="layoutMode">
-          <option value="weighted">Hierarchical</option>
+          <option value="hierarchical01">Hierarchical</option>
+          <option value="hierarchical02">Hierarchical 02</option>
           <option value="force">Force-directed</option>
         </select>
       </div>
@@ -5286,6 +5292,17 @@ function applyFilter(preserveView = false): void {
 
   const layoutMode = (document.getElementById('layoutMode') as HTMLSelectElement)
     .value;
+  
+  // Clear stored node positions when switching layouts
+  // This ensures the new layout algorithm's positions are used
+  const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+  if (layoutAlgorithm || layoutMode === 'force') {
+    // Switching to a layout that computes positions - clear stored positions
+    rawData.nodes.forEach((node) => {
+      delete node.x;
+      delete node.y;
+    });
+  }
   const wrapChars =
     parseInt(
       (document.getElementById('wrapChars') as HTMLInputElement).value,
@@ -5435,7 +5452,7 @@ function applyFilter(preserveView = false): void {
       });
     } else if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'weighted') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
   } else {
@@ -5448,7 +5465,7 @@ function applyFilter(preserveView = false): void {
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'weighted') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
@@ -6028,7 +6045,7 @@ function setupEventListeners(): void {
     }
   });
   document.getElementById('resetView')?.addEventListener('click', () => {
-    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'weighted';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical01';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '10';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '80';
