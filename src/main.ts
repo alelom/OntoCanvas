@@ -5964,6 +5964,8 @@ function setupEventListeners(): void {
   document.getElementById('maxFontSize')?.addEventListener('change', () => applyFilter());
   document.getElementById('relationshipFontSize')?.addEventListener('input', () => applyFilter());
   document.getElementById('relationshipFontSize')?.addEventListener('change', () => applyFilter());
+  document.getElementById('dataPropertyFontSize')?.addEventListener('input', () => applyFilter());
+  document.getElementById('dataPropertyFontSize')?.addEventListener('change', () => applyFilter());
   document
     .getElementById('searchIncludeNeighbors')
     ?.addEventListener('change', () => applyFilter());
