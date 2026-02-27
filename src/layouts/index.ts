@@ -1,6 +1,7 @@
 import type { GraphEdge, NodeDimensions } from '../types';
 import { computeHierarchical01 } from './hierarchical01';
 import { computeHierarchical02 } from './hierarchical02';
+import { computeHierarchical03 } from './hierarchical03';
 
 /**
  * Layout algorithm function signature
@@ -18,6 +19,7 @@ export type LayoutAlgorithm = (
 export const LAYOUT_ALGORITHMS: Record<string, LayoutAlgorithm> = {
   'hierarchical01': computeHierarchical01,
   'hierarchical02': computeHierarchical02,
+  'hierarchical03': computeHierarchical03,
   // Backward compatibility: 'weighted' maps to hierarchical01
   'weighted': computeHierarchical01,
 };

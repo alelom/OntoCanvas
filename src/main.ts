@@ -4634,8 +4634,9 @@ function renderApp(): void {
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <strong>Layout:</strong>
         <select id="layoutMode">
-          <option value="hierarchical01">Hierarchical</option>
+          <option value="hierarchical01">Hierarchical 01</option>
           <option value="hierarchical02">Hierarchical 02</option>
+          <option value="hierarchical03">Hierarchical 03</option>
           <option value="force">Force-directed</option>
         </select>
       </div>
@@ -5452,7 +5453,7 @@ function applyFilter(preserveView = false): void {
       });
     } else if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
   } else {
@@ -5465,7 +5466,7 @@ function applyFilter(preserveView = false): void {
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
