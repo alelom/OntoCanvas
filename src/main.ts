@@ -180,11 +180,11 @@ function collectDisplayConfig(): DisplayConfig | null {
     version: DISPLAY_CONFIG_VERSION,
     nodePositions,
     edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences) : {},
-    wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 10,
+    wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 12,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
-    maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
+    maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 70,
     relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
-    dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 18,
+    dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 12,
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical01',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
@@ -203,11 +203,11 @@ function applyDisplayConfig(config: DisplayConfig): void {
       node.y = pos.y;
     }
   });
-  (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 10);
+  (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 12);
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
-  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 80);
+  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 70);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
-  (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 18);
+  (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
   // Handle backward compatibility: 'weighted' maps to 'hierarchical01'
   const layoutMode = config.layoutMode ?? 'hierarchical01';
   const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
@@ -2338,11 +2338,11 @@ function buildNetworkData(filter: {
   console.log(`[DEBUG] Describes edges after style filtering: ${describesEdgesAfterStyleFilter.length}`, describesEdgesAfterStyleFilter);
 
   const layoutMode = filter.layoutMode;
-  const wrapChars = filter.wrapChars ?? 10;
+  const wrapChars = filter.wrapChars ?? 12;
   const minFontSize = Math.max(8, Math.min(96, filter.minFontSize ?? 20));
-  const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 80));
+  const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
-  const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 18));
+  const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
@@ -2664,12 +2664,15 @@ function buildNetworkData(filter: {
         }
       }
       
+      // Format the node label as "property label (datatype)" - e.g., "inferred at (xsd:date)"
+      const nodeLabel = `${dataProp.label} (${rangeLabel})`;
+      
       // Debug: Log the actual label being set for the node
-      console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
+      console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
         
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
-        label: wrapText(rangeLabel, wrapChars),
+        label: wrapText(nodeLabel, wrapChars),
         shape: 'box',
         size: 15,
         color: { background: dataPropBackgroundColor, border: dataPropBorderColor },
@@ -2690,9 +2693,6 @@ function buildNetworkData(filter: {
         
       propIndex++;
       
-      // Format the property label for the edge (wrapped if needed)
-      const edgeLabel = wrapText(dataProp.label, wrapChars);
-      
       // Apply search transparency if search query is active
       // Data property edges inherit opacity from their associated class node
       let dataPropEdgeColor = '#4a90a4';
@@ -2707,10 +2707,7 @@ function buildNetworkData(filter: {
         }
       }
       
-      // Debug: Log the actual label being set for the edge
-      console.log(`[DEBUG] Setting data property edge label: propertyName="${dataProp.propertyName}", classId="${classId}", edgeLabel="${edgeLabel}", isRestriction=${dataProp.isRestriction}`);
-      
-      // Create edge - thicker for restrictions, thinner dashed for normal
+      // Create edge - no label (label is now in the node)
       // Arrow points from class (domain) to data property node (range type)
       if (dataProp.isRestriction) {
         dataPropertyEdges.push({
@@ -2718,7 +2715,7 @@ function buildNetworkData(filter: {
           from: classId,
           to: dataProp.id,
           arrows: 'to',
-          label: edgeLabel,
+          label: '', // No label on edge - label is in the node
           font: { size: relationshipFontSize, color: dataPropEdgeFontColor },
           color: { color: dataPropEdgeColor, highlight: dataPropEdgeColor },
           dashes: false, // Solid line
@@ -2730,7 +2727,7 @@ function buildNetworkData(filter: {
           from: classId,
           to: dataProp.id,
           arrows: 'to',
-          label: edgeLabel,
+          label: '', // No label on edge - label is in the node
           font: { size: relationshipFontSize, color: dataPropEdgeFontColor },
           color: { color: dataPropEdgeColor, highlight: dataPropEdgeColor },
           dashes: [5, 5], // Dashed line
@@ -4708,10 +4705,10 @@ function renderApp(): void {
       </div>
       <div id="textDisplayWrap" style="position: relative; display: inline-block;">
         <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
-        <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 200px;">
+        <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
           <div style="margin-bottom: 10px;">
             <strong style="font-size: 12px;">Nodes text wrap:</strong>
-            <input type="number" id="wrapChars" min="1" max="50" value="10" style="width: 50px; margin-left: 6px;">
+            <input type="number" id="wrapChars" min="1" max="50" value="12" style="width: 50px; margin-left: 6px;">
             <span style="font-size: 11px;">chars</span>
           </div>
           <div>
@@ -4720,7 +4717,7 @@ function renderApp(): void {
               <span style="font-size: 11px;">Min (leaves)</span>
               <input type="number" id="minFontSize" min="8" max="96" value="20" style="width: 45px; margin-left: 6px;">
               <span style="font-size: 11px; margin-left: 8px;">Max (roots)</span>
-              <input type="number" id="maxFontSize" min="8" max="96" value="80" style="width: 45px; margin-left: 6px;">
+              <input type="number" id="maxFontSize" min="8" max="96" value="70" style="width: 45px; margin-left: 6px;">
             </div>
           </div>
           <div style="margin-top: 10px;">
@@ -4730,7 +4727,7 @@ function renderApp(): void {
           </div>
           <div style="margin-top: 10px;">
             <strong style="font-size: 12px;">Data properties font size</strong>
-            <input type="number" id="dataPropertyFontSize" min="8" max="48" value="18" style="width: 45px; margin-left: 6px;">
+            <input type="number" id="dataPropertyFontSize" min="8" max="48" value="12" style="width: 45px; margin-left: 6px;">
             <span style="font-size: 11px;">px</span>
           </div>
         </div>
@@ -5357,7 +5354,7 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('wrapChars') as HTMLInputElement).value,
       10
-    ) || 10;
+    ) || 12;
   const minFontSize =
     parseInt(
       (document.getElementById('minFontSize') as HTMLInputElement).value,
@@ -5367,7 +5364,7 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('maxFontSize') as HTMLInputElement).value,
       10
-    ) || 80;
+    ) || 70;
   const relationshipFontSize =
     parseInt(
       (document.getElementById('relationshipFontSize') as HTMLInputElement).value,
@@ -5377,7 +5374,7 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value,
       10
-    ) || 18;
+    ) || 12;
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement;
   const neighborsEl = document.getElementById(
     'searchIncludeNeighbors'
@@ -6098,9 +6095,9 @@ function setupEventListeners(): void {
   });
   document.getElementById('resetView')?.addEventListener('click', () => {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical01';
-    (document.getElementById('wrapChars') as HTMLInputElement).value = '10';
+    (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
-    (document.getElementById('maxFontSize') as HTMLInputElement).value = '80';
+    (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
