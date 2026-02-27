@@ -203,25 +203,60 @@ export async function fetchExternalOntologyTtl(
         // But the Turtle file is at github.io/dano/dano.ttl
         console.warn(`Alternate links not found in HTML. Trying direct Turtle URL construction...`);
         
+        const urlObj = new URL(finalUrl);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+        const turtleUrlPatterns: string[] = [];
+        
+        // First, try replacing .html with common RDF extensions (most common pattern for HTML ontology pages)
+        // This works for any URL, not just GitHub Pages
+        const lastPart = pathParts[pathParts.length - 1] || '';
+        if (finalUrl.endsWith('.html') || lastPart.endsWith('.html')) {
+          const baseUrl = finalUrl.replace(/\.html$/i, '');
+          turtleUrlPatterns.push(
+            `${baseUrl}.ttl`,
+            `${baseUrl}.owl`,
+            `${baseUrl}.rdf`
+          );
+        }
+        
+        // Try directory-based patterns (remove filename, try common ontology filenames)
+        if (pathParts.length > 0) {
+          const dirPath = pathParts.slice(0, -1); // Remove last part (filename)
+          const baseDir = dirPath.length > 0 ? `/${dirPath.join('/')}` : '';
+          const commonNames = ['ontology.ttl', 'index.ttl', 'ontology.owl', 'index.owl'];
+          for (const name of commonNames) {
+            turtleUrlPatterns.push(`${urlObj.origin}${baseDir}/${name}`);
+          }
+        }
+        
         // Check if the final URL is from GitHub Pages (common pattern for ontology hosting)
         if (finalUrl.includes('github.io') || finalUrl.includes('github.com')) {
-          // Try to construct the Turtle URL by appending /dano.ttl or replacing path with /dano.ttl
-          const urlObj = new URL(finalUrl);
-          const pathParts = urlObj.pathname.split('/').filter(p => p);
-          
-          // Try different patterns:
-          const turtleUrlPatterns = [
-            `${urlObj.origin}/${pathParts[0]}/dano.ttl`, // e.g., github.io/dano/dano.ttl
-            `${urlObj.origin}/dano.ttl`, // e.g., github.io/dano.ttl
-            `${urlObj.origin}/${pathParts.join('/')}/dano.ttl`, // Append to existing path
-          ];
+          // Try GitHub Pages specific patterns
+          if (pathParts.length > 0) {
+            turtleUrlPatterns.push(
+              `${urlObj.origin}/${pathParts[0]}/dano.ttl`, // e.g., github.io/dano/dano.ttl
+              `${urlObj.origin}/dano.ttl`, // e.g., github.io/dano.ttl
+              `${urlObj.origin}/${pathParts.join('/')}/dano.ttl` // Append to existing path
+            );
+            
+            // Try with the actual directory name instead of hardcoded "dano"
+            const dirName = pathParts[0];
+            if (dirName) {
+              turtleUrlPatterns.push(
+                `${urlObj.origin}/${dirName}/${dirName}.ttl`,
+                `${urlObj.origin}/${dirName}/ontology.ttl`
+              );
+            }
+          }
           
           // Also try based on the original normalized URL
           if (normalizedUrl.includes('w3id.org/dano')) {
             turtleUrlPatterns.unshift('https://rub-informatik-im-bauwesen.github.io/dano/dano.ttl');
           }
-          
-          for (const turtleUrl of turtleUrlPatterns) {
+        }
+        
+        // Try all constructed Turtle URL patterns
+        for (const turtleUrl of turtleUrlPatterns) {
             try {
               console.log(`Trying direct Turtle URL: ${turtleUrl}`);
               const directController = new AbortController();
@@ -246,15 +281,29 @@ export async function fetchExternalOntologyTtl(
                 throw directFetchErr;
               }
               
-              if (turtleResponse.ok) {
+              if (turtleResponse.ok || turtleResponse.status === 200) {
                 text = await turtleResponse.text();
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 
-                if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
-                  console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
-                  // Cache and return the TTL text
-                  externalTtlCache.set(normalizedUrl, text);
-                  return text;
+                // More robust HTML detection
+                const looksLikeHtml = text.trim().toLowerCase().startsWith('<!doctype') ||
+                                     text.trim().toLowerCase().startsWith('<html') ||
+                                     (text.includes('<html') && text.includes('</html>'));
+                
+                if (text.trim() && !looksLikeHtml) {
+                  // Check if it looks like RDF/Turtle
+                  const looksLikeRdf = text.trim().startsWith('@prefix') ||
+                                       text.trim().startsWith('@base') ||
+                                       text.includes('rdf:type') ||
+                                       text.includes('owl:') ||
+                                       text.includes('rdfs:');
+                  
+                  if (looksLikeRdf) {
+                    console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
+                    // Cache and return the TTL text
+                    externalTtlCache.set(normalizedUrl, text);
+                    return text;
+                  }
                 }
               }
             } catch (directErr) {
@@ -262,7 +311,6 @@ export async function fetchExternalOntologyTtl(
               console.warn(`Failed to fetch from direct URL ${turtleUrl}:`, directErr);
             }
           }
-        }
         
         console.error(`Could not find or fetch Turtle content from ${normalizedUrl}`);
         console.error(`  Final URL: ${finalUrl}`);
