@@ -77,7 +77,7 @@ export function initOpenOntologyModal(
       gap: 8px;
     `;
     const icon = document.createElement('img');
-    icon.src = '/OntoCanvas.png';
+    icon.src = `${import.meta.env.BASE_URL}OntoCanvas.png`;
     icon.alt = 'OntoCanvas';
     icon.style.cssText = 'width: 24px; height: 24px;';
     title.appendChild(icon);

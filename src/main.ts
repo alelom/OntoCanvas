@@ -4619,7 +4619,7 @@ function renderApp(): void {
     <div id="controls">
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <button type="button" id="openOntologyBtn" class="primary" style="width: fit-content; display: flex; align-items: center; gap: 8px;">
-          <img src="/OntoCanvas.png" alt="OntoCanvas" style="width: 20px; height: 20px;" />
+          <img src="${import.meta.env.BASE_URL}OntoCanvas.png" alt="OntoCanvas" style="width: 20px; height: 20px;" />
           Open ontology
         </button>
         <input type="file" id="fileInput" accept=".ttl,.turtle" style="display: none;" />
