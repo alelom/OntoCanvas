@@ -8,12 +8,37 @@ Interactive ontology editor and visualizer with TTL file support.
 
 ## Features
 
-- **Nodes and edges styling based on rules**
+ 
 - **Layout styles** – Hierarchical (weighted) or force-directed
-- **Font size** – Min/max (leaf→root) with hierarchical scaling
+- **Editing** – Visually add/remove nodes (classes) and edges (object properties) rename classes, add data relationships, undo/redo, ...
+- **Nodes and edges styling based on rules**: font size, line colour
 - **Search** – Filter by node label or relationship type
-- **Relationships** – Show/hide and color by relationship type
-- **Editing** – Add/remove nodes and edges, rename nodes, undo/redo
+- **Relationships filters** – Show/hide by relationship type
+
+
+## Comparison with other ontology editors and visualisers 
+
+| Tool | Pros | Cons |
+|------|------|------|
+| **This editor** | **Hierarchical view** – clear tree layout for class hierarchies; **simple fast edits** – add/remove nodes and edges, rename, undo/redo; browser-based, no install; direct TTL load/save; lightweight, no server | Limited OWL expressivity; no reasoner; no SPARQL; focused on class hierarchy + relationships |
+| **Protégé / WebProtégé** | Industry standard; full OWL support; reasoner integration; plugins; collaborative (WebProtégé) | Not very visual; steep learning curve; heavy; form-based, not graph-first |
+| **Onto4ALL** | Browser-based; box-and-arrow visual; simple | Limited features; basic editing; not widely maintained |
+| **OWLGrEd** | UML-style diagrams; good for drawing class diagrams; OWL export | Desktop app; less interactive; diagram-first, not live graph |
+| **VocBench 3** | Web-based; strong for SKOS; light OWL; validation | Focused on vocabularies, not full ontology modeling |
+| **metaphactory** | Commercial KG platform; visual ontology modeling; enterprise features | Paid; heavyweight; requires setup |
+| **GraphDB Workbench** | Triplestore UI; graph visualisation; SPARQL; query results as graph | Editor is secondary; not designed for ontology authoring |
+| **LinkedDataHub** | Low-code RDF/KG; forms + graph views; flexible | Complex setup; more data than schema oriented |
+| **yEd + manual export** | Generic graph editor; flexible layout; familiar | No ontology semantics; manual translation to TTL; no round-trip |
+| **TopBraid Composer** | Full OWL; visual + form; SPARQL; Eclipse-based | Commercial; desktop; heavyweight |
+| **Semaforer** | Lightweight; web-based; simple | Limited scope; less mature |
+| **Neon** | OWL 2; ontology evolution; change tracking | Research tool; less mainstream |
+
+**When to use this editor:** You want a quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything, with direct TTL file round-trip and undo/redo.
+
+
+
+
+
 
 ## Testing
 
@@ -53,25 +78,6 @@ npm run build
 ```
 
 Output is in `dist/`. Deploy the contents to any static host (e.g. GitHub Pages).
-
-## Comparison with other ontology editors
-
-| Tool | Pros | Cons |
-|------|------|------|
-| **This editor** | **Hierarchical view** – clear tree layout for class hierarchies; **simple fast edits** – add/remove nodes and edges, rename, undo/redo; browser-based, no install; direct TTL load/save; lightweight, no server | Limited OWL expressivity; no reasoner; no SPARQL; focused on class hierarchy + relationships |
-| **Protégé / WebProtégé** | Industry standard; full OWL support; reasoner integration; plugins; collaborative (WebProtégé) | Not very visual; steep learning curve; heavy; form-based, not graph-first |
-| **Onto4ALL** | Browser-based; box-and-arrow visual; simple | Limited features; basic editing; not widely maintained |
-| **OWLGrEd** | UML-style diagrams; good for drawing class diagrams; OWL export | Desktop app; less interactive; diagram-first, not live graph |
-| **VocBench 3** | Web-based; strong for SKOS; light OWL; validation | Focused on vocabularies, not full ontology modeling |
-| **metaphactory** | Commercial KG platform; visual ontology modeling; enterprise features | Paid; heavyweight; requires setup |
-| **GraphDB Workbench** | Triplestore UI; graph visualisation; SPARQL; query results as graph | Editor is secondary; not designed for ontology authoring |
-| **LinkedDataHub** | Low-code RDF/KG; forms + graph views; flexible | Complex setup; more data than schema oriented |
-| **yEd + manual export** | Generic graph editor; flexible layout; familiar | No ontology semantics; manual translation to TTL; no round-trip |
-| **TopBraid Composer** | Full OWL; visual + form; SPARQL; Eclipse-based | Commercial; desktop; heavyweight |
-| **Semaforer** | Lightweight; web-based; simple | Limited scope; less mature |
-| **Neon** | OWL 2; ontology evolution; change tracking | Research tool; less mainstream |
-
-**When to use this editor:** You want a quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything, with direct TTL file round-trip and undo/redo.
 
 ## Tech stack
 
