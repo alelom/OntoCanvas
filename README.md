@@ -3,7 +3,8 @@
   <h1>OntoCanvas</h1>
 </div>
 
-Interactive ontology Same with TTL file support.
+Interactive ontology editor and visualizer with TTL file support.
+
 
 ## Features
 
