@@ -37,25 +37,14 @@ Interactive ontology editor and visualizer with TTL file support.
 
 
 
+## Tech stack
+
+- **Vite** – Build tool
+- **TypeScript** – Type safety
+- **N3.js** – Turtle/RDF parsing (client-side)
+- **vis-network** – Graph visualization
 
 
-
-## Testing
-
-```bash
-npm run test        # Run tests once
-npm run test:watch  # Run tests in watch mode
-```
-
-Tests cover load (parse), edit (label update), save (serialize), and round-trip consistency.
-
-**E2E test (delete + undo):** With the dev server running (`npm run dev`), from the project root:
-
-```bash
-uv run python tests/test_editor_delete_e2e.py
-```
-
-Verifies that deleting a node leaves its children floating and that undo restores correctly. Tests both "with search" and "without search" scenarios. If you see delete/undo bugs in the browser, try a hard refresh (Ctrl+Shift+R) to clear cache.
 
 ## Setup
 
@@ -79,9 +68,11 @@ npm run build
 
 Output is in `dist/`. Deploy the contents to any static host (e.g. GitHub Pages).
 
-## Tech stack
+## Testing
 
-- **Vite** – Build tool
-- **TypeScript** – Type safety
-- **N3.js** – Turtle/RDF parsing (client-side)
-- **vis-network** – Graph visualization
+```bash
+npm run test        # Run tests once
+npm run test:watch  # Run tests in watch mode
+```
+
+Tests cover load (parse), edit (label update), save (serialize), and round-trip consistency with E2E tests.
