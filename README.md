@@ -3,15 +3,12 @@
   <h1>OntoCanvas</h1>
 </div>
 
-Interactive ontology visualizer with TTL file support. Same visualization features as the [Visualizer](./Visualizer/), plus the ability to load any Turtle (.ttl) ontology file.
+Interactive ontology Same with TTL file support.
 
 ## Features
 
-- **Load ontology from file** – Open any `.ttl` or `.turtle` ontology from your machine
-- **Load last opened ontology** – Quickly reopen the most recently used ontology file
-- **Labellable filter** – All / labellable only / non-labellable only
-- **Node color by** – Labellable status or default
-- **Layout** – Hierarchical (weighted) or force-directed
+- **Nodes and edges styling based on rules**
+- **Layout styles** – Hierarchical (weighted) or force-directed
 - **Font size** – Min/max (leaf→root) with hierarchical scaling
 - **Search** – Filter by node label or relationship type
 - **Relationships** – Show/hide and color by relationship type
