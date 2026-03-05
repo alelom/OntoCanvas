@@ -3,7 +3,7 @@ import { postProcessTurtle } from './turtlePostProcess';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
-import { isDebugMode, debugLog, debugError } from './utils/debug';
+import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -269,7 +269,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
 
   // Debug: Log all blank node restrictions to find describes edge
   const blankNodeRestrictions = subClassQuads.filter((q) => isBlankNode(q.object));
-  console.log(`[DEBUG] Found ${blankNodeRestrictions.length} blank node restrictions (potential edges)`);
+  debugLog(`[DEBUG] Found ${blankNodeRestrictions.length} blank node restrictions (potential edges)`);
   
   // Debug: Specifically look for describes property
   const describesPropertyUri = 'https://w3id.org/dano#describes';
@@ -306,7 +306,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
         const propUri = (onProperty.object as { value: string }).value;
         if (propUri === describesPropertyUri || propUri.includes('describes')) {
           foundDescribesRestriction = true;
-          console.log('[DEBUG] Found describes restriction:', {
+          debugLog('[DEBUG] Found describes restriction:', {
             subject: subjUri,
             subjectName: subjName,
             propertyUri: propUri,
@@ -321,23 +321,23 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       if (!onProperty || !targetQuad) {
         // Debug: Log why restriction was skipped
         if (!onProperty) {
-          console.log(`[DEBUG] Skipped restriction: missing onProperty for subject ${subjName}`);
+          debugLog(`[DEBUG] Skipped restriction: missing onProperty for subject ${subjName}`);
         }
         if (!targetQuad) {
-          console.log(`[DEBUG] Skipped restriction: missing someValuesFrom/onClass for subject ${subjName}, property ${onProperty ? (onProperty.object as { value: string }).value : 'unknown'}`);
+          debugLog(`[DEBUG] Skipped restriction: missing someValuesFrom/onClass for subject ${subjName}, property ${onProperty ? (onProperty.object as { value: string }).value : 'unknown'}`);
         }
         continue;
       }
       const target = targetQuad.object;
       if (target.termType !== 'NamedNode') {
-        console.log(`[DEBUG] Skipped restriction: target is not NamedNode for subject ${subjName}`);
+        debugLog(`[DEBUG] Skipped restriction: target is not NamedNode for subject ${subjName}`);
         continue;
       }
       const targetName = extractLocalName(target.value);
       
       // Debug: Log node matching for describes
       if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
-        console.log('[DEBUG] Processing describes restriction:', {
+        debugLog('[DEBUG] Processing describes restriction:', {
           subjectName: subjName,
           targetUri: target.value,
           targetName: targetName,
@@ -349,7 +349,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
       if (!seenClasses.has(targetName)) {
         // Debug: Log when target node is missing
         if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
-          console.warn(`[DEBUG] Target node "${targetName}" not in seenClasses. Available classes:`, Array.from(seenClasses));
+          debugWarn(`[DEBUG] Target node "${targetName}" not in seenClasses. Available classes:`, Array.from(seenClasses));
         }
         continue;
       }
@@ -376,7 +376,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
         
         // Debug: Log DimensionChain contains edge specifically
         if (subjName === 'DimensionChain' && targetName === 'Dimension' && propName.includes('contains')) {
-          console.log('[DEBUG] Parsed DimensionChain->Dimension contains restriction:', {
+          debugLog('[DEBUG] Parsed DimensionChain->Dimension contains restriction:', {
             edge,
             cardinality,
             minQual: minQual ? (minQual.object as { value: string }).value : null,
@@ -391,24 +391,24 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
         edges.push(edge);
         // Debug: Log external property edges
         if (propName.startsWith('http://') || propName.startsWith('https://')) {
-          console.log('[DEBUG] Parsed external property edge:', edge);
+          debugLog('[DEBUG] Parsed external property edge:', edge);
         }
         // Debug: Specifically log describes edge
         if (propName === describesPropertyUri || propName.includes('describes')) {
-          console.log('[DEBUG] ✓ Successfully added describes edge:', edge);
+          debugLog('[DEBUG] ✓ Successfully added describes edge:', edge);
         }
         // Debug: Log contains edges to check for duplicates
         if (propName.includes('contains')) {
-          console.log('[DEBUG] Added contains edge:', { key, edge, propName, propUri });
+          debugLog('[DEBUG] Added contains edge:', { key, edge, propName, propUri });
         }
       } else {
         // Debug: Log duplicate edge
         if (propName === describesPropertyUri || propName.includes('describes')) {
-          console.log('[DEBUG] Duplicate describes edge skipped (key already exists):', key);
+          debugLog('[DEBUG] Duplicate describes edge skipped (key already exists):', key);
         }
         // Debug: Log duplicate contains edge
         if (propName.includes('contains')) {
-          console.warn('[DEBUG] ⚠ Duplicate contains edge skipped (key already exists):', key, {
+          debugWarn('[DEBUG] ⚠ Duplicate contains edge skipped (key already exists):', key, {
             subject: subjUri,
             target: target.value,
             propUri: propUri
@@ -420,11 +420,11 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   
   // Debug: Summary
   if (!foundDescribesRestriction) {
-    console.warn('[DEBUG] ⚠ No describes restriction found in TTL store');
+    debugLog('[DEBUG] ⚠ No describes restriction found in TTL store');
   }
-  console.log(`[DEBUG] Total edges parsed: ${edges.length}`);
+  debugLog(`[DEBUG] Total edges parsed: ${edges.length}`);
   const describesEdges = edges.filter((e) => e.type === describesPropertyUri || e.type.includes('describes'));
-  console.log(`[DEBUG] Describes edges in parsed edges: ${describesEdges.length}`, describesEdges);
+  debugLog(`[DEBUG] Describes edges in parsed edges: ${describesEdges.length}`, describesEdges);
 
   const objectProps = getObjectProperties(store);
   const dataProps = getDataProperties(store);
@@ -494,7 +494,7 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
           
           // Debug: Log domain/range edges
           if (propName.includes('describes') || propName.includes('contains')) {
-            console.log('[DEBUG] Added edge from domain/range:', { edge, propUri, domainUri, rangeUri });
+            debugLog('[DEBUG] Added edge from domain/range:', { edge, propUri, domainUri, rangeUri });
           }
         }
       }

@@ -1,5 +1,6 @@
 import { Parser, Store } from 'n3';
 import { extractLocalName, extractLocalNameFromUri } from './parser';
+import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 
 export interface ExternalClassInfo {
   uri: string;
@@ -44,6 +45,21 @@ const externalClassesCache: Map<string, ExternalClassInfo[]> = new Map();
  */
 const externalObjectPropertiesCache: Map<string, ExternalObjectPropertyInfo[]> = new Map();
 
+// Standard vocabularies that don't need to be fetched (they're built into the system)
+// These are commonly referenced but don't need to be fetched as external ontologies
+const STANDARD_VOCABULARIES = new Set([
+  'http://www.w3.org/2002/07/owl',
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns',
+  'http://www.w3.org/2000/01/rdf-schema',
+  'http://www.w3.org/2001/XMLSchema',
+  'http://www.w3.org/2004/02/skos/core',
+  'http://www.opengis.net/ont/geosparql',
+  'http://xmlns.com/foaf/0.1/',
+  'http://purl.org/vocab/vann/',
+  'http://purl.org/dc/terms/',
+  'https://schema.org/',
+]);
+
 /**
  * Fetches and caches the raw TTL content from an external ontology.
  * This is the central function that ensures we fetch TTL once and reuse it.
@@ -55,14 +71,27 @@ export async function fetchExternalOntologyTtl(
   // Normalize URL (remove trailing # if present)
   const normalizedUrl = url.endsWith('#') ? url.slice(0, -1) : url;
   
+  // Skip standard vocabularies - they don't need to be fetched
+  // These are expected to fail (CORS, 404, etc.) and failures should be silent
+  if (STANDARD_VOCABULARIES.has(normalizedUrl) || STANDARD_VOCABULARIES.has(normalizedUrl.replace(/\/$/, ''))) {
+    if (isDebugMode()) {
+      debugWarn(`Skipping fetch for standard vocabulary: ${normalizedUrl}`);
+    }
+    return null;
+  }
+  
   // Check cache first
   if (externalTtlCache.has(normalizedUrl)) {
-    console.log(`Using cached TTL for ${normalizedUrl}`);
+    if (isDebugMode()) {
+      console.log(`Using cached TTL for ${normalizedUrl}`);
+    }
     return externalTtlCache.get(normalizedUrl)!;
   }
 
   try {
-    console.log(`Fetching external ontology TTL from: ${normalizedUrl}`);
+    if (isDebugMode()) {
+      console.log(`Fetching external ontology TTL from: ${normalizedUrl}`);
+    }
     
     // Use HTTP content negotiation - match curl format exactly
     // Override User-Agent to avoid server serving HTML to browsers
@@ -70,7 +99,9 @@ export async function fetchExternalOntologyTtl(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
-      console.error(`Fetch timeout after 2s for ${normalizedUrl}`);
+      if (isDebugMode()) {
+        debugWarn(`Fetch timeout after 2s for ${normalizedUrl}`);
+      }
     }, 2000); // 2 second timeout
     
     let response;
@@ -88,32 +119,45 @@ export async function fetchExternalOntologyTtl(
     } catch (fetchErr) {
       clearTimeout(timeoutId);
       if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
-        console.error(`Fetch aborted (timeout) for ${normalizedUrl}`);
-        // If initial fetch times out, try known fallback URLs directly
-        // This handles cases where the redirect is slow but the final URL works
-        console.warn(`Initial fetch timed out, trying fallback URLs directly...`);
+        if (isDebugMode()) {
+          debugWarn(`Fetch aborted (timeout) for ${normalizedUrl}`);
+          debugWarn(`Initial fetch timed out, trying fallback URLs directly...`);
+        }
         response = undefined; // Mark that we need to try fallbacks
       } else {
-        throw fetchErr;
+        // CORS errors and network errors are expected for many external ontologies
+        // Only log in debug mode
+        if (isDebugMode()) {
+          debugWarn(`Fetch error for ${normalizedUrl}:`, fetchErr);
+        }
+        return null;
       }
     }
     
     // If we got a response, process it normally
     if (response) {
       if (!response.ok) {
-        console.error(`Failed to fetch ${normalizedUrl}: HTTP ${response.status} ${response.statusText}`);
+        if (isDebugMode()) {
+          debugWarn(`Failed to fetch ${normalizedUrl}: HTTP ${response.status} ${response.statusText}`);
+        }
         return null;
       }
       
       const contentType = response.headers.get('content-type') || '';
       const finalUrl = response.url; // Get final URL after redirects
-      console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
+      if (isDebugMode()) {
+        console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
+      }
       
       let text = await response.text();
-      console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
+      if (isDebugMode()) {
+        console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
+      }
       
       if (!text.trim()) {
-        console.warn(`Empty response from ${normalizedUrl}`);
+        if (isDebugMode()) {
+          debugWarn(`Empty response from ${normalizedUrl}`);
+        }
         return null;
       }
       
@@ -141,8 +185,8 @@ export async function fetchExternalOntologyTtl(
         // Content negotiation failed - server returned HTML despite Accept: text/turtle
         // This often happens when servers check User-Agent and serve HTML to browsers
         // Try to extract the actual Turtle URL from HTML alternate links
-        console.warn(`Content negotiation failed for ${normalizedUrl}: received HTML instead of RDF/Turtle.`);
-        console.warn(`  Attempting to extract Turtle link from HTML...`);
+        debugLog(`[DEBUG] Content negotiation failed for ${normalizedUrl}: received HTML instead of RDF/Turtle.`);
+        debugLog(`[DEBUG] Attempting to extract Turtle link from HTML...`);
         
         // Look for alternate links in HTML (common pattern: <link rel="alternate" type="text/turtle" href="...">)
         const linkPatterns = [
@@ -155,7 +199,9 @@ export async function fetchExternalOntologyTtl(
           const match = text.match(pattern);
           if (match && match[1]) {
             const turtleUrl = new URL(match[1], normalizedUrl).href;
-            console.log(`Found alternate Turtle link in HTML: ${turtleUrl}`);
+            if (isDebugMode()) {
+              console.log(`Found alternate Turtle link in HTML: ${turtleUrl}`);
+            }
             
             // Fetch the actual Turtle content from the alternate link
             try {
@@ -201,7 +247,7 @@ export async function fetchExternalOntologyTtl(
         // If HTML alternate links didn't work, try constructing the direct Turtle URL
         // For w3id.org/dano, the server redirects to github.io/dano/ which serves HTML to browsers
         // But the Turtle file is at github.io/dano/dano.ttl
-        console.warn(`Alternate links not found in HTML. Trying direct Turtle URL construction...`);
+        debugLog(`[DEBUG] Alternate links not found in HTML. Trying direct Turtle URL construction...`);
         
         const urlObj = new URL(finalUrl);
         const pathParts = urlObj.pathname.split('/').filter(p => p);
@@ -299,7 +345,9 @@ export async function fetchExternalOntologyTtl(
                                        text.includes('rdfs:');
                   
                   if (looksLikeRdf) {
-                    console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
+                    if (isDebugMode()) {
+                      console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
+                    }
                     // Cache and return the TTL text
                     externalTtlCache.set(normalizedUrl, text);
                     return text;
@@ -312,15 +360,20 @@ export async function fetchExternalOntologyTtl(
             }
           }
         
-        console.error(`Could not find or fetch Turtle content from ${normalizedUrl}`);
-        console.error(`  Final URL: ${finalUrl}`);
-        console.error(`  Content-Type: ${contentType}`);
+        // This is expected for many external ontologies - only warn in debug mode
+        if (isDebugMode()) {
+          debugWarn(`Could not find or fetch Turtle content from ${normalizedUrl}`);
+          debugWarn(`  Final URL: ${finalUrl}`);
+          debugWarn(`  Content-Type: ${contentType}`);
+        }
         return null;
       }
       
       // If we get here, we have content but it's not clearly RDF or HTML
       // Try to parse it anyway (might be RDF without proper content-type header)
-      console.warn(`Unclear content type from ${normalizedUrl}, assuming it's Turtle`);
+      if (isDebugMode()) {
+        debugWarn(`Unclear content type from ${normalizedUrl}, assuming it's Turtle`);
+      }
       // Cache and return the text anyway
       externalTtlCache.set(normalizedUrl, text);
       return text;
@@ -330,7 +383,9 @@ export async function fetchExternalOntologyTtl(
     // 1. Initial fetch timed out (response is undefined)
     // 2. We need to try known fallback URLs
     // Try known fallback URLs directly
-    console.warn(`Trying known fallback URLs directly...`);
+    if (isDebugMode()) {
+      debugWarn(`Trying known fallback URLs directly...`);
+    }
     
     // Known URL patterns that work when the initial fetch times out
     const knownFallbacks: Array<{ pattern: string | RegExp; turtleUrl: string }> = [
@@ -342,7 +397,9 @@ export async function fetchExternalOntologyTtl(
     
     for (const fallback of knownFallbacks) {
       if (typeof fallback.pattern === 'string' ? normalizedUrl.includes(fallback.pattern) : fallback.pattern.test(normalizedUrl)) {
-        console.log(`Trying known fallback URL: ${fallback.turtleUrl}`);
+        if (isDebugMode()) {
+          console.log(`Trying known fallback URL: ${fallback.turtleUrl}`);
+        }
         try {
           const fallbackController = new AbortController();
           const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 2000);
@@ -361,7 +418,9 @@ export async function fetchExternalOntologyTtl(
           } catch (fallbackFetchErr) {
             clearTimeout(fallbackTimeoutId);
             if (fallbackFetchErr instanceof Error && fallbackFetchErr.name === 'AbortError') {
-              console.warn(`Fallback URL timed out: ${fallback.turtleUrl}`);
+              if (isDebugMode()) {
+                debugWarn(`Fallback URL timed out: ${fallback.turtleUrl}`);
+              }
               continue; // Try next fallback
             }
             throw fallbackFetchErr;
@@ -372,23 +431,34 @@ export async function fetchExternalOntologyTtl(
             const fallbackContentType = fallbackResponse.headers.get('content-type') || '';
             
             if (fallbackText.trim() && !fallbackText.trim().toLowerCase().startsWith('<!doctype')) {
-              console.log(`Successfully fetched Turtle from fallback URL: ${fallback.turtleUrl}, content-type: ${fallbackContentType}`);
+              if (isDebugMode()) {
+                console.log(`Successfully fetched Turtle from fallback URL: ${fallback.turtleUrl}, content-type: ${fallbackContentType}`);
+              }
               // Cache and return the TTL text
               externalTtlCache.set(normalizedUrl, fallbackText);
               return fallbackText;
             }
           }
         } catch (fallbackErr) {
-          console.warn(`Failed to fetch from fallback URL ${fallback.turtleUrl}:`, fallbackErr);
+          if (isDebugMode()) {
+            debugWarn(`Failed to fetch from fallback URL ${fallback.turtleUrl}:`, fallbackErr);
+          }
         }
       }
     }
     
     // If all fallbacks failed, return null
-    console.error(`Failed to fetch TTL from ${normalizedUrl} and all fallback URLs`);
+    // This is expected for many external ontologies - only warn in debug mode
+    if (isDebugMode()) {
+      debugWarn(`Failed to fetch TTL from ${normalizedUrl} and all fallback URLs`);
+    }
     return null;
   } catch (err) {
-    console.error(`Failed to fetch TTL from ${normalizedUrl}:`, err);
+    // CORS errors and network errors are expected for many external ontologies
+    // Only log in debug mode
+    if (isDebugMode()) {
+      debugWarn(`Failed to fetch TTL from ${normalizedUrl}:`, err);
+    }
     return null;
   }
 }
@@ -444,7 +514,9 @@ async function parseOntologyContent(
       });
     }
     
-    console.log(`Extracted ${classes.length} classes from ${normalizedUrl}`);
+    if (isDebugMode()) {
+      console.log(`Extracted ${classes.length} classes from ${normalizedUrl}`);
+    }
     externalClassesCache.set(normalizedUrl, classes);
     return classes;
   } catch (err) {
@@ -507,10 +579,14 @@ async function parseOntologyObjectProperties(
       });
     }
     
-    console.log(`Extracted ${objectProperties.length} object properties from ${normalizedUrl}`);
+    if (isDebugMode()) {
+      console.log(`Extracted ${objectProperties.length} object properties from ${normalizedUrl}`);
+    }
     return objectProperties;
   } catch (err) {
-    console.error(`Failed to parse object properties from ${normalizedUrl}:`, err);
+    if (isDebugMode()) {
+      debugError(`Failed to parse object properties from ${normalizedUrl}:`, err);
+    }
     return [];
   }
 }
@@ -583,12 +659,16 @@ export async function searchExternalClasses(
   const queryLower = query.toLowerCase().trim();
   const allResults: ExternalClassInfo[] = [];
   
-  console.log(`Searching for "${queryLower}" across ${externalRefs.length} ontology(ies)`);
+  if (isDebugMode()) {
+    console.log(`Searching for "${queryLower}" across ${externalRefs.length} ontology(ies)`);
+  }
   
   for (const ref of externalRefs) {
     try {
       const classes = await fetchExternalOntologyClasses(ref.url, externalRefs);
-      console.log(`Found ${classes.length} classes in ${ref.url}`);
+      if (isDebugMode()) {
+        console.log(`Found ${classes.length} classes in ${ref.url}`);
+      }
       const matches = classes.filter((cls) => {
         const localNameLower = cls.localName.toLowerCase();
         const labelLower = cls.label.toLowerCase();
@@ -596,14 +676,22 @@ export async function searchExternalClasses(
                           labelLower.includes(queryLower);
         return nameMatch;
       });
-      console.log(`Found ${matches.length} matches in ${ref.url}`);
+      if (isDebugMode()) {
+        console.log(`Found ${matches.length} matches in ${ref.url}`);
+      }
       allResults.push(...matches);
     } catch (err) {
-      console.error(`Error searching in ${ref.url}:`, err);
+      if (isDebugMode()) {
+        debugError(`Error searching in ${ref.url}:`, err);
+      }
     }
   }
   
-  console.log(`Total matches: ${allResults.length}`);
+  if (isDebugMode()) {
+    if (isDebugMode()) {
+    console.log(`Total matches: ${allResults.length}`);
+  }
+  }
   
   // Sort by relevance (exact matches first, then by name)
   return allResults.sort((a, b) => {
@@ -642,12 +730,16 @@ export async function searchExternalObjectProperties(
   const queryLower = query.toLowerCase().trim();
   const allResults: ExternalObjectPropertyInfo[] = [];
   
-  console.log(`Searching for object properties "${queryLower}" across ${externalRefs.length} ontology(ies)`);
+  if (isDebugMode()) {
+    console.log(`Searching for object properties "${queryLower}" across ${externalRefs.length} ontology(ies)`);
+  }
   
   for (const ref of externalRefs) {
     try {
       const objectProperties = await fetchExternalOntologyObjectProperties(ref.url, externalRefs);
-      console.log(`Found ${objectProperties.length} object properties in ${ref.url}`);
+      if (isDebugMode()) {
+        console.log(`Found ${objectProperties.length} object properties in ${ref.url}`);
+      }
       const matches = objectProperties.filter((op) => {
         const localNameLower = op.localName.toLowerCase();
         const labelLower = op.label.toLowerCase();
@@ -655,10 +747,14 @@ export async function searchExternalObjectProperties(
                           labelLower.includes(queryLower);
         return nameMatch;
       });
-      console.log(`Found ${matches.length} matches in ${ref.url}`);
+      if (isDebugMode()) {
+        console.log(`Found ${matches.length} matches in ${ref.url}`);
+      }
       allResults.push(...matches);
     } catch (err) {
-      console.error(`Error searching object properties in ${ref.url}:`, err);
+      if (isDebugMode()) {
+        debugError(`Error searching object properties in ${ref.url}:`, err);
+      }
     }
   }
   
@@ -705,23 +801,35 @@ export function clearExternalClassesCache(): void {
 export async function preloadExternalOntologyClasses(
   externalRefs: ExternalOntologyReference[]
 ): Promise<void> {
-  console.log(`Pre-loading TTL content for ${externalRefs.length} external ontology(ies)...`);
+  if (isDebugMode()) {
+    console.log(`Pre-loading TTL content for ${externalRefs.length} external ontology(ies)...`);
+  }
   const promises = externalRefs.map(async (ref) => {
     try {
       // Fetch and cache the TTL content (this will be reused for both classes and object properties)
       const ttlText = await fetchExternalOntologyTtl(ref.url);
       if (ttlText) {
-        console.log(`Successfully pre-loaded TTL for ${ref.url} (${ttlText.length} characters)`);
+        if (isDebugMode()) {
+          console.log(`Successfully pre-loaded TTL for ${ref.url} (${ttlText.length} characters)`);
+        }
         // Pre-parse classes and object properties to warm up the caches
         await fetchExternalOntologyClasses(ref.url, externalRefs);
         await fetchExternalOntologyObjectProperties(ref.url, externalRefs);
       } else {
-        console.warn(`Failed to pre-load TTL for ${ref.url}`);
+        // Failed to pre-load - this is expected for many external ontologies (CORS, 404, etc.)
+        // Only warn in debug mode
+        if (isDebugMode()) {
+          debugWarn(`Failed to pre-load TTL for ${ref.url} (this is expected for many external ontologies)`);
+        }
       }
     } catch (err) {
-      console.warn(`Failed to pre-load ${ref.url}:`, err);
+      if (isDebugMode()) {
+        debugWarn(`Failed to pre-load ${ref.url}:`, err);
+      }
     }
   });
   await Promise.allSettled(promises);
-  console.log('Finished pre-loading external ontologies');
+  if (isDebugMode()) {
+    console.log('Finished pre-loading external ontologies');
+  }
 }

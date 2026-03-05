@@ -5551,9 +5551,13 @@ async function loadTtlAndRender(
     }
     
     // Pre-fetch and cache external ontology classes and object properties (non-blocking)
+    // Failures are expected (CORS, 404, etc.) and are handled silently unless in debug mode
     if (externalOntologyReferences.length > 0) {
       preloadExternalOntologyClasses(externalOntologyReferences).catch((err) => {
-        console.error('Failed to pre-load external ontologies:', err);
+        // Only log in debug mode - failures are expected for many external ontologies
+        if (isDebugMode()) {
+          debugWarn('Failed to pre-load external ontologies:', err);
+        }
       });
     }
     
@@ -6021,6 +6025,18 @@ async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConf
     const response = await fetch(displayUrl);
     if (!response.ok) {
       // 404 or other error - display file doesn't exist, which is fine
+      // Show a helpful warning message (not an error, since this is expected)
+      // Note: The browser will also show a 404 error in the Network tab, but this warning
+      // provides user-friendly context that this is expected behavior.
+      if (response.status === 404) {
+        // Use a single, clear warning message that's easy to spot
+        console.warn(
+          `[OntoCanvas] Display style file not found: ${displayUrl}`
+        );
+        console.warn(
+          `We tried looking for an OntoCanvas display style file related to this ontology, but it could not be found. The ontology will load without custom styling.`
+        );
+      }
       return null;
     }
     const text = await response.text();
@@ -6037,7 +6053,10 @@ async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConf
     return config;
   } catch (err) {
     // Network error or parse error - silently fail (display file is optional)
-    console.debug('Could not load display config from URL:', displayUrl, err);
+    // Only log in debug mode
+    if (isDebugMode()) {
+      debugWarn('Could not load display config from URL:', displayUrl, err);
+    }
     return null;
   }
 }
@@ -7049,10 +7068,9 @@ console.warn = (...args: unknown[]) => {
   if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
     addTestLog(message);
   }
-  // Only log warnings to console if debug mode is enabled (for production performance)
-  if (isDebugMode() || message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[TEST]')) {
-    originalConsoleWarn.apply(console, args);
-  }
+  // Always log warnings to console (warnings are important user feedback)
+  // This includes the display.json 404 warning which should always be visible
+  originalConsoleWarn.apply(console, args);
 };
 
 // Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
