@@ -3073,7 +3073,7 @@ function buildNetworkData(filter: {
 
   // Handle multiple self-loops on the same node - space them out using different sizes and angles
   // When multiple object properties have the same domain and range (self-loops), they overlap completely.
-  // We use different selfReferenceSize values to create concentric loops that don't overlap.
+  // We use different selfReference.size values to create concentric loops that don't overlap.
   // The spacing scales with relationshipFontSize to prevent label overlap with larger fonts.
   const nodeToSelfLoops = new Map<string, Array<Record<string, unknown>>>();
   selfLoops.forEach((edgeObj) => {
@@ -3091,18 +3091,23 @@ function buildNetworkData(filter: {
       const sizeIncrement = Math.max(20, relationshipFontSize * 1.5);
       
       list.forEach((edgeObj, i) => {
-        edgeObj.selfReferenceSize = baseSize + i * sizeIncrement;
-        
-        // Try to distribute angles evenly around the node (0 to 2π)
-        // Note: selfReferenceAngle may not be supported in all vis-network versions
-        // The size difference alone should prevent complete overlap
+        // Distribute angles evenly around the node (0 to 2π)
         const angleStep = (2 * Math.PI) / list.length;
         const angle = i * angleStep;
-        edgeObj.selfReferenceAngle = angle;
+        
+        // Use new selfReference format (replaces deprecated selfReferenceSize and selfReferenceAngle)
+        edgeObj.selfReference = {
+          size: baseSize + i * sizeIncrement,
+          angle: angle,
+        };
       });
     } else if (list.length === 1) {
       // Single self-loop - scale with font size (minimum 30)
-      list[0].selfReferenceSize = Math.max(30, relationshipFontSize * 2);
+      // Use default angle (Math.PI / 4) as suggested in the deprecation warning
+      list[0].selfReference = {
+        size: Math.max(30, relationshipFontSize * 2),
+        angle: Math.PI / 4,
+      };
     }
   });
 
