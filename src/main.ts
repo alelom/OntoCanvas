@@ -653,7 +653,7 @@ function performDeleteSelection(): boolean {
     } catch (err) {
       // Edge not found in store (may only exist in rawData from domain/range)
       // Still remove from rawData
-      console.warn(`Failed to remove connected edge from store: ${err instanceof Error ? err.message : String(err)}`);
+      debugWarn(`Failed to remove connected edge from store: ${err instanceof Error ? err.message : String(err)}`);
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) {
         const edge = rawData.edges[idx];
