@@ -137,7 +137,7 @@ export function getEdgeStyleConfig(
     
     config[type] = {
       show: showCb?.checked ?? true, // Default to true if checkbox doesn't exist (edge not in menu yet)
-      showLabel: labelCb?.checked ?? true,
+      showLabel: labelCb?.checked ?? (type === 'subClassOf' ? false : true), // subClassOf label hidden by default
       color: colorEl?.value ?? defaultColor,
       lineType,
     };

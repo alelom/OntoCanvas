@@ -19,7 +19,7 @@ import { setExampleImageUrisForClass, ensureExampleImageAnnotationProperty } fro
 import type { GraphData } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ONTOLOGY_PATH = resolve(__dirname, '../../ontology/aec_drawing_ontology.ttl');
+const ONTOLOGY_PATH = resolve(__dirname, '../tests/fixtures/aec_drawing_ontology.ttl');
 
 function loadOntologyAsString(): string {
   return readFileSync(ONTOLOGY_PATH, 'utf-8');

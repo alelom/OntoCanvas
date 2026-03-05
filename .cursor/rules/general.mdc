@@ -7,4 +7,8 @@ This project uses `uv` as a package manager.
 Whenever a modification to the Visualizer or Editor is requested, either take a screenshot or connect to the browser MCP to verify the output.
 
 
-When we add or modify features, let's do it in a tidy way, as not to overwhelm the `main.ts` file which is already very long in terms of number of lines of code.
+When you add or modify features, do it in a tidy and modular way with multiple files, as not to overwhelm the `main.ts` file which is already very long in terms of number of lines of code.
+
+You must ensure to add relevant Integration/E2E test every time you fix or add a feature. 
+
+You must run tests every time you finish fixing or adding some feature and ensure they pass.

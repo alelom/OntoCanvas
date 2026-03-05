@@ -90,11 +90,11 @@ import {
   getDefaultColor,
   getSpacing,
   computeNodeDepths,
-  computeWeightedLayout,
   estimateNodeDimensions,
   resolveOverlaps,
   matchesSearch,
   COLORS,
+  getLayoutAlgorithm,
 } from './graph';
 import {
   initStatusBar,
@@ -173,19 +173,37 @@ function collectDisplayConfig(): DisplayConfig | null {
   const edgeStylesContent = document.getElementById('edgeStylesContent');
   const annotationPropsContent = document.getElementById('annotationPropsContent');
   const nodePositions: Record<string, { x: number; y: number }> = {};
-  rawData.nodes.forEach((n) => {
-    if (n.x != null && n.y != null) nodePositions[n.id] = { x: n.x, y: n.y };
-  });
+  
+  // Get positions from network if available (most up-to-date), otherwise from rawData
+  if (network) {
+    const networkPositions = network.getPositions();
+    Object.entries(networkPositions).forEach(([id, pos]) => {
+      if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+        nodePositions[id] = { x: pos.x, y: pos.y };
+        // Also update rawData to keep it in sync
+        const node = rawData.nodes.find((n) => n.id === id);
+        if (node) {
+          node.x = pos.x;
+          node.y = pos.y;
+        }
+      }
+    });
+  } else {
+    // Fallback to rawData positions if network not available
+    rawData.nodes.forEach((n) => {
+      if (n.x != null && n.y != null) nodePositions[n.id] = { x: n.x, y: n.y };
+    });
+  }
   return {
     version: DISPLAY_CONFIG_VERSION,
     nodePositions,
     edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences) : {},
-    wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 10,
+    wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 12,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
-    maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 80,
+    maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 70,
     relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
-    dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 18,
-    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'weighted',
+    dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 12,
+    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical01',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent) : undefined,
@@ -196,39 +214,146 @@ function collectDisplayConfig(): DisplayConfig | null {
 }
 
 function applyDisplayConfig(config: DisplayConfig): void {
-  Object.entries(config.nodePositions || {}).forEach(([id, pos]) => {
-    const node = rawData.nodes.find((n) => n.id === id);
+  // Define edgeStyleConfig first before using it
+  const edgeStyleConfig = config.edgeStyleConfig || {};
+  
+  console.log('[DISPLAY CONFIG] Applying display config...');
+  console.log('[DISPLAY CONFIG] Edge style config keys:', Object.keys(edgeStyleConfig));
+  console.log('[DISPLAY CONFIG] Edge style config:', edgeStyleConfig);
+  
+  // Log all edge types in rawData
+  const allEdgeTypesInData = getEdgeTypes(rawData.edges);
+  console.log('[DISPLAY CONFIG] All edge types in rawData.edges:', allEdgeTypesInData);
+  console.log('[DISPLAY CONFIG] Total edges in rawData.edges:', rawData.edges.length);
+  
+  // Check for describes edges specifically
+  const describesEdgesInData = rawData.edges.filter((e) => 
+    e.type === 'https://w3id.org/dano#describes' || 
+    e.type.includes('describes') ||
+    e.type.toLowerCase().includes('describes')
+  );
+  console.log('[DISPLAY CONFIG] Describes edges in rawData.edges:', describesEdgesInData.length);
+  if (describesEdgesInData.length > 0) {
+    console.log('[DISPLAY CONFIG] Describes edge types found:', [...new Set(describesEdgesInData.map(e => e.type))]);
+    console.log('[DISPLAY CONFIG] Sample describes edges:', describesEdgesInData.slice(0, 3));
+  }
+  
+  // Check if edge types in config match edge types in data
+  const configEdgeTypes = Object.keys(edgeStyleConfig);
+  console.log('[DISPLAY CONFIG] Edge types in config:', configEdgeTypes);
+  
+  const matchingTypes = configEdgeTypes.filter(type => allEdgeTypesInData.includes(type));
+  const missingTypes = configEdgeTypes.filter(type => !allEdgeTypesInData.includes(type));
+  console.log('[DISPLAY CONFIG] Matching edge types (in both config and data):', matchingTypes);
+  console.log('[DISPLAY CONFIG] Missing edge types (in config but not in data):', missingTypes);
+  
+  // Check for potential matches with different formats (e.g., local name vs full URI)
+  missingTypes.forEach(configType => {
+    const potentialMatches = allEdgeTypesInData.filter(dataType => 
+      dataType.includes(configType) || 
+      configType.includes(dataType) ||
+      dataType.endsWith('#' + configType) ||
+      configType.endsWith('#' + dataType) ||
+      extractLocalName(dataType) === configType ||
+      extractLocalName(configType) === dataType
+    );
+    if (potentialMatches.length > 0) {
+      console.warn(`[DISPLAY CONFIG] ⚠ Edge type "${configType}" in config might match:`, potentialMatches);
+    }
+  });
+  
+  // Apply node positions with upgrade/migration support
+  let matchedNodes = 0;
+  let unmatchedNodes = 0;
+  const nodePositions = config.nodePositions || {};
+  
+  Object.entries(nodePositions).forEach(([id, pos]) => {
+    // First try exact ID match
+    let node = rawData.nodes.find((n) => n.id === id);
+    
+    // If not found, try matching by label (for upgraded ontologies where IDs might have changed)
+    if (!node) {
+      // Try to find by label - useful when ontology structure changed but labels are similar
+      const configLabel = id; // In old configs, ID might actually be a label
+      node = rawData.nodes.find((n) => 
+        n.label === configLabel || 
+        n.id === configLabel ||
+        (n.label && n.label.toLowerCase() === configLabel.toLowerCase())
+      );
+    }
+    
     if (node) {
       node.x = pos.x;
       node.y = pos.y;
+      matchedNodes++;
+    } else {
+      unmatchedNodes++;
     }
   });
-  (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 10);
+  
+  if (unmatchedNodes > 0) {
+    console.log(`[DISPLAY CONFIG] Applied positions for ${matchedNodes} nodes, ${unmatchedNodes} nodes from config not found in current ontology (likely due to ontology changes)`);
+  } else {
+    console.log(`[DISPLAY CONFIG] Applied positions for ${matchedNodes} nodes`);
+  }
+  (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 12);
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
-  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 80);
+  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 70);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
-  (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 18);
-  (document.getElementById('layoutMode') as HTMLSelectElement).value = config.layoutMode ?? 'weighted';
+  (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
+  // Handle backward compatibility: 'weighted' maps to 'hierarchical01'
+  const layoutMode = config.layoutMode ?? 'hierarchical01';
+  const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
+  (document.getElementById('layoutMode') as HTMLSelectElement).value = normalizedLayoutMode;
   (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
-  const edgeStyleConfig = config.edgeStyleConfig || {};
+  
+  // Store the loaded edge style config so it can be merged when building the filter
+  // This ensures edge types that don't have checkboxes yet are still applied
+  // Convert old config format if needed (handle missing lineType)
+  const upgradedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }> = {};
+  Object.keys(edgeStyleConfig).forEach((type) => {
+    const c = edgeStyleConfig[type];
+    if (c) {
+      upgradedEdgeStyleConfig[type] = {
+        show: c.show !== false,
+        showLabel: c.showLabel !== false,
+        color: c.color || getDefaultColor(),
+        lineType: c.lineType || 'solid', // Default to solid if missing
+      };
+    }
+  });
+  loadedEdgeStyleConfig = upgradedEdgeStyleConfig;
+  
+  console.log(`[DISPLAY CONFIG] Stored edge style config for ${Object.keys(upgradedEdgeStyleConfig).length} edge types`);
+  
   if (document.getElementById('edgeStylesContent')) {
+    const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const types = getAllRelationshipTypes(rawData, objectProperties);
     const defaultColors = getDefaultEdgeColors(types);
-    Object.keys(edgeStyleConfig).forEach((type) => {
-      const c = edgeStyleConfig[type];
+    let appliedToCheckboxes = 0;
+    Object.keys(upgradedEdgeStyleConfig).forEach((type) => {
+      const c = upgradedEdgeStyleConfig[type];
       if (c) {
-        const showCb = document.querySelector(`.edge-show-cb[data-type="${type}"]`) as HTMLInputElement | null;
-        const labelCb = document.querySelector(`.edge-label-cb[data-type="${type}"]`) as HTMLInputElement | null;
-        const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement | null;
-        if (showCb) showCb.checked = c.show !== false;
-        if (labelCb) labelCb.checked = c.showLabel !== false;
+        // CSS-escape the type to handle special characters like #, :, etc.
+        const escapedType = CSS.escape(type);
+        const showCb = edgeStylesContent.querySelector(`.edge-show-cb[data-type="${escapedType}"]`) as HTMLInputElement | null;
+        const labelCb = edgeStylesContent.querySelector(`.edge-label-cb[data-type="${escapedType}"]`) as HTMLInputElement | null;
+        const colorEl = edgeStylesContent.querySelector(`.edge-color-picker[data-type="${escapedType}"]`) as HTMLInputElement | null;
+        if (showCb) {
+          showCb.checked = c.show;
+          appliedToCheckboxes++;
+        }
+        if (labelCb) {
+          labelCb.checked = c.showLabel;
+        }
         if (colorEl) {
           // Use saved color if available, otherwise use default color for this type
           colorEl.value = c.color || defaultColors[type] || getDefaultColor();
         }
       }
     });
+    console.log(`[DISPLAY CONFIG] Applied edge styles to ${appliedToCheckboxes} checkboxes in DOM`);
     // For types not in saved config, ensure they have default colors
     // This ensures that even if no saved config exists, all types get their spectrum colors
     types.forEach((type) => {
@@ -248,6 +373,10 @@ function applyDisplayConfig(config: DisplayConfig): void {
 }
 
 let displayConfigSaveTimer: number | null = null;
+/** Edge style config loaded from display config file (takes precedence over DOM checkboxes) */
+let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }> | null = null;
+/** Track the last layout mode to detect when it changes */
+let lastLayoutMode: string | null = null;
 
 function scheduleDisplayConfigSave(): void {
   if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
@@ -427,7 +556,8 @@ function performDeleteSelection(): boolean {
   for (const { from, to, type } of edgesToRemove) {
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
     const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
-    const ok = removeEdgeFromStore(ttlStore, from, to, type);
+    // Del key deletion should remove both restriction and domain/range
+    const ok = removeEdgeFromStore(ttlStore, from, to, type, true);
     if (ok) {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
@@ -436,7 +566,8 @@ function performDeleteSelection(): boolean {
         rawData.edges.push(edge ?? { from, to, type });
       });
       edgeRedoActions.push(() => {
-        removeEdgeFromStore(ttlStore!, from, to, type);
+        // Del key deletion should remove both restriction and domain/range
+        removeEdgeFromStore(ttlStore!, from, to, type, true);
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
         if (i >= 0) rawData.edges.splice(i, 1);
       });
@@ -451,7 +582,8 @@ function performDeleteSelection(): boolean {
           rawData.edges.push(edge);
         });
         edgeRedoActions.push(() => {
-          removeEdgeFromStore(ttlStore!, from, to, type);
+          // Del key deletion should remove both restriction and domain/range
+          removeEdgeFromStore(ttlStore!, from, to, type, true);
           const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
           if (i >= 0) rawData.edges.splice(i, 1);
         });
@@ -472,7 +604,8 @@ function performDeleteSelection(): boolean {
         rawData.edges.push(edge ?? { from, to, type });
       });
       edgeRedoActions.push(() => {
-        removeEdgeFromStore(ttlStore!, from, to, type);
+        // Del key deletion should remove both restriction and domain/range
+        removeEdgeFromStore(ttlStore!, from, to, type, true);
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
         if (i >= 0) rawData.edges.splice(i, 1);
       });
@@ -487,7 +620,8 @@ function performDeleteSelection(): boolean {
           rawData.edges.push(edge);
         });
         edgeRedoActions.push(() => {
-          removeEdgeFromStore(ttlStore!, from, to, type);
+          // Del key deletion should remove both restriction and domain/range
+          removeEdgeFromStore(ttlStore!, from, to, type, true);
           const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
           if (i >= 0) rawData.edges.splice(i, 1);
         });
@@ -928,6 +1062,8 @@ function initEdgeStylesMenu(
     const deleteBtn = isEditable
       ? `<button type="button" class="edge-delete-btn" data-type="${type}" title="Delete this object property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`
       : '';
+    // subClassOf label should be unchecked by default
+    const labelChecked = type === 'subClassOf' ? '' : 'checked';
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     // HTML attributes can contain # without escaping, but we need to escape quotes
@@ -941,7 +1077,7 @@ function initEdgeStylesMenu(
         <span>Show</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
-        <input type="checkbox" class="edge-label-cb" data-type="${htmlEscapedType}" checked>
+        <input type="checkbox" class="edge-label-cb" data-type="${htmlEscapedType}" ${labelChecked}>
         <span>Label</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px;">
@@ -2197,25 +2333,34 @@ function buildNetworkData(filter: {
   );
   let nodeIds = new Set(filteredNodes.map((n) => n.id));
   
-  // Debug: Check for describes edges before filtering
+  // Extract edgeStyleConfig from filter first
+  const edgeStyleConfig = filter.edgeStyleConfig;
+  
+  // Debug: Check for describes edges before filtering (only if they exist or are expected)
   const describesEdgesBeforeFilter = rawData.edges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
-  if (describesEdgesBeforeFilter.length > 0) {
-    console.log('[DEBUG] Describes edges in rawData.edges before filtering:', describesEdgesBeforeFilter);
-    console.log('[DEBUG] Available node IDs in filteredNodes:', Array.from(nodeIds));
-    describesEdgesBeforeFilter.forEach((e) => {
-      const fromExists = nodeIds.has(e.from);
-      const toExists = nodeIds.has(e.to);
-      console.log(`[DEBUG] Describes edge: from="${e.from}" (exists: ${fromExists}), to="${e.to}" (exists: ${toExists}), type="${e.type}"`);
-      if (!fromExists || !toExists) {
-        console.warn(`[DEBUG] ⚠ Describes edge will be filtered out - missing nodes`);
-        if (!fromExists) console.warn(`[DEBUG]   Missing from node: "${e.from}"`);
-        if (!toExists) console.warn(`[DEBUG]   Missing to node: "${e.to}"`);
-      }
-    });
-  } else {
-    console.warn('[DEBUG] ⚠ No describes edges found in rawData.edges at all!');
+  // Only log if describes edges exist or if they're referenced in the edge style config
+  const hasDescribesInConfig = Object.keys(edgeStyleConfig).some(type => 
+    type.includes('describes') || type === 'https://w3id.org/dano#describes'
+  );
+  if (describesEdgesBeforeFilter.length > 0 || hasDescribesInConfig) {
+    if (describesEdgesBeforeFilter.length > 0) {
+      console.log('[DEBUG] Describes edges in rawData.edges before filtering:', describesEdgesBeforeFilter);
+      console.log('[DEBUG] Available node IDs in filteredNodes:', Array.from(nodeIds));
+      describesEdgesBeforeFilter.forEach((e) => {
+        const fromExists = nodeIds.has(e.from);
+        const toExists = nodeIds.has(e.to);
+        console.log(`[DEBUG] Describes edge: from="${e.from}" (exists: ${fromExists}), to="${e.to}" (exists: ${toExists}), type="${e.type}"`);
+        if (!fromExists || !toExists) {
+          console.warn(`[DEBUG] ⚠ Describes edge will be filtered out - missing nodes`);
+          if (!fromExists) console.warn(`[DEBUG]   Missing from node: "${e.from}"`);
+          if (!toExists) console.warn(`[DEBUG]   Missing to node: "${e.to}"`);
+        }
+      });
+    } else if (hasDescribesInConfig) {
+      console.warn('[DEBUG] ⚠ Display config references "describes" edges but none found in rawData.edges');
+    }
   }
   
   // Debug: Check for edges with external property URIs before filtering
@@ -2235,11 +2380,13 @@ function buildNetworkData(filter: {
     (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
   );
   
-  // Debug: Check describes edges after node filtering
+  // Debug: Check describes edges after node filtering (only if they exist)
   const describesEdgesAfterNodeFilter = filteredEdges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
-  console.log(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
+  if (describesEdgesAfterNodeFilter.length > 0 || describesEdgesBeforeFilter.length > 0) {
+    console.log(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
+  }
 
   const searchQuery = (filter.searchQuery || '').trim();
   // Track search categories for transparency styling
@@ -2282,13 +2429,15 @@ function buildNetworkData(filter: {
     // We'll apply opacity styling based on their category
   }
 
-  const edgeStyleConfig = filter.edgeStyleConfig;
+  // edgeStyleConfig is already defined above at the start of the function
   
-  // Debug: Check describes edges before style filtering
+  // Debug: Check describes edges before style filtering (only if they exist)
   const describesEdgesBeforeStyleFilter = filteredEdges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
-  console.log(`[DEBUG] Describes edges before style filtering: ${describesEdgesBeforeStyleFilter.length}`, describesEdgesBeforeStyleFilter);
+  if (describesEdgesBeforeStyleFilter.length > 0 || describesEdgesBeforeFilter.length > 0) {
+    console.log(`[DEBUG] Describes edges before style filtering: ${describesEdgesBeforeStyleFilter.length}`, describesEdgesBeforeStyleFilter);
+  }
   
   // Debug: Check edge style config for describes
   const describesEdgeType = describesEdgesBeforeStyleFilter.length > 0 ? describesEdgesBeforeStyleFilter[0].type : null;
@@ -2328,22 +2477,39 @@ function buildNetworkData(filter: {
     return shouldShow;
   });
   
-  // Debug: Check describes edges after style filtering
+  // Debug: Check describes edges after style filtering (only if they exist)
   const describesEdgesAfterStyleFilter = filteredEdges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
-  console.log(`[DEBUG] Describes edges after style filtering: ${describesEdgesAfterStyleFilter.length}`, describesEdgesAfterStyleFilter);
+  if (describesEdgesAfterStyleFilter.length > 0 || describesEdgesBeforeFilter.length > 0) {
+    console.log(`[DEBUG] Describes edges after style filtering: ${describesEdgesAfterStyleFilter.length}`, describesEdgesAfterStyleFilter);
+  }
 
   const layoutMode = filter.layoutMode;
-  const wrapChars = filter.wrapChars ?? 10;
+  const wrapChars = filter.wrapChars ?? 12;
   const minFontSize = Math.max(8, Math.min(96, filter.minFontSize ?? 20));
-  const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 80));
+  const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
-  const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 18));
+  const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
-  if (layoutMode === 'weighted') {
+  
+  // First, preserve any existing positions from rawData (loaded from config or set by drag)
+  filteredNodes.forEach((n) => {
+    if (n.x != null && n.y != null) {
+      nodePositions[n.id] = { x: n.x, y: n.y };
+    }
+  });
+  
+  // Use layout registry for hierarchical layouts
+  // Only compute positions for nodes that don't already have positions
+  const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+  const nodesWithoutPositions = filteredNodes.filter((n) => !(n.x != null && n.y != null));
+  
+  if (layoutAlgorithm && nodesWithoutPositions.length > 0) {
+    // Only compute layout for nodes without positions
+    const nodesToLayout = new Set(nodesWithoutPositions.map((n) => n.id));
     const nodeDimensions = new Map<string, { width: number; height: number }>();
     filteredNodes.forEach((n) => {
       const fontSize =
@@ -2359,19 +2525,34 @@ function buildNetworkData(filter: {
         estimateNodeDimensions(n.label, wrapChars, fontSize)
       );
     });
-    nodePositions = computeWeightedLayout(
+    
+    // Compute layout for all nodes (algorithm needs full graph context)
+    const computedPositions = layoutAlgorithm(
       nodeIds,
       filteredEdges,
       SPACING,
       nodeDimensions
     );
-    nodePositions = resolveOverlaps(
-      nodePositions,
+    const resolvedPositions = resolveOverlaps(
+      computedPositions,
       nodeIds,
       filteredEdges,
       nodeDimensions,
       { minPadding: 8 }
     );
+    
+    // Only use computed positions for nodes that don't already have positions
+    Object.entries(resolvedPositions).forEach(([id, pos]) => {
+      if (nodesToLayout.has(id) && !nodePositions[id]) {
+        nodePositions[id] = pos;
+        // Also update rawData to keep it in sync
+        const node = rawData.nodes.find((n) => n.id === id);
+        if (node) {
+          node.x = pos.x;
+          node.y = pos.y;
+        }
+      }
+    });
   }
 
   const nodes = filteredNodes.map((n) => {
@@ -2659,12 +2840,15 @@ function buildNetworkData(filter: {
         }
       }
       
+      // Format the node label as "property label (datatype)" - e.g., "inferred at (xsd:date)"
+      const nodeLabel = `${dataProp.label} (${rangeLabel})`;
+      
       // Debug: Log the actual label being set for the node
-      console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
+      console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
         
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
-        label: wrapText(rangeLabel, wrapChars),
+        label: wrapText(nodeLabel, wrapChars),
         shape: 'box',
         size: 15,
         color: { background: dataPropBackgroundColor, border: dataPropBorderColor },
@@ -2685,9 +2869,6 @@ function buildNetworkData(filter: {
         
       propIndex++;
       
-      // Format the property label for the edge (wrapped if needed)
-      const edgeLabel = wrapText(dataProp.label, wrapChars);
-      
       // Apply search transparency if search query is active
       // Data property edges inherit opacity from their associated class node
       let dataPropEdgeColor = '#4a90a4';
@@ -2702,10 +2883,7 @@ function buildNetworkData(filter: {
         }
       }
       
-      // Debug: Log the actual label being set for the edge
-      console.log(`[DEBUG] Setting data property edge label: propertyName="${dataProp.propertyName}", classId="${classId}", edgeLabel="${edgeLabel}", isRestriction=${dataProp.isRestriction}`);
-      
-      // Create edge - thicker for restrictions, thinner dashed for normal
+      // Create edge - no label (label is now in the node)
       // Arrow points from class (domain) to data property node (range type)
       if (dataProp.isRestriction) {
         dataPropertyEdges.push({
@@ -2713,7 +2891,7 @@ function buildNetworkData(filter: {
           from: classId,
           to: dataProp.id,
           arrows: 'to',
-          label: edgeLabel,
+          label: '', // No label on edge - label is in the node
           font: { size: relationshipFontSize, color: dataPropEdgeFontColor },
           color: { color: dataPropEdgeColor, highlight: dataPropEdgeColor },
           dashes: false, // Solid line
@@ -2725,7 +2903,7 @@ function buildNetworkData(filter: {
           from: classId,
           to: dataProp.id,
           arrows: 'to',
-          label: edgeLabel,
+          label: '', // No label on edge - label is in the node
           font: { size: relationshipFontSize, color: dataPropEdgeFontColor },
           color: { color: dataPropEdgeColor, highlight: dataPropEdgeColor },
           dashes: [5, 5], // Dashed line
@@ -2736,11 +2914,13 @@ function buildNetworkData(filter: {
   });
   
 
-  // Debug: Check describes edges before mapping to vis-network format
+  // Debug: Check describes edges before mapping to vis-network format (only if they exist)
   const describesEdgesBeforeMapping = filteredEdges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
-  console.log(`[DEBUG] Describes edges before mapping to vis-network: ${describesEdgesBeforeMapping.length}`, describesEdgesBeforeMapping);
+  if (describesEdgesBeforeMapping.length > 0 || describesEdgesBeforeFilter.length > 0) {
+    console.log(`[DEBUG] Describes edges before mapping to vis-network: ${describesEdgesBeforeMapping.length}`, describesEdgesBeforeMapping);
+  }
   
   const edges = filteredEdges.map((e) => {
     const style = edgeStyleConfig[e.type] || {
@@ -2807,11 +2987,13 @@ function buildNetworkData(filter: {
     };
   });
   
-  // Debug: Check describes edges after mapping
+  // Debug: Check describes edges after mapping (only if they exist)
   const describesEdgesAfterMapping = edges.filter((e) => 
     (e.id as string).includes('describes')
   );
-  console.log(`[DEBUG] Describes edges after mapping to vis-network: ${describesEdgesAfterMapping.length}`, describesEdgesAfterMapping);
+  if (describesEdgesAfterMapping.length > 0 || describesEdgesBeforeFilter.length > 0) {
+    console.log(`[DEBUG] Describes edges after mapping to vis-network: ${describesEdgesAfterMapping.length}`, describesEdgesAfterMapping);
+  }
 
   // Deduplicate edges by id (same from, to, and type)
   const edgeMap = new Map<string, Record<string, unknown>>();
@@ -2826,9 +3008,55 @@ function buildNetworkData(filter: {
   });
   const uniqueEdges = Array.from(edgeMap.values());
   
+  // Separate self-loops (from === to) from regular edges
+  const selfLoops: Array<Record<string, unknown>> = [];
+  const regularEdges: Array<Record<string, unknown>> = [];
+  uniqueEdges.forEach((edgeObj) => {
+    if (edgeObj.from === edgeObj.to) {
+      selfLoops.push(edgeObj);
+    } else {
+      regularEdges.push(edgeObj);
+    }
+  });
+
+  // Handle multiple self-loops on the same node - space them out using different sizes and angles
+  // When multiple object properties have the same domain and range (self-loops), they overlap completely.
+  // We use different selfReferenceSize values to create concentric loops that don't overlap.
+  // The spacing scales with relationshipFontSize to prevent label overlap with larger fonts.
+  const nodeToSelfLoops = new Map<string, Array<Record<string, unknown>>>();
+  selfLoops.forEach((edgeObj) => {
+    const nodeId = edgeObj.from as string;
+    if (!nodeToSelfLoops.has(nodeId)) nodeToSelfLoops.set(nodeId, []);
+    nodeToSelfLoops.get(nodeId)!.push(edgeObj);
+  });
+  nodeToSelfLoops.forEach((list) => {
+    if (list.length >= 2) {
+      // For multiple self-loops, space them out using different sizes to create concentric circles
+      // Scale spacing with relationshipFontSize to accommodate larger labels
+      // Base size: 2x font size (minimum 30) to ensure adequate spacing
+      // Increment: 1.5x font size (minimum 20) to maintain proportional spacing
+      const baseSize = Math.max(30, relationshipFontSize * 2);
+      const sizeIncrement = Math.max(20, relationshipFontSize * 1.5);
+      
+      list.forEach((edgeObj, i) => {
+        edgeObj.selfReferenceSize = baseSize + i * sizeIncrement;
+        
+        // Try to distribute angles evenly around the node (0 to 2π)
+        // Note: selfReferenceAngle may not be supported in all vis-network versions
+        // The size difference alone should prevent complete overlap
+        const angleStep = (2 * Math.PI) / list.length;
+        const angle = i * angleStep;
+        edgeObj.selfReferenceAngle = angle;
+      });
+    } else if (list.length === 1) {
+      // Single self-loop - scale with font size (minimum 30)
+      list[0].selfReferenceSize = Math.max(30, relationshipFontSize * 2);
+    }
+  });
+
   // Assign smooth curves to overlapping edges (same node pair) to avoid label/line overlap
   const pairToEdges = new Map<string, Array<Record<string, unknown>>>();
-  uniqueEdges.forEach((edgeObj) => {
+  regularEdges.forEach((edgeObj) => {
     const pairKey = [edgeObj.from, edgeObj.to].sort().join('|');
     if (!pairToEdges.has(pairKey)) pairToEdges.set(pairKey, []);
     pairToEdges.get(pairKey)!.push(edgeObj);
@@ -2846,27 +3074,34 @@ function buildNetworkData(filter: {
     }
   });
 
+  // Combine regular edges with self-loops
+  const processedEdges = [...regularEdges, ...selfLoops];
+
   // Combine regular nodes with data property nodes
   const allNodes = [...nodes, ...dataPropertyNodes];
-  // Combine regular edges with data property edges (use deduplicated edges)
-  const allEdges = [...uniqueEdges, ...dataPropertyEdges];
+  // Combine processed edges (regular + self-loops) with data property edges
+  const allEdges = [...processedEdges, ...dataPropertyEdges];
   
   // Debug: Final check for describes edges
   const describesEdgesFinal = allEdges.filter((e) => 
     (e.id as string).includes('describes')
   );
-  console.log(`[DEBUG] ===== FINAL: Describes edges in allEdges: ${describesEdgesFinal.length} =====`);
-  if (describesEdgesFinal.length > 0) {
-    console.log('[DEBUG] ✓ Describes edges will be rendered:', describesEdgesFinal);
-  } else {
-    console.warn('[DEBUG] ⚠ NO describes edges in final allEdges - edge will NOT appear in graph!');
-    console.log('[DEBUG] Summary of filtering:');
-    console.log(`  - Total edges in rawData.edges: ${rawData.edges.length}`);
-    console.log(`  - Describes edges in rawData.edges: ${rawData.edges.filter((e) => e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')).length}`);
-    console.log(`  - Filtered edges after node filtering: ${filteredEdges.length}`);
-    console.log(`  - Edges after style filtering: ${filteredEdges.length}`);
-    console.log(`  - Edges mapped to vis-network: ${edges.length}`);
-    console.log(`  - Unique edges (after deduplication): ${uniqueEdges.length}`);
+  // Only log final describes edges summary if they exist or were expected
+  if (describesEdgesFinal.length > 0 || describesEdgesBeforeFilter.length > 0) {
+    console.log(`[DEBUG] ===== FINAL: Describes edges in allEdges: ${describesEdgesFinal.length} =====`);
+    if (describesEdgesFinal.length > 0) {
+      console.log('[DEBUG] ✓ Describes edges will be rendered:', describesEdgesFinal);
+    } else if (describesEdgesBeforeFilter.length > 0) {
+      // Only warn if we had describes edges that got filtered out
+      console.warn('[DEBUG] ⚠ NO describes edges in final allEdges - edge will NOT appear in graph!');
+      console.log('[DEBUG] Summary of filtering:');
+      console.log(`  - Total edges in rawData.edges: ${rawData.edges.length}`);
+      console.log(`  - Describes edges in rawData.edges: ${describesEdgesBeforeFilter.length}`);
+      console.log(`  - Filtered edges after node filtering: ${filteredEdges.length}`);
+      console.log(`  - Edges after style filtering: ${filteredEdges.length}`);
+      console.log(`  - Edges mapped to vis-network: ${edges.length}`);
+      console.log(`  - Unique edges (after deduplication): ${uniqueEdges.length}`);
+    }
   }
 
   return {
@@ -4291,7 +4526,11 @@ function confirmEditEdge(): void {
     hideEditEdgeModalWithCleanup();
     return;
   }
-  let removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+  // When unchecking "is restriction", only remove the restriction, not the domain/range
+  // When checking "is restriction" or changing other properties, remove both restriction and domain/range
+  // (The domain/range will be recreated when we add the new edge if needed)
+  const shouldRemoveDomainRange = oldWasRestriction && !isRestriction ? false : true;
+  let removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType, shouldRemoveDomainRange);
   // Edge may exist only in rawData (e.g. from object property domain/range) with no restriction in store
   if (!removeOk && oldEdge) {
     removeOk = true; // Proceed: we will remove from rawData and add the new restriction to the store
@@ -4300,16 +4539,23 @@ function confirmEditEdge(): void {
     hideEditEdgeModalWithCleanup();
     return;
   }
-  const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
+  // Only add restriction if isRestriction is true, otherwise the domain/range edge will remain visible
+  const addOk = isRestriction ? addEdgeToStore(ttlStore, newFrom, newTo, newType, card) : true;
   if (!addOk) {
-    addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+    // Restore the old restriction if adding new one failed
+    if (oldWasRestriction) {
+      addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+    }
     alert('Failed to update edge.');
     hideEditEdgeModalWithCleanup();
     return;
   }
+  
+  // Update rawData - remove old edge and add new one
   const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
   if (idx >= 0) rawData.edges.splice(idx, 1);
   
+  // Always add the edge back to rawData with the correct isRestriction flag
   const newEdge: import('./types').GraphEdge = { 
     from: newFrom, 
     to: newTo, 
@@ -4345,15 +4591,37 @@ function confirmEditEdge(): void {
   const oldCard = { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null };
   pushUndoable(
     () => {
-      removeEdgeFromStore(ttlStore!, newFrom, newTo, newType);
-      addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType, oldCard);
+      // Undo: restore old edge state
+      // Remove new edge (with appropriate removeDomainRange flag based on new state)
+      const newShouldRemoveDomainRange = isRestriction ? true : false;
+      removeEdgeFromStore(ttlStore!, newFrom, newTo, newType, newShouldRemoveDomainRange);
+      // Restore old edge
+      if (oldWasRestriction) {
+        addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType, oldCard);
+      }
       const i = rawData.edges.findIndex((e) => e.from === newFrom && e.to === newTo && e.type === newType);
       if (i >= 0) rawData.edges.splice(i, 1);
-      rawData.edges.push({ from: oldFrom, to: oldTo, type: oldType, ...oldCard });
+      const restoredEdge: import('./types').GraphEdge = { 
+        from: oldFrom, 
+        to: oldTo, 
+        type: oldType,
+        isRestriction: oldWasRestriction
+      };
+      if (oldWasRestriction && (oldCard.minCardinality != null || oldCard.maxCardinality != null)) {
+        restoredEdge.minCardinality = oldCard.minCardinality ?? undefined;
+        restoredEdge.maxCardinality = oldCard.maxCardinality ?? undefined;
+      }
+      rawData.edges.push(restoredEdge);
     },
     () => {
-      removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType);
-      addEdgeToStore(ttlStore!, newFrom, newTo, newType, card);
+      // Redo: apply new edge state again
+      // Remove old edge (with appropriate removeDomainRange flag based on old state)
+      const oldShouldRemoveDomainRange = oldWasRestriction && !isRestriction ? false : true;
+      removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType, oldShouldRemoveDomainRange);
+      // Add new edge
+      if (isRestriction) {
+        addEdgeToStore(ttlStore!, newFrom, newTo, newType, card);
+      }
       const i = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
       if (i >= 0) rawData.edges.splice(i, 1);
       rawData.edges.push(newEdge);
@@ -4629,7 +4897,9 @@ function renderApp(): void {
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <strong>Layout:</strong>
         <select id="layoutMode">
-          <option value="weighted">Hierarchical</option>
+          <option value="hierarchical01">Hierarchical 01</option>
+          <option value="hierarchical02">Hierarchical 02</option>
+          <option value="hierarchical03">Hierarchical 03</option>
           <option value="force">Force-directed</option>
         </select>
       </div>
@@ -4652,10 +4922,10 @@ function renderApp(): void {
       </div>
       <div id="textDisplayWrap" style="position: relative; display: inline-block;">
         <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
-        <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 200px;">
+        <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
           <div style="margin-bottom: 10px;">
             <strong style="font-size: 12px;">Nodes text wrap:</strong>
-            <input type="number" id="wrapChars" min="1" max="50" value="10" style="width: 50px; margin-left: 6px;">
+            <input type="number" id="wrapChars" min="1" max="50" value="12" style="width: 50px; margin-left: 6px;">
             <span style="font-size: 11px;">chars</span>
           </div>
           <div>
@@ -4664,7 +4934,7 @@ function renderApp(): void {
               <span style="font-size: 11px;">Min (leaves)</span>
               <input type="number" id="minFontSize" min="8" max="96" value="20" style="width: 45px; margin-left: 6px;">
               <span style="font-size: 11px; margin-left: 8px;">Max (roots)</span>
-              <input type="number" id="maxFontSize" min="8" max="96" value="80" style="width: 45px; margin-left: 6px;">
+              <input type="number" id="maxFontSize" min="8" max="96" value="70" style="width: 45px; margin-left: 6px;">
             </div>
           </div>
           <div style="margin-top: 10px;">
@@ -4674,7 +4944,7 @@ function renderApp(): void {
           </div>
           <div style="margin-top: 10px;">
             <strong style="font-size: 12px;">Data properties font size</strong>
-            <input type="number" id="dataPropertyFontSize" min="8" max="48" value="18" style="width: 45px; margin-left: 6px;">
+            <input type="number" id="dataPropertyFontSize" min="8" max="48" value="12" style="width: 45px; margin-left: 6px;">
             <span style="font-size: 11px;">px</span>
           </div>
         </div>
@@ -5110,6 +5380,10 @@ async function loadTtlAndRender(
     clearUndoRedo();
     updateFilePathDisplay();
     
+    // Clear loaded edge style config when loading a new ontology
+    // It will be set again if a display config is loaded
+    loadedEdgeStyleConfig = null;
+    
     // Update status bar with the new store (defer to avoid blocking)
     setTimeout(() => {
       updateStatusBar(ttlStore);
@@ -5250,9 +5524,23 @@ async function loadTtlAndRender(
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     const displayConfig = await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
+    
+    // Set lastLayoutMode BEFORE applying config to prevent clearing positions
+    // Get layout mode from config or default
+    const configLayoutMode = displayConfig?.layoutMode || 'hierarchical01';
+    const normalizedConfigLayoutMode = configLayoutMode === 'weighted' ? 'hierarchical01' : configLayoutMode;
+    lastLayoutMode = normalizedConfigLayoutMode;
+    
     if (displayConfig) {
+      console.log('[DISPLAY CONFIG] Loading display config from IndexedDB for:', loadedFileName);
+      console.log('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.nodePositions || {}).length, 'node positions');
+      console.log('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.edgeStyleConfig || {}).length, 'edge style configs');
+      // Store the edge style config so it can be merged when building the filter
+      loadedEdgeStyleConfig = displayConfig.edgeStyleConfig || null;
       applyDisplayConfig(displayConfig);
       if (displayConfig.viewState) savedViewState = displayConfig.viewState;
+    } else {
+      console.log('[DISPLAY CONFIG] No display config found in IndexedDB for:', loadedFileName);
     }
 
     // Allow layout to settle after vizControls appears, then render
@@ -5286,11 +5574,28 @@ function applyFilter(preserveView = false): void {
 
   const layoutMode = (document.getElementById('layoutMode') as HTMLSelectElement)
     .value;
+  
+  // Clear stored node positions ONLY when switching to a different layout mode
+  // This ensures the new layout algorithm's positions are used, but preserves
+  // positions when just applying filters or reloading
+  const layoutModeChanged = lastLayoutMode !== null && lastLayoutMode !== layoutMode;
+  if (layoutModeChanged) {
+    const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+    if (layoutAlgorithm || layoutMode === 'force') {
+      // Switching to a layout that computes positions - clear stored positions
+      console.log(`[DISPLAY CONFIG] Layout mode changed from ${lastLayoutMode} to ${layoutMode}, clearing node positions`);
+      rawData.nodes.forEach((node) => {
+        delete node.x;
+        delete node.y;
+      });
+    }
+  }
+  lastLayoutMode = layoutMode;
   const wrapChars =
     parseInt(
       (document.getElementById('wrapChars') as HTMLInputElement).value,
       10
-    ) || 10;
+    ) || 12;
   const minFontSize =
     parseInt(
       (document.getElementById('minFontSize') as HTMLInputElement).value,
@@ -5300,7 +5605,7 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('maxFontSize') as HTMLInputElement).value,
       10
-    ) || 80;
+    ) || 70;
   const relationshipFontSize =
     parseInt(
       (document.getElementById('relationshipFontSize') as HTMLInputElement).value,
@@ -5310,7 +5615,7 @@ function applyFilter(preserveView = false): void {
     parseInt(
       (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value,
       10
-    ) || 18;
+    ) || 12;
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement;
   const neighborsEl = document.getElementById(
     'searchIncludeNeighbors'
@@ -5318,6 +5623,26 @@ function applyFilter(preserveView = false): void {
   const edgeStylesContent = document.getElementById('edgeStylesContent')!;
 
   const annotationPropsContent = document.getElementById('annotationPropsContent');
+  // Get edge style config from DOM
+  const domEdgeStyleConfig = getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences);
+  
+  // Merge with loaded edge style config (from display config file) if present
+  // Loaded config takes precedence over DOM checkboxes
+  const mergedEdgeStyleConfig = { ...domEdgeStyleConfig };
+  if (loadedEdgeStyleConfig) {
+    Object.keys(loadedEdgeStyleConfig).forEach((type) => {
+      const loadedStyle = loadedEdgeStyleConfig[type];
+      if (loadedStyle) {
+        mergedEdgeStyleConfig[type] = {
+          show: loadedStyle.show,
+          showLabel: loadedStyle.showLabel,
+          color: loadedStyle.color,
+          lineType: loadedStyle.lineType ?? mergedEdgeStyleConfig[type]?.lineType ?? 'solid',
+        };
+      }
+    });
+  }
+  
   const currentFilter = {
     wrapChars,
     minFontSize,
@@ -5326,7 +5651,7 @@ function applyFilter(preserveView = false): void {
     dataPropertyFontSize,
     searchQuery: searchEl?.value ?? '',
     includeNeighbors: neighborsEl?.checked ?? true,
-    edgeStyleConfig: getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences),
+    edgeStyleConfig: mergedEdgeStyleConfig,
     annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent),
     layoutMode,
   };
@@ -5435,7 +5760,7 @@ function applyFilter(preserveView = false): void {
       });
     } else if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'weighted') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
   } else {
@@ -5448,7 +5773,7 @@ function applyFilter(preserveView = false): void {
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'weighted') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
@@ -5610,6 +5935,36 @@ async function loadFromFile(): Promise<void> {
 }
 
 /**
+ * Attempt to load display config from a URL.
+ * Returns the config if found, null otherwise (doesn't throw on 404).
+ */
+async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConfig | null> {
+  try {
+    const response = await fetch(displayUrl);
+    if (!response.ok) {
+      // 404 or other error - display file doesn't exist, which is fine
+      return null;
+    }
+    const text = await response.text();
+    const config = JSON.parse(text) as DisplayConfig;
+    if (!config || typeof config !== 'object') {
+      console.warn('Invalid display config format from URL:', displayUrl);
+      return null;
+    }
+    // Validate version
+    if (config.version !== DISPLAY_CONFIG_VERSION) {
+      console.warn('Display config version mismatch:', displayUrl);
+      return null;
+    }
+    return config;
+  } catch (err) {
+    // Network error or parse error - silently fail (display file is optional)
+    console.debug('Could not load display config from URL:', displayUrl, err);
+    return null;
+  }
+}
+
+/**
  * Load ontology from a URL.
  */
 async function loadFromUrl(url: string): Promise<void> {
@@ -5634,7 +5989,40 @@ async function loadFromUrl(url: string): Promise<void> {
     // Save last opened URL (non-blocking)
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
+    // Try to load display config from URL if it exists (before loading TTL)
+    // This allows the URL-based config to take precedence over IndexedDB
+    const { getDisplayFileUrl } = await import('./utils/urlParams');
+    const displayUrl = getDisplayFileUrl(url);
+    let urlDisplayConfig: DisplayConfig | null = null;
+    if (displayUrl) {
+      urlDisplayConfig = await loadDisplayConfigFromUrl(displayUrl);
+    }
+    
     await loadTtlAndRender(ttl, fileName, null, url);
+    
+    // If we loaded a display config from URL, apply it now (overriding any IndexedDB config)
+    if (urlDisplayConfig) {
+      // Store the edge style config so it can be merged when building the filter
+      loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;
+      // Apply the display config after the graph is rendered
+      // Use requestAnimationFrame to ensure the graph is ready
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          applyDisplayConfig(urlDisplayConfig!);
+          applyFilter();
+          if (network && urlDisplayConfig!.viewState) {
+            network.moveTo({
+              scale: urlDisplayConfig!.viewState.scale,
+              position: urlDisplayConfig!.viewState.position,
+              animation: false,
+            });
+          }
+          // Save to IndexedDB for future loads
+          saveDisplayConfigToIndexedDB(urlDisplayConfig!, url, fileName).catch(() => {});
+        });
+      });
+    }
+    
     hideLoadingModal();
   } catch (err) {
     hideLoadingModal();
@@ -5946,6 +6334,8 @@ function setupEventListeners(): void {
   document.getElementById('maxFontSize')?.addEventListener('change', () => applyFilter());
   document.getElementById('relationshipFontSize')?.addEventListener('input', () => applyFilter());
   document.getElementById('relationshipFontSize')?.addEventListener('change', () => applyFilter());
+  document.getElementById('dataPropertyFontSize')?.addEventListener('input', () => applyFilter());
+  document.getElementById('dataPropertyFontSize')?.addEventListener('change', () => applyFilter());
   document
     .getElementById('searchIncludeNeighbors')
     ?.addEventListener('change', () => applyFilter());
@@ -6028,10 +6418,10 @@ function setupEventListeners(): void {
     }
   });
   document.getElementById('resetView')?.addEventListener('click', () => {
-    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'weighted';
-    (document.getElementById('wrapChars') as HTMLInputElement).value = '10';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical01';
+    (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
-    (document.getElementById('maxFontSize') as HTMLInputElement).value = '80';
+    (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
@@ -6148,19 +6538,37 @@ function setupEventListeners(): void {
     loadDisplayConfigInput.value = '';
     if (!file || rawData.nodes.length === 0) return;
     try {
+      console.log('[DISPLAY CONFIG] Loading display config from file:', file.name);
       const text = await file.text();
       const config = JSON.parse(text) as DisplayConfig;
       if (!config || typeof config !== 'object') throw new Error('Invalid config format');
+      console.log('[DISPLAY CONFIG] Parsed config version:', config.version);
+      console.log('[DISPLAY CONFIG] Config has edgeStyleConfig:', !!config.edgeStyleConfig);
+      
+      // Apply the display config (this will store edgeStyleConfig in loadedEdgeStyleConfig)
       applyDisplayConfig(config);
+      
+      // Force a re-render to apply the styles
       applyFilter();
+      
+      // Apply view state after a short delay to ensure network is ready
       if (network && config.viewState) {
-        network.moveTo({
-          scale: config.viewState.scale,
-          position: config.viewState.position,
-          animation: false,
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            network?.moveTo({
+              scale: config.viewState!.scale,
+              position: config.viewState!.position,
+              animation: false,
+            });
+          });
         });
       }
-      saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
+      
+      // Save the upgraded config back to IndexedDB
+      const upgradedConfig = collectDisplayConfig();
+      if (upgradedConfig) {
+        saveDisplayConfigToIndexedDB(upgradedConfig, loadedFilePath, loadedFileName).catch(() => {});
+      }
     } catch (err) {
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
       errorMsg.textContent = `Failed to load display config: ${err instanceof Error ? err.message : String(err)}`;
