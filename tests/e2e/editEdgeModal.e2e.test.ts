@@ -93,6 +93,51 @@ async function getEditEdgeModalValues(page: Page): Promise<{
   });
 }
 
+// Helper function to set edit edge modal values
+async function setEditEdgeModalValues(
+  page: Page,
+  values: {
+    isRestrictionChecked?: boolean;
+    minCardinality?: string;
+    maxCardinality?: string;
+  }
+): Promise<void> {
+  if (values.isRestrictionChecked !== undefined) {
+    const checkbox = page.locator('#editEdgeIsRestriction');
+    if (await checkbox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (values.isRestrictionChecked) {
+        await checkbox.check({ timeout: 2000 });
+      } else {
+        await checkbox.uncheck({ timeout: 2000 });
+      }
+      await page.waitForTimeout(100);
+    }
+  }
+  if (values.minCardinality !== undefined) {
+    const minInput = page.locator('#editEdgeMinCard');
+    if (await minInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await minInput.fill(values.minCardinality, { timeout: 2000 });
+      await page.waitForTimeout(50);
+    }
+  }
+  if (values.maxCardinality !== undefined) {
+    const maxInput = page.locator('#editEdgeMaxCard');
+    if (await maxInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await maxInput.fill(values.maxCardinality, { timeout: 2000 });
+      await page.waitForTimeout(50);
+    }
+  }
+}
+
+// Helper function to confirm edit edge modal
+async function confirmEditEdgeModal(page: Page): Promise<void> {
+  const confirmBtn = page.locator('#editEdgeConfirm');
+  if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await confirmBtn.click({ timeout: 2000 });
+    await page.waitForTimeout(200); // Wait for modal to close and graph to update
+  }
+}
+
 // Helper function to close edit edge modal
 async function closeEditEdgeModal(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -348,6 +393,252 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(ttl).not.toBeNull();
       expect(ttl).toContain('minQualifiedCardinality');
       expect(ttl).toContain('maxQualifiedCardinality');
+    });
+  });
+
+  describe('Unchecking OWL Restriction', () => {
+    it('should remove restriction but keep edge when unchecking isRestriction checkbox', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'restriction-edge-test.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      // Load test file
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Find the edge (should be a restriction)
+      const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
+      expect(edgeId).not.toBeNull();
+
+      // Verify it's a restriction initially
+      const initialEdgeData = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(initialEdgeData).not.toBeNull();
+      expect(initialEdgeData?.isRestriction).toBe(true);
+
+      // Open edit edge modal
+      const opened = await openEditEdgeModal(page, edgeId!);
+      expect(opened).toBe(true);
+
+      // Verify checkbox is checked
+      const initialModalValues = await getEditEdgeModalValues(page);
+      expect(initialModalValues).not.toBeNull();
+      expect(initialModalValues?.isRestrictionChecked).toBe(true);
+
+      // Uncheck the "is restriction" checkbox
+      await setEditEdgeModalValues(page, { isRestrictionChecked: false });
+      await page.waitForTimeout(100);
+
+      // Verify checkbox is now unchecked
+      const updatedModalValues = await getEditEdgeModalValues(page);
+      expect(updatedModalValues).not.toBeNull();
+      expect(updatedModalValues?.isRestrictionChecked).toBe(false);
+
+      // Confirm the edit
+      await confirmEditEdgeModal(page);
+      await waitForGraphRender(page);
+
+      // Verify edge still exists but is no longer a restriction
+      const afterUncheckEdgeData = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(afterUncheckEdgeData).not.toBeNull();
+      expect(afterUncheckEdgeData?.isRestriction).toBe(false);
+
+      // Verify the edge is still visible in the graph
+      const edgeStillExists = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId) !== null;
+        },
+        edgeId!
+      );
+      expect(edgeStillExists).toBe(true);
+
+      // Verify TTL no longer has the restriction
+      const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());
+      expect(ttl).not.toBeNull();
+      expect(ttl).not.toContain('owl:Restriction');
+      expect(ttl).not.toContain('owl:onProperty');
+      expect(ttl).not.toContain('owl:someValuesFrom');
+      // But domain/range should still be there
+      expect(ttl).toContain('rdfs:domain');
+      expect(ttl).toContain('rdfs:range');
+    });
+
+    it('should restore restriction when undoing uncheck operation', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'restriction-edge-test.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      // Load test file
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Find the edge
+      const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
+      expect(edgeId).not.toBeNull();
+
+      // Open edit edge modal and uncheck restriction
+      const opened = await openEditEdgeModal(page, edgeId!);
+      expect(opened).toBe(true);
+      await setEditEdgeModalValues(page, { isRestrictionChecked: false });
+      await confirmEditEdgeModal(page);
+      await waitForGraphRender(page);
+
+      // Verify edge is no longer a restriction
+      const afterUncheck = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(afterUncheck?.isRestriction).toBe(false);
+
+      // Perform undo
+      await page.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        if (testHook?.performUndo) testHook.performUndo();
+      });
+      await waitForGraphRender(page);
+
+      // Verify edge is back as a restriction
+      const afterUndo = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(afterUndo).not.toBeNull();
+      expect(afterUndo?.isRestriction).toBe(true);
+    });
+
+    it('should delete edge completely when using Del key (not just remove restriction)', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'restriction-edge-test.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      // Load test file
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Find the edge
+      const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
+      expect(edgeId).not.toBeNull();
+
+      // Select the edge using the network's setSelection method
+      const selectionWorked = await page.evaluate(
+        (edgeId) => {
+          const network = (window as any).network;
+          if (network && network.setSelection) {
+            network.setSelection({ edges: [edgeId] });
+            // Verify selection
+            const selected = network.getSelectedEdges();
+            return selected.includes(edgeId);
+          }
+          return false;
+        },
+        edgeId!
+      );
+      expect(selectionWorked).toBe(true);
+      await page.waitForTimeout(300);
+
+      // Delete the edge using Del key
+      await page.keyboard.press('Delete');
+      await waitForGraphRender(page);
+      await page.waitForTimeout(200); // Extra wait for deletion to complete
+
+      // Verify edge is completely gone
+      const afterDelete = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(afterDelete).toBeNull();
+
+      // Verify TTL no longer has domain/range for this property
+      const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());
+      expect(ttl).not.toBeNull();
+      // The property should still exist, but without domain/range
+      expect(ttl).toContain('hasProperty');
+      // Domain/range should be removed
+      const hasDomainRange = ttl.includes('rdfs:domain') && ttl.includes('rdfs:range');
+      // Check if domain/range still exists for hasProperty specifically
+      const hasPropertyDomainRange = /hasProperty[^;]*rdfs:domain|hasProperty[^;]*rdfs:range/.test(ttl);
+      expect(hasPropertyDomainRange).toBe(false);
+    });
+
+    it('should restore edge when undoing deletion', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'restriction-edge-test.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      // Load test file
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      // Find the edge
+      const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
+      expect(edgeId).not.toBeNull();
+
+      // Select and delete the edge
+      await page.evaluate(
+        (edgeId) => {
+          const network = (window as any).network;
+          if (network && network.setSelection) {
+            network.setSelection({ edges: [edgeId] });
+          }
+        },
+        edgeId!
+      );
+      await page.waitForTimeout(200);
+      await page.keyboard.press('Delete');
+      await waitForGraphRender(page);
+
+      // Verify edge is gone
+      const afterDelete = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(afterDelete).toBeNull();
+
+      // Perform undo
+      await page.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        if (testHook?.performUndo) testHook.performUndo();
+      });
+      await waitForGraphRender(page);
+
+      // Verify edge is restored as a restriction
+      const afterUndo = await page.evaluate(
+        (edgeId) => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          if (!testHook) return null;
+          return testHook.getEdgeData(edgeId);
+        },
+        edgeId!
+      );
+      expect(afterUndo).not.toBeNull();
+      expect(afterUndo?.isRestriction).toBe(true);
     });
   });
 });

@@ -49,3 +49,48 @@ export function getOntologyUrlFromParams(): string | null {
     return null;
   }
 }
+
+/**
+ * Construct the display file URL from an ontology URL.
+ * If the ontology URL is {base}.html or {base}.ttl, returns {base}.display.json
+ * 
+ * @param ontologyUrl - The ontology URL
+ * @returns The display file URL, or null if the ontology URL is invalid
+ */
+export function getDisplayFileUrl(ontologyUrl: string): string | null {
+  try {
+    const url = new URL(ontologyUrl);
+    const pathname = url.pathname;
+    
+    // Remove trailing slash if present
+    const cleanPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+    
+    // Extract the base name (everything before the last dot)
+    const lastSlashIndex = cleanPath.lastIndexOf('/');
+    const fileName = lastSlashIndex >= 0 ? cleanPath.slice(lastSlashIndex + 1) : cleanPath;
+    
+    // Find the last dot to determine the extension
+    const lastDotIndex = fileName.lastIndexOf('.');
+    
+    let baseName: string;
+    if (lastDotIndex > 0) {
+      // Has an extension, remove it
+      baseName = fileName.slice(0, lastDotIndex);
+    } else {
+      // No extension, use the full filename
+      baseName = fileName;
+    }
+    
+    // Construct the display file path
+    const displayFileName = `${baseName}.display.json`;
+    const displayPath = lastSlashIndex >= 0 
+      ? cleanPath.slice(0, lastSlashIndex + 1) + displayFileName
+      : '/' + displayFileName;
+    
+    // Construct the full URL
+    url.pathname = displayPath;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}

@@ -431,6 +431,9 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   // Create edges from object property domain/range definitions
   // This handles cases where properties are defined but not used in restrictions
   // (e.g., dano:describes with domain DescriptionElement and range DisplayElement)
+  // Note: We create domain/range edges for all properties, but they are marked as
+  // isRestriction: false. When a restriction is removed, the edge from domain/range
+  // will still exist, which is the expected behavior for most properties.
   for (const op of objectProps) {
     // Use explicit URI when set (disambiguates e.g. hasGeometry from GeoSPARQL vs DAnO), else name if full URI, else resolve from store
     let propUri: string;
@@ -1720,12 +1723,16 @@ export function addEdgeToStore(
 /**
  * Remove an edge from the store. Supports subClassOf (direct quads) and any restriction-backed
  * edge type (onProperty + someValuesFrom), including partOf, contains, hasFunction, hasMaterial, etc.
+ * @param removeDomainRange - If true and no restriction exists, removes the domain/range definition from the property.
+ *                            If false, only removes restrictions, leaving domain/range intact.
+ *                            Defaults to true (for Del key deletion behavior).
  */
 export function removeEdgeFromStore(
   store: Store,
   from: string,
   to: string,
-  edgeType: string
+  edgeType: string,
+  removeDomainRange: boolean = true
 ): boolean {
   if (edgeType === 'subClassOf') {
     const subjUri = toClassUri(from);
@@ -1740,17 +1747,57 @@ export function removeEdgeFromStore(
     for (const q of quads) store.removeQuad(q);
     return true;
   }
+  
   // Any non-subClassOf edge type is stored as an OWL restriction; remove by onProperty + someValuesFrom
   const blank = findRestrictionBlank(store, from, edgeType, to);
-  if (!blank) return false;
-  const fromUri = DataFactory.namedNode(toClassUri(from));
-  const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
-  for (const q of subClassOfQuads) store.removeQuad(q);
-  const blankQuads = store.getQuads(blank, null, null, null);
-  for (const q of blankQuads) store.removeQuad(q);
-  const blankAsObjQuads = store.getQuads(null, null, blank, null);
-  for (const q of blankAsObjQuads) store.removeQuad(q);
-  return true;
+  let restrictionRemoved = false;
+  if (blank) {
+    // Restriction exists - remove it
+    const fromUri = DataFactory.namedNode(toClassUri(from));
+    const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
+    for (const q of subClassOfQuads) store.removeQuad(q);
+    const blankQuads = store.getQuads(blank, null, null, null);
+    for (const q of blankQuads) store.removeQuad(q);
+    const blankAsObjQuads = store.getQuads(null, null, blank, null);
+    for (const q of blankAsObjQuads) store.removeQuad(q);
+    restrictionRemoved = true;
+  }
+  
+  // Also remove domain/range definition if requested (when deleting via Del key, both restriction and domain/range should be removed)
+  // But when unchecking "is restriction" in edit modal, we only remove the restriction, not domain/range
+  if (removeDomainRange) {
+    // But first verify that both nodes still exist (if nodes are deleted, we can't remove domain/range)
+    const fromUri = toClassUri(from);
+    const toUri = toClassUri(to);
+    const fromNodeQuads = store.getQuads(DataFactory.namedNode(fromUri), DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+    const toNodeQuads = store.getQuads(DataFactory.namedNode(toUri), DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+    
+    // If nodes don't exist, we can't remove domain/range (this handles the "delete order" case)
+    // But if we already removed a restriction, we should return true
+    if (fromNodeQuads.length > 0 && toNodeQuads.length > 0) {
+      // Resolve property URI from store to handle different namespaces
+      const propUri = getObjectPropertyUriFromStore(store, edgeType);
+      const propNode = DataFactory.namedNode(propUri);
+      const fromUriNode = DataFactory.namedNode(fromUri);
+      const toUriNode = DataFactory.namedNode(toUri);
+      
+      // Remove the specific domain/range pair
+      const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, null);
+      const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, null);
+      
+      // Remove domain if it matches
+      for (const q of domainQuads) {
+        store.removeQuad(q);
+      }
+      // Remove range if it matches
+      for (const q of rangeQuads) {
+        store.removeQuad(q);
+      }
+    }
+  }
+  
+  // Return true if restriction was removed (domain/range removal is a side effect, not the main return value)
+  return restrictionRemoved;
 }
 
 /**
