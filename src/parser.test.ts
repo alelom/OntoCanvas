@@ -238,8 +238,7 @@ describe('updateLabelInStore (edit)', () => {
       (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
     );
     expect(containsEdge).toBeDefined();
-    const removeOk = removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
-    expect(removeOk).toBe(true);
+    removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
     const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
     const gone = afterRemove.graphData.edges.find(
       (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
@@ -297,8 +296,7 @@ describe('updateLabelInStore (edit)', () => {
       (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
     );
     expect(edge).toBeDefined();
-    const removeOk = removeEdgeFromStore(store, 'FacadeCladding', 'Function', 'hasFunction');
-    expect(removeOk).toBe(true);
+    removeEdgeFromStore(store, 'FacadeCladding', 'Function', 'hasFunction');
     const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
     const gone = afterRemove.graphData.edges.find(
       (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
@@ -313,17 +311,15 @@ describe('updateLabelInStore (edit)', () => {
     const before = await parseTtlToGraph(await storeToTurtle(store));
     expect(before.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains')).toBe(true);
 
-    // Wrong order: remove node first, then edge. removeEdgeFromStore fails because the
-    // restriction blank is no longer reachable from Layout's subClassOf quads.
+    // Wrong order: remove node first, then edge. removeEdgeFromStore should still succeed
+    // because domain/range quads are on the property, not the nodes.
     removeNodeFromStore(store, 'Layout');
-    const removeEdgeFails = removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
-    expect(removeEdgeFails).toBe(false);
+    removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
 
     // Correct order: reload, remove edge first, then node. Both succeed.
     const { store: store2 } = await parseTtlToGraph(ttl);
     addEdgeToStore(store2, 'Layout', 'FacadeCladding', 'contains');
-    const edgeOk = removeEdgeFromStore(store2, 'Layout', 'FacadeCladding', 'contains');
-    expect(edgeOk).toBe(true);
+    removeEdgeFromStore(store2, 'Layout', 'FacadeCladding', 'contains');
     const nodeOk = removeNodeFromStore(store2, 'Layout');
     expect(nodeOk).toBe(true);
     const after = await parseTtlToGraph(await storeToTurtle(store2));

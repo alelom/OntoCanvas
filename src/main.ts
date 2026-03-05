@@ -9,6 +9,7 @@ import {
   updateEdgeInStore,
   addEdgeToStore,
   removeEdgeFromStore,
+  removeRestrictionFromStore,
   addNodeToStore,
   removeNodeFromStore,
   addObjectPropertyToStore,
@@ -96,6 +97,7 @@ import {
   COLORS,
   getLayoutAlgorithm,
 } from './graph';
+import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import {
   initStatusBar,
   updateStatusBar,
@@ -217,14 +219,14 @@ function applyDisplayConfig(config: DisplayConfig): void {
   // Define edgeStyleConfig first before using it
   const edgeStyleConfig = config.edgeStyleConfig || {};
   
-  console.log('[DISPLAY CONFIG] Applying display config...');
-  console.log('[DISPLAY CONFIG] Edge style config keys:', Object.keys(edgeStyleConfig));
-  console.log('[DISPLAY CONFIG] Edge style config:', edgeStyleConfig);
+  debugLog('[DISPLAY CONFIG] Applying display config...');
+  debugLog('[DISPLAY CONFIG] Edge style config keys:', Object.keys(edgeStyleConfig));
+  debugLog('[DISPLAY CONFIG] Edge style config:', edgeStyleConfig);
   
   // Log all edge types in rawData
   const allEdgeTypesInData = getEdgeTypes(rawData.edges);
-  console.log('[DISPLAY CONFIG] All edge types in rawData.edges:', allEdgeTypesInData);
-  console.log('[DISPLAY CONFIG] Total edges in rawData.edges:', rawData.edges.length);
+  debugLog('[DISPLAY CONFIG] All edge types in rawData.edges:', allEdgeTypesInData);
+  debugLog('[DISPLAY CONFIG] Total edges in rawData.edges:', rawData.edges.length);
   
   // Check for describes edges specifically
   const describesEdgesInData = rawData.edges.filter((e) => 
@@ -232,20 +234,20 @@ function applyDisplayConfig(config: DisplayConfig): void {
     e.type.includes('describes') ||
     e.type.toLowerCase().includes('describes')
   );
-  console.log('[DISPLAY CONFIG] Describes edges in rawData.edges:', describesEdgesInData.length);
+  debugLog('[DISPLAY CONFIG] Describes edges in rawData.edges:', describesEdgesInData.length);
   if (describesEdgesInData.length > 0) {
-    console.log('[DISPLAY CONFIG] Describes edge types found:', [...new Set(describesEdgesInData.map(e => e.type))]);
-    console.log('[DISPLAY CONFIG] Sample describes edges:', describesEdgesInData.slice(0, 3));
+    debugLog('[DISPLAY CONFIG] Describes edge types found:', [...new Set(describesEdgesInData.map(e => e.type))]);
+    debugLog('[DISPLAY CONFIG] Sample describes edges:', describesEdgesInData.slice(0, 3));
   }
   
   // Check if edge types in config match edge types in data
   const configEdgeTypes = Object.keys(edgeStyleConfig);
-  console.log('[DISPLAY CONFIG] Edge types in config:', configEdgeTypes);
+  debugLog('[DISPLAY CONFIG] Edge types in config:', configEdgeTypes);
   
   const matchingTypes = configEdgeTypes.filter(type => allEdgeTypesInData.includes(type));
   const missingTypes = configEdgeTypes.filter(type => !allEdgeTypesInData.includes(type));
-  console.log('[DISPLAY CONFIG] Matching edge types (in both config and data):', matchingTypes);
-  console.log('[DISPLAY CONFIG] Missing edge types (in config but not in data):', missingTypes);
+  debugLog('[DISPLAY CONFIG] Matching edge types (in both config and data):', matchingTypes);
+  debugLog('[DISPLAY CONFIG] Missing edge types (in config but not in data):', missingTypes);
   
   // Check for potential matches with different formats (e.g., local name vs full URI)
   missingTypes.forEach(configType => {
@@ -258,7 +260,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
       extractLocalName(configType) === dataType
     );
     if (potentialMatches.length > 0) {
-      console.warn(`[DISPLAY CONFIG] ⚠ Edge type "${configType}" in config might match:`, potentialMatches);
+      debugWarn(`[DISPLAY CONFIG] ⚠ Edge type "${configType}" in config might match:`, potentialMatches);
     }
   });
   
@@ -292,9 +294,9 @@ function applyDisplayConfig(config: DisplayConfig): void {
   });
   
   if (unmatchedNodes > 0) {
-    console.log(`[DISPLAY CONFIG] Applied positions for ${matchedNodes} nodes, ${unmatchedNodes} nodes from config not found in current ontology (likely due to ontology changes)`);
+    debugLog(`[DISPLAY CONFIG] Applied positions for ${matchedNodes} nodes, ${unmatchedNodes} nodes from config not found in current ontology (likely due to ontology changes)`);
   } else {
-    console.log(`[DISPLAY CONFIG] Applied positions for ${matchedNodes} nodes`);
+    debugLog(`[DISPLAY CONFIG] Applied positions for ${matchedNodes} nodes`);
   }
   (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 12);
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
@@ -494,14 +496,24 @@ function updateUndoRedoButtons(): void {
 }
 
 function performDeleteSelection(): boolean {
-  if (!network || !ttlStore) return false;
+  debugLog(`[DELETE] performDeleteSelection called`);
+  if (!network || !ttlStore) {
+    debugLog(`[DELETE] Early return: network or ttlStore not available`);
+    return false;
+  }
   const activeEl = document.activeElement as HTMLElement;
   if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+    debugLog(`[DELETE] Early return: active element is input/textarea/contentEditable:`, activeEl.tagName);
     return false;
   }
   const selectedNodeIds = network.getSelectedNodes().map(String);
   const selectedEdgeIds = network.getSelectedEdges().map(String);
-  if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) return false;
+  debugLog(`[DELETE] Selected nodes: ${selectedNodeIds.length}, Selected edges: ${selectedEdgeIds.length}`);
+  debugLog(`[DELETE] Selected edge IDs:`, selectedEdgeIds);
+  if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {
+    debugLog(`[DELETE] Early return: no selection`);
+    return false;
+  }
 
   const edgesToRemove: { from: string; to: string; type: string }[] = [];
   const dataPropertyRestrictionsToRemove: { classId: string; propertyName: string }[] = [];
@@ -553,50 +565,79 @@ function performDeleteSelection(): boolean {
 
   // Remove edges BEFORE nodes. Restriction-based edges (contains, partOf) require the node's
   // subClassOf quads to still exist for removeEdgeFromStore to find and remove them.
+  // Note: rawData.edges contains at most one edge per from/to/type combination.
+  debugLog(`[DELETE] Starting edge deletion. edgesToRemove: ${edgesToRemove.length} edges`);
   for (const { from, to, type } of edgesToRemove) {
+    debugLog(`[DELETE] Processing edge deletion: ${from} -> ${to} : ${type}`);
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    debugLog(`[DELETE] Found edge in rawData:`, edge ? { from: edge.from, to: edge.to, type: edge.type, isRestriction: edge.isRestriction } : 'NOT FOUND');
     const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     // Del key deletion should remove both restriction and domain/range
-    const ok = removeEdgeFromStore(ttlStore, from, to, type, true);
-    if (ok) {
+    try {
+      debugLog(`[DELETE] Calling removeEdgeFromStore for: ${from} -> ${to} : ${type}`);
+      removeEdgeFromStore(ttlStore, from, to, type);
+      debugLog(`[DELETE] removeEdgeFromStore succeeded for: ${from} -> ${to} : ${type}`);
+      // Successfully removed from store - remove from rawData
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-      if (idx >= 0) rawData.edges.splice(idx, 1);
+      debugLog(`[DELETE] Edge index in rawData: ${idx}`);
+      if (idx >= 0) {
+        rawData.edges.splice(idx, 1);
+        debugLog(`[DELETE] Removed edge from rawData. Remaining edges: ${rawData.edges.length}`);
+      } else {
+        debugWarn(`[DELETE] WARNING: Edge not found in rawData at index ${idx} for: ${from} -> ${to} : ${type}`);
+      }
       edgeUndoActions.push(() => {
         addEdgeToStore(ttlStore!, from, to, type, card);
         rawData.edges.push(edge ?? { from, to, type });
       });
       edgeRedoActions.push(() => {
         // Del key deletion should remove both restriction and domain/range
-        removeEdgeFromStore(ttlStore!, from, to, type, true);
+        removeEdgeFromStore(ttlStore!, from, to, type);
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
         if (i >= 0) rawData.edges.splice(i, 1);
       });
-    } else {
+    } catch (err) {
+      // Edge not found in store (may only exist in rawData from domain/range)
+      // Still remove from rawData
+      debugError(`[DELETE] EXCEPTION removing edge from store: ${from} -> ${to} : ${type}`);
+      debugError(`[DELETE] Exception message: ${err instanceof Error ? err.message : String(err)}`);
+      debugError(`[DELETE] Exception stack:`, err instanceof Error ? err.stack : 'No stack trace');
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      debugLog(`[DELETE] Exception case - edge index in rawData: ${idx}`);
       if (idx >= 0) {
         const edge = rawData.edges[idx];
+        debugLog(`[DELETE] Removing edge from rawData despite exception:`, { from: edge.from, to: edge.to, type: edge.type });
         const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
         rawData.edges.splice(idx, 1);
+        debugLog(`[DELETE] Removed edge from rawData after exception. Remaining edges: ${rawData.edges.length}`);
         edgeUndoActions.push(() => {
           addEdgeToStore(ttlStore!, from, to, type, card);
           rawData.edges.push(edge);
         });
         edgeRedoActions.push(() => {
           // Del key deletion should remove both restriction and domain/range
-          removeEdgeFromStore(ttlStore!, from, to, type, true);
+          try {
+            removeEdgeFromStore(ttlStore!, from, to, type);
+          } catch {
+            // Ignore errors in redo
+          }
           const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
           if (i >= 0) rawData.edges.splice(i, 1);
         });
+      } else {
+        debugWarn(`[DELETE] WARNING: Edge not found in rawData at index ${idx} after exception for: ${from} -> ${to} : ${type}`);
       }
     }
   }
+  debugLog(`[DELETE] Finished edge deletion. Remaining edges in rawData: ${rawData.edges.length}`);
 
   for (const { from, to, type } of connectedEdges) {
     if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
     const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
-    const ok = removeEdgeFromStore(ttlStore, from, to, type);
-    if (ok) {
+    try {
+      removeEdgeFromStore(ttlStore, from, to, type);
+      // Successfully removed from store - remove from rawData
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
       edgeUndoActions.push(() => {
@@ -605,11 +646,14 @@ function performDeleteSelection(): boolean {
       });
       edgeRedoActions.push(() => {
         // Del key deletion should remove both restriction and domain/range
-        removeEdgeFromStore(ttlStore!, from, to, type, true);
+        removeEdgeFromStore(ttlStore!, from, to, type);
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
         if (i >= 0) rawData.edges.splice(i, 1);
       });
-    } else {
+    } catch (err) {
+      // Edge not found in store (may only exist in rawData from domain/range)
+      // Still remove from rawData
+      console.warn(`Failed to remove connected edge from store: ${err instanceof Error ? err.message : String(err)}`);
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) {
         const edge = rawData.edges[idx];
@@ -621,7 +665,11 @@ function performDeleteSelection(): boolean {
         });
         edgeRedoActions.push(() => {
           // Del key deletion should remove both restriction and domain/range
-          removeEdgeFromStore(ttlStore!, from, to, type, true);
+          try {
+            removeEdgeFromStore(ttlStore!, from, to, type);
+          } catch {
+            // Ignore errors in redo
+          }
           const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
           if (i >= 0) rawData.edges.splice(i, 1);
         });
@@ -707,7 +755,11 @@ function performDeleteSelection(): boolean {
   if (edgeStylesContent) {
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
   }
+  debugLog(`[DELETE] About to call applyFilter. rawData.edges count: ${rawData.edges.length}`);
+  debugLog(`[DELETE] rawData.edges:`, rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
   applyFilter(true);
+  debugLog(`[DELETE] After applyFilter. rawData.edges count: ${rawData.edges.length}`);
+  debugLog(`[DELETE] rawData.edges after filter:`, rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
   network.unselectAll();
   return true;
 }
@@ -2346,20 +2398,20 @@ function buildNetworkData(filter: {
   );
   if (describesEdgesBeforeFilter.length > 0 || hasDescribesInConfig) {
     if (describesEdgesBeforeFilter.length > 0) {
-      console.log('[DEBUG] Describes edges in rawData.edges before filtering:', describesEdgesBeforeFilter);
-      console.log('[DEBUG] Available node IDs in filteredNodes:', Array.from(nodeIds));
+      debugLog('[DEBUG] Describes edges in rawData.edges before filtering:', describesEdgesBeforeFilter);
+      debugLog('[DEBUG] Available node IDs in filteredNodes:', Array.from(nodeIds));
       describesEdgesBeforeFilter.forEach((e) => {
         const fromExists = nodeIds.has(e.from);
         const toExists = nodeIds.has(e.to);
-        console.log(`[DEBUG] Describes edge: from="${e.from}" (exists: ${fromExists}), to="${e.to}" (exists: ${toExists}), type="${e.type}"`);
+        debugLog(`[DEBUG] Describes edge: from="${e.from}" (exists: ${fromExists}), to="${e.to}" (exists: ${toExists}), type="${e.type}"`);
         if (!fromExists || !toExists) {
-          console.warn(`[DEBUG] ⚠ Describes edge will be filtered out - missing nodes`);
-          if (!fromExists) console.warn(`[DEBUG]   Missing from node: "${e.from}"`);
-          if (!toExists) console.warn(`[DEBUG]   Missing to node: "${e.to}"`);
+          debugWarn(`[DEBUG] ⚠ Describes edge will be filtered out - missing nodes`);
+          if (!fromExists) debugWarn(`[DEBUG]   Missing from node: "${e.from}"`);
+          if (!toExists) debugWarn(`[DEBUG]   Missing to node: "${e.to}"`);
         }
       });
     } else if (hasDescribesInConfig) {
-      console.warn('[DEBUG] ⚠ Display config references "describes" edges but none found in rawData.edges');
+      debugWarn('[DEBUG] ⚠ Display config references "describes" edges but none found in rawData.edges');
     }
   }
   
@@ -2369,10 +2421,10 @@ function buildNetworkData(filter: {
     (e.type.includes('describes') || e.type.includes('dano'))
   );
   if (externalEdgesBeforeFilter.length > 0) {
-    console.log('[DEBUG] External property edges in rawData.edges:', externalEdgesBeforeFilter);
-    console.log('[DEBUG] Available node IDs:', Array.from(nodeIds));
+    debugLog('[DEBUG] External property edges in rawData.edges:', externalEdgesBeforeFilter);
+    debugLog('[DEBUG] Available node IDs:', Array.from(nodeIds));
     externalEdgesBeforeFilter.forEach((e) => {
-      console.log(`[DEBUG] Edge ${e.type}: from="${e.from}" (exists: ${nodeIds.has(e.from)}), to="${e.to}" (exists: ${nodeIds.has(e.to)})`);
+      debugLog(`[DEBUG] Edge ${e.type}: from="${e.from}" (exists: ${nodeIds.has(e.from)}), to="${e.to}" (exists: ${nodeIds.has(e.to)})`);
     });
   }
   
@@ -2385,7 +2437,7 @@ function buildNetworkData(filter: {
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
   if (describesEdgesAfterNodeFilter.length > 0 || describesEdgesBeforeFilter.length > 0) {
-    console.log(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
+    debugLog(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
   }
 
   const searchQuery = (filter.searchQuery || '').trim();
@@ -2436,22 +2488,22 @@ function buildNetworkData(filter: {
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
   if (describesEdgesBeforeStyleFilter.length > 0 || describesEdgesBeforeFilter.length > 0) {
-    console.log(`[DEBUG] Describes edges before style filtering: ${describesEdgesBeforeStyleFilter.length}`, describesEdgesBeforeStyleFilter);
+    debugLog(`[DEBUG] Describes edges before style filtering: ${describesEdgesBeforeStyleFilter.length}`, describesEdgesBeforeStyleFilter);
   }
   
   // Debug: Check edge style config for describes
   const describesEdgeType = describesEdgesBeforeStyleFilter.length > 0 ? describesEdgesBeforeStyleFilter[0].type : null;
   if (describesEdgeType) {
     const describesStyle = edgeStyleConfig[describesEdgeType];
-    console.log(`[DEBUG] Edge style config for "${describesEdgeType}":`, describesStyle);
-    console.log(`[DEBUG] All edge style config keys:`, Object.keys(edgeStyleConfig));
+    debugLog(`[DEBUG] Edge style config for "${describesEdgeType}":`, describesStyle);
+    debugLog(`[DEBUG] All edge style config keys:`, Object.keys(edgeStyleConfig));
   }
   
   // Debug: Log edges with external property URIs
   const externalEdges = filteredEdges.filter((e) => e.type.startsWith('http://') || e.type.startsWith('https://'));
   if (externalEdges.length > 0) {
-    console.log('[DEBUG] External property edges found:', externalEdges.map((e) => ({ from: e.from, to: e.to, type: e.type })));
-    console.log('[DEBUG] Edge style config keys:', Object.keys(edgeStyleConfig));
+    debugLog('[DEBUG] External property edges found:', externalEdges.map((e) => ({ from: e.from, to: e.to, type: e.type })));
+    debugLog('[DEBUG] Edge style config keys:', Object.keys(edgeStyleConfig));
   }
   
   filteredEdges = filteredEdges.filter((e) => {
@@ -2460,19 +2512,19 @@ function buildNetworkData(filter: {
     
     // Debug: Specifically log describes edge filtering
     if (e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')) {
-      console.log(`[DEBUG] Describes edge style check:`, {
+      debugLog(`[DEBUG] Describes edge style check:`, {
         type: e.type,
         style: style,
         shouldShow: shouldShow,
         showValue: style?.show,
       });
       if (!shouldShow) {
-        console.warn(`[DEBUG] ⚠ Describes edge filtered out by style config:`, style);
+        debugWarn(`[DEBUG] ⚠ Describes edge filtered out by style config:`, style);
       }
     }
     
     if (!shouldShow && (e.type.startsWith('http://') || e.type.startsWith('https://'))) {
-      console.warn(`[DEBUG] External edge filtered out: ${e.type}, style:`, style);
+      debugWarn(`[DEBUG] External edge filtered out: ${e.type}, style:`, style);
     }
     return shouldShow;
   });
@@ -2482,7 +2534,7 @@ function buildNetworkData(filter: {
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
   if (describesEdgesAfterStyleFilter.length > 0 || describesEdgesBeforeFilter.length > 0) {
-    console.log(`[DEBUG] Describes edges after style filtering: ${describesEdgesAfterStyleFilter.length}`, describesEdgesAfterStyleFilter);
+    debugLog(`[DEBUG] Describes edges after style filtering: ${describesEdgesAfterStyleFilter.length}`, describesEdgesAfterStyleFilter);
   }
 
   const layoutMode = filter.layoutMode;
@@ -2844,7 +2896,7 @@ function buildNetworkData(filter: {
       const nodeLabel = `${dataProp.label} (${rangeLabel})`;
       
       // Debug: Log the actual label being set for the node
-      console.log(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
+      debugLog(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
         
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
@@ -2919,7 +2971,7 @@ function buildNetworkData(filter: {
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
   if (describesEdgesBeforeMapping.length > 0 || describesEdgesBeforeFilter.length > 0) {
-    console.log(`[DEBUG] Describes edges before mapping to vis-network: ${describesEdgesBeforeMapping.length}`, describesEdgesBeforeMapping);
+    debugLog(`[DEBUG] Describes edges before mapping to vis-network: ${describesEdgesBeforeMapping.length}`, describesEdgesBeforeMapping);
   }
   
   const edges = filteredEdges.map((e) => {
@@ -2963,7 +3015,7 @@ function buildNetworkData(filter: {
     
     // Debug: Log describes edge mapping
     if (e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')) {
-      console.log(`[DEBUG] Mapping describes edge to vis-network:`, {
+      debugLog(`[DEBUG] Mapping describes edge to vis-network:`, {
         from: e.from,
         to: e.to,
         type: e.type,
@@ -2992,7 +3044,7 @@ function buildNetworkData(filter: {
     (e.id as string).includes('describes')
   );
   if (describesEdgesAfterMapping.length > 0 || describesEdgesBeforeFilter.length > 0) {
-    console.log(`[DEBUG] Describes edges after mapping to vis-network: ${describesEdgesAfterMapping.length}`, describesEdgesAfterMapping);
+    debugLog(`[DEBUG] Describes edges after mapping to vis-network: ${describesEdgesAfterMapping.length}`, describesEdgesAfterMapping);
   }
 
   // Deduplicate edges by id (same from, to, and type)
@@ -3088,19 +3140,19 @@ function buildNetworkData(filter: {
   );
   // Only log final describes edges summary if they exist or were expected
   if (describesEdgesFinal.length > 0 || describesEdgesBeforeFilter.length > 0) {
-    console.log(`[DEBUG] ===== FINAL: Describes edges in allEdges: ${describesEdgesFinal.length} =====`);
+    debugLog(`[DEBUG] ===== FINAL: Describes edges in allEdges: ${describesEdgesFinal.length} =====`);
     if (describesEdgesFinal.length > 0) {
-      console.log('[DEBUG] ✓ Describes edges will be rendered:', describesEdgesFinal);
+      debugLog('[DEBUG] ✓ Describes edges will be rendered:', describesEdgesFinal);
     } else if (describesEdgesBeforeFilter.length > 0) {
       // Only warn if we had describes edges that got filtered out
-      console.warn('[DEBUG] ⚠ NO describes edges in final allEdges - edge will NOT appear in graph!');
-      console.log('[DEBUG] Summary of filtering:');
-      console.log(`  - Total edges in rawData.edges: ${rawData.edges.length}`);
-      console.log(`  - Describes edges in rawData.edges: ${describesEdgesBeforeFilter.length}`);
-      console.log(`  - Filtered edges after node filtering: ${filteredEdges.length}`);
-      console.log(`  - Edges after style filtering: ${filteredEdges.length}`);
-      console.log(`  - Edges mapped to vis-network: ${edges.length}`);
-      console.log(`  - Unique edges (after deduplication): ${uniqueEdges.length}`);
+      debugWarn('[DEBUG] ⚠ NO describes edges in final allEdges - edge will NOT appear in graph!');
+      debugLog('[DEBUG] Summary of filtering:');
+      debugLog(`  - Total edges in rawData.edges: ${rawData.edges.length}`);
+      debugLog(`  - Describes edges in rawData.edges: ${describesEdgesBeforeFilter.length}`);
+      debugLog(`  - Filtered edges after node filtering: ${filteredEdges.length}`);
+      debugLog(`  - Edges after style filtering: ${filteredEdges.length}`);
+      debugLog(`  - Edges mapped to vis-network: ${edges.length}`);
+      debugLog(`  - Unique edges (after deduplication): ${uniqueEdges.length}`);
     }
   }
 
@@ -4175,7 +4227,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     if (!edge && allMatchingEdges.length > 0) {
       // Fall back to any matching edge if no restriction edge found
       edge = allMatchingEdges[0];
-      console.warn('[DEBUG] No restriction edge found, using fallback:', {
+      debugWarn('[DEBUG] No restriction edge found, using fallback:', {
         edgeFrom,
         edgeTo,
         edgeType,
@@ -4183,7 +4235,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
         selectedEdge: edge,
       });
     } else if (!edge) {
-      console.error('[DEBUG] No matching edge found at all:', {
+      debugError('[DEBUG] No matching edge found at all:', {
         edgeFrom,
         edgeTo,
         edgeType,
@@ -4192,7 +4244,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     
     // Debug: Log edge lookup - ALWAYS log, not just when multiple edges
-    console.log('[DEBUG] Edge lookup result:', {
+    debugLog('[DEBUG] Edge lookup result:', {
       edgeFrom,
       edgeTo,
       edgeType,
@@ -4240,7 +4292,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
 
     // Debug: Log edge lookup for troubleshooting
-    console.log('[DEBUG] showEditEdgeModal - edge lookup:', {
+    debugLog('[DEBUG] showEditEdgeModal - edge lookup:', {
       edgeFrom,
       edgeTo,
       edgeType,
@@ -4266,7 +4318,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       // Check if this is a restriction edge - prioritize explicit isRestriction flag
       const isRestriction = edge?.isRestriction === true;
       isRestrictionCb.checked = isRestriction;
-      console.log('[DEBUG] showEditEdgeModal - restriction checkbox:', {
+      debugLog('[DEBUG] showEditEdgeModal - restriction checkbox:', {
         isRestriction,
         edgeIsRestriction: edge?.isRestriction,
         minCardinality: edge?.minCardinality,
@@ -4438,7 +4490,11 @@ function confirmEditEdge(): void {
     }
     pushUndoable(
       () => {
-        removeEdgeFromStore(ttlStore!, from, to, newType);
+        try {
+          removeEdgeFromStore(ttlStore!, from, to, newType);
+        } catch (err) {
+          console.warn(`Undo: Failed to remove edge from store: ${err instanceof Error ? err.message : String(err)}`);
+        }
         const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === newType);
         if (i >= 0) rawData.edges.splice(i, 1);
       },
@@ -4528,16 +4584,22 @@ function confirmEditEdge(): void {
   }
   // When unchecking "is restriction", only remove the restriction, not the domain/range
   // When checking "is restriction" or changing other properties, remove both restriction and domain/range
-  // (The domain/range will be recreated when we add the new edge if needed)
-  const shouldRemoveDomainRange = oldWasRestriction && !isRestriction ? false : true;
-  let removeOk = removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType, shouldRemoveDomainRange);
-  // Edge may exist only in rawData (e.g. from object property domain/range) with no restriction in store
-  if (!removeOk && oldEdge) {
-    removeOk = true; // Proceed: we will remove from rawData and add the new restriction to the store
-  }
-  if (!removeOk) {
-    hideEditEdgeModalWithCleanup();
-    return;
+  try {
+    if (oldWasRestriction && !isRestriction) {
+      // Unchecking "is restriction" - only remove restriction, edge remains as domain/range
+      removeRestrictionFromStore(ttlStore, oldFrom, oldTo, oldType);
+    } else {
+      // Changing other properties or checking "is restriction" - remove edge completely
+      removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+    }
+  } catch (err) {
+    // Edge may exist only in rawData (e.g. from object property domain/range) with no restriction in store)
+    // Proceed: we will remove from rawData and add the new restriction to the store
+    console.warn(`Failed to remove edge from store: ${err instanceof Error ? err.message : String(err)}`);
+    if (!oldEdge) {
+      hideEditEdgeModalWithCleanup();
+      return;
+    }
   }
   // Only add restriction if isRestriction is true, otherwise the domain/range edge will remain visible
   const addOk = isRestriction ? addEdgeToStore(ttlStore, newFrom, newTo, newType, card) : true;
@@ -4592,9 +4654,12 @@ function confirmEditEdge(): void {
   pushUndoable(
     () => {
       // Undo: restore old edge state
-      // Remove new edge (with appropriate removeDomainRange flag based on new state)
-      const newShouldRemoveDomainRange = isRestriction ? true : false;
-      removeEdgeFromStore(ttlStore!, newFrom, newTo, newType, newShouldRemoveDomainRange);
+      // Remove new edge completely
+      try {
+        removeEdgeFromStore(ttlStore!, newFrom, newTo, newType);
+      } catch (err) {
+        console.warn(`Undo: Failed to remove new edge from store: ${err instanceof Error ? err.message : String(err)}`);
+      }
       // Restore old edge
       if (oldWasRestriction) {
         addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType, oldCard);
@@ -4615,9 +4680,18 @@ function confirmEditEdge(): void {
     },
     () => {
       // Redo: apply new edge state again
-      // Remove old edge (with appropriate removeDomainRange flag based on old state)
-      const oldShouldRemoveDomainRange = oldWasRestriction && !isRestriction ? false : true;
-      removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType, oldShouldRemoveDomainRange);
+      // Remove old edge completely
+      try {
+        if (oldWasRestriction && !isRestriction) {
+          // Was unchecking restriction - remove restriction only
+          removeRestrictionFromStore(ttlStore!, oldFrom, oldTo, oldType);
+        } else {
+          // Was changing other properties or checking restriction - remove edge completely
+          removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType);
+        }
+      } catch (err) {
+        console.warn(`Redo: Failed to remove old edge from store: ${err instanceof Error ? err.message : String(err)}`);
+      }
       // Add new edge
       if (isRestriction) {
         addEdgeToStore(ttlStore!, newFrom, newTo, newType, card);
@@ -5368,9 +5442,9 @@ async function loadTtlAndRender(
     const describesEdgesInRawData = rawData.edges.filter((e) => 
       e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
     );
-    console.log('[DEBUG] After parsing - describes edges in rawData.edges:', describesEdgesInRawData.length, describesEdgesInRawData);
-    console.log('[DEBUG] All edges in rawData.edges:', rawData.edges.length);
-    console.log('[DEBUG] All node IDs in rawData.nodes:', rawData.nodes.map((n) => n.id));
+    debugLog('[DEBUG] After parsing - describes edges in rawData.edges:', describesEdgesInRawData.length, describesEdgesInRawData);
+    debugLog('[DEBUG] All edges in rawData.edges:', rawData.edges.length);
+    debugLog('[DEBUG] All node IDs in rawData.nodes:', rawData.nodes.map((n) => n.id));
     
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
@@ -5714,11 +5788,11 @@ function applyFilter(preserveView = false): void {
         const type = afterArrow.substring(colonIndex + 1);
         
         // Debug: Log edge click
-        console.log('[DEBUG] Edge clicked for editing:', { edgeId, from, to, type });
+        debugLog('[DEBUG] Edge clicked for editing:', { edgeId, from, to, type });
         
         // Debug: Check what edges exist in rawData for this match
         const matchingEdges = rawData.edges.filter((e) => e.from === from && e.to === to && e.type === type);
-        console.log('[DEBUG] All matching edges in rawData:', {
+        debugLog('[DEBUG] All matching edges in rawData:', {
           from,
           to,
           type,
@@ -5806,7 +5880,11 @@ function applyFilter(preserveView = false): void {
               () => {
                 // Undo: remove pasted edges
                 addedEdges.forEach((edge) => {
-                  removeEdgeFromStore(ttlStore!, edge.from, edge.to, edge.type);
+                  try {
+                    removeEdgeFromStore(ttlStore!, edge.from, edge.to, edge.type);
+                  } catch (err) {
+                    console.warn(`Undo: Failed to remove pasted edge from store: ${err instanceof Error ? err.message : String(err)}`);
+                  }
                   const idx = rawData.edges.findIndex(
                     (e) => e.from === edge.from && e.to === edge.to && e.type === edge.type
                   );
@@ -6805,6 +6883,7 @@ function setupEventListeners(): void {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // Run in capture phase so we handle Delete before search input (which would delete a character)
         const activeEl = document.activeElement as HTMLElement;
+        debugLog(`[DELETE KEY] Delete/Backspace key pressed. Active element:`, activeEl?.id || activeEl?.tagName);
         if (activeEl?.id === 'searchQuery' && network?.getSelectedNodes().length) {
           activeEl.blur();
         }
@@ -6926,6 +7005,56 @@ setTimeout(async () => {
   }
 }, 100);
 
+// Internal log collection for testing
+const testLogs: string[] = [];
+const MAX_TEST_LOGS = 1000;
+
+function addTestLog(message: string): void {
+  testLogs.push(`[${new Date().toISOString()}] ${message}`);
+  if (testLogs.length > MAX_TEST_LOGS) {
+    testLogs.shift(); // Remove oldest log
+  }
+  // Don't log to console here - let the console override handle it based on debug mode
+}
+
+// Override console methods to capture test logs (always) but only log to console if debug mode is enabled
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+console.log = (...args: unknown[]) => {
+  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  // Always capture test logs for E2E testing
+  if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
+    addTestLog(message);
+  }
+  // Only log to console if debug mode is enabled (for production performance)
+  if (isDebugMode() || message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[TEST]')) {
+    originalConsoleLog.apply(console, args);
+  }
+};
+
+console.error = (...args: unknown[]) => {
+  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  // Always capture test logs for E2E testing
+  if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
+    addTestLog(message);
+  }
+  // Always log errors to console (even without debug mode)
+  originalConsoleError.apply(console, args);
+};
+
+console.warn = (...args: unknown[]) => {
+  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  // Always capture test logs for E2E testing
+  if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
+    addTestLog(message);
+  }
+  // Only log warnings to console if debug mode is enabled (for production performance)
+  if (isDebugMode() || message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[TEST]')) {
+    originalConsoleWarn.apply(console, args);
+  }
+};
+
 // Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
 (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
   /** Hide the open-ontology modal so tests can use the file input. */
@@ -6937,6 +7066,30 @@ setTimeout(async () => {
       return true;
     }
     return false;
+  },
+  /** Select edge by edge ID (format: "from->to:type"). */
+  selectEdgeById: (edgeId: string): boolean => {
+    if (!network) return false;
+    network.setSelection({ edges: [edgeId] });
+    // Wait a bit for selection to be applied, then verify
+    setTimeout(() => {
+      const selected = network.getSelectedEdges();
+      if (isDebugMode()) {
+        debugLog(`[SELECT EDGE] Selection result for ${edgeId}:`, { selected, includes: selected.includes(edgeId) });
+      }
+    }, 50);
+    const selected = network.getSelectedEdges();
+    return selected.includes(edgeId);
+  },
+  /** Get selected edges from network (for debugging). */
+  getSelectedEdges: (): string[] => {
+    if (!network) return [];
+    return network.getSelectedEdges().map(String);
+  },
+  /** Get selected nodes from network (for debugging). */
+  getSelectedNodes: (): string[] => {
+    if (!network) return [];
+    return network.getSelectedNodes().map(String);
   },
   performDelete: (): boolean => performDeleteSelection(),
   performUndo: (): void => performUndo(),
@@ -6988,9 +7141,17 @@ setTimeout(async () => {
     const to = afterArrow.substring(0, colonIndex);
     const type = afterArrow.substring(colonIndex + 1);
     
-    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
-    if (!edge) return null;
+    debugLog(`[GET EDGE DATA] Looking for edge: ${from} -> ${to} : ${type}`);
+    debugLog(`[GET EDGE DATA] rawData.edges count: ${rawData.edges.length}`);
+    debugLog(`[GET EDGE DATA] rawData.edges:`, rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
     
+    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    if (!edge) {
+      debugLog(`[GET EDGE DATA] Edge NOT FOUND in rawData`);
+      return null;
+    }
+    
+    debugLog(`[GET EDGE DATA] Edge FOUND:`, { from: edge.from, to: edge.to, type: edge.type, isRestriction: edge.isRestriction });
     return {
       from: edge.from,
       to: edge.to,
@@ -6999,6 +7160,25 @@ setTimeout(async () => {
       minCardinality: edge.minCardinality,
       maxCardinality: edge.maxCardinality,
     };
+  },
+  /** Get all edges from rawData (for debugging). */
+  getAllEdges: (): Array<{ from: string; to: string; type: string; isRestriction?: boolean }> => {
+    return rawData.edges.map(e => ({ from: e.from, to: e.to, type: e.type, isRestriction: e.isRestriction }));
+  },
+  /** Get collected test logs (for debugging deletion flow). */
+  getTestLogs: (filter?: string): string[] => {
+    if (filter) {
+      return testLogs.filter(log => log.includes(filter));
+    }
+    return [...testLogs]; // Return a copy
+  },
+  /** Clear collected test logs. */
+  clearTestLogs: (): void => {
+    testLogs.length = 0;
+  },
+  /** Test logging functionality - logs a test message. */
+  testLog: (message: string): void => {
+    addTestLog(`[TEST] ${message}`);
   },
   /** Trigger edit edge modal programmatically. */
   editEdge: (edgeId: string): boolean => {

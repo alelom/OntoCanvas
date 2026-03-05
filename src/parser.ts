@@ -3,6 +3,7 @@ import { postProcessTurtle } from './turtlePostProcess';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
+import { isDebugMode, debugLog, debugError } from './utils/debug';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -434,6 +435,9 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   // Note: We create domain/range edges for all properties, but they are marked as
   // isRestriction: false. When a restriction is removed, the edge from domain/range
   // will still exist, which is the expected behavior for most properties.
+  // IMPORTANT: rawData.edges contains at most one edge per from/to/type combination.
+  // If both a restriction and domain/range exist for the same property, only one edge
+  // is created (the restriction edge takes precedence).
   for (const op of objectProps) {
     // Use explicit URI when set (disambiguates e.g. hasGeometry from GeoSPARQL vs DAnO), else name if full URI, else resolve from store
     let propUri: string;
@@ -795,7 +799,12 @@ function getObjectPropertyUriFromStore(store: Store, name: string): string {
   if (name.startsWith('http://') || name.startsWith('https://')) return name;
   const ops = getObjectProperties(store);
   const op = ops.find((p) => p.name === name || p.uri === name);
-  return op?.uri ?? BASE_IRI + name;
+  if (!op || !op.uri) {
+    // Fallback to BASE_IRI if property not found (for backward compatibility)
+    // Note: This may fail if the property is from an imported ontology
+    return BASE_IRI + name;
+  }
+  return op.uri;
 }
 
 function findRestrictionBlank(
@@ -1721,19 +1730,75 @@ export function addEdgeToStore(
 }
 
 /**
- * Remove an edge from the store. Supports subClassOf (direct quads) and any restriction-backed
- * edge type (onProperty + someValuesFrom), including partOf, contains, hasFunction, hasMaterial, etc.
- * @param removeDomainRange - If true and no restriction exists, removes the domain/range definition from the property.
- *                            If false, only removes restrictions, leaving domain/range intact.
- *                            Defaults to true (for Del key deletion behavior).
+ * Remove only the OWL restriction from the store, leaving the domain/range definition intact.
+ * The edge will remain visible as a non-restriction edge (from domain/range).
+ * Called from the Edit Edge modal when unchecking "is restriction".
+ * 
+ * @throws Error if the restriction cannot be found or removed
+ */
+export function removeRestrictionFromStore(
+  store: Store,
+  from: string,
+  to: string,
+  edgeType: string
+): void {
+  if (edgeType === 'subClassOf') {
+    // subClassOf is not a restriction, it's a direct relationship
+    const subjUri = toClassUri(from);
+    const objUri = toClassUri(to);
+    const quads = store.getQuads(
+      DataFactory.namedNode(subjUri),
+      DataFactory.namedNode(RDFS + 'subClassOf'),
+      DataFactory.namedNode(objUri),
+      null
+    );
+    if (quads.length === 0) {
+      throw new Error(`Cannot remove subClassOf edge: ${from} -> ${to} (not found in store)`);
+    }
+    for (const q of quads) store.removeQuad(q);
+    return;
+  }
+  
+  // Find and remove the restriction blank node
+  const blank = findRestrictionBlank(store, from, edgeType, to);
+  if (!blank) {
+    throw new Error(`Cannot remove restriction: ${from} -> ${to} : ${edgeType} (restriction not found in store)`);
+  }
+  
+  // Restriction exists - remove it
+  const fromUri = DataFactory.namedNode(toClassUri(from));
+  const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
+  for (const q of subClassOfQuads) store.removeQuad(q);
+  const blankQuads = store.getQuads(blank, null, null, null);
+  for (const q of blankQuads) store.removeQuad(q);
+  const blankAsObjQuads = store.getQuads(null, null, blank, null);
+  for (const q of blankAsObjQuads) store.removeQuad(q);
+}
+
+/**
+ * Remove an edge completely from the store. Removes both the restriction (if it exists) and
+ * the domain/range definition. The edge will no longer appear in the graph.
+ * 
+ * Called when:
+ * - User deletes a selected edge by pressing Del key
+ * - Domain/range are deleted from the Edit Edge or Edit Object Property modals
+ * 
+ * Supports subClassOf (direct quads) and any restriction-backed edge type.
+ * Note: rawData.edges contains at most one edge per from/to/type combination.
+ * Note: edgeType should be a full URI (especially for imported ontologies to avoid name conflicts).
+ * 
+ * @throws Error if domain/range cannot be found or removed (e.g., nodes deleted, property not found)
  */
 export function removeEdgeFromStore(
   store: Store,
   from: string,
   to: string,
-  edgeType: string,
-  removeDomainRange: boolean = true
-): boolean {
+  edgeType: string
+): void {
+  if (isDebugMode()) {
+    debugLog(`[DELETE EDGE] removeEdgeFromStore called: ${from} -> ${to} : ${edgeType}`);
+  }
+  
   if (edgeType === 'subClassOf') {
     const subjUri = toClassUri(from);
     const objUri = toClassUri(to);
@@ -1743,61 +1808,102 @@ export function removeEdgeFromStore(
       DataFactory.namedNode(objUri),
       null
     );
-    if (quads.length === 0) return false;
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] subClassOf: found ${quads.length} quads`);
+    }
+    if (quads.length === 0) {
+      throw new Error(`Cannot remove subClassOf edge: ${from} -> ${to} (not found in store)`);
+    }
     for (const q of quads) store.removeQuad(q);
-    return true;
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] subClassOf: removed ${quads.length} quads successfully`);
+    }
+    return;
   }
   
-  // Any non-subClassOf edge type is stored as an OWL restriction; remove by onProperty + someValuesFrom
+  // Remove restriction if it exists
   const blank = findRestrictionBlank(store, from, edgeType, to);
-  let restrictionRemoved = false;
   if (blank) {
-    // Restriction exists - remove it
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] Found restriction blank node: ${blank.value}`);
+    }
     const fromUri = DataFactory.namedNode(toClassUri(from));
     const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] Removing ${subClassOfQuads.length} subClassOf quads pointing to restriction`);
+    }
     for (const q of subClassOfQuads) store.removeQuad(q);
     const blankQuads = store.getQuads(blank, null, null, null);
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] Removing ${blankQuads.length} quads from restriction blank node`);
+    }
     for (const q of blankQuads) store.removeQuad(q);
     const blankAsObjQuads = store.getQuads(null, null, blank, null);
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] Removing ${blankAsObjQuads.length} quads with restriction as object`);
+    }
     for (const q of blankAsObjQuads) store.removeQuad(q);
-    restrictionRemoved = true;
-  }
-  
-  // Also remove domain/range definition if requested (when deleting via Del key, both restriction and domain/range should be removed)
-  // But when unchecking "is restriction" in edit modal, we only remove the restriction, not domain/range
-  if (removeDomainRange) {
-    // But first verify that both nodes still exist (if nodes are deleted, we can't remove domain/range)
-    const fromUri = toClassUri(from);
-    const toUri = toClassUri(to);
-    const fromNodeQuads = store.getQuads(DataFactory.namedNode(fromUri), DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
-    const toNodeQuads = store.getQuads(DataFactory.namedNode(toUri), DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
-    
-    // If nodes don't exist, we can't remove domain/range (this handles the "delete order" case)
-    // But if we already removed a restriction, we should return true
-    if (fromNodeQuads.length > 0 && toNodeQuads.length > 0) {
-      // Resolve property URI from store to handle different namespaces
-      const propUri = getObjectPropertyUriFromStore(store, edgeType);
-      const propNode = DataFactory.namedNode(propUri);
-      const fromUriNode = DataFactory.namedNode(fromUri);
-      const toUriNode = DataFactory.namedNode(toUri);
-      
-      // Remove the specific domain/range pair
-      const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, null);
-      const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, null);
-      
-      // Remove domain if it matches
-      for (const q of domainQuads) {
-        store.removeQuad(q);
-      }
-      // Remove range if it matches
-      for (const q of rangeQuads) {
-        store.removeQuad(q);
-      }
+  } else {
+    if (isDebugMode()) {
+      debugLog(`[DELETE EDGE] No restriction found for ${from} -> ${to} : ${edgeType}`);
     }
   }
   
-  // Return true if restriction was removed (domain/range removal is a side effect, not the main return value)
-  return restrictionRemoved;
+  // Always remove domain/range definition to completely remove the edge
+  // Domain/range quads are on the property, not the nodes, so we can remove them even if nodes don't exist
+  const fromUri = toClassUri(from);
+  const toUri = toClassUri(to);
+  if (isDebugMode()) {
+    debugLog(`[DELETE EDGE] Resolving property URI for edgeType: ${edgeType}`);
+    debugLog(`[DELETE EDGE] From URI: ${fromUri}, To URI: ${toUri}`);
+  }
+  
+  // Resolve property URI from store to handle different namespaces
+  // Note: edgeType should ideally be a full URI (especially for imported ontologies to avoid name conflicts),
+  // but we support local names for backward compatibility
+  const propUri = getObjectPropertyUriFromStore(store, edgeType);
+  if (isDebugMode()) {
+    debugLog(`[DELETE EDGE] Resolved property URI: ${propUri}`);
+  }
+  if (!propUri) {
+    throw new Error(`Cannot resolve property URI for edge type: ${edgeType}`);
+  }
+  
+  const propNode = DataFactory.namedNode(propUri);
+  const fromUriNode = DataFactory.namedNode(fromUri);
+  const toUriNode = DataFactory.namedNode(toUri);
+  
+  // Remove the specific domain/range pair
+  const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, null);
+  const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, null);
+  if (isDebugMode()) {
+    debugLog(`[DELETE EDGE] Found ${domainQuads.length} domain quads and ${rangeQuads.length} range quads`);
+  }
+  
+  if (domainQuads.length === 0 && rangeQuads.length === 0) {
+    if (isDebugMode()) {
+      debugError(`[DELETE EDGE] ERROR: No domain/range quads found for ${from} -> ${to} : ${edgeType}`);
+      debugError(`[DELETE EDGE] Property URI: ${propUri}, From URI: ${fromUri}, To URI: ${toUri}`);
+      // Log all domain/range quads for this property to help debug
+      const allDomainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), null, null);
+      const allRangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), null, null);
+      debugError(`[DELETE EDGE] All domain quads for property: ${allDomainQuads.length}`, allDomainQuads.map(q => ({ domain: q.object.value })));
+      debugError(`[DELETE EDGE] All range quads for property: ${allRangeQuads.length}`, allRangeQuads.map(q => ({ range: q.object.value })));
+    }
+    throw new Error(`Cannot remove edge: domain/range definition not found for ${from} -> ${to} : ${edgeType}`);
+  }
+  
+  // Remove domain if it matches
+  for (const q of domainQuads) {
+    store.removeQuad(q);
+  }
+  // Remove range if it matches
+  for (const q of rangeQuads) {
+    store.removeQuad(q);
+  }
+  if (isDebugMode()) {
+    debugLog(`[DELETE EDGE] Successfully removed ${domainQuads.length} domain quads and ${rangeQuads.length} range quads`);
+  }
 }
 
 /**
