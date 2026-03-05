@@ -688,9 +688,7 @@ export async function searchExternalClasses(
   }
   
   if (isDebugMode()) {
-    if (isDebugMode()) {
     console.log(`Total matches: ${allResults.length}`);
-  }
   }
   
   // Sort by relevance (exact matches first, then by name)
