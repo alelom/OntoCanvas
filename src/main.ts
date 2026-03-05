@@ -5706,25 +5706,25 @@ function applyFilter(preserveView = false): void {
   const edgeStylesContent = document.getElementById('edgeStylesContent')!;
 
   const annotationPropsContent = document.getElementById('annotationPropsContent');
-  // Get edge style config from DOM
+  // Get edge style config from DOM (user's current checkbox states)
   const domEdgeStyleConfig = getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences);
   
   // Merge with loaded edge style config (from display config file) if present
-  // Loaded config takes precedence over DOM checkboxes
-  const mergedEdgeStyleConfig = { ...domEdgeStyleConfig };
-  if (loadedEdgeStyleConfig) {
-    Object.keys(loadedEdgeStyleConfig).forEach((type) => {
-      const loadedStyle = loadedEdgeStyleConfig[type];
-      if (loadedStyle) {
-        mergedEdgeStyleConfig[type] = {
-          show: loadedStyle.show,
-          showLabel: loadedStyle.showLabel,
-          color: loadedStyle.color,
-          lineType: loadedStyle.lineType ?? mergedEdgeStyleConfig[type]?.lineType ?? 'solid',
-        };
-      }
-    });
-  }
+  // DOM checkboxes take precedence over loaded config (user interaction overrides saved state)
+  // Loaded config is used as fallback for edge types not yet in the DOM
+  const mergedEdgeStyleConfig = loadedEdgeStyleConfig ? { ...loadedEdgeStyleConfig } : {};
+  // Override with DOM checkbox states (user's current selections)
+  Object.keys(domEdgeStyleConfig).forEach((type) => {
+    const domStyle = domEdgeStyleConfig[type];
+    if (domStyle) {
+      mergedEdgeStyleConfig[type] = {
+        show: domStyle.show,
+        showLabel: domStyle.showLabel,
+        color: domStyle.color,
+        lineType: domStyle.lineType ?? mergedEdgeStyleConfig[type]?.lineType ?? 'solid',
+      };
+    }
+  });
   
   const currentFilter = {
     wrapChars,
@@ -6719,8 +6719,32 @@ function setupEventListeners(): void {
       delete node.y;
     });
     
+    // Reset all display settings to defaults
+    (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
+    (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
+    (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
+    (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
+    (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = '12';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical01';
+    (document.getElementById('searchQuery') as HTMLInputElement).value = '';
+    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
+    
+    // Clear loaded edge style config (so it doesn't override DOM checkboxes)
+    loadedEdgeStyleConfig = null;
+    
+    // Reset Object Property display settings to defaults
+    // Reinitialize the edge styles menu which will reset all checkboxes to default values
+    const edgeStylesContent = document.getElementById('edgeStylesContent');
+    if (edgeStylesContent) {
+      initEdgeStylesMenu(edgeStylesContent, applyFilter);
+      updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+    }
+    
     // Delete display config from IndexedDB
     await deleteDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName).catch(() => {});
+    
+    // Reset lastLayoutMode to prevent position clearing on first applyFilter
+    lastLayoutMode = 'hierarchical01';
     
     // Regenerate layout by applying filter
     applyFilter();
@@ -7119,6 +7143,7 @@ console.warn = (...args: unknown[]) => {
   performRedo: (): void => performRedo(),
   getNodeIds: (): string[] => rawData.nodes.map((n) => n.id),
   getNodeCount: (): number => rawData.nodes.length,
+  getRawDataEdges: (): GraphEdge[] => rawData.edges,
   getUndoStackLength: (): number => undoStack.length,
   /** Visible node count from the UI (what's actually rendered). Use to verify display matches rawData. */
   getVisibleNodeCount: (): number =>

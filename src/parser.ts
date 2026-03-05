@@ -874,7 +874,12 @@ export function updateEdgeInStore(
   }
   // Restriction-based edges
   if (edgeType !== 'subClassOf') {
-    if (!removeEdgeFromStore(store, oldFrom, oldTo, edgeType)) return false;
+    try {
+      removeEdgeFromStore(store, oldFrom, oldTo, edgeType);
+    } catch (err) {
+      // Edge not found in store - cannot update
+      return false;
+    }
     return addEdgeToStore(store, newFrom, newTo, edgeType, cardinality);
   }
   return false;

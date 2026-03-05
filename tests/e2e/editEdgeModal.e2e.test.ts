@@ -35,7 +35,7 @@ async function loadTestFile(page: Page, filePath: string): Promise<void> {
 
 async function waitForGraphRender(page: Page, timeout = 4000): Promise<void> {
   // Wait for the graph to render. The counts can be 0 (e.g., after deleting all nodes/edges),
-  // so we only check that the elements exist and have defined (non-undefined) values.
+  // so we check that the elements exist and have valid numeric values (including 0).
   // Note: This is NOT a timing issue - the function was incorrectly requiring non-zero counts,
   // which would cause infinite waits when the last node/edge was deleted.
   await page.waitForFunction(
@@ -44,8 +44,15 @@ async function waitForGraphRender(page: Page, timeout = 4000): Promise<void> {
       const edgeCountEl = document.getElementById('edgeCount');
       const nodeCount = nodeCountEl?.textContent?.trim();
       const edgeCount = edgeCountEl?.textContent?.trim();
-      // Allow counts to be 0, but require them to be defined (not undefined)
-      return nodeCount !== undefined && edgeCount !== undefined;
+      // Require counts to be present, non-empty, and parse as valid finite numbers (including 0)
+      return (
+        nodeCount !== undefined &&
+        nodeCount !== '' &&
+        Number.isFinite(Number(nodeCount)) &&
+        edgeCount !== undefined &&
+        edgeCount !== '' &&
+        Number.isFinite(Number(edgeCount))
+      );
     },
     { timeout }
   );
