@@ -1663,17 +1663,21 @@ export function getDataPropertyRestrictionsForClass(
 }
 
 /**
- * Add an edge to the store. Supports subClassOf (direct quad) and partOf/contains (OWL restrictions).
- * Cardinality is optional; when provided, uses qualified cardinality (owl:onClass + min/maxQualifiedCardinality).
+ * Add only the OWL restriction to the store, leaving domain/range intact.
+ * The edge will be visible as a restriction edge.
+ * Called when adding a restriction to an existing domain/range edge.
+ * 
+ * @throws Error if restriction already exists or cannot be added
  */
-export function addEdgeToStore(
+export function addRestrictionToStore(
   store: Store,
   from: string,
   to: string,
   edgeType: string,
   cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
-): boolean {
+): void {
   if (edgeType === 'subClassOf') {
+    // subClassOf is not a restriction, it's a direct relationship
     const subjUri = toClassUri(from);
     const objUri = toClassUri(to);
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
@@ -1683,7 +1687,9 @@ export function addEdgeToStore(
       DataFactory.namedNode(objUri),
       null
     );
-    if (existing.length > 0) return false;
+    if (existing.length > 0) {
+      throw new Error(`Cannot add subClassOf edge: ${from} -> ${to} (already exists in store)`);
+    }
     const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
     store.addQuad(
       DataFactory.namedNode(subjUri),
@@ -1691,11 +1697,14 @@ export function addEdgeToStore(
       DataFactory.namedNode(objUri),
       graph
     );
-    return true;
+    return;
   }
+  
   // Any edge type other than subClassOf is stored as an OWL restriction
   if (edgeType !== 'subClassOf') {
-    if (findRestrictionBlank(store, from, edgeType, to)) return false;
+    if (findRestrictionBlank(store, from, edgeType, to)) {
+      throw new Error(`Cannot add restriction: ${from} -> ${to} : ${edgeType} (restriction already exists in store)`);
+    }
     const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
     const blank = new BlankNode();
     const fromUri = DataFactory.namedNode(toClassUri(from));
@@ -1729,9 +1738,80 @@ export function addEdgeToStore(
     } else {
       store.addQuad(blank, DataFactory.namedNode(OWL + 'someValuesFrom'), toUri, graph);
     }
-    return true;
+    return;
   }
-  return false;
+  
+  throw new Error(`Unsupported edge type: ${edgeType}`);
+}
+
+/**
+ * Add an edge completely to the store. Adds both the OWL restriction (if applicable) and the domain/range definition.
+ * Supports subClassOf (direct quad) and partOf/contains (OWL restrictions).
+ * Cardinality is optional; when provided, uses qualified cardinality (owl:onClass + min/maxQualifiedCardinality).
+ * 
+ * For non-subClassOf edges, this function:
+ * 1. Adds the domain/range definition to the property (if not already present)
+ * 2. Adds the OWL restriction (blank node)
+ * 
+ * @throws Error if edge already exists or cannot be added
+ */
+export function addEdgeToStore(
+  store: Store,
+  from: string,
+  to: string,
+  edgeType: string,
+  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
+): boolean {
+  if (edgeType === 'subClassOf') {
+    // subClassOf doesn't have domain/range, just add the direct relationship
+    try {
+      addRestrictionToStore(store, from, to, edgeType, cardinality);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+  
+  // For non-subClassOf edges, we need to add both domain/range and restriction
+  // First, ensure domain/range exists on the property
+  const propUri = getObjectPropertyUriFromStore(store, edgeType);
+  if (!propUri) {
+    // Property doesn't exist - cannot add edge
+    return false;
+  }
+  
+  const propNode = DataFactory.namedNode(propUri);
+  const fromUri = toClassUri(from);
+  const toUri = toClassUri(to);
+  const fromUriNode = DataFactory.namedNode(fromUri);
+  const toUriNode = DataFactory.namedNode(toUri);
+  
+  // Check if domain/range already exists
+  const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, null);
+  const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, null);
+  
+  const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  
+  // Add domain if not present
+  if (domainQuads.length === 0) {
+    store.addQuad(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, graph);
+  }
+  
+  // Add range if not present
+  if (rangeQuads.length === 0) {
+    store.addQuad(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, graph);
+  }
+  
+  // Now add the restriction
+  try {
+    addRestrictionToStore(store, from, to, edgeType, cardinality);
+    return true;
+  } catch (err) {
+    // If restriction addition fails, we should rollback domain/range addition
+    // But since domain/range can be shared by multiple edges, we don't rollback
+    // The caller should handle this appropriately
+    return false;
+  }
 }
 
 /**

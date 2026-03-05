@@ -181,6 +181,18 @@ export function updateNodeEdgeCounts(nodeCount: number, edgeCount: number): void
 }
 
 /**
+ * Check if a string is a valid URL.
+ */
+function isValidUrl(str: string): boolean {
+  try {
+    const url = new URL(str);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Update file path display in the status bar.
  */
 export function updateFilePathDisplay(filePath: string | null): void {
@@ -188,8 +200,16 @@ export function updateFilePathDisplay(filePath: string | null): void {
   if (!el) return;
   
   if (filePath) {
-    el.textContent = `| File: ${filePath}`;
-    el.title = filePath;
+    const isUrl = isValidUrl(filePath);
+    if (isUrl) {
+      // Make it a clickable link
+      el.innerHTML = `| File: <a href="${filePath}" target="_blank" rel="noopener noreferrer" style="color: #3498db; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${filePath}</a>`;
+      el.title = `Click to open: ${filePath}`;
+    } else {
+      // Regular text for non-URL paths
+      el.textContent = `| File: ${filePath}`;
+      el.title = filePath;
+    }
     el.style.display = '';
   } else {
     el.textContent = '';

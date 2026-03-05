@@ -8,6 +8,7 @@ import {
   updateCommentInStore,
   updateEdgeInStore,
   addEdgeToStore,
+  addRestrictionToStore,
   removeEdgeFromStore,
   removeRestrictionFromStore,
   addNodeToStore,
@@ -307,7 +308,15 @@ function applyDisplayConfig(config: DisplayConfig): void {
   const layoutMode = config.layoutMode ?? 'hierarchical01';
   const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
   (document.getElementById('layoutMode') as HTMLSelectElement).value = normalizedLayoutMode;
-  (document.getElementById('searchQuery') as HTMLInputElement).value = config.searchQuery ?? '';
+  const searchQueryEl = document.getElementById('searchQuery') as HTMLInputElement;
+  if (searchQueryEl) {
+    searchQueryEl.value = config.searchQuery ?? '';
+    // Trigger input event to update styling (outline, background, clear button)
+    // Use requestAnimationFrame to ensure event listeners are set up
+    requestAnimationFrame(() => {
+      searchQueryEl.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
   
   // Store the loaded edge style config so it can be merged when building the filter
@@ -2356,7 +2365,7 @@ function applyOpacityToColor(color: string, opacity: number): string {
  * @param nodeId Node ID to check
  * @param matchingIds Set of matching node IDs
  * @param neighborIds Set of neighbor node IDs
- * @returns Opacity value: 1.0 for matching, 0.65 for neighbors, 0.25 for others
+ * @returns Opacity value: 1.0 for matching, 0.65 for neighbors, 0.08 for others (minimum 5%)
  */
 function getSearchOpacity(nodeId: string, matchingIds: Set<string>, neighborIds: Set<string>): number {
   if (matchingIds.has(nodeId)) {
@@ -2365,7 +2374,7 @@ function getSearchOpacity(nodeId: string, matchingIds: Set<string>, neighborIds:
   if (neighborIds.has(nodeId)) {
     return 0.65; // 60-70% opacity for neighbors (using 65%)
   }
-  return 0.25; // 20-30% opacity for others (using 25%)
+  return 0.08; // 8% opacity for others (increased transparency distance, minimum 5%)
 }
 
 function buildNetworkData(filter: {
@@ -4587,16 +4596,28 @@ function confirmEditEdge(): void {
     hideEditEdgeModalWithCleanup();
     return;
   }
+  // Track what we removed to determine what to add back
+  let onlyRemovedRestriction = false;
+  const isChangingEdge = oldFrom !== newFrom || oldTo !== newTo || oldType !== newType;
+  
   // When unchecking "is restriction", only remove the restriction, not the domain/range
   // When checking "is restriction" or changing other properties, remove both restriction and domain/range
   try {
     if (oldWasRestriction && !isRestriction) {
       // Unchecking "is restriction" - only remove restriction, edge remains as domain/range
       removeRestrictionFromStore(ttlStore, oldFrom, oldTo, oldType);
-    } else {
-      // Changing other properties or checking "is restriction" - remove edge completely
+      onlyRemovedRestriction = true;
+    } else if (!oldWasRestriction && isRestriction && !isChangingEdge) {
+      // Checking "is restriction" on existing domain/range edge (not changing from/to/type)
+      // Don't remove anything - domain/range already exists, we just need to add restriction
+      onlyRemovedRestriction = true; // No removal needed, but domain/range exists
+      // Skip removal - nothing to remove
+    } else if (isChangingEdge || (oldWasRestriction && isRestriction)) {
+      // Changing from/to/type OR changing restriction properties - remove edge completely
       removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+      onlyRemovedRestriction = false;
     }
+    // If !oldWasRestriction && !isRestriction && !isChangingEdge: no change, nothing to do (handled by sameEdge check above)
   } catch (err) {
     // Edge may exist only in rawData (e.g. from object property domain/range) with no restriction in store)
     // Proceed: we will remove from rawData and add the new restriction to the store
@@ -4605,17 +4626,52 @@ function confirmEditEdge(): void {
       hideEditEdgeModalWithCleanup();
       return;
     }
+    // Assume we need to add complete edge if removal failed
+    onlyRemovedRestriction = false;
   }
+  
   // Only add restriction if isRestriction is true, otherwise the domain/range edge will remain visible
-  const addOk = isRestriction ? addEdgeToStore(ttlStore, newFrom, newTo, newType, card) : true;
-  if (!addOk) {
-    // Restore the old restriction if adding new one failed
-    if (oldWasRestriction) {
-      addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+  if (isRestriction) {
+    // If we only removed the restriction (or didn't remove anything because domain/range exists),
+    // and we're not changing from/to/type, domain/range should still exist, so just add the restriction
+    if (onlyRemovedRestriction && !isChangingEdge) {
+      try {
+        addRestrictionToStore(ttlStore, newFrom, newTo, newType, card);
+      } catch (err) {
+        // If restriction addition fails (e.g., domain/range doesn't exist), try adding complete edge
+        const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
+        if (!addOk) {
+          // Restore the old restriction if adding new one failed
+          if (oldWasRestriction) {
+            try {
+              addRestrictionToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+            } catch {
+              addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+            }
+          }
+          alert('Failed to update edge.');
+          hideEditEdgeModalWithCleanup();
+          return;
+        }
+      }
+    } else {
+      // Removed edge completely or changing from/to/type - need to add complete edge (domain/range + restriction)
+      const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
+      if (!addOk) {
+        // Restore the old restriction if adding new one failed
+        if (oldWasRestriction) {
+          try {
+            addRestrictionToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+          } catch {
+            // If restoration fails, try adding complete edge
+            addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+          }
+        }
+        alert('Failed to update edge.');
+        hideEditEdgeModalWithCleanup();
+        return;
+      }
     }
-    alert('Failed to update edge.');
-    hideEditEdgeModalWithCleanup();
-    return;
   }
   
   // Update rawData - remove old edge and add new one
@@ -4971,36 +5027,19 @@ function renderApp(): void {
           Open ontology
         </button>
         <input type="file" id="fileInput" accept=".ttl,.turtle" style="display: none;" />
+        <button type="button" id="manageExternalRefs" title="Manage external ontology references" style="width: fit-content; margin-top: 4px;">Manage external references</button>
       </div>
       <div id="vizControls" style="display: none;">
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <strong>Layout:</strong>
+        <strong>Display options:</strong>
         <select id="layoutMode">
           <option value="hierarchical01">Hierarchical 01</option>
           <option value="hierarchical02">Hierarchical 02</option>
           <option value="hierarchical03">Hierarchical 03</option>
           <option value="force">Force-directed</option>
         </select>
-      </div>
-      <div id="styleMenusGroup" style="display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid #000; border-radius: 4px;">
-        <details id="edgeStylesMenu">
-          <summary style="cursor: pointer; font-weight: bold;">Object Properties</summary>
-          <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
-          <button type="button" id="addRelationshipTypeBtn" style="margin-top: 6px; font-size: 11px;">+ Add object property</button>
-        </details>
-        <details id="dataPropsMenu">
-          <summary style="cursor: pointer; font-weight: bold;">Data Properties</summary>
-          <div id="dataPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
-          <button type="button" id="addDataPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add data property</button>
-        </details>
-        <details id="annotationPropsMenu">
-          <summary style="cursor: pointer; font-weight: bold;">Annotation Properties</summary>
-          <div id="annotationPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
-          <button type="button" id="addAnnotationPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add annotation property</button>
-        </details>
-      </div>
-      <div id="textDisplayWrap" style="position: relative; display: inline-block;">
-        <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
+        <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
+          <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
         <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
           <div style="margin-bottom: 10px;">
             <strong style="font-size: 12px;">Nodes text wrap:</strong>
@@ -5028,10 +5067,29 @@ function renderApp(): void {
           </div>
         </div>
       </div>
+      </div>
+      <div id="styleMenusGroup" style="display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid #000; border-radius: 4px;">
+        <details id="edgeStylesMenu">
+          <summary style="cursor: pointer; font-weight: bold;">Object Properties</summary>
+          <div id="edgeStylesContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+          <button type="button" id="addRelationshipTypeBtn" style="margin-top: 6px; font-size: 11px;">+ Add object property</button>
+        </details>
+        <details id="dataPropsMenu">
+          <summary style="cursor: pointer; font-weight: bold;">Data Properties</summary>
+          <div id="dataPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+          <button type="button" id="addDataPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add data property</button>
+        </details>
+        <details id="annotationPropsMenu">
+          <summary style="cursor: pointer; font-weight: bold;">Annotation Properties</summary>
+          <div id="annotationPropsContent" style="margin-top: 8px; padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto;"></div>
+          <button type="button" id="addAnnotationPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add annotation property</button>
+        </details>
+      </div>
       <div>
         <strong>Search:</strong>
-        <div id="searchWrap">
-          <input type="text" id="searchQuery" placeholder="Node or relationship..." autocomplete="off" style="width: 180px;">
+        <div id="searchWrap" style="position: relative; display: inline-block;">
+          <input type="text" id="searchQuery" placeholder="Node or relationship..." autocomplete="off" style="width: 180px; padding-right: 24px; box-sizing: border-box;">
+          <button type="button" id="searchClearBtn" style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 2px 4px; color: #666; font-size: 16px; line-height: 1; display: none; z-index: 10;" title="Clear search" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#666'">×</button>
           <div id="searchAutocomplete"></div>
         </div>
         <label style="font-size: 11px; margin-left: 4px;">
@@ -5054,9 +5112,6 @@ function renderApp(): void {
         <button type="button" id="saveDisplayConfig" title="Save display config to a .display.json file (e.g. next to your ontology)">Save display config</button>
         <button type="button" id="loadDisplayConfig" title="Load display config from a .display.json file">Load display config</button>
         <button type="button" id="resetDisplayConfig" title="Reset display config and regenerate layout from scratch">Reset display config</button>
-      </span>
-      <span id="externalRefsGroup" style="display: none; gap: 8px; align-items: center;">
-        <button type="button" id="manageExternalRefs" title="Manage external ontology references">Manage external references</button>
       </span>
       </div>
       <div id="errorMsg" class="error" style="display: none;"></div>
@@ -5479,8 +5534,8 @@ async function loadTtlAndRender(
       displayConfigGroup.style.display = 'inline-flex';
       displayConfigGroup.style.flexDirection = 'column';
     }
-    const externalRefsGroup = document.getElementById('externalRefsGroup');
-    if (externalRefsGroup) externalRefsGroup.style.display = 'inline-flex';
+    const manageExternalRefsBtn = document.getElementById('manageExternalRefs');
+    if (manageExternalRefsBtn) manageExternalRefsBtn.style.display = 'inline-block';
     
     // Extract external references from owl:imports in the ontology
     const extractedRefs = extractExternalRefsFromStore(ttlStore);
@@ -6943,16 +6998,94 @@ function setupEventListeners(): void {
 
   const searchInput = document.getElementById('searchQuery');
   const searchList = document.getElementById('searchAutocomplete');
+  const searchClearBtn = document.getElementById('searchClearBtn');
   if (searchInput && searchList) {
     let debounceTimer: number;
+    let animationId: number | null = null;
+    
+    // Function to clear the search bar
+    const clearSearch = () => {
+      (searchInput as HTMLInputElement).value = '';
+      updateSearchBarStyle();
+      applyFilter();
+      searchInput.focus();
+    };
+    
+    // Add click handler for clear button
+    if (searchClearBtn) {
+      searchClearBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        clearSearch();
+      });
+    }
+    
+    // Function to update search bar styling based on content
+    const updateSearchBarStyle = () => {
+      const hasText = (searchInput as HTMLInputElement).value.trim().length > 0;
+      const inputEl = searchInput as HTMLElement;
+      
+      // Show/hide clear button
+      if (searchClearBtn) {
+        searchClearBtn.style.display = hasText ? 'block' : 'none';
+      }
+      
+      if (hasText) {
+        // Add more visible colored outline when search bar has text
+        inputEl.style.outline = '3px solid #3498db';
+        inputEl.style.outlineOffset = '2px';
+        inputEl.style.borderRadius = '4px';
+        // Add light yellow background to indicate active filtering
+        inputEl.style.backgroundColor = '#fffacd'; // Light yellow (lemon chiffon)
+        
+        // Add pulsating animation - more visible with wider opacity range
+        if (animationId === null) {
+          let startTime: number | null = null;
+          const animate = (timestamp: number) => {
+            if (startTime === null) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+            // Pulsate between 0.3 and 1.0 opacity, 1.5 second cycle (faster and more pronounced)
+            const opacity = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin((elapsed / 1500) * 2 * Math.PI));
+            inputEl.style.outlineColor = `rgba(52, 152, 219, ${opacity})`;
+            // Also pulsate the outline width slightly for more visibility
+            const widthMultiplier = 0.85 + 0.15 * (0.5 + 0.5 * Math.sin((elapsed / 1500) * 2 * Math.PI));
+            inputEl.style.outlineWidth = `${3 * widthMultiplier}px`;
+            animationId = requestAnimationFrame(animate);
+          };
+          animationId = requestAnimationFrame(animate);
+        }
+      } else {
+        // Remove outline, animation, and background when empty
+        inputEl.style.outline = '';
+        inputEl.style.outlineOffset = '';
+        inputEl.style.backgroundColor = '';
+        if (animationId !== null) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+      }
+    };
+    
     searchInput.addEventListener('input', () => {
+      updateSearchBarStyle();
       applyFilter();
       clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(updateSearchAutocomplete, 150);
     });
     searchInput.addEventListener('focus', () => {
+      updateSearchBarStyle();
       if ((searchInput as HTMLInputElement).value.trim()) updateSearchAutocomplete();
     });
+    searchInput.addEventListener('blur', () => {
+      // Keep outline and animation on blur if there's text
+      const hasText = (searchInput as HTMLInputElement).value.trim().length > 0;
+      if (hasText) {
+        updateSearchBarStyle();
+      }
+    });
+    
+    // Initial check
+    updateSearchBarStyle();
   }
 }
 
