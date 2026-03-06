@@ -63,6 +63,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browsers
+        if: steps.check-artifacts.outputs.result != 'true'
+        run: npx playwright install --with-deps chromium
+
       - name: Run tests with coverage (if artifacts not found)
         if: steps.check-artifacts.outputs.result != 'true'
         run: |
