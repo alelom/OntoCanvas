@@ -152,6 +152,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.wait-for-tests.outputs.e2eRunId }}
 
+      - name: Debug coverage file structure
+        run: |
+          echo "=== Coverage Unit Structure ==="
+          find coverage-unit -type f -name "*.json" -o -name "*.info" -o -name "*.lcov" | head -20
+          echo ""
+          echo "=== Coverage E2E Structure ==="
+          find coverage-e2e -type f -name "*.json" -o -name "*.info" -o -name "*.lcov" | head -20
+
       - name: Merge coverage reports
         run: |
           # Create merged coverage directory
@@ -237,17 +245,21 @@ jobs:
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-unit/coverage-final.json,./coverage-unit/lcov.info
+          files: ./coverage-unit/coverage/coverage-final.json,./coverage-unit/coverage/lcov.info
           flags: unittests
           name: codecov-unit
           fail_ci_if_error: false
+          override_commit: ${{ steps.sha.outputs.sha }}
+          override_branch: ${{ github.ref_name }}
 
       - name: Upload E2E coverage to Codecov
         uses: codecov/codecov-action@v4
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-e2e/coverage-final.json,./coverage-e2e/lcov.info
+          files: ./coverage-e2e/coverage/coverage-final.json,./coverage-e2e/coverage/lcov.info
           flags: e2e
           name: codecov-e2e
           fail_ci_if_error: false
+          override_commit: ${{ steps.sha.outputs.sha }}
+          override_branch: ${{ github.ref_name }}
