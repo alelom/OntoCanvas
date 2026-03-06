@@ -208,8 +208,7 @@ export function updateEdgeColorsLegend(
   // Create clickable edge entries with hover underline
   const edgeEntries = types.map((t) => {
     const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-    // Use the full URI (t) as the search value
-    const searchValue = t;
+    // Use the full URI (t) directly as the data-edge-type value
     return `<span style="color: ${config[t].color}">●</span> <a href="#" class="edge-legend-link" data-edge-type="${t.replace(/"/g, '&quot;')}" style="color: inherit; text-decoration: none; cursor: pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${label}</a>`;
   }).join(' ');
   
