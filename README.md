@@ -46,6 +46,7 @@ Interactive ontology editor and visualizer with TTL file support.
 
 
 
+
 ## Tech stack
 
 - **Vite** – Build tool
