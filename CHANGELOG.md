@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/alelom/OntoCanvas/compare/v1.1.0...v1.1.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* test semantic release ([6ce0999](https://github.com/alelom/OntoCanvas/commit/6ce0999a3b779684d4b04938cf0e9d92be9ff4be))
+
 ## [1.0.4](https://github.com/alelom/OntoCanvas/compare/v1.0.3...v1.0.4) (2026-02-26)
 
 
