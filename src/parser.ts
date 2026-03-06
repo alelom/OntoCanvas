@@ -1965,15 +1965,21 @@ export function removeEdgeFromStore(
     debugLog(`[DELETE EDGE] Found ${domainQuads.length} domain quads and ${rangeQuads.length} range quads`);
   }
   
-  if (domainQuads.length === 0 && rangeQuads.length === 0) {
+  if (!restrictionRemoved && domainQuads.length === 0 && rangeQuads.length === 0) {
     if (isDebugMode()) {
       debugError(`[DELETE EDGE] ERROR: No domain/range quads found for ${from} -> ${to} : ${edgeType}`);
       debugError(`[DELETE EDGE] Property URI: ${propUri}, From URI: ${fromUri}, To URI: ${toUri}`);
       // Log all domain/range quads for this property to help debug
       const allDomainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), null, null);
       const allRangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), null, null);
-      debugError(`[DELETE EDGE] All domain quads for property: ${allDomainQuads.length}`, allDomainQuads.map(q => ({ domain: q.object.value })));
-      debugError(`[DELETE EDGE] All range quads for property: ${allRangeQuads.length}`, allRangeQuads.map(q => ({ range: q.object.value })));
+      debugError(
+        `[DELETE EDGE] All domain quads for property: ${allDomainQuads.length}`,
+        allDomainQuads.map(q => ({ domain: q.object.value })),
+      );
+      debugError(
+        `[DELETE EDGE] All range quads for property: ${allRangeQuads.length}`,
+        allRangeQuads.map(q => ({ range: q.object.value })),
+      );
     }
     throw new Error(`Cannot remove edge: domain/range definition not found for ${from} -> ${to} : ${edgeType}`);
   }
