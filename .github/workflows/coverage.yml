@@ -30,30 +30,84 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_run" ]; then
             echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+            echo "workflow_run_id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
           else
             echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check for test artifacts
-        id: check-artifacts
+      - name: Verify Tests workflow completed successfully
         uses: actions/github-script@v7
+        id: verify-tests
         with:
           script: |
-            const artifacts = await github.rest.actions.listArtifactsForRepo({
+            const workflowRunId = '${{ github.event.workflow_run.id }}';
+            const sha = '${{ steps.sha.outputs.sha }}';
+            
+            // Get the specific workflow run that triggered this
+            const workflowRun = await github.rest.actions.getWorkflowRun({
               owner: context.repo.owner,
               repo: context.repo.repo,
+              run_id: workflowRunId,
             });
+            
+            // Verify it's for the correct commit and completed successfully
+            if (workflowRun.data.head_sha !== sha) {
+              core.setFailed(`Tests workflow run ${workflowRunId} is for commit ${workflowRun.data.head_sha}, but we need ${sha}`);
+              return false;
+            }
+            
+            if (workflowRun.data.conclusion !== 'success') {
+              core.setFailed(`Tests workflow run ${workflowRunId} did not complete successfully: ${workflowRun.data.conclusion}`);
+              return false;
+            }
+            
+            core.info(`Tests workflow ${workflowRunId} completed successfully for commit ${sha}`);
+            return true;
+
+      - name: Wait for test artifacts to be available
+        uses: actions/github-script@v7
+        id: wait-artifacts
+        with:
+          script: |
             const sha = '${{ steps.sha.outputs.sha }}';
-            const coverageArtifact = artifacts.data.artifacts.find(
-              a => a.name === `coverage-${sha}`
-            );
-            const markerArtifact = artifacts.data.artifacts.find(
-              a => a.name === `test-marker-${sha}`
-            );
-            const found = !!(coverageArtifact && markerArtifact);
-            core.setOutput('found', found);
-            return found;
-        continue-on-error: true
+            const maxAttempts = 30; // 2.5 minutes max wait
+            const delayMs = 5000; // 5 seconds between attempts
+            
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              const artifacts = await github.rest.actions.listArtifactsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              
+              const coverageArtifact = artifacts.data.artifacts.find(
+                a => a.name === `coverage-${sha}`
+              );
+              const markerArtifact = artifacts.data.artifacts.find(
+                a => a.name === `test-marker-${sha}`
+              );
+              
+              if (coverageArtifact && markerArtifact) {
+                core.info(`Both artifacts found after ${attempt + 1} attempts`);
+                core.setOutput('found', 'true');
+                return { found: true, attempts: attempt + 1 };
+              }
+              
+              if (attempt < maxAttempts - 1) {
+                core.info(`Waiting for artifacts... (attempt ${attempt + 1}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+              }
+            }
+            
+            core.setFailed('Timeout waiting for test artifacts to be available');
+            return { found: false };
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-${{ steps.sha.outputs.sha }}
+          path: coverage/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Download coverage data (if exists)
         if: steps.check-artifacts.outputs.result == 'true'
@@ -74,15 +128,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
-        if: steps.check-artifacts.outputs.result != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Run tests with coverage (if artifacts not found)
-        if: steps.check-artifacts.outputs.result != 'true'
-        run: |
-          npm test -- --coverage
-          npm run test:e2e -- --coverage
 
       - name: Generate coverage reports
         run: |
