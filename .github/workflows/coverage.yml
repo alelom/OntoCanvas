@@ -30,7 +30,12 @@ jobs:
 
       - name: Get commit SHA
         id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_run" ]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Check for test artifacts
         id: check-artifacts
@@ -59,6 +64,9 @@ jobs:
         with:
           name: coverage-${{ steps.sha.outputs.sha }}
           path: coverage/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          if-no-artifacts-found: ignore
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

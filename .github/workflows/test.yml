@@ -1,50 +1,118 @@
 name: Tests
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Unit Tests", "E2E Tests"]
+    types:
+      - completed
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: test-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  test:
+  merge-coverage:
+    # Only run if the triggering workflow completed successfully
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run unit tests with coverage
-        run: npm test -- --coverage
-
-      - name: Run E2E tests with coverage
-        run: npm run test:e2e -- --coverage
-        env:
-          EDITOR_E2E_URL: http://localhost:5173/
-
       - name: Get commit SHA
         id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_run" ]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Upload coverage data
+      - name: Wait for both test workflows to complete
+        uses: actions/github-script@v7
+        id: check-workflows
+        with:
+          script: |
+            const sha = '${{ steps.sha.outputs.sha }}';
+            const workflows = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head_sha: sha,
+              per_page: 100,
+            });
+            
+            const unitTestsRun = workflows.data.workflow_runs.find(
+              r => r.name === 'Unit Tests' && r.head_sha === sha && r.status === 'completed'
+            );
+            const e2eTestsRun = workflows.data.workflow_runs.find(
+              r => r.name === 'E2E Tests' && r.head_sha === sha && r.status === 'completed'
+            );
+            
+            const bothComplete = unitTestsRun && e2eTestsRun;
+            const bothSuccess = bothComplete && 
+                                unitTestsRun.conclusion === 'success' && 
+                                e2eTestsRun.conclusion === 'success';
+            
+            core.setOutput('bothComplete', bothComplete);
+            core.setOutput('bothSuccess', bothSuccess);
+            return { bothComplete, bothSuccess };
+
+      - name: Check for artifacts
+        id: check-artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const sha = '${{ steps.sha.outputs.sha }}';
+            const unitArtifact = artifacts.data.artifacts.find(
+              a => a.name === `coverage-unit-${sha}`
+            );
+            const e2eArtifact = artifacts.data.artifacts.find(
+              a => a.name === `coverage-e2e-${sha}`
+            );
+            const bothExist = !!(unitArtifact && e2eArtifact);
+            core.setOutput('bothExist', bothExist);
+            return bothExist;
+        continue-on-error: true
+
+      - name: Download unit test coverage
+        if: steps.check-artifacts.outputs.result == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-unit-${{ steps.sha.outputs.sha }}
+          path: coverage-unit/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          if-no-artifacts-found: ignore
+
+      - name: Download E2E test coverage
+        if: steps.check-artifacts.outputs.result == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-e2e-${{ steps.sha.outputs.sha }}
+          path: coverage-e2e/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          if-no-artifacts-found: ignore
+
+      - name: Merge coverage reports
+        if: steps.check-artifacts.outputs.result == 'true'
+        run: |
+          # Create merged coverage directory
+          mkdir -p coverage
+          # Copy unit test coverage as base
+          if [ -d "coverage-unit" ] && [ "$(ls -A coverage-unit 2>/dev/null)" ]; then
+            cp -r coverage-unit/* coverage/ 2>/dev/null || true
+          fi
+          # Merge E2E coverage
+          if [ -d "coverage-e2e" ] && [ "$(ls -A coverage-e2e 2>/dev/null)" ]; then
+            cp -r coverage-e2e/* coverage/ 2>/dev/null || true
+          fi
+          echo "Coverage reports merged"
+
+      - name: Upload merged coverage data
+        if: steps.check-artifacts.outputs.result == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ steps.sha.outputs.sha }}
@@ -52,9 +120,11 @@ jobs:
           retention-days: 90
 
       - name: Create test completion marker
+        if: steps.check-artifacts.outputs.result == 'true'
         run: echo "${{ steps.sha.outputs.sha }}" > test-completed-${{ steps.sha.outputs.sha }}.txt
 
       - name: Upload test completion marker
+        if: steps.check-artifacts.outputs.result == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-marker-${{ steps.sha.outputs.sha }}
