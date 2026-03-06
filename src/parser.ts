@@ -923,14 +923,24 @@ export function addNodeToStore(
 
 /**
  * Remove a node (OWL class) from the store.
+ * Also removes any domain/range quads that reference this node.
  */
 export function removeNodeFromStore(store: Store, localName: string): boolean {
   const subjUri = toClassUri(localName);
   const subject = DataFactory.namedNode(subjUri);
+  
+  // Remove all quads where this node is the subject
   const quads = store.getQuads(subject, null, null, null);
-  if (quads.length === 0) return false;
   for (const q of quads) store.removeQuad(q);
-  return true;
+  
+  // Remove all domain/range quads where this node is the object
+  // This ensures that when a node is deleted, properties no longer reference it
+  const domainQuads = store.getQuads(null, DataFactory.namedNode(RDFS + 'domain'), subject, null);
+  for (const q of domainQuads) store.removeQuad(q);
+  const rangeQuads = store.getQuads(null, DataFactory.namedNode(RDFS + 'range'), subject, null);
+  for (const q of rangeQuads) store.removeQuad(q);
+  
+  return quads.length > 0 || domainQuads.length > 0 || rangeQuads.length > 0;
 }
 
 function ensureHasCardinalityAnnotationProperty(store: Store): void {
@@ -1908,6 +1918,7 @@ export function removeEdgeFromStore(
   
   // Remove restriction if it exists
   const blank = findRestrictionBlank(store, from, edgeType, to);
+  const restrictionRemoved = !!blank; // Track whether a restriction was found and removed
   if (blank) {
     if (isDebugMode()) {
       debugLog(`[DELETE EDGE] Found restriction blank node: ${blank.value}`);

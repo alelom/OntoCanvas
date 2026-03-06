@@ -199,11 +199,35 @@ export function updateFilePathDisplay(filePath: string | null): void {
   const el = document.getElementById('filePathDisplay');
   if (!el) return;
   
+  // Clear existing content
+  el.textContent = '';
+  el.title = '';
+  
   if (filePath) {
     const isUrl = isValidUrl(filePath);
     if (isUrl) {
-      // Make it a clickable link
-      el.innerHTML = `| File: <a href="${filePath}" target="_blank" rel="noopener noreferrer" style="color: #3498db; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${filePath}</a>`;
+      // Create text node for "| File: " prefix
+      const prefix = document.createTextNode('| File: ');
+      el.appendChild(prefix);
+      
+      // Create anchor element safely using DOM APIs
+      const link = document.createElement('a');
+      link.href = filePath; // Browser will safely encode the URL
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = filePath; // textContent is safe - escapes HTML
+      link.style.color = '#3498db';
+      link.style.textDecoration = 'none';
+      
+      // Use CSS hover via event listeners instead of inline handlers
+      link.addEventListener('mouseenter', () => {
+        link.style.textDecoration = 'underline';
+      });
+      link.addEventListener('mouseleave', () => {
+        link.style.textDecoration = 'none';
+      });
+      
+      el.appendChild(link);
       el.title = `Click to open: ${filePath}`;
     } else {
       // Regular text for non-URL paths
@@ -212,8 +236,6 @@ export function updateFilePathDisplay(filePath: string | null): void {
     }
     el.style.display = '';
   } else {
-    el.textContent = '';
-    el.title = '';
     el.style.display = 'none';
   }
 }

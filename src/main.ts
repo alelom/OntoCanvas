@@ -7198,26 +7198,85 @@ function addTestLog(message: string): void {
   // Don't log to console here - let the console override handle it based on debug mode
 }
 
+/**
+ * Safely stringify a value, handling circular structures and other edge cases.
+ * Falls back to String() if JSON.stringify fails.
+ */
+function safeStringify(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    // Handle circular structures, DOM elements, vis-network objects, etc.
+    try {
+      return String(value);
+    } catch {
+      return '[Unable to stringify]';
+    }
+  }
+}
+
+/**
+ * Check if a message string contains any test log tags.
+ */
+function hasTestLogTag(message: string): boolean {
+  return message.includes('[DELETE]') || 
+         message.includes('[GET EDGE DATA]') || 
+         message.includes('[DELETE KEY]') || 
+         message.includes('[DEBUG]') || 
+         message.includes('[TEST]');
+}
+
+/**
+ * Build message string from args only when needed (lazy evaluation).
+ * This avoids overhead when debug mode is off and no tags are present.
+ * First checks all string arguments for tags before doing expensive stringification.
+ */
+function buildMessageIfNeeded(args: unknown[]): string | null {
+  // Quick check: scan all string args first (cheap operation)
+  for (const arg of args) {
+    if (typeof arg === 'string' && hasTestLogTag(arg)) {
+      // Found a tag in a string arg, build full message
+      return args.map(safeStringify).join(' ');
+    }
+  }
+  
+  // No tags found in string args, but might be in stringified non-string args
+  // Only do expensive stringification if we have non-string args
+  if (args.some(arg => typeof arg !== 'string')) {
+    const message = args.map(safeStringify).join(' ');
+    if (hasTestLogTag(message)) {
+      return message;
+    }
+  }
+  
+  return null;
+}
+
 // Override console methods to capture test logs (always) but only log to console if debug mode is enabled
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 const originalConsoleWarn = console.warn;
 console.log = (...args: unknown[]) => {
-  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  // Only build message string if we might need it (lazy evaluation)
+  const message = buildMessageIfNeeded(args);
   // Always capture test logs for E2E testing
-  if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
+  if (message) {
     addTestLog(message);
   }
   // Only log to console if debug mode is enabled (for production performance)
-  if (isDebugMode() || message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[TEST]')) {
+  if (isDebugMode() || message) {
     originalConsoleLog.apply(console, args);
   }
 };
 
 console.error = (...args: unknown[]) => {
-  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  // Only build message string if we might need it (lazy evaluation)
+  const message = buildMessageIfNeeded(args);
   // Always capture test logs for E2E testing
-  if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
+  if (message) {
     addTestLog(message);
   }
   // Always log errors to console (even without debug mode)
@@ -7225,9 +7284,10 @@ console.error = (...args: unknown[]) => {
 };
 
 console.warn = (...args: unknown[]) => {
-  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  // Only build message string if we might need it (lazy evaluation)
+  const message = buildMessageIfNeeded(args);
   // Always capture test logs for E2E testing
-  if (message.includes('[DELETE]') || message.includes('[GET EDGE DATA]') || message.includes('[DELETE KEY]') || message.includes('[DEBUG]') || message.includes('[TEST]')) {
+  if (message) {
     addTestLog(message);
   }
   // Always log warnings to console (warnings are important user feedback)
