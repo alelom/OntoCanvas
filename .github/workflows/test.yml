@@ -45,16 +45,6 @@ jobs:
           path: coverage/
           retention-days: 90
 
-      - name: Upload unit coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage-final.json,./coverage/coverage-final.lcov
-          flags: unittests
-          name: codecov-unit
-          fail_ci_if_error: false
-
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
@@ -89,13 +79,3 @@ jobs:
           name: coverage-e2e-${{ steps.sha.outputs.sha }}
           path: coverage/
           retention-days: 90
-
-      - name: Upload E2E coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage-final.json,./coverage/coverage-final.lcov
-          flags: e2e
-          name: codecov-e2e
-          fail_ci_if_error: false
