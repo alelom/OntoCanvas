@@ -181,19 +181,61 @@ export function updateNodeEdgeCounts(nodeCount: number, edgeCount: number): void
 }
 
 /**
+ * Check if a string is a valid URL.
+ */
+function isValidUrl(str: string): boolean {
+  try {
+    const url = new URL(str);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Update file path display in the status bar.
  */
 export function updateFilePathDisplay(filePath: string | null): void {
   const el = document.getElementById('filePathDisplay');
   if (!el) return;
   
+  // Clear existing content
+  el.textContent = '';
+  el.title = '';
+  
   if (filePath) {
-    el.textContent = `| File: ${filePath}`;
-    el.title = filePath;
+    const isUrl = isValidUrl(filePath);
+    if (isUrl) {
+      // Create text node for "| File: " prefix
+      const prefix = document.createTextNode('| File: ');
+      el.appendChild(prefix);
+      
+      // Create anchor element safely using DOM APIs
+      const link = document.createElement('a');
+      link.href = filePath; // Browser will safely encode the URL
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = filePath; // textContent is safe - escapes HTML
+      link.style.color = '#3498db';
+      link.style.textDecoration = 'none';
+      
+      // Use CSS hover via event listeners instead of inline handlers
+      link.addEventListener('mouseenter', () => {
+        link.style.textDecoration = 'underline';
+      });
+      link.addEventListener('mouseleave', () => {
+        link.style.textDecoration = 'none';
+      });
+      
+      el.appendChild(link);
+      el.title = `Click to open: ${filePath}`;
+    } else {
+      // Regular text for non-URL paths
+      el.textContent = `| File: ${filePath}`;
+      el.title = filePath;
+    }
     el.style.display = '';
   } else {
-    el.textContent = '';
-    el.title = '';
     el.style.display = 'none';
   }
 }

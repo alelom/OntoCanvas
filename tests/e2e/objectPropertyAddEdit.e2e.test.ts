@@ -34,11 +34,23 @@ async function loadTestFile(page: Page, filePath: string): Promise<void> {
 }
 
 async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
+  // Wait for the graph to render. The counts can be 0 (e.g., after deleting all nodes/edges),
+  // so we check that the elements exist and have valid numeric values (including 0).
   await page.waitForFunction(
     () => {
       const nodeCountEl = document.getElementById('nodeCount');
+      const edgeCountEl = document.getElementById('edgeCount');
       const nodeCount = nodeCountEl?.textContent?.trim();
-      return nodeCount !== undefined && nodeCount !== '';
+      const edgeCount = edgeCountEl?.textContent?.trim();
+      // Require counts to be present, non-empty, and parse as valid finite numbers (including 0)
+      return (
+        nodeCount !== undefined &&
+        nodeCount !== '' &&
+        Number.isFinite(Number(nodeCount)) &&
+        edgeCount !== undefined &&
+        edgeCount !== '' &&
+        Number.isFinite(Number(edgeCount))
+      );
     },
     { timeout }
   );

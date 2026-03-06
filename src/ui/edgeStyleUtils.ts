@@ -146,6 +146,40 @@ export function getEdgeStyleConfig(
 }
 
 /**
+ * Check if an edge type can be displayed in the canvas.
+ * 
+ * An edge can be displayed if:
+ * 1. It's subClassOf (always displayable, not an object property)
+ * 2. It appears in rawData.edges (meaning it has both domain and range AND classes exist, OR a restriction exists)
+ * 
+ * According to parser.ts, edges are only created when:
+ * - Both domain and range exist AND the classes exist in the ontology (domain/range edge)
+ * - OR a restriction exists using that property (restriction edge)
+ * 
+ * If an edge type doesn't appear in rawData.edges, it means either:
+ * - Domain or range is missing (e.g., "depicts" has domain but no range)
+ * - The classes don't exist
+ * - No restriction exists
+ * 
+ * In all these cases, the edge cannot be displayed, so it shouldn't be in the legend.
+ */
+function canDisplayEdgeType(
+  edgeType: string,
+  rawData: GraphData,
+  objectProperties: ObjectPropertyInfo[]
+): boolean {
+  // subClassOf is always displayable (it's not an object property)
+  if (edgeType === 'subClassOf') {
+    return true;
+  }
+  
+  // Check if this edge type actually appears in rawData.edges
+  // If it appears, it means it can be displayed (has domain/range + classes exist, or restriction exists)
+  // If it doesn't appear, it cannot be displayed (missing domain/range, classes don't exist, or no restriction)
+  return rawData.edges.some((e) => e.type === edgeType);
+}
+
+/**
  * Update edge colors legend in the status bar
  */
 export function updateEdgeColorsLegend(
@@ -161,13 +195,42 @@ export function updateEdgeColorsLegend(
     return;
   }
   const config = getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences);
-  const types = Object.keys(config).filter((t) => config[t].show);
+  
+  // Filter to only show edge types that can be displayed (have domain/range or appear in edges)
+  const types = Object.keys(config).filter((t) => {
+    return config[t].show && canDisplayEdgeType(t, rawData, objectProperties);
+  });
+  
   if (types.length === 0) {
     legendEl.textContent = '';
     return;
   }
-  legendEl.innerHTML =
-    'Edge colors: ' +
-    types.map((t) => `<span style="color: ${config[t].color}">●</span> ${getRelationshipLabel(t, objectProperties, externalOntologyReferences)}`).join(' ');
+  // Create clickable edge entries with hover underline
+  const edgeEntries = types.map((t) => {
+    const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
+    // Use the full URI (t) directly as the data-edge-type value
+    return `<span style="color: ${config[t].color}">●</span> <a href="#" class="edge-legend-link" data-edge-type="${t.replace(/"/g, '&quot;')}" style="color: inherit; text-decoration: none; cursor: pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${label}</a>`;
+  }).join(' ');
+  
+  legendEl.innerHTML = 'Edges: ' + edgeEntries;
+  
+  // Add click handlers for edge links
+  legendEl.querySelectorAll('.edge-legend-link').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const edgeType = (link as HTMLElement).getAttribute('data-edge-type');
+      if (edgeType) {
+        const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.value = edgeType;
+          // Trigger input event to update search and styling
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+          // Focus the search input to show the outline
+          searchInput.focus();
+        }
+      }
+    });
+  });
+  
   // externalOntologyReferences is used in getRelationshipLabel call above
 }
