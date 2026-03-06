@@ -28,76 +28,80 @@ jobs:
             echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           fi
 
-      - name: Wait for both test workflows to complete
+      - name: Wait for both test workflows and artifacts
         uses: actions/github-script@v7
-        id: check-workflows
+        id: wait-for-artifacts
         with:
           script: |
             const sha = '${{ steps.sha.outputs.sha }}';
-            const workflows = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head_sha: sha,
-              per_page: 100,
-            });
+            const maxAttempts = 60; // 5 minutes max wait
+            const delayMs = 5000; // 5 seconds between attempts
             
-            const unitTestsRun = workflows.data.workflow_runs.find(
-              r => r.name === 'Unit Tests' && r.head_sha === sha && r.status === 'completed'
-            );
-            const e2eTestsRun = workflows.data.workflow_runs.find(
-              r => r.name === 'E2E Tests' && r.head_sha === sha && r.status === 'completed'
-            );
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              // Check if both workflows completed
+              const workflows = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head_sha: sha,
+                per_page: 100,
+              });
+              
+              const unitTestsRun = workflows.data.workflow_runs.find(
+                r => r.name === 'Unit Tests' && r.head_sha === sha && r.status === 'completed'
+              );
+              const e2eTestsRun = workflows.data.workflow_runs.find(
+                r => r.name === 'E2E Tests' && r.head_sha === sha && r.status === 'completed'
+              );
+              
+              // Check if both workflows completed successfully
+              if (unitTestsRun && e2eTestsRun && 
+                  unitTestsRun.conclusion === 'success' && 
+                  e2eTestsRun.conclusion === 'success') {
+                
+                // Check if artifacts exist
+                const artifacts = await github.rest.actions.listArtifactsForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                });
+                
+                const unitArtifact = artifacts.data.artifacts.find(
+                  a => a.name === `coverage-unit-${sha}`
+                );
+                const e2eArtifact = artifacts.data.artifacts.find(
+                  a => a.name === `coverage-e2e-${sha}`
+                );
+                
+                if (unitArtifact && e2eArtifact) {
+                  core.info(`Both artifacts found after ${attempt + 1} attempts`);
+                  core.setOutput('ready', 'true');
+                  return { ready: true, attempts: attempt + 1 };
+                }
+              }
+              
+              if (attempt < maxAttempts - 1) {
+                core.info(`Waiting for artifacts... (attempt ${attempt + 1}/${maxAttempts})`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+              }
+            }
             
-            const bothComplete = unitTestsRun && e2eTestsRun;
-            const bothSuccess = bothComplete && 
-                                unitTestsRun.conclusion === 'success' && 
-                                e2eTestsRun.conclusion === 'success';
-            
-            core.setOutput('bothComplete', bothComplete);
-            core.setOutput('bothSuccess', bothSuccess);
-            return { bothComplete, bothSuccess };
-
-      - name: Check for artifacts
-        id: check-artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const artifacts = await github.rest.actions.listArtifactsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const sha = '${{ steps.sha.outputs.sha }}';
-            const unitArtifact = artifacts.data.artifacts.find(
-              a => a.name === `coverage-unit-${sha}`
-            );
-            const e2eArtifact = artifacts.data.artifacts.find(
-              a => a.name === `coverage-e2e-${sha}`
-            );
-            const bothExist = !!(unitArtifact && e2eArtifact);
-            core.setOutput('bothExist', bothExist);
-            return bothExist;
-        continue-on-error: true
+            core.setFailed('Timeout waiting for both test workflows to complete and upload artifacts');
+            return { ready: false };
 
       - name: Download unit test coverage
-        if: steps.check-artifacts.outputs.result == 'true'
         uses: actions/download-artifact@v4
         with:
           name: coverage-unit-${{ steps.sha.outputs.sha }}
           path: coverage-unit/
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          if-no-artifacts-found: ignore
 
       - name: Download E2E test coverage
-        if: steps.check-artifacts.outputs.result == 'true'
         uses: actions/download-artifact@v4
         with:
           name: coverage-e2e-${{ steps.sha.outputs.sha }}
           path: coverage-e2e/
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          if-no-artifacts-found: ignore
 
       - name: Merge coverage reports
-        if: steps.check-artifacts.outputs.result == 'true'
         run: |
           # Create merged coverage directory
           mkdir -p coverage
@@ -112,7 +116,6 @@ jobs:
           echo "Coverage reports merged"
 
       - name: Upload merged coverage data
-        if: steps.check-artifacts.outputs.result == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ steps.sha.outputs.sha }}
@@ -120,11 +123,9 @@ jobs:
           retention-days: 90
 
       - name: Create test completion marker
-        if: steps.check-artifacts.outputs.result == 'true'
         run: echo "${{ steps.sha.outputs.sha }}" > test-completed-${{ steps.sha.outputs.sha }}.txt
 
       - name: Upload test completion marker
-        if: steps.check-artifacts.outputs.result == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-marker-${{ steps.sha.outputs.sha }}
