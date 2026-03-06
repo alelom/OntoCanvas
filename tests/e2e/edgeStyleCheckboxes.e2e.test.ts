@@ -126,7 +126,8 @@ async function hasEdgeLabel(page: Page, edgeType: string): Promise<boolean> {
         ) as HTMLInputElement;
       }
       
-      return checkbox ? checkbox.checked : true; // Default to true if checkbox not found
+      // If checkbox is not found, report as not checked so tests fail loudly
+      return checkbox ? checkbox.checked : false;
     },
     { edgeType }
   );
