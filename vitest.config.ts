@@ -1,15 +1,7 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  base: './',
   test: {
-    include: ['tests/e2e/**/*.e2e.test.ts'],
-    globals: true,
-    environment: 'node',
-    testTimeout: 15000,
-    hookTimeout: 60000,
-    globalSetup: ['tests/e2e/globalSetup.ts'],
-    globalTeardown: ['tests/e2e/globalTeardown.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

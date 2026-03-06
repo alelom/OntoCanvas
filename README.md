@@ -1,6 +1,13 @@
 <div align="center">
   <img src="OntoCanvas.png" alt="OntoCanvas" width="200"/>
   <h1>OntoCanvas</h1>
+  
+  <!-- Test Status Badge -->
+  ![Tests](https://github.com/alelom/OntoCanvas/workflows/Tests/badge.svg)
+  
+  <!-- Coverage Badges (Codecov) -->
+  ![Unit Test Coverage](https://codecov.io/gh/alelom/OntoCanvas/branch/main/graph/badge.svg?flag=unittests)
+  ![E2E Test Coverage](https://codecov.io/gh/alelom/OntoCanvas/branch/main/graph/badge.svg?flag=e2e)
 </div>
 
 Interactive ontology editor and visualizer with TTL file support.
