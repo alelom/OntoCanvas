@@ -2,7 +2,7 @@ name: Coverage
 
 on:
   workflow_run:
-    workflows: ["Tests"]
+    workflows: ["Unit Tests", "E2E Tests"]
     types:
       - completed
 
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   coverage:
-    # Only run if Tests workflow completed successfully
+    # Only run if the triggering workflow completed successfully
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -28,96 +28,103 @@ jobs:
       - name: Get commit SHA
         id: sha
         run: |
-          if [ "${{ github.event_name }}" == "workflow_run" ]; then
-            echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
-            echo "workflow_run_id=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
-          else
-            echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-          fi
+          echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
 
-      - name: Verify Tests workflow completed successfully
+      - name: Wait for both test workflows and get their run IDs
         uses: actions/github-script@v7
-        id: verify-tests
-        with:
-          script: |
-            const workflowRunId = '${{ github.event.workflow_run.id }}';
-            const sha = '${{ steps.sha.outputs.sha }}';
-            
-            // Get the specific workflow run that triggered this
-            const workflowRun = await github.rest.actions.getWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: workflowRunId,
-            });
-            
-            // Verify it's for the correct commit and completed successfully
-            if (workflowRun.data.head_sha !== sha) {
-              core.setFailed(`Tests workflow run ${workflowRunId} is for commit ${workflowRun.data.head_sha}, but we need ${sha}`);
-              return false;
-            }
-            
-            if (workflowRun.data.conclusion !== 'success') {
-              core.setFailed(`Tests workflow run ${workflowRunId} did not complete successfully: ${workflowRun.data.conclusion}`);
-              return false;
-            }
-            
-            core.info(`Tests workflow ${workflowRunId} completed successfully for commit ${sha}`);
-            return true;
-
-      - name: Wait for test artifacts to be available
-        uses: actions/github-script@v7
-        id: wait-artifacts
+        id: wait-for-tests
         with:
           script: |
             const sha = '${{ steps.sha.outputs.sha }}';
-            const maxAttempts = 30; // 2.5 minutes max wait
+            const maxAttempts = 60; // 5 minutes max wait
             const delayMs = 5000; // 5 seconds between attempts
             
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
-              const artifacts = await github.rest.actions.listArtifactsForRepo({
+              // Get all workflow runs for this commit
+              const workflows = await github.rest.actions.listWorkflowRunsForRepo({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
+                head_sha: sha,
+                per_page: 100,
               });
               
-              const coverageArtifact = artifacts.data.artifacts.find(
-                a => a.name === `coverage-${sha}`
+              const unitTestsRun = workflows.data.workflow_runs.find(
+                r => r.name === 'Unit Tests' && r.head_sha === sha && r.status === 'completed'
               );
-              const markerArtifact = artifacts.data.artifacts.find(
-                a => a.name === `test-marker-${sha}`
+              const e2eTestsRun = workflows.data.workflow_runs.find(
+                r => r.name === 'E2E Tests' && r.head_sha === sha && r.status === 'completed'
               );
               
-              if (coverageArtifact && markerArtifact) {
-                core.info(`Both artifacts found after ${attempt + 1} attempts`);
-                core.setOutput('found', 'true');
-                return { found: true, attempts: attempt + 1 };
+              // Check if both workflows completed successfully
+              if (unitTestsRun && e2eTestsRun && 
+                  unitTestsRun.conclusion === 'success' && 
+                  e2eTestsRun.conclusion === 'success') {
+                
+                // Check if artifacts exist
+                const artifacts = await github.rest.actions.listArtifactsForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                });
+                
+                const unitArtifact = artifacts.data.artifacts.find(
+                  a => a.name === `coverage-unit-${sha}`
+                );
+                const e2eArtifact = artifacts.data.artifacts.find(
+                  a => a.name === `coverage-e2e-${sha}`
+                );
+                
+                if (unitArtifact && e2eArtifact) {
+                  core.info(`Both artifacts found after ${attempt + 1} attempts`);
+                  core.setOutput('unitRunId', String(unitTestsRun.id));
+                  core.setOutput('e2eRunId', String(e2eTestsRun.id));
+                  core.setOutput('ready', 'true');
+                  return { 
+                    ready: true, 
+                    attempts: attempt + 1,
+                    unitRunId: unitTestsRun.id,
+                    e2eRunId: e2eTestsRun.id
+                  };
+                }
               }
               
               if (attempt < maxAttempts - 1) {
-                core.info(`Waiting for artifacts... (attempt ${attempt + 1}/${maxAttempts})`);
+                core.info(`Waiting for both test workflows to complete... (attempt ${attempt + 1}/${maxAttempts})`);
                 await new Promise(resolve => setTimeout(resolve, delayMs));
               }
             }
             
-            core.setFailed('Timeout waiting for test artifacts to be available');
-            return { found: false };
+            core.setFailed('Timeout waiting for both test workflows to complete and upload artifacts');
+            return { ready: false };
 
-      - name: Download coverage data
+      - name: Download unit test coverage
         uses: actions/download-artifact@v4
         with:
-          name: coverage-${{ steps.sha.outputs.sha }}
-          path: coverage/
+          name: coverage-unit-${{ steps.sha.outputs.sha }}
+          path: coverage-unit/
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.wait-for-tests.outputs.unitRunId }}
 
-      - name: Download coverage data (if exists)
-        if: steps.check-artifacts.outputs.result == 'true'
+      - name: Download E2E test coverage
         uses: actions/download-artifact@v4
         with:
-          name: coverage-${{ steps.sha.outputs.sha }}
-          path: coverage/
+          name: coverage-e2e-${{ steps.sha.outputs.sha }}
+          path: coverage-e2e/
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-          if-no-artifacts-found: ignore
+          run-id: ${{ steps.wait-for-tests.outputs.e2eRunId }}
+
+      - name: Merge coverage reports
+        run: |
+          # Create merged coverage directory
+          mkdir -p coverage
+          # Copy unit test coverage as base
+          if [ -d "coverage-unit" ] && [ "$(ls -A coverage-unit 2>/dev/null)" ]; then
+            cp -r coverage-unit/* coverage/ 2>/dev/null || true
+          fi
+          # Merge E2E coverage
+          if [ -d "coverage-e2e" ] && [ "$(ls -A coverage-e2e 2>/dev/null)" ]; then
+            cp -r coverage-e2e/* coverage/ 2>/dev/null || true
+          fi
+          echo "Coverage reports merged"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -128,12 +135,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-
       - name: Generate coverage reports
         run: |
           # Coverage data should now exist in coverage/ directory
           # Generate any additional reports if needed
           echo "Coverage reports generated"
+
+      - name: Upload merged coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ steps.sha.outputs.sha }}
+          path: coverage/
+          retention-days: 90
+
+      - name: Create test completion marker
+        run: echo "${{ steps.sha.outputs.sha }}" > test-completed-${{ steps.sha.outputs.sha }}.txt
+
+      - name: Upload test completion marker
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-marker-${{ steps.sha.outputs.sha }}
+          path: test-completed-${{ steps.sha.outputs.sha }}.txt
+          retention-days: 90
 
       - name: Setup coverage branch
         run: |
@@ -157,11 +180,22 @@ jobs:
           git commit -m "Add coverage report for ${{ steps.sha.outputs.sha }}" || exit 0
           git push origin coverage-reports
 
-      - name: Upload to Codecov
+      - name: Upload unit coverage to Codecov
         uses: codecov/codecov-action@v4
+        if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage-final.json,./coverage/coverage-final.lcov
-          flags: unittests,e2e
-          name: codecov-umbrella
+          files: ./coverage-unit/coverage/coverage-final.json,./coverage-unit/coverage/coverage-final.lcov
+          flags: unittests
+          name: codecov-unit
+          fail_ci_if_error: false
+
+      - name: Upload E2E coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-e2e/coverage/coverage-final.json,./coverage-e2e/coverage/coverage-final.lcov
+          flags: e2e
+          name: codecov-e2e
           fail_ci_if_error: false
