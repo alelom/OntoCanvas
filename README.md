@@ -2,7 +2,7 @@
   <img src="OntoCanvas.png" alt="OntoCanvas" width="200"/>
   <h1>OntoCanvas</h1>
   
-  <!-- Test Status Badges (shields.io with GitHub API) -->
+  <!-- Test Status Badges (shields.io) -->
   ![Unit Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=Unit%20Tests&branch=main)
   ![E2E Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=E2E%20Tests&branch=main)
   
