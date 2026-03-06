@@ -1,9 +1,10 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Coverage"]
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -13,6 +14,8 @@ permissions:
 
 jobs:
   release:
+    # Only run if the Coverage workflow completed successfully
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
