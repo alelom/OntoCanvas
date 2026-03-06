@@ -2,7 +2,7 @@ name: Coverage
 
 on:
   workflow_run:
-    workflows: ["Unit Tests", "E2E Tests"]
+    workflows: ["Tests"]
     types:
       - completed
 
@@ -30,40 +30,45 @@ jobs:
         run: |
           echo "sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
 
-      - name: Wait for both test workflows and get their run IDs
+      - name: Wait for both test jobs and get their run IDs
         uses: actions/github-script@v7
         id: wait-for-tests
         with:
           script: |
             const sha = '${{ steps.sha.outputs.sha }}';
+            const workflowRunId = ${{ github.event.workflow_run.id }};
             const maxAttempts = 60; // 5 minutes max wait
             const delayMs = 5000; // 5 seconds between attempts
             
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
-              // Get all workflow runs for this commit
-              const workflows = await github.rest.actions.listWorkflowRunsForRepo({
+              // Get the workflow run and its jobs
+              const workflowRun = await github.rest.actions.getWorkflowRun({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                head_sha: sha,
-                per_page: 100,
+                run_id: workflowRunId,
               });
               
-              const unitTestsRun = workflows.data.workflow_runs.find(
-                r => r.name === 'Unit Tests' && r.head_sha === sha && r.status === 'completed'
-              );
-              const e2eTestsRun = workflows.data.workflow_runs.find(
-                r => r.name === 'E2E Tests' && r.head_sha === sha && r.status === 'completed'
-              );
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: workflowRunId,
+              });
               
-              // Check if both workflows completed successfully
-              if (unitTestsRun && e2eTestsRun && 
-                  unitTestsRun.conclusion === 'success' && 
-                  e2eTestsRun.conclusion === 'success') {
+              const unitTestsJob = jobs.data.jobs.find(j => j.name === 'Unit Tests');
+              const e2eTestsJob = jobs.data.jobs.find(j => j.name === 'E2E Tests');
+              
+              // Check if both jobs completed successfully
+              if (unitTestsJob && e2eTestsJob && 
+                  unitTestsJob.status === 'completed' && 
+                  e2eTestsJob.status === 'completed' &&
+                  unitTestsJob.conclusion === 'success' && 
+                  e2eTestsJob.conclusion === 'success') {
                 
                 // Check if artifacts exist
-                const artifacts = await github.rest.actions.listArtifactsForRepo({
+                const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
+                  run_id: workflowRunId,
                 });
                 
                 const unitArtifact = artifacts.data.artifacts.find(
@@ -75,25 +80,25 @@ jobs:
                 
                 if (unitArtifact && e2eArtifact) {
                   core.info(`Both artifacts found after ${attempt + 1} attempts`);
-                  core.setOutput('unitRunId', String(unitTestsRun.id));
-                  core.setOutput('e2eRunId', String(e2eTestsRun.id));
+                  core.setOutput('unitRunId', String(workflowRunId));
+                  core.setOutput('e2eRunId', String(workflowRunId));
                   core.setOutput('ready', 'true');
                   return { 
                     ready: true, 
                     attempts: attempt + 1,
-                    unitRunId: unitTestsRun.id,
-                    e2eRunId: e2eTestsRun.id
+                    unitRunId: workflowRunId,
+                    e2eRunId: workflowRunId
                   };
                 }
               }
               
               if (attempt < maxAttempts - 1) {
-                core.info(`Waiting for both test workflows to complete... (attempt ${attempt + 1}/${maxAttempts})`);
+                core.info(`Waiting for both test jobs to complete... (attempt ${attempt + 1}/${maxAttempts})`);
                 await new Promise(resolve => setTimeout(resolve, delayMs));
               }
             }
             
-            core.setFailed('Timeout waiting for both test workflows to complete and upload artifacts');
+            core.setFailed('Timeout waiting for both test jobs to complete and upload artifacts');
             return { ready: false };
 
       - name: Download unit test coverage
@@ -166,6 +171,8 @@ jobs:
           git pull origin coverage-reports 2>/dev/null || true
 
       - name: Commit coverage reports and badges
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Copy coverage reports to a directory in the branch
           mkdir -p coverage-reports/${{ steps.sha.outputs.sha }}
@@ -178,7 +185,7 @@ jobs:
           
           git add coverage-reports/
           git commit -m "Add coverage report for ${{ steps.sha.outputs.sha }}" || exit 0
-          git push origin coverage-reports
+          git push https://x-access-token:$GITHUB_TOKEN@github.com/${{ github.repository }}.git coverage-reports
 
       - name: Upload unit coverage to Codecov
         uses: codecov/codecov-action@v4
