@@ -2,7 +2,6 @@
  * E2E tests for data property drag coupling: when a domain class is dragged,
  * its attached data property nodes move with it; data property nodes remain
  * independently draggable.
- * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';

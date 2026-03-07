@@ -1,5 +1,5 @@
 /**
- * @vitest-environment jsdom
+ * E2E tests for edit edge modal (cardinality, restriction, delete, undo).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';

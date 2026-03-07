@@ -162,6 +162,7 @@ import {
 import { getNetworkOptions } from './ui/networkConfig';
 import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
 import { handleUrlLoadFailure } from './lib/urlLoadFailureHandler';
+import { loadOntologyFromContent } from './lib/loadOntology';
 import {
   labelToCamelCaseIdentifier,
   validateLabelForIdentifier,
@@ -5029,7 +5030,7 @@ function renderApp(): void {
           <img src="${import.meta.env.BASE_URL}OntoCanvas.png" alt="OntoCanvas" style="width: 20px; height: 20px;" />
           Open ontology
         </button>
-        <input type="file" id="fileInput" accept=".ttl,.turtle" style="display: none;" />
+        <input type="file" id="fileInput" accept=".ttl,.turtle,.owl,.rdf,.rdfxml,.jsonld,.json" style="display: none;" />
         <button type="button" id="manageExternalRefs" title="Manage external ontology references" style="width: fit-content; margin-top: 4px;">Manage external references</button>
       </div>
       <div id="vizControls" style="display: none;">
@@ -5494,21 +5495,16 @@ async function loadTtlAndRender(
   errorMsg.textContent = '';
 
   try {
-    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = await parseTtlToGraph(ttlString);
+    const pathForParse = pathHint ?? fileName ?? '';
+    const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
+    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = parseResult;
+
     rawData = graphData;
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
     ttlStore = store;
-    
-    // Debug: Check if describes edge exists in rawData.edges after parsing
-    const describesEdgesInRawData = rawData.edges.filter((e) => 
-      e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
-    );
-    debugLog('[DEBUG] After parsing - describes edges in rawData.edges:', describesEdgesInRawData.length, describesEdgesInRawData);
-    debugLog('[DEBUG] All edges in rawData.edges:', rawData.edges.length);
-    debugLog('[DEBUG] All node IDs in rawData.nodes:', rawData.nodes.map((n) => n.id));
-    
+
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
@@ -5516,16 +5512,13 @@ async function loadTtlAndRender(
     hasUnsavedChanges = false;
     clearUndoRedo();
     updateFilePathDisplay();
-    
-    // Clear loaded edge style config when loading a new ontology
-    // It will be set again if a display config is loaded
+
     loadedEdgeStyleConfig = null;
-    
-    // Update status bar with the new store (defer to avoid blocking)
+
     setTimeout(() => {
       updateStatusBar(ttlStore);
     }, 0);
-    
+
     if (handle && fileName) {
       saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
     }
@@ -5539,36 +5532,11 @@ async function loadTtlAndRender(
     }
     const manageExternalRefsBtn = document.getElementById('manageExternalRefs');
     if (manageExternalRefsBtn) manageExternalRefsBtn.style.display = 'inline-block';
-    
-    // Extract external references from owl:imports in the ontology
-    const extractedRefs = extractExternalRefsFromStore(ttlStore);
+
+    debugLog('[DEBUG] After parsing - describes edges in rawData.edges:', rawData.edges.filter((e) => e.type.includes('describes')).length);
     console.log('Extracted external references from ontology:', extractedRefs);
-    
-    // Extract prefixes from @prefix declarations in the TTL
-    const prefixMap = extractPrefixesFromTtl(ttlString);
-    console.log('Extracted prefixes from TTL:', prefixMap);
-    
-    // Enhance extracted refs with prefixes from TTL
-    for (const ref of extractedRefs) {
-      const urlWithoutHash = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
-      console.log(`Matching ref URL: ${ref.url} (normalized: ${urlWithoutHash})`);
-      // Find matching prefix in TTL
-      for (const [prefix, url] of Object.entries(prefixMap)) {
-        const urlStr = String(url);
-        const prefixUrlWithoutHash = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr;
-        console.log(`  Comparing with prefix ${prefix}: ${urlStr} (normalized: ${prefixUrlWithoutHash})`);
-        if (urlWithoutHash === prefixUrlWithoutHash) {
-          console.log(`  ✓ Match found! Setting prefix to ${prefix}`);
-          ref.prefix = prefix;
-          ref.usePrefix = true;
-          break;
-        }
-      }
-      if (!ref.prefix) {
-        console.log(`  ✗ No matching prefix found for ${ref.url}`);
-      }
-    }
-    
+    console.log('Extracted prefixes:', prefixMap);
+
     // Load external references from IndexedDB and merge with extracted ones
     const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
     console.log('Loaded external references from IndexedDB:', dbRefs);
@@ -5994,7 +5962,10 @@ function applyFilter(preserveView = false): void {
           console.log(`Copied ${count} relationship(s)`);
         },
         (nodeId) => openEditModalForNode(nodeId),
-        (edgeId) => openEditModalForEdge(edgeId)
+        (edgeId) => openEditModalForEdge(edgeId),
+        () => {
+          if (network) updateSelectionInfoDisplay(network);
+        }
       );
       
       // Update context menu data after initialization
@@ -6052,7 +6023,11 @@ async function loadFromFile(): Promise<void> {
     try {
       const [handle] = await (window as Window & { showOpenFilePicker: (o?: object) => Promise<FileSystemFileHandle[]> })
         .showOpenFilePicker({
-          types: [{ accept: { 'text/turtle': ['.ttl', '.turtle'] } }],
+          types: [
+            { accept: { 'text/turtle': ['.ttl', '.turtle'] }, description: 'Turtle' },
+            { accept: { 'application/rdf+xml': ['.owl', '.rdf', '.rdfxml'] }, description: 'RDF/XML (OWL)' },
+            { accept: { 'application/ld+json': ['.jsonld', '.json'] }, description: 'JSON-LD' },
+          ],
           mode: 'readwrite',
         });
       const file = await handle.getFile();
@@ -6127,13 +6102,10 @@ async function loadFromUrl(url: string): Promise<void> {
   try {
     const ttl = await fetchOntologyFromUrl(url);
 
-    // Extract filename from URL
+    // Use URL path as filename for display; format is detected from URL for parsing
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/');
-    let fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
-    if (!fileName.toLowerCase().endsWith('.ttl') && !fileName.toLowerCase().endsWith('.turtle')) {
-      fileName = `${fileName}.ttl`;
-    }
+    const fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
 
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
@@ -7312,6 +7284,19 @@ console.warn = (...args: unknown[]) => {
   getSelectedNodes: (): string[] => {
     if (!network) return [];
     return network.getSelectedNodes().map(String);
+  },
+  /** Open context menu for a class node (for E2E: then click "Select all children" or "Select all parents"). */
+  openContextMenuForNode: (nodeId: string): void => {
+    const container = document.getElementById('network');
+    if (!container || !network) return;
+    const ev = {
+      clientX: 100,
+      clientY: 100,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      stopImmediatePropagation: () => {},
+    } as MouseEvent;
+    showContextMenu(ev, network, container, nodeId, null);
   },
   /** Get network instance for E2E (setSelection, getPositions, moveNode, emit). */
   getNetwork: (): typeof network => network,

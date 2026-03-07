@@ -1,6 +1,5 @@
 /**
  * E2E tests for data property: double-click/context menu opening edit modal, and domain editing.
- * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';

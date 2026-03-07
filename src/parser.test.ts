@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
 import {
   parseTtlToGraph,
+  parseRdfToGraph,
+  quadsToParseResult,
   updateLabelInStore,
   storeToTurtle,
   extractLocalName,
@@ -99,6 +101,21 @@ describe('parseTtlToGraph (load)', () => {
     const result2 = await parseTtlToGraph(ttl);
 
     expectGraphDataEqual(result1.graphData, result2.graphData);
+  });
+
+  it('parseRdfToGraph with contentType text/turtle matches parseTtlToGraph', async () => {
+    const ttl = loadOntologyAsString();
+    const resultTtl = await parseTtlToGraph(ttl);
+    const resultRdf = await parseRdfToGraph(ttl, { contentType: 'text/turtle' });
+    expectGraphDataEqual(resultTtl.graphData, resultRdf.graphData);
+  });
+
+  it('quadsToParseResult reproduces same graph from store quads', async () => {
+    const ttl = loadOntologyAsString();
+    const { store, graphData } = await parseTtlToGraph(ttl);
+    const quads = [...store];
+    const result = quadsToParseResult(quads);
+    expectGraphDataEqual(result.graphData, graphData);
   });
 
   it('extracts subClassOf edges', async () => {

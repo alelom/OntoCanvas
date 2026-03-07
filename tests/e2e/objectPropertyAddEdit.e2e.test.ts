@@ -1,6 +1,5 @@
 /**
  * E2E tests for Add Object Property (list update, duplicate identifier) and Edit Object Property (derived IRI display).
- * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';

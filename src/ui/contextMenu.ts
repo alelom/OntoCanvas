@@ -12,6 +12,10 @@ import {
 } from '../lib/ontologyValidator';
 import type { GraphData } from '../types';
 import type { Store } from 'n3';
+import {
+  getTransitiveChildIds,
+  getTransitiveParentIds,
+} from '../lib/classGraphTraversal';
 
 /**
  * Callback type for when relationships are pasted.
@@ -36,6 +40,11 @@ export type OnEditNodeCallback = (nodeId: string) => void;
  */
 export type OnEditEdgeCallback = (edgeId: string) => void;
 
+/**
+ * Callback type for when selection is changed from the context menu (e.g. Select all children/parents).
+ */
+export type OnSelectionChangedCallback = () => void;
+
 let contextMenuElement: HTMLElement | null = null;
 let currentNetwork: Network | null = null;
 let currentStore: Store | null = null;
@@ -44,6 +53,7 @@ let onPasteCallback: OnPasteCallback | null = null;
 let onCopyCallback: OnCopyCallback | null = null;
 let onEditNodeCallback: ((nodeId: string) => void) | null = null;
 let onEditEdgeCallback: ((edgeId: string) => void) | null = null;
+let onSelectionChangedCallback: OnSelectionChangedCallback | null = null;
 let currentTargetNodeId: string | null = null;
 
 /**
@@ -57,7 +67,8 @@ export function initContextMenu(
   onPaste: OnPasteCallback,
   onCopy: OnCopyCallback,
   onEditNode: OnEditNodeCallback,
-  onEditEdge: OnEditEdgeCallback
+  onEditEdge: OnEditEdgeCallback,
+  onSelectionChanged?: OnSelectionChangedCallback
 ): void {
   currentNetwork = network;
   currentStore = store;
@@ -66,6 +77,7 @@ export function initContextMenu(
   onCopyCallback = onCopy;
   onEditNodeCallback = onEditNode;
   onEditEdgeCallback = onEditEdge;
+  onSelectionChangedCallback = onSelectionChanged ?? null;
 
   // Create context menu element if it doesn't exist
   if (!contextMenuElement) {
@@ -219,6 +231,44 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       !hasCopiedRelationships()
     );
 
+    // Select all children / parents (class nodes only; disabled when no descendants/ancestors)
+    const isClassNode = !nodeId.startsWith('__dataprop');
+    let selectChildrenBtn: HTMLElement | null = null;
+    let selectParentsBtn: HTMLElement | null = null;
+    if (isClassNode && currentRawData) {
+      const classIds = new Set(currentRawData.nodes.map((n) => n.id));
+      const childIds = getTransitiveChildIds(nodeId, currentRawData.edges, classIds);
+      const parentIds = getTransitiveParentIds(nodeId, currentRawData.edges, classIds);
+      selectChildrenBtn = createMenuItem(
+        'Select all children',
+        () => {
+          if (currentNetwork) {
+            currentNetwork.setSelection(
+              { nodes: childIds },
+              { unselectAll: true, highlightEdges: true }
+            );
+            onSelectionChangedCallback?.();
+          }
+          hideContextMenu();
+        },
+        childIds.length <= 1
+      );
+      selectParentsBtn = createMenuItem(
+        'Select all parents',
+        () => {
+          if (currentNetwork) {
+            currentNetwork.setSelection(
+              { nodes: parentIds },
+              { unselectAll: true, highlightEdges: true }
+            );
+            onSelectionChangedCallback?.();
+          }
+          hideContextMenu();
+        },
+        parentIds.length <= 1
+      );
+    }
+
     // Separator before "Edit properties"
     const separator = createSeparator();
     
@@ -232,6 +282,8 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
 
     contextMenuElement.appendChild(copyBtn);
     contextMenuElement.appendChild(pasteBtn);
+    if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+    if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
     contextMenuElement.appendChild(separator);
     contextMenuElement.appendChild(editBtn);
   } else if (edgeId) {

@@ -1,9 +1,11 @@
 import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
+import type { Quad as N3Quad } from 'n3';
 import { postProcessTurtle } from './turtlePostProcess';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
+import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -194,14 +196,10 @@ export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] 
 }
 
 /**
- * Parse TTL string and extract OWL classes with subClassOf, partOf, contains.
- * Returns both graph data and the N3 Store for editing/serialization.
+ * Build ParseResult (graph data + store + property lists) from an N3 Store.
+ * Used by both quadsToParseResult and (indirectly) parseTtlToGraph / parseRdfToGraph.
  */
-export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
-  const parser = new Parser({ format: 'text/turtle' });
-  const quads = parser.parse(ttlString);
-  const store = new Store(quads);
-
+function buildParseResultFromStore(store: Store): ParseResult {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenClasses = new Set<string>();
@@ -535,6 +533,42 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   }
 
   return { graphData: { nodes, edges }, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps };
+}
+
+/**
+ * Build ParseResult from an array of quads (e.g. from N3 or rdf-parse).
+ * RDF/JS quads from rdf-parse are compatible with N3 Store at runtime.
+ */
+export function quadsToParseResult(quads: N3Quad[]): ParseResult {
+  return buildParseResultFromStore(new Store(quads as Iterable<N3Quad>));
+}
+
+/**
+ * Parse Turtle string and extract OWL classes with subClassOf, partOf, contains.
+ * Returns both graph data and the N3 Store for editing/serialization.
+ * Backward-compatible wrapper using rdf-parse for consistency with other formats.
+ */
+export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
+  const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
+  return quadsToParseResult(quads as N3Quad[]);
+}
+
+export interface ParseRdfToGraphOptions {
+  path?: string;
+  contentType?: string;
+  baseIRI?: string;
+}
+
+/**
+ * Parse RDF content (Turtle, RDF/XML, JSON-LD, etc.) to graph + store.
+ * Format is detected from path or contentType.
+ */
+export async function parseRdfToGraph(
+  content: string,
+  options?: ParseRdfToGraphOptions
+): Promise<ParseResult> {
+  const quads = await parseRdfToQuads(content, options ?? {});
+  return quadsToParseResult(quads as N3Quad[]);
 }
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';

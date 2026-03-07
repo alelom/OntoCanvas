@@ -11,7 +11,13 @@
   ![E2E Test Coverage](https://codecov.io/gh/alelom/OntoCanvas/branch/main/graph/badge.svg?flag=e2e&token=)
 </div>
 
-Interactive ontology editor and visualizer with TTL file support.
+Interactive ontology editor and visualizer with multi-format RDF support (open from file or URL; save as Turtle).
+
+
+## Supported formats
+
+- **Open:** Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and other formats supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js).
+- **Save:** Turtle only.
 
 
 ## Features
@@ -28,7 +34,7 @@ Interactive ontology editor and visualizer with TTL file support.
 
 | Tool | Pros | Cons |
 |------|------|------|
-| **OntoCanvas** (this tool) | **Hierarchical view** – clear tree layout for class hierarchies; **simple fast edits** – add/remove nodes and edges, rename, undo/redo; browser-based, no install; direct TTL load/save; lightweight, no server | Limited OWL expressivity; no reasoner; no SPARQL; focused on class hierarchy + relationships |
+| **OntoCanvas** (this tool) | **Hierarchical view** – clear tree layout for class hierarchies; **simple fast edits** – add/remove nodes and edges, rename, undo/redo; browser-based, no install; **multi-format load** (Turtle, RDF/XML, JSON-LD, etc.), save as Turtle; lightweight, no server | Limited OWL expressivity; no reasoner; no SPARQL; focused on class hierarchy + relationships |
 | **WebVOWL** | Web-based visualization; well-established tool; SVG export; good for exploring ontology structure | Primarily visualization only, no editing; **only "free nodes" mode (no hierarchical view)** – makes complex ontologies difficult to understand; only visualisation, no authoring |
 | **Protégé / WebProtégé** | Industry standard; full OWL support; reasoner integration; plugins; collaborative (WebProtégé) | Not very visual; steep learning curve; heavy; form-based, not graph-first |
 | **Onto4ALL** | Browser-based; box-and-arrow visual; simple | Limited features; basic editing; not widely maintained |
@@ -42,7 +48,7 @@ Interactive ontology editor and visualizer with TTL file support.
 | **Semaforer** | Lightweight; web-based; simple | Limited scope; less mature |
 | **Neon** | OWL 2; ontology evolution; change tracking | Research tool; less mainstream |
 
-**When to use this editor:** You want a quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything, with direct TTL file round-trip and undo/redo.
+**When to use this editor:** You want a quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything, with support for opening Turtle, OWL, JSON-LD and other RDF formats and saving as Turtle, plus undo/redo.
 
 
 
@@ -51,7 +57,8 @@ Interactive ontology editor and visualizer with TTL file support.
 
 - **Vite** – Build tool
 - **TypeScript** – Type safety
-- **N3.js** – Turtle/RDF parsing (client-side)
+- **rdf-parse** – Multi-format RDF parsing (Turtle, RDF/XML, JSON-LD, etc.) in the browser
+- **N3.js** – In-memory RDF store and Turtle serialisation (save)
 - **vis-network** – Graph visualization
 
 

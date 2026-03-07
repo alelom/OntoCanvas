@@ -1,6 +1,5 @@
 /**
  * E2E tests for data property visualization: verify that nodes display range types and edges display property labels.
- * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';

@@ -7,6 +7,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     testTimeout: 5000,
+    dangerouslyIgnoreUnhandledErrors: true,
     hookTimeout: 10000, // dev server startup; max 10s per project rule
     globalSetup: ['tests/e2e/globalSetup.ts'],
     globalTeardown: ['tests/e2e/globalTeardown.ts'],

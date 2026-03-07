@@ -1,6 +1,5 @@
 /**
  * E2E tests for display config save/load functionality
- * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';

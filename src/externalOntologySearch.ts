@@ -1,4 +1,5 @@
-import { Parser, Store } from 'n3';
+import { Store } from 'n3';
+import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { extractLocalName, extractLocalNameFromUri } from './parser';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 
@@ -129,8 +130,8 @@ export async function fetchExternalOntologyTtl(
       response = await fetch(normalizedUrl, {
         method: 'GET',
         headers: {
-          'Accept': 'text/turtle',
-          'User-Agent': 'curl/8.0.0', // Override browser User-Agent to get Turtle instead of HTML
+          'Accept': 'text/turtle, application/rdf+xml, application/ld+json, application/n-triples, text/n3, */*',
+          'User-Agent': 'curl/8.0.0', // Override browser User-Agent to get RDF instead of HTML
         },
         redirect: 'follow', // Explicitly follow redirects (like curl -L)
         signal: controller.signal,
@@ -489,15 +490,22 @@ export async function fetchExternalOntologyTtl(
   }
 }
 
+function getParseOptionsForUrl(normalizedUrl: string): { path: string; contentType?: string } {
+  const hasExtension = /\.(ttl|turtle|owl|rdf|rdfxml|jsonld|json|nt|nq|n3|trig)$/i.test(normalizedUrl);
+  const opts: { path: string; contentType?: string } = { path: normalizedUrl };
+  if (!hasExtension) opts.contentType = 'text/turtle';
+  return opts;
+}
+
 async function parseOntologyContent(
   text: string,
   normalizedUrl: string,
   externalRefs?: ExternalOntologyReference[]
 ): Promise<ExternalClassInfo[]> {
   try {
-    const parser = new Parser({ format: 'text/turtle' });
-    const quads = parser.parse(text);
-    const store = new Store(quads);
+    const opts = getParseOptionsForUrl(normalizedUrl);
+    const quads = await parseRdfToQuads(text, opts);
+    const store = new Store(quads as Iterable<import('n3').Quad>);
     
     const classes: ExternalClassInfo[] = [];
     const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
@@ -557,9 +565,9 @@ async function parseOntologyObjectProperties(
   externalRefs?: ExternalOntologyReference[]
 ): Promise<ExternalObjectPropertyInfo[]> {
   try {
-    const parser = new Parser({ format: 'text/turtle' });
-    const quads = parser.parse(text);
-    const store = new Store(quads);
+    const opts = getParseOptionsForUrl(normalizedUrl);
+    const quads = await parseRdfToQuads(text, opts);
+    const store = new Store(quads as Iterable<import('n3').Quad>);
     
     const objectProperties: ExternalObjectPropertyInfo[] = [];
     const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';

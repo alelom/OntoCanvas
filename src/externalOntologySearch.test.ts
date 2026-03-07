@@ -330,12 +330,12 @@ describe('externalOntologySearch', () => {
 
       const result = await fetchExternalOntologyClasses('https://w3id.org/dano', []);
       
-      // Verify Accept header was sent with proper content negotiation (simple format like curl)
+      // Verify Accept header includes Turtle and other RDF formats for content negotiation
       expect(mockFetch).toHaveBeenCalledWith(
         'https://w3id.org/dano',
         expect.objectContaining({
           headers: expect.objectContaining({
-            'Accept': 'text/turtle',
+            'Accept': expect.stringContaining('text/turtle'),
           }),
           redirect: 'follow',
         })

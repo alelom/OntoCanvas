@@ -1,5 +1,5 @@
 /**
- * @vitest-environment jsdom
+ * E2E tests for edge style checkboxes (show/hide edges and labels).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
