@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/alelom/OntoCanvas/compare/v1.1.1...v1.2.0) (2026-03-07)
+
+
+### Features
+
+* dataproperties drag-drop movement follows parent domain class ([c5783e9](https://github.com/alelom/OntoCanvas/commit/c5783e95ed28f310af59c99ce5f08caed9ab71fd))
+
 ## [1.1.1](https://github.com/alelom/OntoCanvas/compare/v1.1.0...v1.1.1) (2026-03-06)
 
 
