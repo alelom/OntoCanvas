@@ -14,6 +14,6 @@ export default defineConfig({
     globals: true,
     // Default to node; e2e tests that need DOM use @vitest-environment jsdom in the file
     environment: 'node',
-    testTimeout: 10000,
+    testTimeout: 5000,
   },
 });

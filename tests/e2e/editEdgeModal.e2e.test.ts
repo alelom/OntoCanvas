@@ -171,8 +171,8 @@ describe('Edit Edge Modal E2E Tests', () => {
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-    page.setDefaultTimeout(8000);
-    page.setDefaultNavigationTimeout(8000);
+    page.setDefaultTimeout(5000);
+    page.setDefaultNavigationTimeout(5000);
     
     // Set up console log capture early
     page.on('console', (msg) => {

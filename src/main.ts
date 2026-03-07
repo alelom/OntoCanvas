@@ -161,6 +161,7 @@ import {
 } from './ui/edgeStyleUtils';
 import { getNetworkOptions } from './ui/networkConfig';
 import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
+import { handleUrlLoadFailure } from './lib/urlLoadFailureHandler';
 import {
   labelToCamelCaseIdentifier,
   validateLabelForIdentifier,
@@ -6119,12 +6120,9 @@ async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConf
 
 /**
  * Load ontology from a URL.
+ * On failure (CORS or other), shows a modal instead of the in-editor error bar.
  */
 async function loadFromUrl(url: string): Promise<void> {
-  const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-  errorMsg.style.display = 'none';
-  errorMsg.textContent = '';
-
   showLoadingModal();
   try {
     const ttl = await fetchOntologyFromUrl(url);
@@ -6133,32 +6131,23 @@ async function loadFromUrl(url: string): Promise<void> {
     const urlObj = new URL(url);
     const pathParts = urlObj.pathname.split('/');
     let fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
-    
-    // Ensure filename has .ttl extension
     if (!fileName.toLowerCase().endsWith('.ttl') && !fileName.toLowerCase().endsWith('.turtle')) {
       fileName = `${fileName}.ttl`;
     }
 
-    // Save last opened URL (non-blocking)
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
-    // Try to load display config from URL if it exists (before loading TTL)
-    // This allows the URL-based config to take precedence over IndexedDB
     const { getDisplayFileUrl } = await import('./utils/urlParams');
     const displayUrl = getDisplayFileUrl(url);
     let urlDisplayConfig: DisplayConfig | null = null;
     if (displayUrl) {
       urlDisplayConfig = await loadDisplayConfigFromUrl(displayUrl);
     }
-    
+
     await loadTtlAndRender(ttl, fileName, null, url);
-    
-    // If we loaded a display config from URL, apply it now (overriding any IndexedDB config)
+
     if (urlDisplayConfig) {
-      // Store the edge style config so it can be merged when building the filter
       loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;
-      // Apply the display config after the graph is rendered
-      // Use requestAnimationFrame to ensure the graph is ready
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           applyDisplayConfig(urlDisplayConfig!);
@@ -6170,19 +6159,16 @@ async function loadFromUrl(url: string): Promise<void> {
               animation: false,
             });
           }
-          // Save to IndexedDB for future loads
           saveDisplayConfigToIndexedDB(urlDisplayConfig!, url, fileName).catch(() => {});
         });
       });
     }
-    
+
     hideLoadingModal();
   } catch (err) {
     hideLoadingModal();
-    const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('Failed to load ontology from URL:', err);
-    errorMsg.textContent = `Failed to load from URL: ${errorMessage}`;
-    errorMsg.style.display = 'block';
+    handleUrlLoadFailure(url, err, { onOpenFile: loadFromFile });
   }
 }
 

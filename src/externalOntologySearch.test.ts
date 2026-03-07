@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, type ExternalClassInfo, type ExternalOntologyReference } from './externalOntologySearch';
+import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, type ExternalClassInfo, type ExternalOntologyReference } from './externalOntologySearch';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -441,6 +441,21 @@ describe('externalOntologySearch', () => {
       const danoClasses2 = await fetchExternalOntologyClasses('https://w3id.org/dano', refs);
       expect(danoClasses2.length).toBe(danoClasses.length);
       expect(global.fetch).toHaveBeenCalledTimes(2); // Still 2, not 4
+    });
+  });
+
+  describe('fetchExternalOntologyTtl with throwOnCors', () => {
+    it('throws CorsOrNetworkError when fetch throws and throwOnCors is true', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError('Failed to fetch'));
+      await expect(
+        fetchExternalOntologyTtl('https://example.com/ontology.ttl', { throwOnCors: true })
+      ).rejects.toThrow(CorsOrNetworkError);
+    });
+
+    it('returns null when fetch throws and throwOnCors is false (default)', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError('Failed to fetch'));
+      const result = await fetchExternalOntologyTtl('https://example.com/ontology.ttl');
+      expect(result).toBeNull();
     });
   });
 });

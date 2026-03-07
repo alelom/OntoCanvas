@@ -9,7 +9,7 @@ import { join } from 'node:path';
 const EDITOR_URL = process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 const PID_FILE = join(process.cwd(), '.e2e-dev-server-pid');
 const POLL_MS = 500;
-const STARTUP_TIMEOUT_MS = 60000;
+const STARTUP_TIMEOUT_MS = 10000; // dev server startup; max 10s per project rule
 
 async function isServerUp(url: string): Promise<boolean> {
   try {

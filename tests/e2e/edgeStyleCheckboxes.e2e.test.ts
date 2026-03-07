@@ -176,8 +176,8 @@ describe('Edge Style Checkboxes E2E', () => {
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-    page.setDefaultTimeout(8000);
-    page.setDefaultNavigationTimeout(8000);
+    page.setDefaultTimeout(5000);
+    page.setDefaultNavigationTimeout(5000);
     
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });

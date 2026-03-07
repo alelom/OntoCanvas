@@ -28,6 +28,23 @@ export interface ExternalOntologyReference {
 }
 
 /**
+ * Thrown when the initial fetch fails due to CORS or network (e.g. browser blocks response).
+ * Used so the URL loader can show the CORS fallback modal (download + open file).
+ */
+export class CorsOrNetworkError extends Error {
+  constructor(message = 'Failed to fetch (CORS or network error)') {
+    super(message);
+    this.name = 'CorsOrNetworkError';
+    Object.setPrototypeOf(this, CorsOrNetworkError.prototype);
+  }
+}
+
+export interface FetchExternalOntologyTtlOptions {
+  /** When true, throw CorsOrNetworkError instead of returning null when the initial fetch throws (e.g. CORS). */
+  throwOnCors?: boolean;
+}
+
+/**
  * Centralized cache for raw TTL content from external ontologies.
  * This ensures we fetch the TTL once and reuse it for both classes and object properties.
  */
@@ -64,10 +81,13 @@ const STANDARD_VOCABULARIES = new Set([
  * Fetches and caches the raw TTL content from an external ontology.
  * This is the central function that ensures we fetch TTL once and reuse it.
  * Returns the TTL text, or null if fetching failed.
+ * When options.throwOnCors is true, throws CorsOrNetworkError when the initial fetch throws (e.g. CORS).
  */
 export async function fetchExternalOntologyTtl(
-  url: string
+  url: string,
+  options?: FetchExternalOntologyTtlOptions
 ): Promise<string | null> {
+  const throwOnCors = options?.throwOnCors === true;
   // Normalize URL (remove trailing # if present)
   const normalizedUrl = url.endsWith('#') ? url.slice(0, -1) : url;
   
@@ -126,7 +146,11 @@ export async function fetchExternalOntologyTtl(
         response = undefined; // Mark that we need to try fallbacks
       } else {
         // CORS errors and network errors are expected for many external ontologies
-        // Only log in debug mode
+        if (throwOnCors) {
+          throw new CorsOrNetworkError(
+            fetchErr instanceof Error ? fetchErr.message : 'Failed to fetch'
+          );
+        }
         if (isDebugMode()) {
           debugWarn(`Fetch error for ${normalizedUrl}:`, fetchErr);
         }
@@ -454,8 +478,10 @@ export async function fetchExternalOntologyTtl(
     }
     return null;
   } catch (err) {
-    // CORS errors and network errors are expected for many external ontologies
-    // Only log in debug mode
+    if (err instanceof CorsOrNetworkError) {
+      throw err;
+    }
+    // Other errors - only log in debug mode
     if (isDebugMode()) {
       debugWarn(`Failed to fetch TTL from ${normalizedUrl}:`, err);
     }

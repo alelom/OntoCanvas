@@ -6,8 +6,8 @@ export default defineConfig({
     include: ['tests/e2e/**/*.e2e.test.ts'],
     globals: true,
     environment: 'node',
-    testTimeout: 15000,
-    hookTimeout: 60000,
+    testTimeout: 5000,
+    hookTimeout: 10000, // dev server startup; max 10s per project rule
     globalSetup: ['tests/e2e/globalSetup.ts'],
     globalTeardown: ['tests/e2e/globalTeardown.ts'],
     coverage: {

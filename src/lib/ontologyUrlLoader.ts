@@ -12,7 +12,7 @@
 export async function fetchOntologyFromUrl(url: string): Promise<string> {
   // Import fetchExternalOntologyTtl dynamically to avoid circular dependencies
   const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
-  const ttl = await fetchExternalOntologyTtl(url);
+  const ttl = await fetchExternalOntologyTtl(url, { throwOnCors: true });
   if (!ttl) {
     throw new Error(`Failed to fetch ontology from ${url}`);
   }
