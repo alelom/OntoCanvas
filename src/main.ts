@@ -113,6 +113,7 @@ import {
   showContextMenu,
   updateContextMenuData,
 } from './ui/contextMenu';
+import { attachEditorTestHook } from './e2e/editorTestHook';
 import {
   initOpenOntologyModal,
   showOpenOntologyModal,
@@ -7249,278 +7250,31 @@ console.warn = (...args: unknown[]) => {
   originalConsoleWarn.apply(console, args);
 };
 
-// Test hook for browser automation (e.g. Playwright). Exposes programmatic control for E2E tests.
-(window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
-  /** Hide the open-ontology modal so tests can use the file input. */
-  hideOpenOntologyModal: (): void => hideOpenOntologyModal(),
-  selectNodeByLabel: (label: string): boolean => {
-    const node = rawData.nodes.find((n) => (n.label || n.id) === label);
-    if (node && network) {
-      network.setSelection({ nodes: [node.id] });
-      return true;
-    }
-    return false;
-  },
-  /** Select edge by edge ID (format: "from->to:type"). */
-  selectEdgeById: (edgeId: string): boolean => {
-    if (!network) return false;
-    network.setSelection({ edges: [edgeId] });
-    // Wait a bit for selection to be applied, then verify
-    setTimeout(() => {
-      const selected = network.getSelectedEdges();
-      if (isDebugMode()) {
-        debugLog(`[SELECT EDGE] Selection result for ${edgeId}:`, { selected, includes: selected.includes(edgeId) });
-      }
-    }, 50);
-    const selected = network.getSelectedEdges();
-    return selected.includes(edgeId);
-  },
-  /** Get selected edges from network (for debugging). */
-  getSelectedEdges: (): string[] => {
-    if (!network) return [];
-    return network.getSelectedEdges().map(String);
-  },
-  /** Get selected nodes from network (for debugging). */
-  getSelectedNodes: (): string[] => {
-    if (!network) return [];
-    return network.getSelectedNodes().map(String);
-  },
-  /** Open context menu for a class node (for E2E: then click "Select all children" or "Select all parents"). */
-  openContextMenuForNode: (nodeId: string): void => {
-    const container = document.getElementById('network');
-    if (!container || !network) return;
-    const ev = {
-      clientX: 100,
-      clientY: 100,
-      preventDefault: () => {},
-      stopPropagation: () => {},
-      stopImmediatePropagation: () => {},
-    } as MouseEvent;
-    showContextMenu(ev, network, container, nodeId, null);
-  },
-  /** Get network instance for E2E (setSelection, getPositions, moveNode, emit). */
-  getNetwork: (): typeof network => network,
-  performDelete: (): boolean => performDeleteSelection(),
-  performUndo: (): void => performUndo(),
-  performRedo: (): void => performRedo(),
-  getNodeIds: (): string[] => rawData.nodes.map((n) => n.id),
-  getNodeCount: (): number => rawData.nodes.length,
-  getRawDataEdges: (): GraphEdge[] => rawData.edges,
-  getUndoStackLength: (): number => undoStack.length,
-  /** Visible node count from the UI (what's actually rendered). Use to verify display matches rawData. */
-  getVisibleNodeCount: (): number =>
-    parseInt(document.getElementById('nodeCount')?.textContent ?? '0', 10) || 0,
-  /** Clear IndexedDB display config to test with fresh state. */
-  clearDisplayConfig: async (): Promise<void> => {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open('OntologyEditorDisplay', 1);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => resolve(req.result);
-    });
-    const tx = db.transaction('config', 'readwrite');
-    tx.objectStore('config').clear();
-    db.close();
-  },
-  /** Find edge by from/to labels and type. Returns edge ID for use with editEdge. */
-  findEdgeByLabels: (fromLabel: string, toLabel: string, typeLabel?: string): string | null => {
-    const fromNode = rawData.nodes.find((n) => (n.label || n.id) === fromLabel);
-    const toNode = rawData.nodes.find((n) => (n.label || n.id) === toLabel);
-    if (!fromNode || !toNode) return null;
-    
-    const edge = rawData.edges.find((e) => {
-      if (e.from !== fromNode.id || e.to !== toNode.id) return false;
-      if (typeLabel) {
-        const edgeTypeLabel = getRelationshipLabel(e.type, objectProperties, externalOntologyReferences);
-        return edgeTypeLabel === typeLabel || e.type.includes(typeLabel);
-      }
-      return true;
-    });
-    
-    if (!edge) return null;
-    return `${edge.from}->${edge.to}:${edge.type}`;
-  },
-  /** Get edge data from rawData by edge ID. */
-  getEdgeData: (edgeId: string): { from: string; to: string; type: string; isRestriction?: boolean; minCardinality?: number | null; maxCardinality?: number | null } | null => {
-    // Parse edge ID: "from->to:type"
-    const arrowIndex = edgeId.indexOf('->');
-    if (arrowIndex === -1) return null;
-    const from = edgeId.substring(0, arrowIndex);
-    const afterArrow = edgeId.substring(arrowIndex + 2);
-    const colonIndex = afterArrow.indexOf(':');
-    if (colonIndex === -1) return null;
-    const to = afterArrow.substring(0, colonIndex);
-    const type = afterArrow.substring(colonIndex + 1);
-    
-    debugLog(`[GET EDGE DATA] Looking for edge: ${from} -> ${to} : ${type}`);
-    debugLog(`[GET EDGE DATA] rawData.edges count: ${rawData.edges.length}`);
-    debugLog(`[GET EDGE DATA] rawData.edges:`, rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
-    
-    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
-    if (!edge) {
-      debugLog(`[GET EDGE DATA] Edge NOT FOUND in rawData`);
-      return null;
-    }
-    
-    debugLog(`[GET EDGE DATA] Edge FOUND:`, { from: edge.from, to: edge.to, type: edge.type, isRestriction: edge.isRestriction });
-    return {
-      from: edge.from,
-      to: edge.to,
-      type: edge.type,
-      isRestriction: edge.isRestriction,
-      minCardinality: edge.minCardinality,
-      maxCardinality: edge.maxCardinality,
-    };
-  },
-  /** Get all edges from rawData (for debugging). */
-  getAllEdges: (): Array<{ from: string; to: string; type: string; isRestriction?: boolean }> => {
-    return rawData.edges.map(e => ({ from: e.from, to: e.to, type: e.type, isRestriction: e.isRestriction }));
-  },
-  /** Get collected test logs (for debugging deletion flow). */
-  getTestLogs: (filter?: string): string[] => {
-    if (filter) {
-      return testLogs.filter(log => log.includes(filter));
-    }
-    return [...testLogs]; // Return a copy
-  },
-  /** Clear collected test logs. */
-  clearTestLogs: (): void => {
-    testLogs.length = 0;
-  },
-  /** Test logging functionality - logs a test message. */
-  testLog: (message: string): void => {
-    addTestLog(`[TEST] ${message}`);
-  },
-  /** Trigger edit edge modal programmatically. */
-  editEdge: (edgeId: string): boolean => {
-    const arrowIndex = edgeId.indexOf('->');
-    if (arrowIndex === -1) return false;
-    const from = edgeId.substring(0, arrowIndex);
-    const afterArrow = edgeId.substring(arrowIndex + 2);
-    const colonIndex = afterArrow.indexOf(':');
-    if (colonIndex === -1) return false;
-    const to = afterArrow.substring(0, colonIndex);
-    const type = afterArrow.substring(colonIndex + 1);
-    
-    showEditEdgeModal(from, to, type);
-    return true;
-  },
-  /** Get Edit Edge modal values. */
-  getEditEdgeModalValues: (): { minCardinality: string; maxCardinality: string; isRestrictionChecked: boolean } | null => {
-    const modal = document.getElementById('editEdgeModal');
-    if (!modal || modal.style.display === 'none') return null;
-
-    const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
-    const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
-    const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;
-
-    return {
-      minCardinality: minCardInput?.value || '',
-      maxCardinality: maxCardInput?.value || '',
-      isRestrictionChecked: isRestrictionCb?.checked || false,
-    };
-  },
-  /** Open Add Node modal (for E2E). */
-  openAddNodeModal: (x?: number, y?: number): void => {
-    showAddNodeModal(x ?? 100, y ?? 100);
-  },
-  /** Get Add Node modal state: OK disabled, duplicate error visible/text (for E2E). */
-  getAddNodeModalState: (): { okDisabled: boolean; duplicateErrorVisible: boolean; duplicateErrorText: string } => {
-    const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
-    const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
-    return {
-      okDisabled: okBtn?.disabled ?? true,
-      duplicateErrorVisible: dupErr ? dupErr.style.display !== 'none' : false,
-      duplicateErrorText: dupErr?.textContent?.trim() ?? '',
-    };
-  },
-  /** Open edit modal for a node (class rename or data property restriction). For E2E. */
+// E2E test hook: attach programmatic control for browser automation (e.g. Playwright).
+attachEditorTestHook({
+  hideOpenOntologyModal,
+  getRawData: () => rawData,
+  getNetwork: () => network,
+  showContextMenu,
+  performDeleteSelection,
+  performUndo,
+  performRedo,
+  getUndoStack: () => undoStack,
+  getRelationshipLabel,
+  getObjectProperties: () => objectProperties,
+  getExternalOntologyReferences: () => externalOntologyReferences,
   openEditModalForNode,
-  /** Open edit modal for an edge (object or data property). For E2E. */
   openEditModalForEdge,
-  /** Get Edit Edge modal title (e.g. "Edit data property restriction"). */
-  getEditEdgeModalTitle: (): string | null => {
-    const modal = document.getElementById('editEdgeModal');
-    if (!modal || modal.style.display === 'none') return null;
-    const h3 = modal.querySelector('h3');
-    return h3?.textContent?.trim() ?? null;
-  },
-  /** Open Edit data property modal by property name (from Data Properties menu). */
-  openEditDataPropertyModal: (name: string): void => {
-    showEditDataPropertyModal(name);
-  },
-  /** Get data property info by name (for E2E domain assertions). */
-  getDataPropertyByName: (name: string): { domains: string[]; uri?: string } | null => {
-    const dp = dataProperties.find((p) => p.name === name);
-    if (!dp) return null;
-    return { domains: dp.domains ?? [], uri: dp.uri };
-  },
-  /** Serialized TTL from current store (for E2E). */
-  getSerializedTurtle: async (): Promise<string | null> => {
-    if (!ttlStore) return null;
-    return storeToTurtle(ttlStore, externalOntologyReferences);
-  },
-  /** Open Add Object Property modal (for E2E). */
-  openAddObjectPropertyModal: (): void => {
-    document.getElementById('addRelationshipTypeBtn')?.click();
-  },
-  /** Get Add Object Property modal state (for E2E). */
-  getAddObjectPropertyModalState: (): { okDisabled: boolean; validationText: string } => {
-    const modal = document.getElementById('addRelationshipTypeModal');
-    if (!modal || (modal as HTMLElement).style.display === 'none') {
-      return { okDisabled: true, validationText: '' };
-    }
-    const okBtn = document.getElementById('addRelTypeConfirm') as HTMLButtonElement;
-    const validationEl = document.getElementById('addRelTypeLabelValidation') as HTMLElement;
-    return {
-      okDisabled: okBtn?.disabled ?? true,
-      validationText: validationEl?.textContent?.trim() ?? '',
-    };
-  },
-  /** Get Object Properties list text (for E2E). */
-  getObjectPropertiesListText: (): string => {
-    const el = document.getElementById('edgeStylesContent');
-    return el?.textContent?.trim() ?? '';
-  },
-  /** Open Edit Object Property modal by type (for E2E). */
-  openEditObjectPropertyModal: (type: string): void => {
-    const edgeStylesContent = document.getElementById('edgeStylesContent');
-    if (edgeStylesContent) showEditRelationshipTypeModal(type, edgeStylesContent as HTMLElement, applyFilter);
-  },
-  /** Get Edit Object Property identifier text (for E2E - assert no #Ontology#). */
-  getEditObjectPropertyIdentifierText: (): string | null => {
-    const modal = document.getElementById('editRelationshipTypeModal');
-    if (!modal || (modal as HTMLElement).style.display === 'none') return null;
-    const el = document.getElementById('editRelTypeIdentifier');
-    return el?.textContent?.trim() ?? null;
-  },
-  /** Get rendered node label by node ID (for E2E - to verify actual displayed label). */
-  getRenderedNodeLabel: (nodeId: string): string | null => {
-    if (!network) return null;
-    try {
-      // Access the network's internal data structure
-      const networkAny = network as any;
-      const nodes = networkAny.body?.data?.nodes;
-      if (!nodes) return null;
-      const node = nodes.get(nodeId);
-      return node?.label ?? null;
-    } catch (e) {
-      console.error('[getRenderedNodeLabel] Error accessing network data:', e);
-      return null;
-    }
-  },
-  /** Get rendered edge label by edge ID (for E2E - to verify actual displayed label). */
-  getRenderedEdgeLabel: (edgeId: string): string | null => {
-    if (!network) return null;
-    try {
-      // Access the network's internal data structure
-      const networkAny = network as any;
-      const edges = networkAny.body?.data?.edges;
-      if (!edges) return null;
-      const edge = edges.get(edgeId);
-      return edge?.label ?? null;
-    } catch (e) {
-      console.error('[getRenderedEdgeLabel] Error accessing network data:', e);
-      return null;
-    }
-  },
-};
+  showEditEdgeModal,
+  showAddNodeModal,
+  showEditDataPropertyModal,
+  getDataProperties: () => dataProperties,
+  getTtlStore: () => ttlStore,
+  storeToTurtle,
+  applyFilter,
+  showEditRelationshipTypeModal,
+  debugLog,
+  addTestLog,
+  getTestLogs: () => testLogs,
+  isDebugMode,
+});
