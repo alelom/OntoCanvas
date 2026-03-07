@@ -12,3 +12,5 @@ When you add or modify features, do it in a tidy and modular way with multiple f
 You must ensure to add relevant Integration/E2E test every time you fix or add a feature. 
 
 You must run tests every time you finish fixing or adding some feature and ensure they pass.
+
+The users of this static web app, which is deployed on github pages, will never have the option to deploy any additional service (e.g. Proxy) on their own to make this app work. Do not propose solutions that involve such mechanisms.
