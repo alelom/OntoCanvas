@@ -98,6 +98,8 @@ import {
   COLORS,
   getLayoutAlgorithm,
 } from './graph';
+import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
+import { persistNodePositionsFromNetwork } from './graph/persistNodePositions';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import {
   initStatusBar,
@@ -6001,17 +6003,11 @@ function applyFilter(preserveView = false): void {
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
     });
-    network.on('dragEnd', () => {
-      if (!network) return;
-      const positions = network.getPositions();
-      Object.entries(positions).forEach(([id, pos]) => {
-        const node = rawData.nodes.find((n) => n.id === id);
-        if (node && pos) {
-          node.x = pos.x;
-          node.y = pos.y;
-        }
-      });
-      scheduleDisplayConfigSave();
+    setupDragCoupling(network, {
+      onDragEnd: () => {
+        if (!network) return;
+        persistNodePositionsFromNetwork(network, rawData, scheduleDisplayConfigSave);
+      },
     });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
       if (!network) return;
@@ -7331,6 +7327,8 @@ console.warn = (...args: unknown[]) => {
     if (!network) return [];
     return network.getSelectedNodes().map(String);
   },
+  /** Get network instance for E2E (setSelection, getPositions, moveNode, emit). */
+  getNetwork: (): typeof network => network,
   performDelete: (): boolean => performDeleteSelection(),
   performUndo: (): void => performUndo(),
   performRedo: (): void => performRedo(),
