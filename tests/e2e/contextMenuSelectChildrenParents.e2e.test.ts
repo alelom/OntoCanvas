@@ -80,17 +80,18 @@ describe('Context menu Select all children / parents E2E', () => {
     if (browser) await browser.close();
   });
 
-  it('Select all children selects clicked node and all descendants (transitive)', async () => {
+  it('Select all children selects clicked node and all subclasses (transitive)', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'edge-style-test.ttl');
     expect(existsSync(testFile)).toBe(true);
 
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
 
-    // Edge-style-test: ClassA -> ClassB -> ClassC. Select root (Class A), open menu, Select all children.
+    // Edge-style-test: ClassA -> ClassB -> ClassC (subClassOf / hasProperty). Children = subclasses.
+    // Class C is the top (superclass); its children are ClassB and ClassA. Select Class C, Select all children.
     const selectedByLabel = await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { selectNodeByLabel: (l: string) => boolean } }).__EDITOR_TEST__;
-      return testHook?.selectNodeByLabel('Class A') ?? false;
+      return testHook?.selectNodeByLabel('Class C') ?? false;
     });
     expect(selectedByLabel).toBe(true);
     await page.waitForTimeout(100);
@@ -125,17 +126,17 @@ describe('Context menu Select all children / parents E2E', () => {
     }
   });
 
-  it('Select all parents selects clicked node and all ancestors (transitive)', async () => {
+  it('Select all parents selects clicked node and all superclasses (transitive)', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'edge-style-test.ttl');
     expect(existsSync(testFile)).toBe(true);
 
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
 
-    // ClassC is the leaf. Open context menu on Class C, Select all parents.
+    // Class A is the bottom (subclass); its parents are ClassB and ClassC. Select Class A, Select all parents.
     const selectedByLabel = await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { selectNodeByLabel: (l: string) => boolean } }).__EDITOR_TEST__;
-      return testHook?.selectNodeByLabel('Class C') ?? false;
+      return testHook?.selectNodeByLabel('Class A') ?? false;
     });
     expect(selectedByLabel).toBe(true);
     await page.waitForTimeout(100);
