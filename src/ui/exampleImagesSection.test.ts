@@ -36,6 +36,9 @@ describe('exampleImagesSection', () => {
       onUrisChange: noop,
     });
     expect(container.textContent).toContain('img/a.png');
-    expect(container.querySelector('button')?.textContent).toContain('Add example image');
+    const addBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Add example image')
+    );
+    expect(addBtn).toBeDefined();
   });
 });
