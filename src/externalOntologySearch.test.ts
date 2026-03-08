@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, type ExternalClassInfo, type ExternalOntologyReference } from './externalOntologySearch';
+import { Store, DataFactory } from 'n3';
+import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalClassInfo, type ExternalOntologyReference } from './externalOntologySearch';
+
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+const OWL = 'http://www.w3.org/2002/07/owl#';
+const TA = 'http://example.org/task-assignment#';
+const PM = 'http://example.org/project-mgmt#';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -253,6 +259,58 @@ describe('externalOntologySearch', () => {
       expect(results.length).toBeGreaterThan(0);
       const axisLineResult = results.find((r) => r.localName === 'AxisLine');
       expect(axisLineResult).toBeDefined();
+    });
+  });
+
+  describe('getReferencedExternalClassesFromStore', () => {
+    it('returns external classes that appear as domain/range in the store', () => {
+      const store = new Store();
+      store.addQuad(DataFactory.namedNode(TA + 'assignedTo'), DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(TA + 'Task'));
+      store.addQuad(DataFactory.namedNode(TA + 'assignedTo'), DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(PM + 'Person'));
+      store.addQuad(DataFactory.namedNode(TA + 'forProject'), DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(TA + 'Task'));
+      store.addQuad(DataFactory.namedNode(TA + 'forProject'), DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(PM + 'Project'));
+
+      const mainBase = TA.replace('#', '') + '#';
+      const refs: ExternalOntologyReference[] = [{ url: 'http://example.org/project-mgmt', usePrefix: true, prefix: 'pm' }];
+
+      const result = getReferencedExternalClassesFromStore(store, mainBase, refs);
+
+      expect(result.length).toBe(2);
+      const uris = result.map((c) => c.uri).sort();
+      expect(uris).toContain(PM + 'Person');
+      expect(uris).toContain(PM + 'Project');
+      const person = result.find((c) => c.uri === PM + 'Person');
+      expect(person?.localName).toBe('Person');
+    });
+
+    it('excludes local (main ontology) classes', () => {
+      const store = new Store();
+      store.addQuad(DataFactory.namedNode(TA + 'assignedTo'), DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(PM + 'Person'));
+      store.addQuad(DataFactory.namedNode(TA + 'Task'), DataFactory.namedNode(RDFS + 'subClassOf'), DataFactory.namedNode(TA + 'Assignment'));
+
+      const mainBase = TA;
+      const refs: ExternalOntologyReference[] = [{ url: 'http://example.org/project-mgmt', usePrefix: true }];
+
+      const result = getReferencedExternalClassesFromStore(store, mainBase, refs);
+
+      expect(result.length).toBe(1);
+      expect(result[0].uri).toBe(PM + 'Person');
+    });
+  });
+
+  describe('getStubExternalClassForUri', () => {
+    it('returns stub with label from local name when ref matches', () => {
+      const refs: ExternalOntologyReference[] = [{ url: 'http://example.org/project-mgmt', usePrefix: true }];
+      const stub = getStubExternalClassForUri(PM + 'Project', refs);
+      expect(stub).not.toBeNull();
+      expect(stub!.uri).toBe(PM + 'Project');
+      expect(stub!.localName).toBe('Project');
+      expect(stub!.label).toBe('Project');
+      expect(stub!.ontologyUrl).toBe('http://example.org/project-mgmt');
+    });
+    it('returns null when no ref matches namespace', () => {
+      const refs: ExternalOntologyReference[] = [{ url: 'http://other.org/ns', usePrefix: true }];
+      expect(getStubExternalClassForUri(PM + 'Project', refs)).toBeNull();
     });
   });
 

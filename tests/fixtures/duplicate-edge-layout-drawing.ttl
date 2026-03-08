@@ -1,0 +1,25 @@
+@prefix : <http://example.org/aec-drawing-ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+: a owl:Ontology .
+
+:Layout rdf:type owl:Class ;
+    rdfs:label "Layout" .
+
+:DrawingElement rdf:type owl:Class ;
+    rdfs:label "Drawing elements" .
+
+:contains a owl:ObjectProperty ;
+    rdfs:label "contains" ;
+    rdfs:domain :Layout ;
+    rdfs:range :DrawingElement .
+
+# Same relationship from two sources: (1) domain/range above, (2) restriction below.
+# Parser and UI must yield at most one edge Layout -> DrawingElement : contains.
+:Layout rdfs:subClassOf [
+    rdf:type owl:Restriction ;
+    owl:onProperty :contains ;
+    owl:someValuesFrom :DrawingElement
+] .

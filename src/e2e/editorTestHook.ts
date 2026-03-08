@@ -7,6 +7,7 @@ import type { Network } from 'vis-network/esnext';
 import type { Store } from 'n3';
 import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
+import { parseEdgeId } from '../utils/edgeId';
 
 /** Use getters for state that is set after app init (e.g. when a file is loaded) so the hook always sees current values. */
 export interface EditorTestDeps {
@@ -24,6 +25,7 @@ export interface EditorTestDeps {
   openEditModalForNode: (nodeId: string) => void;
   openEditModalForEdge: (edgeId: string) => void;
   showEditEdgeModal: (from: string, to: string, type: string) => void;
+  showAddEdgeModal: (from: string, to: string, callback: (data: { from: string; to: string; id?: string } | null) => void) => void;
   showAddNodeModal: (x: number, y: number) => void;
   showEditDataPropertyModal: (name: string) => void;
   getDataProperties: () => DataPropertyInfo[];
@@ -56,6 +58,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     openEditModalForNode,
     openEditModalForEdge,
     showEditEdgeModal,
+    showAddEdgeModal,
     showAddNodeModal,
     showEditDataPropertyModal,
     getDataProperties,
@@ -80,6 +83,12 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         return true;
       }
       return false;
+    },
+    selectNodeById: (nodeId: string): boolean => {
+      const network = getNetwork();
+      if (!network) return false;
+      network.setSelection({ nodes: [nodeId] });
+      return network.getSelectedNodes().includes(nodeId);
     },
     selectEdgeById: (edgeId: string): boolean => {
       const network = getNetwork();
@@ -157,14 +166,9 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     },
     getEdgeData: (edgeId: string): { from: string; to: string; type: string; isRestriction?: boolean; minCardinality?: number | null; maxCardinality?: number | null } | null => {
       const rawData = getRawData();
-      const arrowIndex = edgeId.indexOf('->');
-      if (arrowIndex === -1) return null;
-      const from = edgeId.substring(0, arrowIndex);
-      const afterArrow = edgeId.substring(arrowIndex + 2);
-      const colonIndex = afterArrow.indexOf(':');
-      if (colonIndex === -1) return null;
-      const to = afterArrow.substring(0, colonIndex);
-      const type = afterArrow.substring(colonIndex + 1);
+      const parsed = parseEdgeId(edgeId);
+      if (!parsed) return null;
+      const { from, to, type } = parsed;
       debugLog(`[GET EDGE DATA] Looking for edge: ${from} -> ${to} : ${type}`);
       debugLog(`[GET EDGE DATA] rawData.edges count: ${rawData.edges.length}`);
       debugLog('[GET EDGE DATA] rawData.edges:', rawData.edges.map((e) => `${e.from}->${e.to}:${e.type}`));
@@ -199,15 +203,9 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       addTestLog(`[TEST] ${message}`);
     },
     editEdge: (edgeId: string): boolean => {
-      const arrowIndex = edgeId.indexOf('->');
-      if (arrowIndex === -1) return false;
-      const from = edgeId.substring(0, arrowIndex);
-      const afterArrow = edgeId.substring(arrowIndex + 2);
-      const colonIndex = afterArrow.indexOf(':');
-      if (colonIndex === -1) return false;
-      const to = afterArrow.substring(0, colonIndex);
-      const type = afterArrow.substring(colonIndex + 1);
-      showEditEdgeModal(from, to, type);
+      const parsed = parseEdgeId(edgeId);
+      if (!parsed) return false;
+      showEditEdgeModal(parsed.from, parsed.to, parsed.type);
       return true;
     },
     getEditEdgeModalValues: (): { minCardinality: string; maxCardinality: string; isRestrictionChecked: boolean } | null => {
@@ -241,6 +239,17 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       if (!modal || (modal as HTMLElement).style.display === 'none') return null;
       const h3 = modal.querySelector('h3');
       return h3?.textContent?.trim() ?? null;
+    },
+    getEditEdgeModalFromToAndRelationship: (): { fromLabel: string; toLabel: string; relationshipValue: string } | null => {
+      const modal = document.getElementById('editEdgeModal');
+      if (!modal || (modal as HTMLElement).style.display === 'none') return null;
+      const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement | null;
+      const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement | null;
+      const typeInput = document.getElementById('editEdgeType') as HTMLInputElement | null;
+      if (!fromSel || !toSel || !typeInput) return null;
+      const fromLabel = fromSel.options[fromSel.selectedIndex]?.text ?? '';
+      const toLabel = toSel.options[toSel.selectedIndex]?.text ?? '';
+      return { fromLabel, toLabel, relationshipValue: typeInput.value ?? '' };
     },
     openEditDataPropertyModal: (name: string): void => {
       showEditDataPropertyModal(name);
@@ -298,6 +307,23 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         return null;
       }
     },
+    getRenderedNodeOptions: (nodeId: string): { opacity?: number; title?: string } | null => {
+      const network = getNetwork();
+      if (!network) return null;
+      try {
+        const networkAny = network as {
+          body?: { data?: { nodes?: Map<string, { opacity?: number; title?: string }> } };
+        };
+        const nodes = networkAny.body?.data?.nodes;
+        if (!nodes) return null;
+        const node = nodes.get(nodeId);
+        if (!node) return null;
+        return { opacity: node.opacity, title: node.title };
+      } catch (e) {
+        console.error('[getRenderedNodeOptions] Error accessing network data:', e);
+        return null;
+      }
+    },
     getRenderedEdgeLabel: (edgeId: string): string | null => {
       const network = getNetwork();
       if (!network) return null;
@@ -309,6 +335,42 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         return edge?.label ?? null;
       } catch (e) {
         console.error('[getRenderedEdgeLabel] Error accessing network data:', e);
+        return null;
+      }
+    },
+    showAddEdgeModalForTest: (from: string, to: string): void => {
+      showAddEdgeModal(from, to, () => {});
+    },
+    getVisibleEdgeCount: (): number =>
+      parseInt(document.getElementById('edgeCount')?.textContent ?? '0', 10) || 0,
+    setEdgeTypeColor: (type: string, color: string): void => {
+      const edgeStylesContent = document.getElementById('edgeStylesContent');
+      if (!edgeStylesContent) return;
+      const escapedType = CSS.escape(type);
+      const colorEl = edgeStylesContent.querySelector(
+        `.edge-color-picker[data-type="${escapedType}"]`
+      ) as HTMLInputElement | null;
+      if (colorEl) {
+        colorEl.value = color;
+        colorEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      applyFilter(true);
+    },
+    getRenderedEdgeOptions: (edgeId: string): { color?: string } | null => {
+      const network = getNetwork();
+      if (!network) return null;
+      try {
+        const networkAny = network as {
+          body?: { data?: { edges?: Map<string, { color?: { color?: string } }> } };
+        };
+        const edges = networkAny.body?.data?.edges;
+        if (!edges) return null;
+        const edge = edges.get(edgeId);
+        if (!edge?.color) return null;
+        const c = edge.color as { color?: string };
+        return { color: c.color ?? undefined };
+      } catch (e) {
+        console.error('[getRenderedEdgeOptions] Error accessing network data:', e);
         return null;
       }
     },

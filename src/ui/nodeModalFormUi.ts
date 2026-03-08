@@ -245,12 +245,14 @@ export interface SyncAddNodeModalParams {
   existingIds: Set<string>;
   label: string;
   externalLabel: string | null;
+  /** When on external tab, the selected class URI; used to detect duplicate when that node already exists in the graph. */
+  externalClassUri?: string | null;
   isCustomTab: boolean;
 }
 
 /** Update add-node modal identifier, duplicate errors, and OK button state. */
 export function syncAddNodeModal(params: SyncAddNodeModalParams): void {
-  const { store, existingIds, label, externalLabel, isCustomTab } = params;
+  const { store, existingIds, label, externalLabel, externalClassUri, isCustomTab } = params;
   const okBtn = document.getElementById('addNodeConfirm') as HTMLButtonElement;
   const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
   const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
@@ -275,6 +277,14 @@ export function syncAddNodeModal(params: SyncAddNodeModalParams): void {
     if (okBtn) okBtn.disabled = false;
   } else {
     if (!externalLabel) {
+      if (okBtn) okBtn.disabled = true;
+      return;
+    }
+    if (externalClassUri && existingIds.has(externalClassUri)) {
+      if (extDupErr) {
+        extDupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
+        extDupErr.style.display = 'block';
+      }
       if (okBtn) okBtn.disabled = true;
       return;
     }

@@ -421,6 +421,47 @@ describe('Edit Edge Modal E2E Tests', () => {
     });
   });
 
+  describe('Edit edge modal keyboard', () => {
+    it('closes Edit edge modal without saving when Escape is pressed', async () => {
+      const testFile = join(TEST_FIXTURES_DIR, 'simple-restriction.ttl');
+      expect(existsSync(testFile)).toBe(true);
+
+      await loadTestFile(page, testFile);
+      await waitForGraphRender(page);
+
+      const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
+      expect(edgeId).not.toBeNull();
+
+      const opened = await openEditEdgeModal(page, edgeId!);
+      expect(opened).toBe(true);
+
+      let modalValues = await getEditEdgeModalValues(page);
+      expect(modalValues).not.toBeNull();
+      expect(modalValues?.minCardinality).toBe('2');
+
+      // Change a value but do not confirm
+      await setEditEdgeModalValues(page, { minCardinality: '9' });
+      await page.waitForTimeout(80);
+
+      // Press Escape to close without saving
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(150);
+
+      // Modal should be closed
+      modalValues = await getEditEdgeModalValues(page);
+      expect(modalValues).toBeNull();
+
+      // Re-open same edge: original values should be unchanged (no save)
+      const reopened = await openEditEdgeModal(page, edgeId!);
+      expect(reopened).toBe(true);
+      modalValues = await getEditEdgeModalValues(page);
+      expect(modalValues).not.toBeNull();
+      expect(modalValues?.minCardinality).toBe('2');
+
+      await closeEditEdgeModal(page);
+    });
+  });
+
   describe('Add Node duplicate identifier', () => {
     it('disables OK and shows error when label would derive to an existing identifier', async () => {
       const testFile = join(TEST_FIXTURES_DIR, 'duplicate-add-node.ttl');
