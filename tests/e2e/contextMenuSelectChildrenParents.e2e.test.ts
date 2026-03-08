@@ -109,7 +109,7 @@ describe('Context menu Select all children / parents E2E', () => {
     });
     expect(menuVisible).toBe(true);
 
-    await page.getByText('Select all children').click();
+    await page.getByText('Select all children ↓').click();
     await page.waitForTimeout(150);
 
     const selectedIds = await page.evaluate(() => {
@@ -148,7 +148,7 @@ describe('Context menu Select all children / parents E2E', () => {
     });
     await page.waitForTimeout(150);
 
-    await page.getByText('Select all parents').click();
+    await page.getByText('Select all parents ↑').click();
     await page.waitForTimeout(150);
 
     const selectedIds = await page.evaluate(() => {

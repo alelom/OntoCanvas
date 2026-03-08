@@ -239,22 +239,8 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       const classIds = new Set(currentRawData.nodes.map((n) => n.id));
       const childIds = getTransitiveChildIds(nodeId, currentRawData.edges, classIds);
       const parentIds = getTransitiveParentIds(nodeId, currentRawData.edges, classIds);
-      selectChildrenBtn = createMenuItem(
-        'Select all children',
-        () => {
-          if (currentNetwork) {
-            currentNetwork.setSelection(
-              { nodes: childIds },
-              { unselectAll: true, highlightEdges: true }
-            );
-            onSelectionChangedCallback?.();
-          }
-          hideContextMenu();
-        },
-        childIds.length <= 1
-      );
       selectParentsBtn = createMenuItem(
-        'Select all parents',
+        'Select all parents ↑',
         () => {
           if (currentNetwork) {
             currentNetwork.setSelection(
@@ -267,13 +253,28 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
         },
         parentIds.length <= 1
       );
+      selectChildrenBtn = createMenuItem(
+        'Select all children ↓',
+        () => {
+          if (currentNetwork) {
+            currentNetwork.setSelection(
+              { nodes: childIds },
+              { unselectAll: true, highlightEdges: true }
+            );
+            onSelectionChangedCallback?.();
+          }
+          hideContextMenu();
+        },
+        childIds.length <= 1
+      );
     }
 
-    // Separator before "Edit properties"
-    const separator = createSeparator();
+    // Separator above selection commands, separator before "Edit properties"
+    const separatorBeforeSelection = createSeparator();
+    const separatorBeforeEdit = createSeparator();
     
     // Edit properties option (always last)
-    const editBtn = createMenuItem('Edit properties', () => {
+    const editBtn = createMenuItem('Edit properties...', () => {
       if (onEditNodeCallback) {
         onEditNodeCallback(nodeId);
       }
@@ -282,9 +283,10 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
 
     contextMenuElement.appendChild(copyBtn);
     contextMenuElement.appendChild(pasteBtn);
-    if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+    contextMenuElement.appendChild(separatorBeforeSelection);
     if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
-    contextMenuElement.appendChild(separator);
+    if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+    contextMenuElement.appendChild(separatorBeforeEdit);
     contextMenuElement.appendChild(editBtn);
   } else if (edgeId) {
     // Edge context menu

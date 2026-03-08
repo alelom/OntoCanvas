@@ -211,7 +211,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 70,
     relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
     dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 12,
-    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical01',
+    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical03',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent) : undefined,
@@ -310,7 +310,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
   // Handle backward compatibility: 'weighted' maps to 'hierarchical01'
-  const layoutMode = config.layoutMode ?? 'hierarchical01';
+  const layoutMode = config.layoutMode ?? 'hierarchical03';
   const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
   (document.getElementById('layoutMode') as HTMLSelectElement).value = normalizedLayoutMode;
   const searchQueryEl = document.getElementById('searchQuery') as HTMLInputElement;
@@ -3452,7 +3452,7 @@ function showRenameModal(
   const modal = document.getElementById('renameModal')!;
   const input = document.getElementById('renameInput') as HTMLInputElement;
   const titleEl = modal.querySelector('h3');
-  if (titleEl) titleEl.textContent = 'Edit node';
+  if (titleEl) titleEl.textContent = 'Edit class properties';
   modal.dataset.mode = 'single';
   delete modal.dataset.nodeIds;
   input.value = currentLabel;
@@ -5038,9 +5038,9 @@ function renderApp(): void {
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <strong>Display options:</strong>
         <select id="layoutMode">
-          <option value="hierarchical01">Hierarchical 01</option>
+          <option value="hierarchical03">Hierarchical 01</option>
           <option value="hierarchical02">Hierarchical 02</option>
-          <option value="hierarchical03">Hierarchical 03</option>
+          <option value="hierarchical01">Hierarchical 03</option>
           <option value="force">Force-directed</option>
         </select>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
@@ -5134,7 +5134,7 @@ function renderApp(): void {
     </div>
     <div id="renameModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <h3>Edit node</h3>
+        <h3>Edit class properties</h3>
         <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
           <span style="font-size: 12px;">Label:</span>
           <input type="text" id="renameInput" style="flex: 1;" />
@@ -5637,7 +5637,7 @@ async function loadTtlAndRender(
     
     // Set lastLayoutMode BEFORE applying config to prevent clearing positions
     // Get layout mode from config or default
-    const configLayoutMode = displayConfig?.layoutMode || 'hierarchical01';
+    const configLayoutMode = displayConfig?.layoutMode || 'hierarchical03';
     const normalizedConfigLayoutMode = configLayoutMode === 'weighted' ? 'hierarchical01' : configLayoutMode;
     lastLayoutMode = normalizedConfigLayoutMode;
     
@@ -6530,7 +6530,7 @@ function setupEventListeners(): void {
     }
   });
   document.getElementById('resetView')?.addEventListener('click', () => {
-    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical01';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical03';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
@@ -6735,7 +6735,7 @@ function setupEventListeners(): void {
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = '12';
-    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical01';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical03';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
     
@@ -6754,7 +6754,7 @@ function setupEventListeners(): void {
     await deleteDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName).catch(() => {});
     
     // Reset lastLayoutMode to prevent position clearing on first applyFilter
-    lastLayoutMode = 'hierarchical01';
+    lastLayoutMode = 'hierarchical03';
     
     // Regenerate layout by applying filter
     applyFilter();

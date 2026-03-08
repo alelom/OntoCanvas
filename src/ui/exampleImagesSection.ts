@@ -1,5 +1,5 @@
 /**
- * Edit node modal subsection: Example images list and Add button.
+ * Edit class modal subsection: Example images list and Add button.
  * Stateless UI: receives callbacks for add, delete, open, uris change. No store/files imports.
  */
 
