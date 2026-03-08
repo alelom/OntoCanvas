@@ -48,4 +48,22 @@ describe('loadOntologyFromContent', () => {
     const result = await loadOntologyFromContent(minimalRdfXml, 'file.owl');
     expect(result.prefixMap).toEqual({});
   });
+
+  it('parses RDF/XML when path has no extension (URL ending in /)', async () => {
+    const result = await loadOntologyFromContent(
+      minimalRdfXml,
+      'https://rub-informatik-im-bauwesen.github.io/dano/'
+    );
+    expect(result.parseResult.graphData.nodes.length).toBe(1);
+    expect(result.parseResult.graphData.nodes[0].label).toBe('OWL Class');
+  });
+
+  it('parses Turtle when path has no extension and content is Turtle', async () => {
+    const result = await loadOntologyFromContent(
+      minimalTurtle,
+      'https://example.org/ontology'
+    );
+    expect(result.parseResult.graphData.nodes.length).toBe(1);
+    expect(result.parseResult.graphData.nodes[0].id).toBe('TestClass');
+  });
 });
