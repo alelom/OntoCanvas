@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/alelom/OntoCanvas/compare/v1.4.1...v1.4.2) (2026-03-08)
+
+
+### Bug Fixes
+
+* manage external references regression fix + improving their fetch ([c558881](https://github.com/alelom/OntoCanvas/commit/c55888121658ac0224bfca13dbbb679aec901f30))
+
 ## [1.4.1](https://github.com/alelom/OntoCanvas/compare/v1.4.0...v1.4.1) (2026-03-08)
 
 
