@@ -1,3 +1,16 @@
+# [1.5.0](https://github.com/alelom/OntoCanvas/compare/v1.4.2...v1.5.0) (2026-03-08)
+
+
+### Bug Fixes
+
+* ensure addNodeModalShowing resets correctly when closing the add node modal ([b69ee93](https://github.com/alelom/OntoCanvas/commit/b69ee939140013eb93781f0e6e0569a4b583e118))
+
+
+### Features
+
+* enhance ontology URL loading by adding fallback for directory-style URLs and improving error handling ([3d5a868](https://github.com/alelom/OntoCanvas/commit/3d5a86840e7cf3d05bf70cdbd23060259443fe13))
+* minor UX/UI improvements for tooltips and example images ([096f0af](https://github.com/alelom/OntoCanvas/commit/096f0af2c34bac96b43ac6a534988d7eacb13842))
+
 ## [1.4.2](https://github.com/alelom/OntoCanvas/compare/v1.4.1...v1.4.2) (2026-03-08)
 
 
