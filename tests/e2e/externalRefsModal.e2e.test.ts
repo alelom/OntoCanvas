@@ -1,8 +1,9 @@
 /**
  * E2E test: "Manage External Ontology References" modal shows refs from owl:imports or from used namespaces/prefixes.
  * Regression: DANO and similar ontologies use dc, geo, schema etc. without owl:imports; modal should still list them.
+ * Each test runs in a fresh page to avoid state/route leakage and timeouts.
  */
-import { describe, it, beforeAll, afterAll } from 'vitest';
+import { describe, it, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
@@ -43,13 +44,22 @@ describe('External refs modal E2E', () => {
 
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true });
-    page = await browser.newPage();
-    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
-    await page.locator('#openOntologyBtn').waitFor({ state: 'visible', timeout: 5000 });
   });
 
   afterAll(async () => {
     if (browser) await browser.close();
+  });
+
+  beforeEach(async () => {
+    page = await browser.newPage();
+    page.setDefaultTimeout(5000);
+    page.setDefaultNavigationTimeout(5000);
+    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
+    await page.locator('#openOntologyBtn').waitFor({ state: 'visible', timeout: 5000 });
+  });
+
+  afterEach(async () => {
+    if (page) await page.close();
   });
 
   it('shows external references in modal when ontology has owl:imports', async () => {
@@ -85,8 +95,6 @@ describe('External refs modal E2E', () => {
     const listText = await listEl.textContent();
     expect(listText).not.toContain('No external ontology references added yet.');
     expect(listText).toMatch(/w3id\.org\/dano/);
-
-    await page.unroute(routePattern);
   }, 10000);
 
   it('shows external references when ontology has no owl:imports but uses dc/geo (DANO-like)', async () => {
@@ -101,8 +109,6 @@ describe('External refs modal E2E', () => {
       await route.fulfill({ status: 200, contentType: 'text/turtle', body: '@prefix owl: <http://www.w3.org/2002/07/owl#> . <> a owl:Ontology .' });
     });
 
-    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
-    await page.locator('#openOntologyBtn').waitFor({ state: 'visible', timeout: 5000 });
     await page.locator('#openOntologyBtn').click();
     await page.getByRole('button', { name: /open ontology from url/i }).click();
     const urlInput = page.getByPlaceholder(/example\.com\/ontology\.ttl/);
@@ -126,8 +132,5 @@ describe('External refs modal E2E', () => {
     const listText = await listEl.textContent();
     expect(listText).not.toContain('No external ontology references added yet.');
     expect(listText?.match(/purl\.org\/dc|opengis\.net\/ont\/geosparql/)).toBeTruthy();
-
-    await page.unroute(routePattern);
-    await page.unroute(/purl\.org|opengis\.net/);
   }, 10000);
 });
