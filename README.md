@@ -11,7 +11,15 @@
   ![E2E Test Coverage](https://codecov.io/gh/alelom/OntoCanvas/branch/main/graph/badge.svg?flag=e2e&token=)
 </div>
 
-Interactive ontology editor and visualizer with multi-format RDF support (open from file or URL; save as Turtle).
+Interactive ontology editor and visualizer with multi-format RDF support.
+
+## What is OntoCanvas?
+
+OntoCanvas is a visual tool for thinking clearly about complex domains and designing or visualising Ontologies in a intuitive visual way. 
+
+In this context, an ontology is a structured map of meaning, shaped like a graph: it defines the important kinds of things in a domain -- like “Person” and "Name" and "Address" -- and the relationships between them, so people and software share the same understanding. Ontologies are useful as mind maps or for complex tasks involving graph databases or Neural Networks.
+
+OntoCanvas helps you design and explore these maps in an intuitive, visual way, so you can discuss and refine how your world is organised without needing to touch code or learn formal ontology logic. 
 
 
 ## Supported formats
