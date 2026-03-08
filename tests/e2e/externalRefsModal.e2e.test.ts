@@ -55,6 +55,11 @@ describe('External refs modal E2E', () => {
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.evaluate(() => {
+      const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
+      if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
+    });
     await page.locator('#openOntologyBtn').waitFor({ state: 'visible', timeout: 5000 });
   });
 
