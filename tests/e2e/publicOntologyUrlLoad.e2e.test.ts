@@ -12,6 +12,8 @@ const PUBLIC_ONTOLOGY_URLS = [
   'https://rub-informatik-im-bauwesen.github.io/dano/',
   'https://pi.pauwel.be/voc/buildingelement/ontology.ttl',
   'https://raw.githubusercontent.com/OBOFoundry/COB/master/cob.owl',
+  // Directory-style URL: resolver tries .../ontology.ttl when base URL returns 404/HTML
+  'https://digitalconstruction.github.io/Processes/latest/',
 ] as const;
 
 describe('Public ontology URL load E2E', () => {
