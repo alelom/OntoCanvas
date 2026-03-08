@@ -1,3 +1,12 @@
+# [1.3.0](https://github.com/alelom/OntoCanvas/compare/v1.2.0...v1.3.0) (2026-03-08)
+
+
+### Features
+
+* new support for rdf-parser with added support for major formats ([63bb528](https://github.com/alelom/OntoCanvas/commit/63bb5287392ffc1189e269f31ec5bef1ae0a4a17))
+* right-click context menu select all children/parents (actually a fix to the feat incorrectly committed in 63bb5287392ffc1189e269f31ec5bef1ae0a4a17: the selection commands were "inverted") ([c44c1ba](https://github.com/alelom/OntoCanvas/commit/c44c1bac65abcc458415d23091df0f7c0bf3fcef))
+* work around CORS issue ([c051776](https://github.com/alelom/OntoCanvas/commit/c05177634b5a6f8e62680b825a41f8128ded27a8))
+
 # [1.2.0](https://github.com/alelom/OntoCanvas/compare/v1.1.1...v1.2.0) (2026-03-07)
 
 
