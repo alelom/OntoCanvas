@@ -67,6 +67,8 @@ import {
   searchExternalClasses,
   searchExternalObjectProperties,
   preloadExternalOntologyClasses,
+  getReferencedExternalClassesFromStore,
+  getStubExternalClassForUri,
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
@@ -87,7 +89,12 @@ import {
   DISPLAY_CONFIG_VERSION,
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
-import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
+import {
+  getQuadsRemovedForExternalClass,
+  removeExternalClassReferencesFromStore,
+  restoreQuadsToStore,
+} from './graph/removeExternalReferences';
+import { parseEdgeId } from './utils/edgeId';
 import {
   wrapText,
   getEdgeTypes,
@@ -434,6 +441,12 @@ function scheduleDisplayConfigSave(): void {
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 let rawData: GraphData = { nodes: [], edges: [] };
+/** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
+let currentGraphDataForBuild: GraphData | null = null;
+/** External class URIs we have seen in this session (from store or added by user). Not removed when user deletes an external node, so "Add from referenced ontology" still finds them. Cleared on load. */
+let knownExternalClassUris: Set<string> = new Set();
+/** External nodes the user added via "Add from referenced ontology" (not from domain/range). Kept so they get correct external styling (opacity, tooltip). Cleared on load; removed when user deletes that node. */
+let userAddedExternalNodes: GraphNode[] = [];
 let annotationProperties: AnnotationPropertyInfo[] = [];
 let objectProperties: ObjectPropertyInfo[] = [];
 let dataProperties: DataPropertyInfo[] = [];
@@ -560,36 +573,24 @@ function performDeleteSelection(): boolean {
   const edgesToRemove: { from: string; to: string; type: string }[] = [];
   const dataPropertyRestrictionsToRemove: { classId: string; propertyName: string }[] = [];
   for (const edgeId of selectedEdgeIds) {
-    // Edge ID format: "from->to:type"
-    // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
-    // So we need to split on "->" first, then split the second part on ":" from the left (only the first ":")
-    const arrowIndex = edgeId.indexOf('->');
-    if (arrowIndex !== -1) {
-      const from = edgeId.substring(0, arrowIndex);
-      const afterArrow = edgeId.substring(arrowIndex + 2);
-      const colonIndex = afterArrow.indexOf(':');
-      if (colonIndex !== -1) {
-        const to = afterArrow.substring(0, colonIndex);
-        const type = afterArrow.substring(colonIndex + 1);
-        // Check if this is a data property edge
-        if (type === 'dataprop' || type === 'dataproprestrict') {
-        // Handle both restriction nodes and generic property nodes
-        let dpMatch = from.match(/^__dataproprestrict__(.+)__(.+)$/);
-        if (!dpMatch) {
-          dpMatch = from.match(/^__dataprop__(.+)__(.+)$/);
-        }
-        if (dpMatch) {
-          const [, classId, propertyName] = dpMatch;
-          // Only remove if it's actually a restriction (has restriction data)
-          const classNode = rawData.nodes.find((n) => n.id === classId);
-          if (classNode?.dataPropertyRestrictions?.some((r) => r.propertyName === propertyName)) {
+    const parsed = parseEdgeId(edgeId);
+    if (!parsed) continue;
+    const { from, to, type } = parsed;
+    // Check if this is a data property edge
+    if (type === 'dataprop' || type === 'dataproprestrict') {
+      let dpMatch = from.match(/^__dataproprestrict__(.+)__(.+)$/);
+      if (!dpMatch) {
+        dpMatch = from.match(/^__dataprop__(.+)__(.+)$/);
+      }
+      if (dpMatch) {
+        const [, classId, propertyName] = dpMatch;
+        const classNode = rawData.nodes.find((n) => n.id === classId);
+        if (classNode?.dataPropertyRestrictions?.some((r) => r.propertyName === propertyName)) {
           dataPropertyRestrictionsToRemove.push({ classId, propertyName });
-          }
-        }
-        } else {
-          edgesToRemove.push({ from, to, type });
         }
       }
+    } else {
+      edgesToRemove.push({ from, to, type });
     }
   }
 
@@ -773,17 +774,47 @@ function performDeleteSelection(): boolean {
     });
   }
 
+  const externalUndoActions: (() => void)[] = [];
+  const externalRedoActions: (() => void)[] = [];
+
+  const userAddedBeingRemoved = userAddedExternalNodes.filter((n) => externalNodeIdsToRemove.includes(n.id));
+  userAddedExternalNodes = userAddedExternalNodes.filter((n) => !externalNodeIdsToRemove.includes(n.id));
+
   for (const externalId of externalNodeIdsToRemove) {
+    const quadsToRestoreOnUndo = getQuadsRemovedForExternalClass(ttlStore, externalId);
+    const edgesForThisExternal = edgesConnectedToExternal.filter(
+      (e) => e.from === externalId || e.to === externalId
+    );
+    const edgesSnapshot = edgesForThisExternal.map((e) => ({ from: e.from, to: e.to, type: e.type }));
+    const userAddedNode = userAddedBeingRemoved.find((n) => n.id === externalId);
+
     removeExternalClassReferencesFromStore(ttlStore, externalId);
-    for (const e of edgesConnectedToExternal) {
-      if (e.from !== externalId && e.to !== externalId) continue;
+    for (const e of edgesForThisExternal) {
       const idx = rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
     }
+
+    externalUndoActions.push(() => {
+      restoreQuadsToStore(ttlStore!, quadsToRestoreOnUndo);
+      edgesSnapshot.forEach((e) => rawData.edges.push(e));
+      if (userAddedNode) userAddedExternalNodes.push(userAddedNode);
+    });
+    externalRedoActions.push(() => {
+      removeExternalClassReferencesFromStore(ttlStore!, externalId);
+      edgesSnapshot.forEach((e) => {
+        const idx = rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
+        if (idx >= 0) rawData.edges.splice(idx, 1);
+      });
+      if (userAddedNode) userAddedExternalNodes = userAddedExternalNodes.filter((nn) => nn.id !== externalId);
+    });
   }
 
   const hasActions =
-    nodeUndoActions.length + edgeUndoActions.length + dataPropUndoActions.length + externalNodeIdsToRemove.length > 0;
+    nodeUndoActions.length +
+    edgeUndoActions.length +
+    dataPropUndoActions.length +
+    externalUndoActions.length >
+    0;
   if (!hasActions) return false;
 
   // Clear search so children of deleted nodes remain visible (they were shown as neighbors)
@@ -798,11 +829,13 @@ function performDeleteSelection(): boolean {
       nodeUndoActions.forEach((a) => a());
       edgeUndoActions.forEach((a) => a());
       dataPropUndoActions.forEach((a) => a());
+      externalUndoActions.forEach((a) => a());
     },
     () => {
       edgeRedoActions.forEach((a) => a());
       nodeRedoActions.forEach((a) => a());
       dataPropRedoActions.forEach((a) => a());
+      externalRedoActions.forEach((a) => a());
     }
   );
   hasUnsavedChanges = true;
@@ -2710,7 +2743,15 @@ function buildNetworkData(
       color: { background: backgroundColor, border: borderColor },
       font: { size: fontSize, color: fontColor },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
-      ...(n.comment && { title: n.comment }),
+      ...((): { title?: string } => {
+        const title =
+          n.comment ??
+          ((n as GraphNode & { isExternal?: boolean; externalOntologyUrl?: string }).isExternal &&
+          (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl
+            ? `(Imported from ${(n as GraphNode & { externalOntologyUrl: string }).externalOntologyUrl})`
+            : undefined);
+        return title ? { title } : {};
+      })(),
     };
     
     // Apply opacity property if less than 1.0
@@ -3633,11 +3674,13 @@ function refreshAddNodeOkButton(): void {
   const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
   const customTabContent = document.getElementById('addNodeCustomTab');
   const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
+  const allNodeIds = (currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id);
   nodeModalFormUi.syncAddNodeModal({
     store: ttlStore,
-    existingIds: new Set(rawData.nodes.map((n) => n.id)),
+    existingIds: new Set(allNodeIds),
     label: customInput?.value?.trim() ?? '',
     externalLabel: selectedExternalClass?.label ?? null,
+    externalClassUri: selectedExternalClass?.uri ?? null,
     isCustomTab: !!isCustomTab,
   });
 }
@@ -3778,9 +3821,36 @@ async function handleExternalClassSearch(query: string): Promise<void> {
   }
   
   try {
-    const results = await searchExternalClasses(query, externalOntologyReferences);
+    const queryLower = query.toLowerCase().trim();
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const referencedFromStore = ttlStore && mainBase
+      ? getReferencedExternalClassesFromStore(ttlStore, mainBase, externalOntologyReferences)
+      : [];
+    referencedFromStore.forEach((c) => knownExternalClassUris.add(c.uri));
+    const stubs: ExternalClassInfo[] = [];
+    for (const uri of knownExternalClassUris) {
+      if (referencedFromStore.some((c) => c.uri === uri)) continue;
+      const stub = getStubExternalClassForUri(uri, externalOntologyReferences);
+      if (stub) stubs.push(stub);
+    }
+    const combined = [...referencedFromStore, ...stubs];
+    const referencedMatches = combined.filter((cls) => {
+      const localNameLower = cls.localName.toLowerCase();
+      const labelLower = cls.label.toLowerCase();
+      return localNameLower.includes(queryLower) || labelLower.includes(queryLower);
+    });
+    const fetched = await searchExternalClasses(query, externalOntologyReferences);
+    const seenUris = new Set(referencedMatches.map((c) => c.uri));
+    const fromFetched = fetched.filter((c) => !seenUris.has(c.uri));
+    fromFetched.forEach((c) => seenUris.add(c.uri));
+    const results = [...referencedMatches, ...fromFetched];
     console.log('Search results:', results);
-  
+
+    const existingNodeIds = new Set((currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id));
+    const ALREADY_IN_GRAPH_MSG = 'The node related to this class is already existing in the editor canvas.';
+    const alreadyInGraphHtml = (msg: string) =>
+      `<div style="font-size: 11px; color: #b8860b; margin-top: 4px; font-weight: 500;">${msg}</div>`;
+
     if (results.length === 0) {
       if (resultsDiv) {
         resultsDiv.innerHTML = '<div style="padding: 8px; color: #666; font-size: 11px;">No classes found</div>';
@@ -3789,39 +3859,45 @@ async function handleExternalClassSearch(query: string): Promise<void> {
       if (descDiv) descDiv.style.display = 'none';
       selectedExternalClass = null;
     } else if (results.length === 1) {
-      // Single match - show description overlay
       const match = results[0];
       selectedExternalClass = match;
       if (descDiv) {
+        const alreadyInGraph = existingNodeIds.has(match.uri);
         descDiv.innerHTML = `
           <div style="font-weight: bold; margin-bottom: 4px;">${match.label}${match.prefix ? ` (${match.prefix}:${match.localName})` : ''}</div>
           ${match.comment ? `<div style="margin-top: 4px;">${match.comment}</div>` : ''}
           <div style="margin-top: 4px; font-size: 10px; color: #999;">From: ${match.ontologyUrl}</div>
+          ${alreadyInGraph ? alreadyInGraphHtml(ALREADY_IN_GRAPH_MSG) : ''}
         `;
         descDiv.style.display = 'block';
       }
       if (resultsDiv) resultsDiv.style.display = 'none';
     } else {
-    // Multiple matches - show list
     if (resultsDiv) {
-      resultsDiv.innerHTML = results.map((cls, idx) => `
-        <div class="external-class-result" data-index="${idx}" style="padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; ${idx === 0 ? 'background: #f0f7ff;' : ''}" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background='${idx === 0 ? '#f0f7ff' : 'transparent'}'">
+      resultsDiv.innerHTML = results.map((cls, idx) => {
+        const alreadyInGraph = existingNodeIds.has(cls.uri);
+        return `
+        <div class="external-class-result" data-index="${idx}" style="padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; ${idx === 0 ? 'background: #f0f7ff;' : ''}${alreadyInGraph ? ' opacity: 0.75;' : ''}" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background='${idx === 0 ? '#f0f7ff' : 'transparent'}'">
           <div style="font-weight: bold;">${cls.label}${cls.prefix ? ` (${cls.prefix}:${cls.localName})` : ''}</div>
           ${cls.comment ? `<div style="font-size: 10px; color: #666; margin-top: 2px;">${cls.comment.substring(0, 100)}${cls.comment.length > 100 ? '...' : ''}</div>` : ''}
           <div style="font-size: 9px; color: #999; margin-top: 2px;">From: ${cls.ontologyUrl}</div>
+          ${alreadyInGraph ? alreadyInGraphHtml(ALREADY_IN_GRAPH_MSG) : ''}
         </div>
-      `).join('');
+      `;
+      }).join('');
       resultsDiv.style.display = 'block';
-      
-      // Add click handlers
+
       resultsDiv.querySelectorAll('.external-class-result').forEach((el, idx) => {
         el.addEventListener('click', () => {
           selectedExternalClass = results[idx];
           if (descDiv) {
+            const r = results[idx];
+            const alreadyInGraph = existingNodeIds.has(r.uri);
             descDiv.innerHTML = `
-              <div style="font-weight: bold; margin-bottom: 4px;">${results[idx].label}${results[idx].prefix ? ` (${results[idx].prefix}:${results[idx].localName})` : ''}</div>
-              ${results[idx].comment ? `<div style="margin-top: 4px;">${results[idx].comment}</div>` : ''}
-              <div style="margin-top: 4px; font-size: 10px; color: #999;">From: ${results[idx].ontologyUrl}</div>
+              <div style="font-weight: bold; margin-bottom: 4px;">${r.label}${r.prefix ? ` (${r.prefix}:${r.localName})` : ''}</div>
+              ${r.comment ? `<div style="margin-top: 4px;">${r.comment}</div>` : ''}
+              <div style="margin-top: 4px; font-size: 10px; color: #999;">From: ${r.ontologyUrl}</div>
+              ${alreadyInGraph ? alreadyInGraphHtml(ALREADY_IN_GRAPH_MSG) : ''}
             `;
             descDiv.style.display = 'block';
           }
@@ -3831,7 +3907,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
       });
     }
     if (descDiv) descDiv.style.display = 'none';
-    selectedExternalClass = results[0]; // Auto-select first result
+    selectedExternalClass = results[0];
     }
     
     refreshAddNodeOkButton();
@@ -3919,25 +3995,37 @@ function confirmAddNode(): void {
     return;
   }
 
-  // Add from external ontology
+  // Add from external ontology: add as external node (correct opacity/tooltip), not a new local class
   if (!selectedExternalClass || !ttlStore) return;
+  knownExternalClassUris.add(selectedExternalClass.uri);
   const label = selectedExternalClass.label;
-  const comment = selectedExternalClass.comment
-    ? `${selectedExternalClass.comment}\n\n(Imported from ${selectedExternalClass.ontologyUrl})`
-    : `(Imported from ${selectedExternalClass.ontologyUrl})`;
+  const uri = selectedExternalClass.uri;
 
-  const result = addNewNodeAtPosition(x, y, label);
-  if (result === null) {
+  const existingIds = new Set((currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id));
+  if (existingIds.has(uri)) {
     if (extDupErr) {
       extDupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
       extDupErr.style.display = 'block';
     }
     return;
   }
-  if (comment) {
-    updateCommentInStore(ttlStore, result.id, comment);
-    const node = rawData.nodes.find((n) => n.id === result.id);
-    if (node) node.comment = comment;
+
+  const externalNode: GraphNode = {
+    id: uri,
+    label,
+    labellableRoot: null,
+    isExternal: true,
+    externalOntologyUrl: selectedExternalClass.ontologyUrl,
+    comment: selectedExternalClass.comment
+      ? `${selectedExternalClass.comment}\n\n(Imported from ${selectedExternalClass.ontologyUrl})`
+      : `(Imported from ${selectedExternalClass.ontologyUrl})`,
+    ...(x != null && y != null && { x, y }),
+  };
+  userAddedExternalNodes.push(externalNode);
+  if (loadedNodePositions) {
+    loadedNodePositions[uri] = { x: x ?? 0, y: y ?? 0 };
+  } else {
+    loadedNodePositions = { [uri]: { x: x ?? 0, y: y ?? 0 } };
   }
   applyFilter(true);
   hideAddNodeModalWithCleanup();
@@ -4156,17 +4244,11 @@ function openEditModalForNode(nodeId: string): void {
 
 /** Open the appropriate edit modal for an edge (object property or data property). Normalizes dataproprestrict -> dataprop. */
 function openEditModalForEdge(edgeId: string): void {
-  const edgeIdStr = String(edgeId);
-  const arrowIndex = edgeIdStr.indexOf('->');
-  if (arrowIndex === -1) return;
-  const from = edgeIdStr.substring(0, arrowIndex);
-  const afterArrow = edgeIdStr.substring(arrowIndex + 2);
-  const colonIndex = afterArrow.indexOf(':');
-  if (colonIndex === -1) return;
-  const to = afterArrow.substring(0, colonIndex);
-  const type = afterArrow.substring(colonIndex + 1);
+  const parsed = parseEdgeId(edgeId);
+  if (!parsed) return;
+  const { from, to, type } = parsed;
   const edgeType = type === 'dataproprestrict' || type === 'dataprop' ? 'dataprop' : type;
-  
+
   // For data property edges, extract the property name and open the data property modal
   // Edge direction: classId -> dataProp.id (arrow points to range type node)
   if (edgeType === 'dataprop') {
@@ -4182,7 +4264,7 @@ function openEditModalForEdge(edgeId: string): void {
       return;
     }
   }
-  
+
   showEditEdgeModal(from, to, edgeType);
 }
 
@@ -4357,8 +4439,9 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       modalContent.style.maxWidth = '';
     }
     
-    fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
-    toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
+    const nodesForDropdown = currentGraphDataForBuild?.nodes ?? rawData.nodes;
+    fromSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
+    toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
     if (typeInputEdit) {
       const label = getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences);
       const displayLabel = formatRelationshipLabelWithPrefix(edgeType, label, externalOntologyReferences);
@@ -4432,8 +4515,10 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;
   toSel.disabled = true;
-  fromSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
-  toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
+  // Use same node list as Edit Edge modal so user-added external nodes (full URI id) appear and pre-select correctly
+  const nodesForDropdown = currentGraphDataForBuild?.nodes ?? rawData.nodes;
+  fromSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
+  toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
   const typeInputAdd = document.getElementById('editEdgeType') as HTMLInputElement;
   if (typeInputAdd) {
     const defaultType = 'subClassOf';
@@ -4532,11 +4617,15 @@ function confirmEditEdge(): void {
       hideEditEdgeModalWithCleanup();
       return;
     }
-    
+
+    // Use canonical type (URI when available) so rawData key matches expandWithExternalRefs and we don't get duplicate edges
+    const op = objectProperties.find((p) => p.name === newType || p.uri === newType);
+    const canonicalType = op?.uri ?? newType;
+
     const newEdge: import('./types').GraphEdge = { 
       from, 
       to, 
-      type: newType,
+      type: canonicalType,
       isRestriction: isRestriction
     };
     if (card && isRestriction) {
@@ -4547,7 +4636,7 @@ function confirmEditEdge(): void {
     
     // If this is an external object property, add it to objectProperties array
     if (selectedExternalObjectProperty) {
-      const existing = objectProperties.find((op) => op.name === newType);
+      const existing = objectProperties.find((o) => o.name === newType);
       if (!existing) {
         objectProperties.push({
           name: newType, // Store the full URI as the name
@@ -4571,7 +4660,7 @@ function confirmEditEdge(): void {
         } catch (err) {
           console.warn(`Undo: Failed to remove edge from store: ${err instanceof Error ? err.message : String(err)}`);
         }
-        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === newType);
+        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === canonicalType);
         if (i >= 0) rawData.edges.splice(i, 1);
       },
       () => {
@@ -4581,7 +4670,7 @@ function confirmEditEdge(): void {
     );
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
-    callback({ from, to, id: `${from}->${to}:${newType}` });
+    callback({ from, to, id: `${from}->${to}:${canonicalType}` });
     pendingAddEdgeData = null;
     hideEditEdgeModalWithCleanup();
     // Clean up unused external properties and update edge styles menu
@@ -5518,7 +5607,7 @@ function renderApp(): void {
         <h3>Manage External Ontology References</h3>
         <div style="margin-bottom: 12px; padding: 10px; background: #f0f8ff; border-radius: 4px;">
           <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
-            <input type="checkbox" id="displayExternalRefs">
+            <input type="checkbox" id="displayExternalRefs" checked>
             Display external references in graph
           </label>
           <div style="margin-top: 8px; font-size: 12px;">
@@ -5584,6 +5673,8 @@ async function loadTtlAndRender(
     objectProperties = objectProps;
     dataProperties = dataProps;
     ttlStore = store;
+    knownExternalClassUris = new Set();
+    userAddedExternalNodes = [];
 
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
@@ -5670,7 +5761,13 @@ async function loadTtlAndRender(
     for (const ref of externalOntologyReferences) {
       console.log(`  - ${ref.url} (prefix: ${ref.prefix || 'none'}, usePrefix: ${ref.usePrefix})`);
     }
-    
+
+    const mainBaseForSeed = getMainOntologyBase(ttlStore);
+    if (mainBaseForSeed && externalOntologyReferences.length > 0) {
+      const refed = getReferencedExternalClassesFromStore(ttlStore, mainBaseForSeed, externalOntologyReferences);
+      refed.forEach((c) => knownExternalClassUris.add(c.uri));
+    }
+
     // Pre-fetch and cache external ontology classes and object properties (non-blocking)
     // Failures are expected (CORS, 404, etc.) and are handled silently unless in debug mode
     if (externalOntologyReferences.length > 0) {
@@ -5863,6 +5960,12 @@ function applyFilter(preserveView = false): void {
       nodePositions: loadedNodePositions ?? undefined,
     });
   }
+  for (const n of userAddedExternalNodes) {
+    if (!graphDataForBuild.nodes.some((nn) => nn.id === n.id)) {
+      graphDataForBuild.nodes.push({ ...n });
+    }
+  }
+  currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
   if (network && ttlStore) {
     updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, (url) => {
@@ -5908,24 +6011,13 @@ function applyFilter(preserveView = false): void {
         callback: (data: { from: string; to: string } | null) => void
       ) => {
         const edgeId = edgeData.id ?? '';
-        // Edge ID format: "from->to:type"
-        // But type can contain ":" (e.g., "https://w3id.org/dano#contains")
-        // So we need to split on "->" first, then split the second part on ":" from the left (only the first ":")
-        const arrowIndex = edgeId.indexOf('->');
-        if (arrowIndex === -1 || !ttlStore) {
+        const parsed = parseEdgeId(edgeId);
+        if (!parsed || !ttlStore) {
           callback(null);
           return;
         }
-        const from = edgeId.substring(0, arrowIndex);
-        const afterArrow = edgeId.substring(arrowIndex + 2);
-        const colonIndex = afterArrow.indexOf(':');
-        if (colonIndex === -1) {
-          callback(null);
-          return;
-        }
-        const to = afterArrow.substring(0, colonIndex);
-        const type = afterArrow.substring(colonIndex + 1);
-        
+        const { from, to, type } = parsed;
+
         // Debug: Log edge click
         debugLog('[DEBUG] Edge clicked for editing:', { edgeId, from, to, type });
         
@@ -5951,7 +6043,9 @@ function applyFilter(preserveView = false): void {
   
   // Update status bar with node/edge counts
   updateNodeEdgeCounts(data.nodes.length, data.edges.length);
-  
+  // Legend must use displayed edges (graphDataForBuild) so domain/range edges from expandWithExternalRefs appear
+  updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences, graphDataForBuild.edges);
+
   if (network) {
     network.setData(data);
     network.setOptions({
@@ -6653,6 +6747,16 @@ function setupEventListeners(): void {
       e.preventDefault();
     }
   });
+  // Document-level Escape so Edit Edge modal closes regardless of focus (e.g. type-ahead)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const modal = document.getElementById('editEdgeModal');
+    if (modal && modal.style.display !== 'none') {
+      hideEditEdgeModalWithCleanup();
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
   document.getElementById('resetView')?.addEventListener('click', () => {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical03';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
@@ -7392,6 +7496,7 @@ attachEditorTestHook({
   openEditModalForNode,
   openEditModalForEdge,
   showEditEdgeModal,
+  showAddEdgeModal,
   showAddNodeModal,
   showEditDataPropertyModal,
   getDataProperties: () => dataProperties,

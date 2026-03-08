@@ -1,4 +1,4 @@
-import { Store } from 'n3';
+import { Store, DataFactory } from 'n3';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { extractLocalName, extractLocalNameFromUri } from './parser';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
@@ -677,6 +677,106 @@ export async function fetchExternalOntologyObjectProperties(
   const objectProperties = await parseOntologyObjectProperties(ttlText, normalizedUrl, externalRefs);
   externalObjectPropertiesCache.set(normalizedUrl, objectProperties);
   return objectProperties;
+}
+
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+
+/**
+ * Returns external classes that are already referenced in the store (as object property domain/range).
+ * Used so "Add from referenced ontology" can find e.g. Person, Project when the external URL is not fetchable.
+ */
+export function getReferencedExternalClassesFromStore(
+  store: Store,
+  mainBase: string | null,
+  externalRefs: ExternalOntologyReference[]
+): ExternalClassInfo[] {
+  const isLocal = (uri: string): boolean => {
+    if (!mainBase) return false;
+    const base = mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase;
+    return uri === mainBase || uri === base || uri.startsWith(mainBase) || uri.startsWith(base + '#') || uri.startsWith(base + '/');
+  };
+  const getNamespace = (uri: string): string => {
+    if (uri.includes('#')) return uri.slice(0, uri.indexOf('#') + 1);
+    const last = uri.lastIndexOf('/');
+    return last >= 0 ? uri.slice(0, last + 1) : uri;
+  };
+  const normalizeRefUrl = (url: string): string => {
+    let u = url.endsWith('#') ? url.slice(0, -1) : url;
+    return u.replace(/\/$/, '').replace(/#$/, '');
+  };
+
+  const externalUris = new Set<string>();
+  const domainQuads = store.getQuads(null, DataFactory.namedNode(RDFS + 'domain'), null, null);
+  const rangeQuads = store.getQuads(null, DataFactory.namedNode(RDFS + 'range'), null, null);
+  for (const q of domainQuads) {
+    if (q.object.termType === 'NamedNode') {
+      const uri = (q.object as { value: string }).value;
+      if (!isLocal(uri)) externalUris.add(uri);
+    }
+  }
+  for (const q of rangeQuads) {
+    if (q.object.termType === 'NamedNode') {
+      const uri = (q.object as { value: string }).value;
+      if (!isLocal(uri)) externalUris.add(uri);
+    }
+  }
+
+  const result: ExternalClassInfo[] = [];
+  for (const uri of externalUris) {
+    const ns = getNamespace(uri);
+    const nsNorm = normalizeRefUrl(ns);
+    const ref = externalRefs.find((r) => {
+      const rNorm = normalizeRefUrl(r.url);
+      return rNorm === nsNorm || r.url.startsWith(nsNorm) || ns.startsWith(rNorm);
+    });
+    if (!ref) continue;
+    const localName = extractLocalName(uri);
+    const labelQuads = store.getQuads(DataFactory.namedNode(uri), DataFactory.namedNode(RDFS + 'label'), null, null);
+    const label = labelQuads.length > 0 && labelQuads[0].object.termType === 'Literal'
+      ? String((labelQuads[0].object as { value: string }).value)
+      : localName;
+    result.push({
+      uri,
+      localName,
+      label,
+      ontologyUrl: ref.url,
+    });
+  }
+  return result;
+}
+
+/**
+ * Returns a stub ExternalClassInfo for an external class URI (e.g. one that was removed from the store
+ * but should still appear in "Add from referenced ontology" search). Used so search works after the user
+ * deletes an external node from the canvas.
+ */
+export function getStubExternalClassForUri(
+  uri: string,
+  externalRefs: ExternalOntologyReference[]
+): ExternalClassInfo | null {
+  const getNamespace = (u: string): string => {
+    if (u.includes('#')) return u.slice(0, u.indexOf('#') + 1);
+    const last = u.lastIndexOf('/');
+    return last >= 0 ? u.slice(0, last + 1) : u;
+  };
+  const normalizeRefUrl = (url: string): string => {
+    let u = url.endsWith('#') ? url.slice(0, -1) : url;
+    return u.replace(/\/$/, '').replace(/#$/, '');
+  };
+  const ns = getNamespace(uri);
+  const nsNorm = normalizeRefUrl(ns);
+  const ref = externalRefs.find((r) => {
+    const rNorm = normalizeRefUrl(r.url);
+    return rNorm === nsNorm || r.url.startsWith(nsNorm) || ns.startsWith(rNorm);
+  });
+  if (!ref) return null;
+  const localName = extractLocalName(uri);
+  return {
+    uri,
+    localName,
+    label: localName,
+    ontologyUrl: ref.url,
+  };
 }
 
 /**

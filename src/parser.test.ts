@@ -22,9 +22,14 @@ import type { GraphData } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ONTOLOGY_PATH = resolve(__dirname, '../tests/fixtures/aec_drawing_ontology.ttl');
+const DUPLICATE_EDGE_FIXTURE_PATH = resolve(__dirname, '../tests/fixtures/duplicate-edge-layout-drawing.ttl');
 
 function loadOntologyAsString(): string {
   return readFileSync(ONTOLOGY_PATH, 'utf-8');
+}
+
+function loadDuplicateEdgeFixtureAsString(): string {
+  return readFileSync(DUPLICATE_EDGE_FIXTURE_PATH, 'utf-8');
 }
 
 /** Normalize graph data for comparison (sort by id). */
@@ -273,6 +278,33 @@ describe('updateLabelInStore (edit)', () => {
       (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
     );
     expect(containsEdge).toBeDefined();
+  });
+
+  it('rejects duplicate edge (addEdgeToStore returns false when same edge already exists)', async () => {
+    const ttl = loadOntologyAsString();
+    const { store } = await parseTtlToGraph(ttl);
+    const first = addEdgeToStore(store, 'Layout', 'FacadeCladding', 'contains');
+    expect(first).toBe(true);
+    const second = addEdgeToStore(store, 'Layout', 'FacadeCladding', 'contains');
+    expect(second).toBe(false);
+    const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
+    const containsEdges = graphData.edges.filter(
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
+    );
+    expect(containsEdges).toHaveLength(1);
+  });
+
+  it('parser yields at most one edge per from/to/type when both domain/range and restriction exist', async () => {
+    const ttl = loadDuplicateEdgeFixtureAsString();
+    const { graphData } = await parseTtlToGraph(ttl);
+    const layoutToDrawing = graphData.edges.filter(
+      (e) => e.from === 'Layout' && e.to === 'DrawingElement' && (e.type === 'contains' || e.type.includes('contains'))
+    );
+    expect(layoutToDrawing).toHaveLength(1);
+    expect(graphData.edges.every((e, i, arr) => {
+      const same = arr.filter((x) => x.from === e.from && x.to === e.to && x.type === e.type);
+      return same.length === 1;
+    })).toBe(true);
   });
 
   it('adds edge with cardinality and round-trips', async () => {

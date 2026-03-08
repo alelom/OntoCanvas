@@ -1,9 +1,16 @@
 /**
  * Unit tests for external expansion: adding external ontology nodes and edges for visualization.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { describe, it, expect } from 'vitest';
 import { loadOntologyFromContent } from '../lib/loadOntology';
+import { parseTtlToGraph } from '../parser';
 import { expandWithExternalRefs, isExternalNodeId } from './externalExpansion';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const AEC_DRAWING_PATH = resolve(__dirname, '../../tests/fixtures/aec_drawing_ontology.ttl');
 
 const TASK_ASSIGNMENT_TTL = `
 @prefix ta: <http://example.org/task-assignment#> .
@@ -57,6 +64,25 @@ describe('expandWithExternalRefs', () => {
     });
     expect(result.nodes.length).toBe(2);
     expect(result.edges.length).toBe(0);
+  });
+
+  it('does not duplicate Layout->DrawingElement contains when rawData already has it (local type name)', async () => {
+    const ttl = readFileSync(AEC_DRAWING_PATH, 'utf-8');
+    const { graphData, store } = await parseTtlToGraph(ttl);
+    const rawData = graphData;
+    const layoutToDrawing = rawData.edges.filter(
+      (e) => e.from === 'Layout' && e.to === 'DrawingElement' && (e.type === 'contains' || e.type.includes('contains'))
+    );
+    expect(layoutToDrawing.length).toBeGreaterThanOrEqual(1);
+    const refs = [{ url: 'http://example.org/aec-drawing-ontology', usePrefix: true, prefix: '' }];
+    const result = expandWithExternalRefs(rawData, store, refs, {
+      displayExternalReferences: true,
+      externalNodeLayout: 'auto',
+    });
+    const resultLayoutToDrawing = result.edges.filter(
+      (e) => e.from === 'Layout' && e.to === 'DrawingElement' && (e.type === 'contains' || e.type.includes('contains'))
+    );
+    expect(resultLayoutToDrawing.length).toBe(1);
   });
 
   it('adds external class nodes and edges when displayExternalReferences is true', async () => {

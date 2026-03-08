@@ -1,4 +1,4 @@
-import type { GraphData, BorderLineType, ObjectPropertyInfo } from '../types';
+import type { GraphData, GraphEdge, BorderLineType, ObjectPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { getAllRelationshipTypes, getRelationshipLabel } from './relationshipUtils';
 import { getDefaultEdgeColors, getDefaultColor, getEdgeTypes } from '../graph';
@@ -142,6 +142,16 @@ export function getEdgeStyleConfig(
       lineType,
     };
   });
+
+  // Edges from expandWithExternalRefs use full URI as type; menu uses op.name (local for main ontology).
+  // Add config entries for full URI so domain/range edges to external nodes get the same style as the menu.
+  objectProperties.forEach((op) => {
+    const uri = op.uri ?? (op.name.startsWith('http://') || op.name.startsWith('https://') ? op.name : null);
+    if (uri && uri !== op.name && config[op.name]) {
+      config[uri] = { ...config[op.name] };
+    }
+  });
+
   return config;
 }
 
@@ -151,12 +161,13 @@ export function getEdgeStyleConfig(
  * An edge can be displayed if:
  * 1. It's subClassOf (always displayable, not an object property)
  * 2. It appears in rawData.edges (meaning it has both domain and range AND classes exist, OR a restriction exists)
+ * 3. It appears in displayedEdges (e.g. from expandWithExternalRefs), so domain/range edges to external nodes are shown in the legend
  * 
  * According to parser.ts, edges are only created when:
  * - Both domain and range exist AND the classes exist in the ontology (domain/range edge)
  * - OR a restriction exists using that property (restriction edge)
  * 
- * If an edge type doesn't appear in rawData.edges, it means either:
+ * If an edge type doesn't appear in rawData.edges or displayedEdges, it means either:
  * - Domain or range is missing (e.g., "depicts" has domain but no range)
  * - The classes don't exist
  * - No restriction exists
@@ -166,26 +177,49 @@ export function getEdgeStyleConfig(
 function canDisplayEdgeType(
   edgeType: string,
   rawData: GraphData,
-  objectProperties: ObjectPropertyInfo[]
+  objectProperties: ObjectPropertyInfo[],
+  displayedEdges?: GraphEdge[]
 ): boolean {
   // subClassOf is always displayable (it's not an object property)
   if (edgeType === 'subClassOf') {
     return true;
   }
   
-  // Check if this edge type actually appears in rawData.edges
-  // If it appears, it means it can be displayed (has domain/range + classes exist, or restriction exists)
-  // If it doesn't appear, it cannot be displayed (missing domain/range, classes don't exist, or no restriction)
-  return rawData.edges.some((e) => e.type === edgeType);
+  // Check rawData.edges (parser output + user-added)
+  if (rawData.edges.some((e) => e.type === edgeType)) return true;
+  // Check displayed edges (includes expandWithExternalRefs domain/range edges with full URI type)
+  if (displayedEdges?.some((e) => e.type === edgeType)) return true;
+  return false;
 }
 
 /**
- * Update edge colors legend in the status bar
+ * Compute which config keys (edge types) should appear in the legend given displayed edge types.
+ * Prefers op.name over full URI so each relationship appears once.
+ * Used by updateEdgeColorsLegend; exported for unit tests.
+ */
+export function getLegendTypesFromDisplayedEdges(
+  displayedTypeSet: Set<string>,
+  objectProperties: ObjectPropertyInfo[],
+  config: Record<string, { show: boolean }>
+): string[] {
+  const canonicalKeys = new Set<string>();
+  for (const t of displayedTypeSet) {
+    const op = objectProperties.find((p) => p.uri === t || p.name === t);
+    canonicalKeys.add(op ? op.name : t);
+  }
+  if (config['subClassOf']?.show) canonicalKeys.add('subClassOf');
+  return Object.keys(config).filter((t) => canonicalKeys.has(t) && config[t].show);
+}
+
+/**
+ * Update edge colors legend in the status bar.
+ * @param displayedEdges - When provided (e.g. graphDataForBuild.edges), edge types that appear here are shown in the legend even if not in rawData.edges (e.g. domain/range edges from expandWithExternalRefs).
  */
 export function updateEdgeColorsLegend(
   rawData: GraphData,
   objectProperties: ObjectPropertyInfo[],
-  externalOntologyReferences: ExternalOntologyReference[]
+  externalOntologyReferences: ExternalOntologyReference[],
+  displayedEdges?: GraphEdge[]
 ): void {
   const legendEl = document.getElementById('edgeColorsLegend');
   if (!legendEl) return;
@@ -196,10 +230,11 @@ export function updateEdgeColorsLegend(
   }
   const config = getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences);
   
-  // Filter to only show edge types that can be displayed (have domain/range or appear in edges)
-  const types = Object.keys(config).filter((t) => {
-    return config[t].show && canDisplayEdgeType(t, rawData, objectProperties);
-  });
+  const displayedTypeSet = new Set([
+    ...rawData.edges.map((e) => e.type),
+    ...(displayedEdges || []).map((e) => e.type),
+  ]);
+  const types = getLegendTypesFromDisplayedEdges(displayedTypeSet, objectProperties, config);
   
   if (types.length === 0) {
     legendEl.textContent = '';

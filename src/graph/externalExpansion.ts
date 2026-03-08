@@ -63,7 +63,6 @@ function isLocalUri(uri: string, mainBase: string | null): boolean {
  */
 function getExternalClassLabel(
   uri: string,
-  refUrl: string,
   cachedClasses: { uri: string; label: string }[] | undefined
 ): string {
   if (cachedClasses) {
@@ -124,6 +123,11 @@ export function expandWithExternalRefs(
         const toId = rangeIsLocal ? rangeLocal : rangeUri;
         const edgeKey = `${fromId}->${toId}:${propUri}`;
         if (existingEdgeKeys.has(edgeKey)) continue;
+        // Parser uses op.name (local) for local ontologies; we use propUri here. Skip if rawData already has this edge.
+        const alreadyInRaw = rawData.edges.some(
+          (e) => e.from === fromId && e.to === toId && (e.type === propUri || e.type === op.name)
+        );
+        if (alreadyInRaw) continue;
         existingEdgeKeys.add(edgeKey);
 
         newEdges.push({ from: fromId, to: toId, type: propUri, isRestriction: false });
@@ -131,9 +135,8 @@ export function expandWithExternalRefs(
         if (!domainIsLocal) {
           const ref = findRefForUri(domainUri, externalRefs);
           if (ref && !externalClassNodes.has(domainUri)) {
-            const normalizedRef = normalizeRefUrl(ref.url);
             const cached = getCachedExternalClasses(ref.url);
-            const label = getExternalClassLabel(domainUri, ref.url, cached);
+            const label = getExternalClassLabel(domainUri, cached);
             externalClassNodes.set(domainUri, {
               id: domainUri,
               label,
@@ -149,7 +152,7 @@ export function expandWithExternalRefs(
           const ref = findRefForUri(rangeUri, externalRefs);
           if (ref && !externalClassNodes.has(rangeUri)) {
             const cached = getCachedExternalClasses(ref.url);
-            const label = getExternalClassLabel(rangeUri, ref.url, cached);
+            const label = getExternalClassLabel(rangeUri, cached);
             externalClassNodes.set(rangeUri, {
               id: rangeUri,
               label,
