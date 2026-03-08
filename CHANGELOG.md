@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/alelom/OntoCanvas/compare/v1.4.0...v1.4.1) (2026-03-08)
+
+
+### Bug Fixes
+
+*  For URLs with no file extension (e.g. ending in /), rdf-parse could not infer format from the path and threw. Now, when the app loads content from a URL like https://rub-informatik-im-bauwesen.github.io/dano/ (or from a fetched document that was originally HTML and then resolved to TTL/RDF), parsing no longer depends on a path extension. ([f730026](https://github.com/alelom/OntoCanvas/commit/f7300269d92f57cf79f4da9b27c1940226d2299a))
+
 # [1.4.0](https://github.com/alelom/OntoCanvas/compare/v1.3.0...v1.4.0) (2026-03-08)
 
 
