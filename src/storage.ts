@@ -10,6 +10,9 @@ const IDB_DISPLAY_STORE = 'config';
 const IDB_EXTERNAL_REFS_NAME = 'OntologyEditorExternalRefs';
 const IDB_EXTERNAL_REFS_STORE = 'refs';
 
+/** How to position external ontology nodes relative to the graph. */
+export type ExternalNodeLayout = 'auto' | 'right' | 'top' | 'bottom' | 'left';
+
 export interface DisplayConfig {
   version: number;
   nodePositions: Record<string, { x: number; y: number }>;
@@ -24,6 +27,10 @@ export interface DisplayConfig {
   includeNeighbors: boolean;
   annotationStyleConfig?: unknown;
   viewState?: { scale: number; position: { x: number; y: number } };
+  /** Whether to show nodes from external ontologies (referenced by object property domain/range). */
+  displayExternalReferences?: boolean;
+  /** Layout of external nodes: auto (use main layout) or always place right/top/bottom/left of connected local node. */
+  externalNodeLayout?: ExternalNodeLayout;
 }
 
 export interface ExternalOntologyReference {

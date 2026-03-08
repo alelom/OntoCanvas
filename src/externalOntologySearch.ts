@@ -816,6 +816,23 @@ export async function searchExternalObjectProperties(
 }
 
 /**
+ * Returns cached external classes for a given ontology URL, or undefined if not cached.
+ * Used by the external expansion module to get labels for external nodes.
+ */
+export function getCachedExternalClasses(url: string): ExternalClassInfo[] | undefined {
+  const normalized = url.endsWith('#') ? url.slice(0, -1) : url;
+  return externalClassesCache.get(normalized);
+}
+
+/**
+ * Returns cached external object properties for a given ontology URL, or undefined if not cached.
+ */
+export function getCachedExternalObjectProperties(url: string): ExternalObjectPropertyInfo[] | undefined {
+  const normalized = url.endsWith('#') ? url.slice(0, -1) : url;
+  return externalObjectPropertiesCache.get(normalized);
+}
+
+/**
  * Clears the cache of fetched external ontology classes.
  * Useful for testing or when you want to force a refetch.
  */

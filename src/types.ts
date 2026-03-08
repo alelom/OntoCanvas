@@ -18,6 +18,10 @@ export interface GraphNode {
   exampleImages?: string[];
   x?: number;
   y?: number;
+  /** True when this node is from an external ontology (read-only, 50% opacity, "Open external ontology" in context menu). */
+  isExternal?: boolean;
+  /** URL of the external ontology that defines this node. Set when isExternal is true. */
+  externalOntologyUrl?: string;
 }
 
 export interface AnnotationPropertyInfo {

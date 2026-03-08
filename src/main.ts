@@ -74,6 +74,7 @@ import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataProp
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
+  type ExternalNodeLayout,
   loadDisplayConfigFromIndexedDB,
   saveDisplayConfigToIndexedDB,
   deleteDisplayConfigFromIndexedDB,
@@ -85,6 +86,8 @@ import {
   saveLastUrlToIndexedDB,
   DISPLAY_CONFIG_VERSION,
 } from './storage';
+import { expandWithExternalRefs } from './graph/externalExpansion';
+import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
 import {
   wrapText,
   getEdgeTypes,
@@ -208,6 +211,8 @@ function collectDisplayConfig(): DisplayConfig | null {
       if (n.x != null && n.y != null) nodePositions[n.id] = { x: n.x, y: n.y };
     });
   }
+  const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
+  const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
   return {
     version: DISPLAY_CONFIG_VERSION,
     nodePositions,
@@ -224,10 +229,20 @@ function collectDisplayConfig(): DisplayConfig | null {
     viewState: network
       ? { scale: network.getScale(), position: network.getViewPosition() }
       : undefined,
+    displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
+    externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
   };
 }
 
 function applyDisplayConfig(config: DisplayConfig): void {
+  displayExternalReferences = config.displayExternalReferences ?? true;
+  externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
+  loadedNodePositions = config.nodePositions ?? null;
+  const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
+  const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
+  if (displayExternalRefEl) displayExternalRefEl.checked = displayExternalReferences;
+  if (externalNodeLayoutEl) externalNodeLayoutEl.value = externalNodeLayout;
+
   // Define edgeStyleConfig first before using it
   const edgeStyleConfig = config.edgeStyleConfig || {};
   
@@ -397,8 +412,14 @@ function applyDisplayConfig(config: DisplayConfig): void {
 let displayConfigSaveTimer: number | null = null;
 /** Edge style config loaded from display config file (takes precedence over DOM checkboxes) */
 let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }> | null = null;
+/** Node positions from display config (used when expanding external refs so external node positions are restored). */
+let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
 /** Track the last layout mode to detect when it changes */
 let lastLayoutMode: string | null = null;
+/** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
+let displayExternalReferences = true;
+/** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
+let externalNodeLayout: ExternalNodeLayout = 'auto';
 
 function scheduleDisplayConfigSave(): void {
   if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
@@ -573,8 +594,14 @@ function performDeleteSelection(): boolean {
   }
 
   const nodesToRemove = selectedNodeIds.filter((id) => rawData.nodes.some((n) => n.id === id));
+  const externalNodeIdsToRemove = selectedNodeIds.filter(
+    (id) => (id.startsWith('http://') || id.startsWith('https://')) && !rawData.nodes.some((n) => n.id === id)
+  );
   const connectedEdges = rawData.edges.filter(
     (e) => nodesToRemove.includes(e.from) || nodesToRemove.includes(e.to)
+  );
+  const edgesConnectedToExternal = rawData.edges.filter(
+    (e) => externalNodeIdsToRemove.includes(e.from) || externalNodeIdsToRemove.includes(e.to)
   );
 
   const nodeUndoActions: Array<() => void> = [];
@@ -746,7 +773,17 @@ function performDeleteSelection(): boolean {
     });
   }
 
-  const hasActions = nodeUndoActions.length + edgeUndoActions.length + dataPropUndoActions.length > 0;
+  for (const externalId of externalNodeIdsToRemove) {
+    removeExternalClassReferencesFromStore(ttlStore, externalId);
+    for (const e of edgesConnectedToExternal) {
+      if (e.from !== externalId && e.to !== externalId) continue;
+      const idx = rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
+      if (idx >= 0) rawData.edges.splice(idx, 1);
+    }
+  }
+
+  const hasActions =
+    nodeUndoActions.length + edgeUndoActions.length + dataPropUndoActions.length + externalNodeIdsToRemove.length > 0;
   if (!hasActions) return false;
 
   // Clear search so children of deleted nodes remain visible (they were shown as neighbors)
@@ -2389,19 +2426,23 @@ function getSearchOpacity(nodeId: string, matchingIds: Set<string>, neighborIds:
   return 0.08; // 8% opacity for others (increased transparency distance, minimum 5%)
 }
 
-function buildNetworkData(filter: {
-  wrapChars: number;
-  minFontSize: number;
-  maxFontSize: number;
-  relationshipFontSize: number;
-  dataPropertyFontSize?: number;
-  searchQuery: string;
-  includeNeighbors: boolean;
-  edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
-  annotationStyleConfig: AnnotationStyleConfig;
-  layoutMode: string;
-}): { nodes: DataSet; edges: DataSet } {
-  let filteredNodes = rawData.nodes.filter((n) =>
+function buildNetworkData(
+  filter: {
+    wrapChars: number;
+    minFontSize: number;
+    maxFontSize: number;
+    relationshipFontSize: number;
+    dataPropertyFontSize?: number;
+    searchQuery: string;
+    includeNeighbors: boolean;
+    edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
+    annotationStyleConfig: AnnotationStyleConfig;
+    layoutMode: string;
+  },
+  graphData?: GraphData
+): { nodes: DataSet; edges: DataSet } {
+  const data = graphData ?? rawData;
+  let filteredNodes = data.nodes.filter((n) =>
     shouldShowNodeByAnnotations(n, filter.annotationStyleConfig)
   );
   let nodeIds = new Set(filteredNodes.map((n) => n.id));
@@ -2410,7 +2451,7 @@ function buildNetworkData(filter: {
   const edgeStyleConfig = filter.edgeStyleConfig;
   
   // Debug: Check for describes edges before filtering (only if they exist or are expected)
-  const describesEdgesBeforeFilter = rawData.edges.filter((e) => 
+  const describesEdgesBeforeFilter = data.edges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')
   );
   // Only log if describes edges exist or if they're referenced in the edge style config
@@ -2437,19 +2478,19 @@ function buildNetworkData(filter: {
   }
   
   // Debug: Check for edges with external property URIs before filtering
-  const externalEdgesBeforeFilter = rawData.edges.filter((e) => 
+  const externalEdgesBeforeFilter = data.edges.filter((e) => 
     (e.type.startsWith('http://') || e.type.startsWith('https://')) &&
     (e.type.includes('describes') || e.type.includes('dano'))
   );
   if (externalEdgesBeforeFilter.length > 0) {
-    debugLog('[DEBUG] External property edges in rawData.edges:', externalEdgesBeforeFilter);
+    debugLog('[DEBUG] External property edges in data.edges:', externalEdgesBeforeFilter);
     debugLog('[DEBUG] Available node IDs:', Array.from(nodeIds));
     externalEdgesBeforeFilter.forEach((e) => {
       debugLog(`[DEBUG] Edge ${e.type}: from="${e.from}" (exists: ${nodeIds.has(e.from)}), to="${e.to}" (exists: ${nodeIds.has(e.to)})`);
     });
   }
   
-  let filteredEdges = rawData.edges.filter(
+  let filteredEdges = data.edges.filter(
     (e) => nodeIds.has(e.from) && nodeIds.has(e.to)
   );
   
@@ -2618,8 +2659,8 @@ function buildNetworkData(filter: {
     Object.entries(resolvedPositions).forEach(([id, pos]) => {
       if (nodesToLayout.has(id) && !nodePositions[id]) {
         nodePositions[id] = pos;
-        // Also update rawData to keep it in sync
-        const node = rawData.nodes.find((n) => n.id === id);
+        // Also update data (rawData or expanded) to keep it in sync
+        const node = data.nodes.find((n) => n.id === id);
         if (node) {
           node.x = pos.x;
           node.y = pos.y;
@@ -2641,19 +2682,25 @@ function buildNetworkData(filter: {
     const style = getNodeStyleFromAnnotations(n, filter.annotationStyleConfig);
     const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
     
-    // Apply search transparency if search query is active
-    let nodeOpacity = 1.0;
+    // Apply search transparency if search query is active; external nodes start at 50% and are more transparent when search is active
+    let nodeOpacity = (n as GraphNode & { isExternal?: boolean }).isExternal ? 0.5 : 1.0;
     let backgroundColor = style.background;
     let borderColor = style.border;
     let fontColor = '#2c3e50';
     
     if (searchQuery) {
-      nodeOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
+      const searchOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
+      const isExternal = (n as GraphNode & { isExternal?: boolean }).isExternal;
+      nodeOpacity = isExternal ? searchOpacity * 0.5 : searchOpacity;
       if (nodeOpacity < 1.0) {
         backgroundColor = applyOpacityToColor(style.background, nodeOpacity);
         borderColor = applyOpacityToColor(style.border, nodeOpacity);
         fontColor = applyOpacityToColor('#2c3e50', nodeOpacity);
       }
+    } else if ((n as GraphNode & { isExternal?: boolean }).isExternal) {
+      backgroundColor = applyOpacityToColor(style.background, 0.5);
+      borderColor = applyOpacityToColor(style.border, 0.5);
+      fontColor = applyOpacityToColor('#2c3e50', 0.5);
     }
     
     const node: Record<string, unknown> = {
@@ -3173,8 +3220,8 @@ function buildNetworkData(filter: {
       // Only warn if we had describes edges that got filtered out
       debugWarn('[DEBUG] ⚠ NO describes edges in final allEdges - edge will NOT appear in graph!');
       debugLog('[DEBUG] Summary of filtering:');
-      debugLog(`  - Total edges in rawData.edges: ${rawData.edges.length}`);
-      debugLog(`  - Describes edges in rawData.edges: ${describesEdgesBeforeFilter.length}`);
+      debugLog(`  - Total edges in data.edges: ${data.edges.length}`);
+      debugLog(`  - Describes edges in data.edges: ${describesEdgesBeforeFilter.length}`);
       debugLog(`  - Filtered edges after node filtering: ${filteredEdges.length}`);
       debugLog(`  - Edges after style filtering: ${filteredEdges.length}`);
       debugLog(`  - Edges mapped to vis-network: ${edges.length}`);
@@ -5469,6 +5516,22 @@ function renderApp(): void {
     <div id="externalRefsModal" class="modal" style="display: none;">
       <div class="modal-content" style="min-width: 500px; max-width: 700px;">
         <h3>Manage External Ontology References</h3>
+        <div style="margin-bottom: 12px; padding: 10px; background: #f0f8ff; border-radius: 4px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+            <input type="checkbox" id="displayExternalRefs">
+            Display external references in graph
+          </label>
+          <div style="margin-top: 8px; font-size: 12px;">
+            <label for="externalNodeLayout">External node layout:</label>
+            <select id="externalNodeLayout" style="margin-left: 6px; padding: 4px;">
+              <option value="auto">Auto-layout</option>
+              <option value="right">Always right</option>
+              <option value="top">Always top</option>
+              <option value="bottom">Always bottom</option>
+              <option value="left">Always left</option>
+            </select>
+          </div>
+        </div>
         <div id="externalRefsList" style="margin-top: 16px; margin-bottom: 16px; max-height: 400px; overflow-y: auto;">
           <!-- External references will be listed here -->
         </div>
@@ -5792,7 +5855,21 @@ function applyFilter(preserveView = false): void {
     layoutMode,
   };
 
-  const data = buildNetworkData(currentFilter);
+  let graphDataForBuild: GraphData = rawData;
+  if (displayExternalReferences && ttlStore && externalOntologyReferences.length > 0) {
+    graphDataForBuild = expandWithExternalRefs(rawData, ttlStore, externalOntologyReferences, {
+      displayExternalReferences,
+      externalNodeLayout,
+      nodePositions: loadedNodePositions ?? undefined,
+    });
+  }
+  const data = buildNetworkData(currentFilter, graphDataForBuild);
+  if (network && ttlStore) {
+    updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, (url) => {
+      const base = window.location.origin + window.location.pathname;
+      window.open(`${base}?onto=${encodeURIComponent(url)}`, '_blank');
+    });
+  }
   const options = getNetworkOptions(layoutMode);
 
   scheduleDisplayConfigSave();
@@ -5995,8 +6072,11 @@ function applyFilter(preserveView = false): void {
         }
       );
       
-      // Update context menu data after initialization
-      updateContextMenuData(ttlStore, rawData);
+      // Update context menu data after initialization (use graphDataForBuild so external nodes are included)
+      updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, (url) => {
+        const base = window.location.origin + window.location.pathname;
+        window.open(`${base}?onto=${encodeURIComponent(url)}`, '_blank');
+      });
     }
     
     network.on('click', () => {
@@ -6012,6 +6092,9 @@ function applyFilter(preserveView = false): void {
       if (!network) return;
       if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0] as string;
+        if (clickedNodeId.startsWith('http://') || clickedNodeId.startsWith('https://')) {
+          return;
+        }
         const selectedIds = network.getSelectedNodes().map(String);
         if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
           showMultiEditModal(selectedIds);
@@ -6286,6 +6369,20 @@ function setupEventListeners(): void {
   
   document.getElementById('manageExternalRefs')?.addEventListener('click', () => {
     showExternalRefsModal(externalOntologyReferences, externalRefsCallbacks, loadedFilePath, loadedFileName);
+    const displayEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
+    const layoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
+    if (displayEl) displayEl.checked = displayExternalReferences;
+    if (layoutEl) layoutEl.value = externalNodeLayout;
+  });
+  document.getElementById('displayExternalRefs')?.addEventListener('change', (e) => {
+    displayExternalReferences = (e.target as HTMLInputElement).checked;
+    applyFilter(true);
+    scheduleDisplayConfigSave();
+  });
+  document.getElementById('externalNodeLayout')?.addEventListener('change', (e) => {
+    externalNodeLayout = (e.target as HTMLSelectElement).value as ExternalNodeLayout;
+    applyFilter(true);
+    scheduleDisplayConfigSave();
   });
   document.getElementById('externalRefsCancel')?.addEventListener('click', hideExternalRefsModal);
   document.getElementById('externalRefsModal')?.addEventListener('click', (e) => {

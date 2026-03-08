@@ -45,16 +45,32 @@ export type OnEditEdgeCallback = (edgeId: string) => void;
  */
 export type OnSelectionChangedCallback = () => void;
 
+/**
+ * Callback when "Open external ontology" is chosen for an external node.
+ */
+export type OnOpenExternalOntologyCallback = (url: string) => void;
+
+export interface ExternalRefForContextMenu {
+  url: string;
+}
+
 let contextMenuElement: HTMLElement | null = null;
 let currentNetwork: Network | null = null;
 let currentStore: Store | null = null;
 let currentRawData: GraphData | null = null;
+let currentExternalRefs: ExternalRefForContextMenu[] | null = null;
+let onOpenExternalOntologyCallback: OnOpenExternalOntologyCallback | null = null;
 let onPasteCallback: OnPasteCallback | null = null;
 let onCopyCallback: OnCopyCallback | null = null;
 let onEditNodeCallback: ((nodeId: string) => void) | null = null;
 let onEditEdgeCallback: ((edgeId: string) => void) | null = null;
 let onSelectionChangedCallback: OnSelectionChangedCallback | null = null;
 let currentTargetNodeId: string | null = null;
+
+function normalizeUrl(u: string): string {
+  let s = u.endsWith('#') ? u.slice(0, -1) : u;
+  return s.replace(/\/$/, '');
+}
 
 /**
  * Initialize the context menu system.
@@ -269,25 +285,43 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       );
     }
 
-    // Separator above selection commands, separator before "Edit properties"
+    // Separator above selection commands, separator before "Edit properties" / "Open external ontology"
     const separatorBeforeSelection = createSeparator();
     const separatorBeforeEdit = createSeparator();
-    
-    // Edit properties option (always last)
-    const editBtn = createMenuItem('Edit properties...', () => {
-      if (onEditNodeCallback) {
-        onEditNodeCallback(nodeId);
-      }
-      hideContextMenu();
-    });
-
-    contextMenuElement.appendChild(copyBtn);
-    contextMenuElement.appendChild(pasteBtn);
-    contextMenuElement.appendChild(separatorBeforeSelection);
-    if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
-    if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
-    contextMenuElement.appendChild(separatorBeforeEdit);
-    contextMenuElement.appendChild(editBtn);
+    const node = currentRawData.nodes.find((n) => n.id === nodeId);
+    const isExternal = node && (node as { isExternal?: boolean }).isExternal;
+    const externalUrl = node && (node as { externalOntologyUrl?: string }).externalOntologyUrl;
+    const canOpenExternal =
+      isExternal &&
+      externalUrl &&
+      currentExternalRefs?.some((ref) => normalizeUrl(ref.url) === normalizeUrl(externalUrl));
+    if (canOpenExternal && onOpenExternalOntologyCallback) {
+      const openExternalBtn = createMenuItem('Open external ontology', () => {
+        onOpenExternalOntologyCallback!(externalUrl!);
+        hideContextMenu();
+      });
+      contextMenuElement.appendChild(copyBtn);
+      contextMenuElement.appendChild(pasteBtn);
+      contextMenuElement.appendChild(separatorBeforeSelection);
+      if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
+      if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+      contextMenuElement.appendChild(separatorBeforeEdit);
+      contextMenuElement.appendChild(openExternalBtn);
+    } else {
+      const editBtn = createMenuItem('Edit properties...', () => {
+        if (onEditNodeCallback) {
+          onEditNodeCallback(nodeId);
+        }
+        hideContextMenu();
+      });
+      contextMenuElement.appendChild(copyBtn);
+      contextMenuElement.appendChild(pasteBtn);
+      contextMenuElement.appendChild(separatorBeforeSelection);
+      if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
+      if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+      contextMenuElement.appendChild(separatorBeforeEdit);
+      contextMenuElement.appendChild(editBtn);
+    }
   } else if (edgeId) {
     // Edge context menu
     // Separator before "Edit properties"
@@ -424,7 +458,14 @@ function handlePaste(targetNodeId: string): void {
 /**
  * Update the store and rawData references (called when they change).
  */
-export function updateContextMenuData(store: Store, rawData: GraphData): void {
+export function updateContextMenuData(
+  store: Store,
+  rawData: GraphData,
+  externalRefs?: ExternalRefForContextMenu[] | null,
+  onOpenExternal?: OnOpenExternalOntologyCallback | null
+): void {
   currentStore = store;
   currentRawData = rawData;
+  currentExternalRefs = externalRefs ?? null;
+  onOpenExternalOntologyCallback = onOpenExternal ?? null;
 }
