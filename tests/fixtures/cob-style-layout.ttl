@@ -1,0 +1,20 @@
+# Minimal fixture mimicking COB-style structure: one main tree + several isolated root classes.
+# Use with Hierarchical 04 (clustered) to verify non-main roots sit in a column at fixed distance.
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix ex: <http://example.org/cob-style#> .
+
+ex:Ontology a owl:Ontology .
+
+ex:MainRoot a owl:Class ; rdfs:label "Main root" .
+ex:Child1 a owl:Class ; rdfs:subClassOf ex:MainRoot ; rdfs:label "Child 1" .
+ex:Child2 a owl:Class ; rdfs:subClassOf ex:MainRoot ; rdfs:label "Child 2" .
+ex:Grandchild1 a owl:Class ; rdfs:subClassOf ex:Child1 ; rdfs:label "Grandchild 1" .
+ex:Grandchild2 a owl:Class ; rdfs:subClassOf ex:Child1 ; rdfs:label "Grandchild 2" .
+
+ex:Orphan1 a owl:Class ; rdfs:label "Orphan 1" .
+ex:Orphan2 a owl:Class ; rdfs:label "Orphan 2" .
+ex:Orphan3 a owl:Class ; rdfs:label "Orphan 3" .
+ex:Orphan4 a owl:Class ; rdfs:label "Orphan 4" .
+ex:Orphan5 a owl:Class ; rdfs:label "Orphan 5" .

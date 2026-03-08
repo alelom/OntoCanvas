@@ -5187,6 +5187,7 @@ function renderApp(): void {
           <option value="hierarchical03">Hierarchical 01</option>
           <option value="hierarchical02">Hierarchical 02</option>
           <option value="hierarchical01">Hierarchical 03</option>
+          <option value="hierarchical04">Hierarchical 04 (clustered)</option>
           <option value="force">Force-directed</option>
         </select>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
@@ -6067,7 +6068,7 @@ function applyFilter(preserveView = false): void {
       });
     } else if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03' || layoutMode === 'hierarchical04') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
   } else {
@@ -6080,7 +6081,7 @@ function applyFilter(preserveView = false): void {
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
+    } else if (layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03' || layoutMode === 'hierarchical04') {
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
