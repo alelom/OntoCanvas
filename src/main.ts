@@ -122,12 +122,14 @@ import {
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import {
   extractExternalRefsFromStore,
+  extractUsedNamespaceRefsFromStore,
   extractPrefixesFromTtl,
   formatNodeLabelWithPrefix,
   formatRelationshipLabelWithPrefix,
   renderExternalRefsList,
   showExternalRefsModal,
   hideExternalRefsModal,
+  sortExternalRefsByUrl,
   type ExternalRefsModalCallbacks,
 } from './ui/externalRefs';
 import { getAppVersion } from './utils/version';
@@ -5567,14 +5569,24 @@ async function loadTtlAndRender(
     const mainBase = getMainOntologyBase(ttlStore);
     for (const [prefix, url] of Object.entries(prefixMap)) {
       const urlStr = String(url);
-      const normalized = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr;
-      const mainNormalized = mainBase != null ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase) : '';
+      const normalized = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr.replace(/\/$/, '');
+      const mainNormalized = mainBase != null ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase).replace(/\/$/, '') : '';
       if (normalized !== mainNormalized && !seenUrls.has(normalized)) {
-        mergedRefs.push({ url: urlStr.endsWith('#') ? urlStr : urlStr + '#', usePrefix: true, prefix });
+        mergedRefs.push({ url: urlStr.replace(/\/$/, ''), usePrefix: true, prefix });
         seenUrls.add(normalized);
       }
     }
-    
+
+    // Add refs from namespaces used in the store (e.g. DANO loaded as RDF/XML has no owl:imports and no TTL prefixes)
+    for (const ref of extractUsedNamespaceRefsFromStore(ttlStore, mainBase)) {
+      const normalized = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url.replace(/\/$/, '');
+      if (!seenUrls.has(normalized)) {
+        mergedRefs.push(ref);
+        seenUrls.add(normalized);
+      }
+    }
+
+    sortExternalRefsByUrl(mergedRefs);
     externalOntologyReferences = mergedRefs;
     console.log('Final merged external references:', externalOntologyReferences);
     console.log(`Total external references: ${externalOntologyReferences.length}`);
@@ -6386,7 +6398,8 @@ function setupEventListeners(): void {
         prefix: preferredPrefix,
       };
       externalOntologyReferences.push(newRef);
-      
+      sortExternalRefsByUrl(externalOntologyReferences);
+
       urlInput.value = '';
       const externalRefsCallbacks: ExternalRefsModalCallbacks = {
         onUpdate: () => {

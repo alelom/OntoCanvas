@@ -4,33 +4,27 @@ import type { ExternalOntologyReference } from '../storage';
 import { saveExternalRefsToIndexedDB } from '../storage';
 
 /**
- * Extract external ontology references from owl:imports statements in the store
+ * Extract external ontology references from owl:imports statements in the store.
+ * We match all quads with predicate owl:imports (any subject) so that imports are found
+ * regardless of how the ontology node is represented (e.g. different term identity from parser).
  */
 export function extractExternalRefsFromStore(store: Store): ExternalOntologyReference[] {
   const refs: ExternalOntologyReference[] = [];
-  const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
   const OWL = 'http://www.w3.org/2002/07/owl#';
   const OWL_IMPORTS = OWL + 'imports';
-  
-  // Find ontology declaration
-  const ontologyQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Ontology'), null);
-  
-  if (ontologyQuads.length === 0) {
-    return refs;
-  }
-  
-  const ontologySubject = ontologyQuads[0].subject;
-  
-  // Get owl:imports statements
-  const importQuads = store.getQuads(ontologySubject, DataFactory.namedNode(OWL_IMPORTS), null, null);
+
+  // Get all owl:imports statements (any subject) so we don't depend on ontology subject matching
+  const importQuads = store.getQuads(null, DataFactory.namedNode(OWL_IMPORTS), null, null);
+  const seenUrls = new Set<string>();
   for (const quad of importQuads) {
     const importObj = quad.object as { termType: string; value?: string };
     if (importObj.termType === 'NamedNode' && importObj.value) {
       const importUrl = importObj.value;
       if (typeof importUrl === 'string' && (importUrl.startsWith('http://') || importUrl.startsWith('https://'))) {
-        // Try to find prefix from URL patterns
         const urlWithoutHash = importUrl.endsWith('#') ? importUrl.slice(0, -1) : importUrl;
-        
+        if (seenUrls.has(urlWithoutHash)) continue;
+        seenUrls.add(urlWithoutHash);
+
         // Try common prefixes based on URL patterns (so imported properties show e.g. geo:hasGeometry in the UI)
         let prefix: string | undefined;
         if (urlWithoutHash.includes('w3id.org/dano')) {
@@ -42,16 +36,104 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
         } else if (urlWithoutHash.includes('opengis.net/ont/geosparql')) {
           prefix = 'geo';
         }
-        
+
+        const url = importUrl.endsWith('#') ? importUrl : importUrl.replace(/\/$/, '');
         refs.push({
-          url: importUrl,
+          url,
           usePrefix: prefix !== undefined,
           prefix: prefix,
         });
       }
     }
   }
-  
+
+  return refs;
+}
+
+/** Core W3C namespaces we do not show as external refs (always present). */
+const CORE_NAMESPACES = new Set([
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns',
+  'http://www.w3.org/2000/01/rdf-schema',
+  'http://www.w3.org/2002/07/owl',
+  'http://www.w3.org/2001/XMLSchema',
+]);
+
+/** Non-vocabulary: identifiers, licenses, docs, people pages, source repos. Never show as external ontology refs. */
+function isNonVocabularyNamespace(normalized: string): boolean {
+  const n = normalized.toLowerCase();
+  if (n.length < 12) return true;
+  if (!/^https?:\/\/[^/?#]+/.test(normalized)) return true;
+  if (n.includes('orcid.org')) return true;
+  if (n.includes('creativecommons.org')) return true;
+  if (n.includes('ruhr-uni-bochum.de') || n.includes('inf.bi.')) return true;
+  if (n.includes('opengis.net/doc/') || n.includes('opengis.net/def/')) return true;
+  if (n.includes('github.com')) return true;
+  if (n.includes('ietf.org')) return true;
+  return false;
+}
+
+/** Map to canonical vocabulary namespace (one ref per vocabulary, correct URL). */
+function toCanonicalVocabularyNamespace(normalized: string): string {
+  if (
+    normalized === 'http://www.opengis.net/ont' ||
+    (normalized.includes('opengis.net') && (normalized.includes('/ont/geosparql') || normalized.includes('/doc/') || normalized.includes('/def/')))
+  )
+    return 'http://www.opengis.net/ont/geosparql';
+  if (normalized === 'http://purl.org/dc/elements' || normalized.startsWith('http://purl.org/dc/elements/'))
+    return 'http://purl.org/dc/elements/1.1';
+  return normalized;
+}
+
+/**
+ * Extract external ontology references from namespaces actually used in the store.
+ * Use when the ontology has no owl:imports (e.g. RDF/XML or TTL without imports) so the
+ * "Manage External Ontology References" modal still shows used vocabularies (dc, geo, schema, etc.).
+ * Excludes non-vocabulary IRIs (ORCID, licenses, institutional pages, spec docs) and
+ * consolidates GeoSPARQL-related namespaces to the canonical ontology IRI.
+ */
+export function extractUsedNamespaceRefsFromStore(
+  store: Store,
+  mainOntologyBase: string | null
+): ExternalOntologyReference[] {
+  const refs: ExternalOntologyReference[] = [];
+  const seen = new Set<string>();
+  const mainNormalized = mainOntologyBase
+    ? (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '')
+    : '';
+
+  function addNamespace(iri: string): void {
+    if (!iri || (!iri.startsWith('http://') && !iri.startsWith('https://'))) return;
+    const ns = iri.includes('#')
+      ? iri.slice(0, iri.indexOf('#') + 1)
+      : iri.replace(/\/?[^/]*\/?$/, '/') || iri + '/';
+    let normalized = (ns.endsWith('#') ? ns.slice(0, -1) : ns).replace(/\/$/, '');
+    normalized = toCanonicalVocabularyNamespace(normalized);
+    if (seen.has(normalized)) return;
+    if (normalized === mainNormalized) return;
+    if (CORE_NAMESPACES.has(normalized)) return;
+    if (isNonVocabularyNamespace(normalized)) return;
+    seen.add(normalized);
+    const url = iri.includes('#') ? normalized + '#' : normalized;
+    let prefix: string | undefined;
+    if (normalized.includes('w3id.org/dano')) prefix = 'dano';
+    else if (normalized.includes('schema.org')) prefix = 'schema';
+    else if (normalized.includes('purl.org/dc')) prefix = 'dc';
+    else if (normalized.includes('opengis.net/ont/geosparql')) prefix = 'geo';
+    else if (normalized.includes('xmlns.com/foaf')) prefix = 'foaf';
+    else if (normalized.includes('skos/core')) prefix = 'skos';
+    else if (normalized.includes('vocab/vann')) prefix = 'vann';
+    refs.push({ url, usePrefix: prefix !== undefined, prefix });
+  }
+
+  for (const q of store) {
+    if (q.subject.termType === 'NamedNode' && (q.subject as { value?: string }).value)
+      addNamespace((q.subject as { value: string }).value);
+    if (q.predicate.termType === 'NamedNode' && (q.predicate as { value?: string }).value)
+      addNamespace((q.predicate as { value: string }).value);
+    if (q.object.termType === 'NamedNode' && (q.object as { value?: string }).value)
+      addNamespace((q.object as { value: string }).value);
+  }
+
   return refs;
 }
 
@@ -164,6 +246,13 @@ export function formatRelationshipLabelWithPrefix(
 /**
  * Callbacks interface for external refs modal
  */
+/**
+ * Sort external refs by URL (alphabetically) in place.
+ */
+export function sortExternalRefsByUrl(refs: ExternalOntologyReference[]): void {
+  refs.sort((a, b) => a.url.localeCompare(b.url));
+}
+
 export interface ExternalRefsModalCallbacks {
   onUpdate: () => void;
   onSave: () => void;
