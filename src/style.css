@@ -186,6 +186,62 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   min-width: 320px;
 }
+.rename-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.rename-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.rename-modal-header-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.rename-modal-header-icon {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  user-select: none;
+}
+.rename-modal-header-icon:hover {
+  background: #eee;
+}
+.rename-modal-header-icon:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+@keyframes rename-tip-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.rename-tip-btn-pulse {
+  animation: rename-tip-pulse 1.5s ease-in-out infinite;
+}
+.rename-popover {
+  display: none;
+  position: fixed;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #333;
+  background: #f9f9f9;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 2100;
+  max-width: min(320px, calc(100vw - 24px));
+}
+.rename-popover.rename-popover-visible {
+  display: block;
+}
 .modal-content h3 {
   margin: 0 0 16px 0;
   font-size: 16px;

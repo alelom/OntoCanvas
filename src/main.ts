@@ -132,6 +132,10 @@ import {
   sortExternalRefsByUrl,
   type ExternalRefsModalCallbacks,
 } from './ui/externalRefs';
+import {
+  initRenameModalHeaderIcons,
+  setRenameModalTipButtonVisible,
+} from './ui/renameModalHeaderIcons';
 import { getAppVersion } from './utils/version';
 import {
   getAllRelationshipTypes,
@@ -3496,7 +3500,8 @@ function showRenameModal(
   } else if (exampleImagesContainer) {
     exampleImagesContainer.style.display = 'none';
   }
-  
+  setRenameModalTipButtonVisible(!fileHandle);
+
   // Render annotation properties
   const annotPropsSection = document.getElementById('renameAnnotationPropsSection');
   if (annotPropsSection) {
@@ -3551,6 +3556,7 @@ function showMultiEditModal(nodeIds: string[]): void {
   const renameIdentifier = document.getElementById('renameIdentifier');
   if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = 'none';
   if (renameIdentifier) (renameIdentifier as HTMLElement).style.display = 'none';
+  setRenameModalTipButtonVisible(false);
   modal.style.display = 'flex';
   commentInput?.focus();
 }
@@ -5136,7 +5142,13 @@ function renderApp(): void {
     </div>
     <div id="renameModal" class="modal" style="display: none;">
       <div class="modal-content">
-        <h3>Edit class properties</h3>
+        <div class="rename-modal-header">
+          <h3>Edit class properties</h3>
+          <div id="renameModalHeaderIcons" class="rename-modal-header-icons">
+            <span id="renameModalTipBtn" class="rename-modal-header-icon" style="display: none;" role="button" tabindex="0" title="Tip">💡</span>
+            <span id="renameModalInfoBtn" class="rename-modal-header-icon" role="button" tabindex="0" title="About this modal">ℹ️</span>
+          </div>
+        </div>
         <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
           <span style="font-size: 12px;">Label:</span>
           <input type="text" id="renameInput" style="flex: 1;" />
@@ -6860,6 +6872,8 @@ function setupEventListeners(): void {
   document.getElementById('renameModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'renameModal') hideRenameModal();
   });
+  const renameModalEl = document.getElementById('renameModal');
+  if (renameModalEl) initRenameModalHeaderIcons(renameModalEl);
 
   // Tab switching
   document.querySelectorAll('.add-node-tab').forEach((tab) => {

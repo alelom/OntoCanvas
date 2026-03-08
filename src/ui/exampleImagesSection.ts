@@ -18,7 +18,6 @@ export interface ExampleImagesSectionApi {
 }
 
 const SECTION_STYLE = 'margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;';
-const WARNING_STYLE = 'font-size: 11px; color: #b8860b; margin-bottom: 8px;';
 const LIST_ITEM_STYLE = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px;';
 const LINK_STYLE = 'color: #3498db; cursor: pointer; text-decoration: none; word-break: break-all;';
 
@@ -62,7 +61,7 @@ function renderList(
 
 /**
  * Initialize the Example images subsection inside the given container.
- * Renders warning when !isLocal, list, and Add button.
+ * Renders list and, when isLocal, Add button. (URL/read-only tip is shown in modal header.)
  * Returns getCurrentUris so main can read the list on OK.
  */
 export function initExampleImagesSection(
@@ -74,13 +73,6 @@ export function initExampleImagesSection(
 
   container.style.cssText = SECTION_STYLE;
   container.innerHTML = '';
-
-  if (!isLocal) {
-    const warning = document.createElement('p');
-    warning.style.cssText = WARNING_STYLE;
-    warning.textContent = 'Ontology is opened from a URL. Example images are read-only; add or remove images only when editing a local file.';
-    container.appendChild(warning);
-  }
 
   const listEl = document.createElement('div');
   listEl.style.marginTop = '8px';

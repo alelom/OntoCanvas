@@ -5,10 +5,13 @@
  * This module provides simple show/hide utilities and a structure for future extraction.
  */
 
+import { hideRenameModalPopover } from './renameModalHeaderIcons';
+
 /**
  * Hide the rename modal
  */
 export function hideRenameModal(): void {
+  hideRenameModalPopover();
   document.getElementById('renameModal')!.style.display = 'none';
 }
 
