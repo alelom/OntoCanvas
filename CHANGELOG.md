@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/alelom/OntoCanvas/compare/v1.3.0...v1.4.0) (2026-03-08)
+
+
+### Features
+
+* minor UX/UI improvements to right context menu, modal namings and Layout option ordering ([c45023b](https://github.com/alelom/OntoCanvas/commit/c45023b938b2b5326a7b18ae183479493a0122d7))
+
 # [1.3.0](https://github.com/alelom/OntoCanvas/compare/v1.2.0...v1.3.0) (2026-03-08)
 
 
