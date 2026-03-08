@@ -1,3 +1,15 @@
+# [1.6.0](https://github.com/alelom/OntoCanvas/compare/v1.5.0...v1.6.0) (2026-03-08)
+
+
+### Bug Fixes
+
+* several fixes to implementation. Implement functions for managing external class references and enhance test coverage ([028a9c8](https://github.com/alelom/OntoCanvas/commit/028a9c827a09a3fed46dff624dd6b7b05d86f3a3))
+
+
+### Features
+
+* add support for displaying external ontology nodes/edges ([df19cb4](https://github.com/alelom/OntoCanvas/commit/df19cb4b98672f3423872c7fba1c22077001c929))
+
 # [1.5.0](https://github.com/alelom/OntoCanvas/compare/v1.4.2...v1.5.0) (2026-03-08)
 
 
