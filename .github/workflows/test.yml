@@ -15,8 +15,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      unit: ${{ steps.filter.outputs.unit }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            unit:
+              - 'src/**'
+              - 'tests/unit/**'
+              - 'vitest.config.ts'
+              - 'tests/unitSetup.ts'
+              - 'package.json'
+              - 'package-lock.json'
+            e2e:
+              - 'src/**'
+              - 'tests/e2e/**'
+              - 'tests/fixtures/**'
+              - 'vitest.e2e.config.ts'
+              - 'tests/e2e/globalSetup.ts'
+              - 'tests/e2e/globalTeardown.ts'
+              - 'package.json'
+              - 'package-lock.json'
+
   unit-tests:
     name: Unit Tests
+    needs: [changes]
+    if: needs.changes.outputs.unit == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,6 +80,8 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
+    needs: [changes]
+    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
