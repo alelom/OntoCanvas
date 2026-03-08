@@ -419,6 +419,7 @@ let dataProperties: DataPropertyInfo[] = [];
 let network: Network | null = null;
 let addNodeMode = false;
 let pendingAddNodePosition: { x: number; y: number } | null = null;
+/** Must be reset to false when add-node modal closes (OK/Cancel/backdrop) so toolbar→canvas click can open modal again. */
 let addNodeModalShowing = false;
 let ttlStore: import('n3').Store | null = null;
 let loadedFileName: string | null = null;
@@ -3691,6 +3692,7 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
 function hideAddNodeModalWithCleanup(): void {
   pendingAddNodePosition = null;
   addNodeMode = false;
+  addNodeModalShowing = false;
   selectedExternalClass = null;
   addNodeExampleImageUris = [];
   addNodeDataPropertyRestrictions = [];
@@ -6931,7 +6933,7 @@ function setupEventListeners(): void {
     refreshAddNodeOkButton();
   });
   
-  document.getElementById('addNodeCancel')?.addEventListener('click', hideAddNodeModal);
+  document.getElementById('addNodeCancel')?.addEventListener('click', hideAddNodeModalWithCleanup);
   document.getElementById('addNodeConfirm')?.addEventListener('click', confirmAddNode);
   document.getElementById('addNodeModal')?.addEventListener('keydown', (e) => {
     if ((e.target as HTMLElement).closest('#addNodeModal') && (e.key === 'Enter' || e.key === 'Escape')) {
@@ -6945,7 +6947,7 @@ function setupEventListeners(): void {
     }
   });
   document.getElementById('addNodeModal')?.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).id === 'addNodeModal') hideAddNodeModal();
+    if ((e.target as HTMLElement).id === 'addNodeModal') hideAddNodeModalWithCleanup();
   });
 
   document.addEventListener(
