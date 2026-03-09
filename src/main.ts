@@ -129,6 +129,26 @@ import {
 } from './ui/externalRefs';
 import { getAppVersion } from './utils/version';
 import {
+  initBoxSelectionOverlay,
+  cleanupBoxSelectionOverlay,
+} from './ui/boxSelectionRenderer';
+import {
+  createBoxSelectionState,
+  startBoxSelection,
+  updateBoxSelection,
+  completeBoxSelection,
+  cancelBoxSelection,
+  type BoxSelectionState,
+} from './ui/boxSelection';
+import {
+  createTouchState,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd,
+  handleTouchCancel,
+  type TouchState,
+} from './ui/touchPanning';
+import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
   getRelationshipLabel,
@@ -3192,6 +3212,11 @@ function setupNetworkSelectionAndNavigation(
   net: Network,
   container: HTMLElement
 ): void {
+  // CRITICAL: Always log when this function is called
+  console.log('[BoxSelection] ===== setupNetworkSelectionAndNavigation CALLED =====');
+  console.log('[BoxSelection] Container:', container.id, container.tagName);
+  console.log('[BoxSelection] Network:', net ? 'exists' : 'null');
+  
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
@@ -3199,6 +3224,14 @@ function setupNetworkSelectionAndNavigation(
   /** Node/edge under cursor at right mousedown (so context menu uses exact click target, not mouseup). */
   let rightClickNodeId: string | null = null;
   let rightClickEdgeId: string | null = null;
+  
+  // Initialize box selection
+  const boxSelectionState = createBoxSelectionState(10); // 10px minimum drag distance
+  initBoxSelectionOverlay(container);
+  let boxSelectionJustCompleted = false; // Flag to prevent click handler after box selection
+  
+  // Initialize touch panning
+  const touchState = createTouchState();
 
   // Prevent browser's default context menu on the container
   container.oncontextmenu = (e: MouseEvent) => {
@@ -3219,16 +3252,64 @@ function setupNetworkSelectionAndNavigation(
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const handleMouseDown = (e: MouseEvent) => {
+  const handleMouseDown = (e: MouseEvent | PointerEvent) => {
+    // CRITICAL: Always log that handler was called (critical for debugging)
+    console.log('[BoxSelection] ===== handleMouseDown CALLED =====');
+    console.log('[BoxSelection] Event type:', e.type);
+    console.log('[BoxSelection] Event:', e);
+    console.log('[BoxSelection] Target:', e.target);
+    
+    // Convert PointerEvent to MouseEvent-like for compatibility
+    const mouseEvent = e as MouseEvent;
+    
     const target = e.target as Node;
-    // Check if click is within the container (including canvas elements)
-    if (!container.contains(target) && !container.isSameNode(target)) {
-      // Also check if the target is a child of the container's canvas
-      const canvas = container.querySelector('canvas');
-      if (!canvas || !canvas.contains(target)) return;
+    const targetElement = target as HTMLElement;
+    
+    // Get coordinates first to check if click is in container bounds
+    const coords = getContainerCoords(mouseEvent);
+    
+    // Check if coordinates are within container bounds (more reliable than target check)
+    const containerRect = container.getBoundingClientRect();
+    const clickX = mouseEvent.clientX;
+    const clickY = mouseEvent.clientY;
+    const isInContainerBounds = 
+      clickX >= containerRect.left &&
+      clickX <= containerRect.right &&
+      clickY >= containerRect.top &&
+      clickY <= containerRect.bottom;
+    
+    if (!isInContainerBounds) {
+      console.log('[BoxSelection] mousedown ignored - outside container bounds');
+      return;
     }
-    const coords = getContainerCoords(e);
-    if (e.button === RIGHT_BUTTON) {
+    
+    // Also check target for additional validation
+    const isInContainer = container.contains(target) || container.isSameNode(target);
+    let isInCanvas = false;
+    
+    if (!isInContainer) {
+      // Check if target is a canvas element within the container's subtree
+      const canvas = container.querySelector('canvas');
+      if (canvas && canvas.contains(target)) {
+        isInCanvas = true;
+      }
+      // Even if target check fails, if coordinates are in bounds, proceed
+      // (vis-network might create elements in ways that break contains())
+    }
+    
+    // Always log mousedown for debugging (critical for troubleshooting)
+    console.log('[BoxSelection] mousedown PROCESSING:', {
+      button: mouseEvent.button,
+      coords,
+      target: target.nodeName,
+      targetId: targetElement.id || 'no-id',
+      isInContainerBounds,
+      isInContainer,
+      isInCanvas,
+      boxSelectionActive: boxSelectionState.isActive,
+      containerId: container.id,
+    });
+    if (mouseEvent.button === RIGHT_BUTTON) {
       // Check if clicking on a node or edge
       const nodeAt = net.getNodeAt(coords);
       const edgeAt = net.getEdgeAt(coords);
@@ -3247,13 +3328,51 @@ function setupNetworkSelectionAndNavigation(
       const viewPos = net.getViewPosition();
       const scale = net.getScale();
       rightPanStart = { x: coords.x, y: coords.y, viewPos: { ...viewPos }, scale };
-    } else if (e.button === LEFT_BUTTON) {
+    } else if (mouseEvent.button === LEFT_BUTTON) {
+      // Don't start box selection if in add node mode
+      if (addNodeMode) {
+        selectionBeforeClick = net.getSelectedNodes().map(String);
+        return;
+      }
+      
+      // Check if clicking on a node or edge - if so, don't start box selection
+      const nodeAt = net.getNodeAt(coords);
+      const edgeAt = net.getEdgeAt(coords);
+      
+      if (nodeAt != null || edgeAt != null) {
+        selectionBeforeClick = net.getSelectedNodes().map(String);
+        return;
+      }
+      
+      // Start box selection on empty canvas
       selectionBeforeClick = net.getSelectedNodes().map(String);
+      startBoxSelection(
+        boxSelectionState,
+        coords.x,
+        coords.y,
+        mouseEvent.ctrlKey || mouseEvent.metaKey,
+        mouseEvent.shiftKey
+      );
+      
+      console.log('[BoxSelection] Started box selection:', {
+        x: coords.x,
+        y: coords.y,
+        ctrl: mouseEvent.ctrlKey || mouseEvent.metaKey,
+        shift: mouseEvent.shiftKey,
+        boxSelectionActive: boxSelectionState.isActive,
+      });
+      
+      // Prevent vis-network from handling this click
+      mouseEvent.stopPropagation();
+      mouseEvent.preventDefault();
     }
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    const coords = getContainerCoords(e);
+  const handleMouseMove = (e: MouseEvent | PointerEvent) => {
+    const mouseEvent = e as MouseEvent;
+    const coords = getContainerCoords(mouseEvent);
+    
+    // Handle right-button panning
     if (rightPanStart) {
       const dx = coords.x - rightPanStart.x;
       const dy = coords.y - rightPanStart.y;
@@ -3270,10 +3389,29 @@ function setupNetworkSelectionAndNavigation(
       });
       rightPanStart = { ...rightPanStart, x: coords.x, y: coords.y, viewPos: newViewPos };
     }
+    
+    // Handle box selection
+    if (boxSelectionState.isActive) {
+      updateBoxSelection(boxSelectionState, coords.x, coords.y);
+      
+      console.log('[BoxSelection] Updating selection rectangle:', {
+        dragDistance: boxSelectionState.dragDistance,
+        startPos: boxSelectionState.startPos,
+        currentPos: boxSelectionState.currentPos,
+        minDragDistance: boxSelectionState.minDragDistance,
+      });
+      
+      // Prevent default to avoid interfering with other handlers
+      if (boxSelectionState.dragDistance >= boxSelectionState.minDragDistance) {
+        mouseEvent.preventDefault();
+        mouseEvent.stopPropagation();
+      }
+    }
   };
 
-  const handleMouseUp = (e: MouseEvent) => {
-    if (e.button === RIGHT_BUTTON) {
+  const handleMouseUp = (e: MouseEvent | PointerEvent) => {
+    const mouseEvent = e as MouseEvent;
+    if (mouseEvent.button === RIGHT_BUTTON) {
       const target = e.target as Node;
       const isInContainer = container.contains(target) || container.isSameNode(target) || 
                            (container.querySelector('canvas')?.contains(target) ?? false);
@@ -3292,11 +3430,75 @@ function setupNetworkSelectionAndNavigation(
       rightPanStart = null;
       rightClickNodeId = null;
       rightClickEdgeId = null;
+    } else if (mouseEvent.button === LEFT_BUTTON) {
+      // Complete box selection if active
+      if (boxSelectionState.isActive) {
+        // Mark that box selection just completed BEFORE completing (to prevent click handler)
+        const hadSignificantDrag = boxSelectionState.dragDistance >= boxSelectionState.minDragDistance;
+        boxSelectionJustCompleted = hadSignificantDrag;
+        
+        // Create edge data getter function
+        const getEdgeData = (edgeId: string): { from: string; to: string } | null => {
+          // Edge IDs are in format "from->to:type"
+          const match = edgeId.match(/^(.+?)->(.+?):/);
+          if (match) {
+            return { from: match[1], to: match[2] };
+          }
+          return null;
+        };
+        
+        const { nodes: selectedNodes, edges: selectedEdges } = completeBoxSelection(
+          boxSelectionState,
+          net,
+          getEdgeData
+        );
+        
+        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+          // Get current selection
+          const currentNodes = net.getSelectedNodes().map(String);
+          const currentEdges = net.getSelectedEdges().map(String);
+          
+          // Apply modifier keys
+          let finalNodes: string[];
+          let finalEdges: string[];
+          
+          if (boxSelectionState.modifierKeys.ctrl || boxSelectionState.modifierKeys.shift) {
+            // Add to existing selection
+            finalNodes = [...new Set([...currentNodes, ...selectedNodes])];
+            finalEdges = [...new Set([...currentEdges, ...selectedEdges])];
+          } else {
+            // Replace selection
+            finalNodes = selectedNodes;
+            finalEdges = selectedEdges;
+          }
+          
+          net.setSelection(
+            { nodes: finalNodes, edges: finalEdges },
+            { unselectAll: false, highlightEdges: true }
+          );
+          updateSelectionInfoDisplay(net);
+        } else if (hadSignificantDrag) {
+          // If we had significant drag but no nodes selected, clear selection (unless modifier keys)
+          if (!boxSelectionState.modifierKeys.ctrl && !boxSelectionState.modifierKeys.shift) {
+            net.setSelection({ nodes: [], edges: [] }, { unselectAll: true });
+            updateSelectionInfoDisplay(net);
+          }
+        }
+        
+        // Reset flag after a short delay to allow click event to be skipped
+        setTimeout(() => {
+          boxSelectionJustCompleted = false;
+        }, 100);
+      }
     }
   };
 
   const handleMouseLeave = () => {
     rightPanStart = null;
+    // Cancel box selection if mouse leaves container
+    if (boxSelectionState.isActive) {
+      cancelBoxSelection(boxSelectionState);
+    }
   };
 
   // Prevent browser context menu on container and all its children (including canvas)
@@ -3311,10 +3513,52 @@ function setupNetworkSelectionAndNavigation(
   };
   
   container.addEventListener('contextmenu', handleContextMenu, true); // Capture phase
-  document.addEventListener('mousedown', handleMouseDown, true);
-  document.addEventListener('mousemove', handleMouseMove, true);
-  document.addEventListener('mouseup', handleMouseUp, true);
+  
+  // Add mouse event listeners to container (like double-click handler does)
+  // This ensures we catch events before vis-network processes them
+  console.log('[BoxSelection] Attaching event listeners to container:', container.id);
+  
+  // Store handler reference for potential removal/debugging
+  (window as any).__boxSelectionHandlers = {
+    mousedown: handleMouseDown,
+    mousemove: handleMouseMove,
+    mouseup: handleMouseUp,
+  };
+  
+  // Attach to container with capture phase (same as double-click handler)
+  // Use pointer events for better compatibility and to catch events before vis-network
+  container.addEventListener('pointerdown', handleMouseDown as (e: Event) => void, true);
+  container.addEventListener('pointermove', handleMouseMove as (e: Event) => void, true);
+  container.addEventListener('pointerup', handleMouseUp as (e: Event) => void, true);
+  container.addEventListener('pointerleave', handleMouseLeave, true);
+  // Also attach mouse events as fallback
+  container.addEventListener('mousedown', handleMouseDown, true);
+  container.addEventListener('mousemove', handleMouseMove, true);
+  container.addEventListener('mouseup', handleMouseUp, true);
   container.addEventListener('mouseleave', handleMouseLeave);
+  
+  // Always log that listeners are attached
+  console.log('[BoxSelection] Event listeners attached successfully to container');
+  
+  // Touch event handlers for 2-finger panning
+  container.addEventListener('touchstart', (e: TouchEvent) => {
+    handleTouchStart(touchState, e, container);
+  }, { passive: true });
+  
+  container.addEventListener('touchmove', (e: TouchEvent) => {
+    if (touchState.touches.size === 2) {
+      e.preventDefault(); // Prevent scrolling when panning/zooming
+      handleTouchMove(touchState, e, net, container);
+    }
+  }, { passive: false });
+  
+  container.addEventListener('touchend', (e: TouchEvent) => {
+    handleTouchEnd(touchState, e);
+  }, { passive: true });
+  
+  container.addEventListener('touchcancel', () => {
+    handleTouchCancel(touchState);
+  }, { passive: true });
 
   const handleNativeClick = (e: MouseEvent) => {
     if (!ttlStore || !network) return;
@@ -3374,6 +3618,11 @@ function setupNetworkSelectionAndNavigation(
   container.addEventListener('dblclick', handleNativeDblclick, true);
 
   net.on('click', (params: { nodes: string[]; edges: string[]; event?: { srcEvent?: MouseEvent; pointer?: { DOM: { x: number; y: number } } } }) => {
+    // Skip click handler if box selection just completed
+    if (boxSelectionJustCompleted) {
+      return;
+    }
+    
     const clickedNode = params.nodes[0] as string | undefined;
     const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
 
@@ -5928,7 +6177,17 @@ function applyFilter(preserveView = false): void {
     const ro = new ResizeObserver(resizeNetwork);
     ro.observe(networkContainer);
     resizeNetwork(); // Initial size
-    setupNetworkSelectionAndNavigation(network, networkContainer);
+    console.log('[BoxSelection] ===== CALLING setupNetworkSelectionAndNavigation =====');
+    console.log('[BoxSelection] Network exists:', network !== null);
+    console.log('[BoxSelection] Container exists:', networkContainer !== null);
+    console.log('[BoxSelection] Container ID:', networkContainer?.id);
+    try {
+      setupNetworkSelectionAndNavigation(network, networkContainer);
+      console.log('[BoxSelection] setupNetworkSelectionAndNavigation completed successfully');
+    } catch (error) {
+      console.error('[BoxSelection] ERROR in setupNetworkSelectionAndNavigation:', error);
+      throw error;
+    }
     
     // Initialize context menu
     if (ttlStore) {
