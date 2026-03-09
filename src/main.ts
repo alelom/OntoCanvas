@@ -3419,10 +3419,14 @@ function setupNetworkSelectionAndNavigation(
   container.addEventListener('mouseleave', handleMouseLeave);
 
   const handleNativeClick = (e: MouseEvent) => {
-    if (!ttlStore || !network) return;
+    // Allow clicks even when ttlStore is null (e.g., empty ontology) - network should still work
+    if (!network) return;
     const target = e.target as HTMLElement;
+    // When clicking Add node button, let vis-network's manipulation UI handle it
+    // It will call our addNode handler when canvas is clicked
     if (target.closest?.('.vis-add')) {
       addNodeMode = true;
+      // Don't prevent default - let vis-network handle it
       return;
     }
     // Don't interfere with manipulation UI unless we're in add node mode
@@ -3432,7 +3436,9 @@ function setupNetworkSelectionAndNavigation(
     if (!addNodeMode) return;
     
     // Check if click is on the network canvas (not on UI elements)
-    if (!container.contains(target) && !target.closest('#network')) return;
+    // Allow clicks on the network container or its children
+    const isNetworkClick = container.contains(target) || target.closest('#network') || target.id === 'network';
+    if (!isNetworkClick) return;
     
     const rect = container.getBoundingClientRect();
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -3444,6 +3450,7 @@ function setupNetworkSelectionAndNavigation(
     }
     const canvasPos = net.DOMtoCanvas(domPos);
     showAddNodeModal(canvasPos.x, canvasPos.y);
+    addNodeMode = false; // Reset after showing modal
   };
 
   const handleNativeDblclick = (e: MouseEvent) => {
@@ -5268,6 +5275,10 @@ function renderApp(): void {
       </span>
       </div>
       <div id="errorMsg" class="error" style="display: none;"></div>
+      <div id="warningMsg" class="warning" style="display: none;">
+        <span id="warningMsgText"></span>
+        <button id="warningMsgClose" type="button" title="Dismiss warning">×</button>
+      </div>
     </div>
     <div id="networkWrapper">
       <div id="network"></div>
@@ -5661,11 +5672,13 @@ async function loadTtlAndRender(
   pathHint?: string
 ): Promise<void> {
   const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+  const warningMsg = document.getElementById('warningMsg') as HTMLElement;
   const vizControls = document.getElementById('vizControls') as HTMLElement;
   errorMsg.style.display = 'none';
   errorMsg.textContent = '';
   errorMsg.innerHTML = '';
   errorMsg.style.cursor = '';
+  warningMsg.style.display = 'none';
 
   try {
     const pathForParse = pathHint ?? fileName ?? '';
@@ -5726,6 +5739,29 @@ async function loadTtlAndRender(
     updateFilePathDisplay();
 
     loadedEdgeStyleConfig = null;
+
+    // Check if ontology has no classes
+    if (graphData.nodes.length === 0) {
+      const warningText = document.getElementById('warningMsgText') as HTMLElement;
+      if (warningText) {
+        warningText.textContent = 'The current file defines no classes, so the canvas is empty.';
+      }
+      warningMsg.style.display = 'flex';
+      
+      // Setup close button
+      const closeBtn = document.getElementById('warningMsgClose') as HTMLElement;
+      if (closeBtn) {
+        // Remove any existing listeners by cloning
+        const newCloseBtn = closeBtn.cloneNode(true) as HTMLElement;
+        closeBtn.parentNode?.replaceChild(newCloseBtn, closeBtn);
+        const currentCloseBtn = document.getElementById('warningMsgClose') as HTMLElement;
+        currentCloseBtn.addEventListener('click', () => {
+          warningMsg.style.display = 'none';
+        });
+      }
+    } else {
+      warningMsg.style.display = 'none';
+    }
 
     setTimeout(() => {
       updateStatusBar(ttlStore);
@@ -5900,7 +5936,9 @@ async function loadTtlAndRender(
 }
 
 function applyFilter(preserveView = false): void {
-  if (rawData.nodes.length === 0) return;
+  // Don't return early - we need to initialize the network even with no nodes
+  // so that Add node/Add edge buttons and double-click work
+  const hasNodes = rawData.nodes.length > 0;
 
   let savedScale: number | null = null;
   let savedPosition: { x: number; y: number } | null = null;
@@ -6029,9 +6067,19 @@ function applyFilter(preserveView = false): void {
         callback(null);
         return;
       }
-      const x = nodeData.x ?? 0;
-      const y = nodeData.y ?? 0;
+      // Get coordinates from nodeData, or use network view position if not provided
+      let x = nodeData.x ?? 0;
+      let y = nodeData.y ?? 0;
+      // If coordinates are 0 or not provided, use the center of the view
+      if ((x === 0 && y === 0) || (x === undefined && y === undefined)) {
+        if (network) {
+          const viewPos = network.getViewPosition();
+          x = viewPos.x;
+          y = viewPos.y;
+        }
+      }
       showAddNodeModal(x, y);
+      addNodeMode = false; // Reset after showing modal
       callback(null);
     },
     addEdge: (
@@ -6040,10 +6088,12 @@ function applyFilter(preserveView = false): void {
     ) => {
       const from = String(edgeData.from);
       const to = String(edgeData.to);
-      if (from === to || !ttlStore) {
+      if (from === to) {
         callback(null);
         return;
       }
+      // Allow adding edges even when ttlStore is null (e.g., empty ontology)
+      // The modal will handle the case where ttlStore is null
       showAddEdgeModal(from, to, callback);
     },
     editEdge: {

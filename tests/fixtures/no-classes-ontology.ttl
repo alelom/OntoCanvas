@@ -1,0 +1,13 @@
+@prefix : <http://example.org/aec-drawing/v01/modular#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/aec-drawing/v01/modular> rdf:type owl:Ontology ;
+    rdfs:label "AEC Drawing Modular Ontology (Aggregate)" ;
+    rdfs:comment "Aggregate ontology importing modular layers for integrated use." ;
+    owl:imports <http://example.org/aec-drawing/v01/core>,
+                <http://example.org/aec-drawing/v01/drawing-metadata>,
+                <http://example.org/aec-drawing/v01/common-symbols>,
+                <http://example.org/aec-drawing/v01/facade-drawing>,
+                <http://example.org/aec-drawing/v01/domain-common> .
