@@ -180,6 +180,8 @@ import { getNetworkOptions } from './ui/networkConfig';
 import { fetchOntologyFromUrl } from './lib/ontologyUrlLoader';
 import { handleUrlLoadFailure } from './lib/urlLoadFailureHandler';
 import { loadOntologyFromContent } from './lib/loadOntology';
+import { validateOntologyStructure, formatValidationErrors } from './lib/ontologyValidation';
+import { showValidationErrorModal } from './ui/validationErrorModal';
 import {
   labelToCamelCaseIdentifier,
   validateLabelForIdentifier,
@@ -5662,11 +5664,50 @@ async function loadTtlAndRender(
   const vizControls = document.getElementById('vizControls') as HTMLElement;
   errorMsg.style.display = 'none';
   errorMsg.textContent = '';
+  errorMsg.innerHTML = '';
+  errorMsg.style.cursor = '';
 
   try {
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = parseResult;
+
+    // Validate ontology structure before proceeding
+    const validationResult = validateOntologyStructure(graphData.nodes, graphData.edges);
+    if (!validationResult.isValid) {
+      const errorCount = validationResult.errors.length;
+      const warningCount = validationResult.warnings.length;
+      let errorSummary = 'Cannot open ontology';
+      if (errorCount > 0 && warningCount > 0) {
+        errorSummary += `: ${errorCount} error${errorCount !== 1 ? 's' : ''} and ${warningCount} warning${warningCount !== 1 ? 's' : ''} found`;
+      } else if (errorCount > 0) {
+        errorSummary += `: ${errorCount} error${errorCount !== 1 ? 's' : ''} found`;
+      } else if (warningCount > 0) {
+        errorSummary += `: ${warningCount} warning${warningCount !== 1 ? 's' : ''} found`;
+      }
+      
+      // Create clickable error message
+      errorMsg.innerHTML = `<span style="cursor: pointer; text-decoration: underline;">${errorSummary}</span>`;
+      errorMsg.style.display = 'block';
+      errorMsg.style.cursor = 'pointer';
+      // Remove any existing click listeners by cloning and replacing
+      const newErrorMsg = errorMsg.cloneNode(true) as HTMLElement;
+      errorMsg.parentNode?.replaceChild(newErrorMsg, errorMsg);
+      const currentErrorMsg = document.getElementById('errorMsg') as HTMLElement;
+      currentErrorMsg.addEventListener('click', () => {
+        showValidationErrorModal(validationResult);
+      });
+      
+      vizControls.style.display = 'none';
+      // Also create plain text version for the error object
+      const errorText = formatValidationErrors(validationResult);
+      throw new Error(`Invalid ontology structure: ${errorText}`);
+    }
+    
+    // Log warnings if any
+    if (validationResult.warnings.length > 0) {
+      console.warn('Ontology validation warnings:', validationResult.warnings);
+    }
 
     rawData = graphData;
     annotationProperties = annotationProps;

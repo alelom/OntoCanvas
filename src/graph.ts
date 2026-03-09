@@ -296,12 +296,27 @@ function buildHierarchy(
 
   const rootOf: Record<string, string> = {};
   const depth: Record<string, number> = {};
-  const visit = (id: string, root: string, d: number) => {
+  const visit = (id: string, root: string, d: number, path: Set<string>) => {
+    // Prevent infinite recursion from circular references
+    if (path.has(id)) {
+      // Circular reference detected - skip to prevent stack overflow
+      return;
+    }
+    // If already assigned to a different root, don't overwrite (first assignment wins)
+    if (rootOf[id] !== undefined && rootOf[id] !== root) {
+      return;
+    }
+    path.add(id);
     rootOf[id] = root;
-    depth[id] = d;
-    (children[id] || []).filter((c) => nodeIds.has(c)).forEach((c) => visit(c, root, d + 1));
+    depth[id] = Math.min(depth[id] ?? d, d);
+    (children[id] || []).filter((c) => nodeIds.has(c)).forEach((c) => {
+      visit(c, root, d + 1, path);
+    });
+    path.delete(id);
   };
-  roots.forEach((r) => visit(r, r, 0));
+  roots.forEach((r) => {
+    visit(r, r, 0, new Set<string>());
+  });
 
   return { parents, children, roots, rootOf, depth };
 }

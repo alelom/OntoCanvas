@@ -163,12 +163,18 @@ body {
 }
 #errorMsg {
   flex-basis: 100%;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.5;
 }
 .error {
   color: #c0392b;
   font-size: 12px;
-  padding: 6px 16px;
+  padding: 8px 16px;
   background: #fadbd8;
+}
+.error:hover {
+  background: #f5c2c2;
 }
 .modal {
   position: fixed;

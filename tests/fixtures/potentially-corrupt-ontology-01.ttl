@@ -1,0 +1,215 @@
+@prefix : <http://example.org/aec-drawing/v01/facade-domain#> .
+@prefix core: <http://example.org/aec-drawing/v01/core#> .
+@prefix common: <http://example.org/aec-drawing/v01/common-symbols#> .
+@prefix dcommon: <http://example.org/aec-drawing/v01/domain-common#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/aec-drawing/v01/facade-domain> rdf:type owl:Ontology ;
+    rdfs:label "AEC Facade Domain Ontology" ;
+    rdfs:comment "Facade-domain specific concepts and symbols." ;
+    owl:imports <http://example.org/aec-drawing/v01/core>,
+                <http://example.org/aec-drawing/v01/common-symbols>,
+                <http://example.org/aec-drawing/v01/domain-common> .
+
+#################################################################
+#    Facade-specific property vocabularies
+#################################################################
+
+:CWFrameMemberProperties rdf:type owl:Class ;
+    rdfs:comment "Specific properties of curtain wall frame members." ;
+    rdfs:label "CW frame member properties" ;
+    core:labellableRoot "false"^^xsd:boolean .
+
+:GlazingProperties rdf:type owl:Class ;
+    rdfs:comment "Specific properties of glazing elements." ;
+    rdfs:label "Glazing properties" ;
+    core:labellableRoot "false"^^xsd:boolean .
+
+:DoubleLaminated rdf:type owl:Class ;
+    rdfs:label "Double laminated" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf :GlazingProperties .
+
+:Laminated rdf:type owl:Class ;
+    rdfs:label "Laminated" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf :GlazingProperties .
+
+:Monolithic rdf:type owl:Class ;
+    rdfs:label "Monolithic" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf :GlazingProperties .
+
+:FacadeCladding rdf:type owl:Class ;
+    rdfs:label "Facade cladding" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:PanelComponent .
+
+:FacadeSecondaryStructure rdf:type owl:Class ;
+    rdfs:label "Facade secondary structure" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:LinearComponent .
+
+:FacadeShape rdf:type owl:Class ;
+    rdfs:label "Facade shape" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf common:GeometricProperties .
+
+:FrameType rdf:type owl:Class ;
+    rdfs:label "Frame type" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf :CWFrameMemberProperties .
+
+:GlazingRetention rdf:type owl:Class ;
+    rdfs:label "Glazing retention" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf :CWFrameMemberProperties .
+
+:CWFrameMember rdf:type owl:Class ;
+    rdfs:label "CW frame member" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:LinearComponent .
+
+:CWSystem rdf:type owl:Class ;
+    rdfs:label "CW system" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf :CWFrameMemberProperties .
+
+:Gasket rdf:type owl:Class ;
+    rdfs:label "Gasket" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:LinearComponent .
+
+:Fixing rdf:type owl:Class ;
+    rdfs:label "Fixing" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:PointComponent .
+
+:Membrane rdf:type owl:Class ;
+    rdfs:label "Membrane" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:PanelComponent .
+
+:Insulation rdf:type owl:Class ;
+    rdfs:label "Insulation" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:PanelComponent .
+
+:Board rdf:type owl:Class ;
+    rdfs:label "Board" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:PanelComponent .
+
+:Bracket rdf:type owl:Class ;
+    rdfs:label "Bracket" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:PointComponent .
+
+:CavityWallSystem rdf:type owl:Class ;
+    rdfs:label "Cavity wall system" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:FacadeSystem .
+
+:CurtainWallSystem rdf:type owl:Class ;
+    rdfs:label "Curtain wall system" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:FacadeSystem .
+
+:PrecastSystem rdf:type owl:Class ;
+    rdfs:label "Precast system" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:FacadeSystem .
+
+:RainscreenSystem rdf:type owl:Class ;
+    rdfs:label "Rainscreen" ;
+    core:labellableRoot "false"^^xsd:boolean ;
+    rdfs:subClassOf dcommon:FacadeSystem .
+
+:LinearStructuralComponent rdf:type owl:Class ;
+    rdfs:label "Linear structural component facade usage" ;
+    rdfs:subClassOf dcommon:LinearStructuralComponent .
+
+:PanelStructuralComponent rdf:type owl:Class ;
+    rdfs:label "Panel structural component facade usage" ;
+    rdfs:subClassOf dcommon:PanelStructuralComponent .
+
+:AddOn rdf:type owl:Class ; rdfs:label "Add-on" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FrameType .
+:BackingWall rdf:type owl:Class ; rdfs:label "Backing wall" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:PanelComponent .
+:Beam rdf:type owl:Class ; rdfs:label "Beam" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:StructuralMember .
+:Blockwork rdf:type owl:Class ; rdfs:label "Blockwork" ; rdfs:subClassOf :RoofCladding .
+:BreatherMembrane rdf:type owl:Class ; rdfs:label "Breather" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Membrane .
+:Cable rdf:type owl:Class ; rdfs:label "Cable" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearStructuralComponent .
+:Capped rdf:type owl:Class ; rdfs:label "Capped" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :GlazingRetention .
+:Capping rdf:type owl:Class ; rdfs:label "Capping" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearComponent .
+:CastInChannel rdf:type owl:Class ; rdfs:label "Cast-in channel" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Fixing .
+:CavityBarrier rdf:type owl:Class ; rdfs:label "Cavity barrier" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Gasket .
+:Cementboard rdf:type owl:Class ; rdfs:label "Cementboard" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Board .
+:Channel rdf:type owl:Class ; rdfs:label "Channel" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Gasket .
+:ChordBracing rdf:type owl:Class ; rdfs:label "Chord/bracing" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:StructuralMember .
+:ClosedState rdf:type owl:Class ; rdfs:label "Closed state" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CavityBarrier .
+:Column rdf:type owl:Class ; rdfs:label "Column" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:StructuralMember .
+:Curved rdf:type owl:Class ; rdfs:label "Curved" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeShape .
+:DeadLoadBracket rdf:type owl:Class ; rdfs:comment "Dead load bracket" ; rdfs:label "Dead load" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Bracket .
+:DGU rdf:type owl:Class ; rdfs:comment "Double Glazing Unit" ; rdfs:label "DGU" ; rdfs:subClassOf :FacadeCladding .
+:EPDM rdf:type owl:Class ; rdfs:label "EPDM" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Membrane .
+:Extruded rdf:type owl:Class ; rdfs:label "Extruded" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FrameType .
+:Fabricated rdf:type owl:Class ; rdfs:label "Fabricated" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FrameType .
+:Faceted rdf:type owl:Class ; rdfs:label "Faceted" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeShape .
+:Fin rdf:type owl:Class ; rdfs:label "Fin" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearComponent .
+:Firestop rdf:type owl:Class ; rdfs:label "Firestop" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearComponent .
+:Flipper rdf:type owl:Class ; rdfs:label "Flipper" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Gasket .
+:GRC rdf:type owl:Class ; rdfs:label "GRC" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :PrecastSystem .
+:HelpingHandBracket rdf:type owl:Class ; rdfs:comment "Helping hand bracket" ; rdfs:label "Helping hand" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Bracket .
+:HollowGasketShape rdf:type owl:Class ; rdfs:label "Hollow gasket shape" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Gasket .
+:LocalisedPenetration rdf:type owl:Class ; rdfs:label "Localised penetration" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:PointComponent .
+:Louvre rdf:type owl:Class ; rdfs:label "Louvre" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearComponent .
+:Masonry rdf:type owl:Class ; rdfs:label "Masonry" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeCladding .
+:MineralWool rdf:type owl:Class ; rdfs:label "Mineral wool" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Insulation .
+:Mullion rdf:type owl:Class ; rdfs:label "Mullion" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CWFrameMember .
+:OGasket rdf:type owl:Class ; rdfs:label "O-gasket" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :HollowGasketShape .
+:OpenState rdf:type owl:Class ; rdfs:label "Open state" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CavityBarrier .
+:OtherInsulation rdf:type owl:Class ; rdfs:label "Other insulation" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Insulation .
+:PGasket rdf:type owl:Class ; rdfs:label "P-gasket" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :HollowGasketShape .
+:Planar rdf:type owl:Class ; rdfs:label "Planar" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeShape .
+:Plasterboard rdf:type owl:Class ; rdfs:label "Plasterboard" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Board .
+:PrecastConcrete rdf:type owl:Class ; rdfs:label "Precast concrete" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeCladding .
+:PrecastRestraintBracket rdf:type owl:Class ; rdfs:comment "Precast restraint bracket" ; rdfs:label "Precast restraint" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Bracket .
+:ProfiledMetal rdf:type owl:Class ; rdfs:label "Profiled metal" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeCladding .
+:PushIn rdf:type owl:Class ; rdfs:label "Push-in" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :SolidGasketShape .
+:Rail rdf:type owl:Class ; rdfs:label "Rail" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeSecondaryStructure .
+:Reflvet rdf:type owl:Class ; rdfs:label "Reflvet" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Gasket .
+:RoofCladding rdf:type owl:Class ; rdfs:label "Roof cladding" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:PanelComponent .
+:Screw rdf:type owl:Class ; rdfs:label "Screw" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Fixing .
+:Sealant rdf:type owl:Class ; rdfs:label "Sealant" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearComponent .
+:SemiUnitisedCurtainWall rdf:type owl:Class ; rdfs:comment "Semi-unitised curtain wall" ; rdfs:label "Semi-unitised" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CurtainWallSystem .
+:SerratedSawtooth rdf:type owl:Class ; rdfs:label "Serrated/Sawtooth" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeShape .
+:SFS rdf:type owl:Class ; rdfs:comment "Steel Frame System" ; rdfs:label "SFS" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :BackingWall .
+:ShelfAngle rdf:type owl:Class ; rdfs:label "Shelf angle" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeSecondaryStructure .
+:Silicone rdf:type owl:Class ; rdfs:label "Silicone" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Sealant .
+:Slab rdf:type owl:Class ; rdfs:label "Slab" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:PanelStructuralComponent .
+:SlideIn rdf:type owl:Class ; rdfs:label "Slide-in" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :SolidGasketShape .
+:SmallPanels rdf:type owl:Class ; rdfs:label "Small panels" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeCladding .
+:SolidGasketShape rdf:type owl:Class ; rdfs:label "Solid gasket shape" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Gasket .
+:SSG rdf:type owl:Class ; rdfs:label "SSG (Structural silicone glazing)" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :GlazingRetention .
+:Stick rdf:type owl:Class ; rdfs:label "Stick" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CWSystem .
+:StickCurtainWall rdf:type owl:Class ; rdfs:comment "Stick curtain wall" ; rdfs:label "Stick" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CurtainWallSystem .
+:TGU rdf:type owl:Class ; rdfs:comment "Triple Glazed Unit" ; rdfs:label "TGU" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeCladding .
+:TimberCassette rdf:type owl:Class ; rdfs:label "Timber cassette" ; rdfs:subClassOf :RoofCladding .
+:Toggle rdf:type owl:Class ; rdfs:label "Toggle" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :GlazingRetention .
+:Transom rdf:type owl:Class ; rdfs:label "Transom" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CWFrameMember .
+:UMPC rdf:type owl:Class ; rdfs:label "UMPC" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :PrecastSystem .
+:Unitised rdf:type owl:Class ; rdfs:label "Unitised" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CWSystem .
+:UnitisedCurtainWall rdf:type owl:Class ; rdfs:comment "Unitised curtain wall" ; rdfs:label "Unitised" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :CurtainWallSystem .
+:Upstand rdf:type owl:Class ; rdfs:label "Upstand" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:PanelStructuralComponent .
+:VCL rdf:type owl:Class ; rdfs:label "VCL (Vapour control layer)" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Insulation .
+:Wall rdf:type owl:Class ; rdfs:label "Wall" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:PanelStructuralComponent .
+:WaterproofingMembrane rdf:type owl:Class ; rdfs:label "Waterproofing" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Membrane .
+:Wedge rdf:type owl:Class ; rdfs:label "Wedge" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :SolidGasketShape .
+:WeldedBolt rdf:type owl:Class ; rdfs:label "Welded bolt" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Fixing .
+:WindowSystem rdf:type owl:Class ; rdfs:label "Window system" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf dcommon:LinearComponent .
+:WoodFibre rdf:type owl:Class ; rdfs:label "Wood fibre" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :Insulation .
+:ZigZag rdf:type owl:Class ; rdfs:label "Zig-zag" ; core:labellableRoot "false"^^xsd:boolean ; rdfs:subClassOf :FacadeShape .
