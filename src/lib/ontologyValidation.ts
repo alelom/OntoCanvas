@@ -22,7 +22,9 @@ export interface ValidationResult {
 
 /**
  * Detect circular references in class hierarchies.
- * Returns cycles found in the hierarchy (subClassOf and contains edges).
+ * Returns cycles found in the hierarchy (subClassOf edges only).
+ * Note: contains edges are excluded as they represent part-whole relationships
+ * that can be bidirectional and don't form true hierarchy cycles.
  */
 function detectCircularReferences(
   nodes: GraphNode[],
@@ -31,25 +33,29 @@ function detectCircularReferences(
   const errors: ValidationError[] = [];
   
   // Build adjacency list for hierarchy edges only
+  // Only subClassOf represents a true hierarchy relationship
+  // contains is a part-whole relationship and can be bidirectional, so it shouldn't be used for cycle detection
   const hierarchyEdges = edges.filter(
-    (e) => (e.type === 'subClassOf' || e.type === 'contains') && 
+    (e) => e.type === 'subClassOf' && 
            nodes.some(n => n.id === e.from) && 
            nodes.some(n => n.id === e.to)
   );
   
-  const children: Record<string, string[]> = {};
+  const parents: Record<string, string[]> = {};
   const nodeIds = new Set(nodes.map(n => n.id));
   
+  // For subClassOf edges: from is the child, to is the parent
+  // Build a parents list: each child (from) should have its parent (to) in its parents list
   hierarchyEdges.forEach((e) => {
-    if (!children[e.from]) {
-      children[e.from] = [];
+    if (!parents[e.from]) {
+      parents[e.from] = [];
     }
     if (nodeIds.has(e.to)) {
-      children[e.from].push(e.to);
+      parents[e.from].push(e.to);
     }
   });
   
-  // DFS to detect cycles
+  // DFS to detect cycles by following parents (up the hierarchy)
   const visited = new Set<string>();
   const recStack = new Set<string>();
   const seenCycles = new Set<string>();
@@ -87,10 +93,11 @@ function detectCircularReferences(
     visited.add(nodeId);
     recStack.add(nodeId);
     
-    const childIds = children[nodeId] || [];
-    for (const childId of childIds) {
-      if (nodeIds.has(childId)) {
-        dfs(childId, [...path, nodeId]);
+    // Follow parents (up the hierarchy) to detect cycles
+    const parentIds = parents[nodeId] || [];
+    for (const parentId of parentIds) {
+      if (nodeIds.has(parentId)) {
+        dfs(parentId, [...path, nodeId]);
       }
     }
     
