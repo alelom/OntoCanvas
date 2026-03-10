@@ -5740,8 +5740,29 @@ async function loadTtlAndRender(
 
     loadedEdgeStyleConfig = null;
 
-    // Check if ontology has no classes
-    if (graphData.nodes.length === 0) {
+    // Check if ontology has no classes AND no edges (canvas is truly empty)
+    // If there are edges (even connecting external nodes), the canvas is not empty
+    // Also check if there are object properties with domain/range that would create edges
+    // (even if those edges connect external nodes like owl:Thing)
+    let hasObjectPropertiesWithDomainRange = false;
+    if (graphData.nodes.length === 0 && graphData.edges.length === 0) {
+      // Check if any object properties have domain/range defined (would create edges with external nodes)
+      const { DataFactory } = await import('n3');
+      const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+      for (const op of objectProps) {
+        const propUri = op.uri ?? (op.name.startsWith('http://') || op.name.startsWith('https://') ? op.name : null);
+        if (!propUri) continue;
+        const propNode = DataFactory.namedNode(propUri);
+        const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), null, null);
+        const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), null, null);
+        if (domainQuads.length > 0 && rangeQuads.length > 0) {
+          hasObjectPropertiesWithDomainRange = true;
+          break;
+        }
+      }
+    }
+    
+    if (graphData.nodes.length === 0 && graphData.edges.length === 0 && !hasObjectPropertiesWithDomainRange) {
       const warningText = document.getElementById('warningMsgText') as HTMLElement;
       if (warningText) {
         warningText.textContent = 'The current file defines no classes, so the canvas is empty.';
@@ -6329,6 +6350,27 @@ async function loadFromFile(): Promise<void> {
       const ttl = await file.text();
       const pathHint = (file as File & { path?: string }).path ?? file.name;
       await loadTtlAndRender(ttl, file.name, handle, pathHint);
+      
+      // Try to load display config from sibling .display.json file
+      const localDisplayConfig = await loadDisplayConfigFromLocalFile(handle, file.name);
+      if (localDisplayConfig) {
+        loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            applyDisplayConfig(localDisplayConfig);
+            applyFilter();
+            if (network && localDisplayConfig.viewState) {
+              network.moveTo({
+                scale: localDisplayConfig.viewState.scale,
+                position: localDisplayConfig.viewState.position,
+                animation: false,
+              });
+            }
+            saveDisplayConfigToIndexedDB(localDisplayConfig, pathHint, file.name).catch(() => {});
+          });
+        });
+      }
+      
       hideLoadingModal();
     } catch (err) {
       hideLoadingModal();
@@ -6383,6 +6425,67 @@ async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConf
     // Only log in debug mode
     if (isDebugMode()) {
       debugWarn('Could not load display config from URL:', displayUrl, err);
+    }
+    return null;
+  }
+}
+
+/**
+ * Attempt to load display config from a sibling .display.json file in the same directory.
+ * Returns the config if found, null otherwise (doesn't throw on errors).
+ * Only works when File System Access API is available and fileHandle.getParent() is supported.
+ */
+async function loadDisplayConfigFromLocalFile(
+  fileHandle: FileSystemFileHandle | null,
+  fileName: string
+): Promise<DisplayConfig | null> {
+  if (!fileHandle) return null;
+  
+  // Check if getParent is available (Chrome/Edge support this)
+  if (!('getParent' in fileHandle) || typeof (fileHandle as FileSystemFileHandle & { getParent?: () => Promise<FileSystemDirectoryHandle> }).getParent !== 'function') {
+    return null;
+  }
+
+  try {
+    // Get the parent directory
+    const parent = await (fileHandle as FileSystemFileHandle & { getParent: () => Promise<FileSystemDirectoryHandle> }).getParent();
+    
+    // Extract base name from fileName (remove extension)
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const baseName = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
+    const displayFileName = `${baseName}.display.json`;
+    
+    // Try to get the display config file
+    try {
+      const displayFileHandle = await parent.getFileHandle(displayFileName);
+      const displayFile = await displayFileHandle.getFile();
+      const text = await displayFile.text();
+      const config = JSON.parse(text) as DisplayConfig;
+      
+      if (!config || typeof config !== 'object') {
+        console.warn('Invalid display config format from local file:', displayFileName);
+        return null;
+      }
+      
+      // Validate version
+      if (config.version !== DISPLAY_CONFIG_VERSION) {
+        console.warn('Display config version mismatch:', displayFileName);
+        return null;
+      }
+      
+      console.log('[DISPLAY CONFIG] Loaded display config from local file:', displayFileName);
+      return config;
+    } catch (fileErr) {
+      // File doesn't exist or can't be read - this is fine, display config is optional
+      if (isDebugMode()) {
+        debugWarn('Could not load display config from local file:', displayFileName, fileErr);
+      }
+      return null;
+    }
+  } catch (err) {
+    // Parent directory access failed - silently fail (display file is optional)
+    if (isDebugMode()) {
+      debugWarn('Could not access parent directory for display config:', err);
     }
     return null;
   }
@@ -6467,6 +6570,27 @@ async function loadLastOpenedFile(): Promise<void> {
       const ttl = await file.text();
       const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
       await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
+      
+      // Try to load display config from sibling .display.json file
+      const localDisplayConfig = await loadDisplayConfigFromLocalFile(stored.handle, file.name);
+      if (localDisplayConfig) {
+        loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            applyDisplayConfig(localDisplayConfig);
+            applyFilter();
+            if (network && localDisplayConfig.viewState) {
+              network.moveTo({
+                scale: localDisplayConfig.viewState.scale,
+                position: localDisplayConfig.viewState.position,
+                animation: false,
+              });
+            }
+            saveDisplayConfigToIndexedDB(localDisplayConfig, pathHint, file.name).catch(() => {});
+          });
+        });
+      }
+      
       hideLoadingModal();
     } catch (err) {
       hideLoadingModal();

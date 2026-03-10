@@ -195,4 +195,37 @@ describe('No classes ontology E2E', () => {
     
     expect(addModalVisible).toBe(true);
   }, 10000);
+
+  it('does not show warning when ontology has object properties referencing external classes (owl:Thing)', async () => {
+    const testFile = join(TEST_FIXTURES_DIR, 'no-classes-2-object-properties.ttl');
+    expect(existsSync(testFile)).toBe(true);
+
+    await loadTestFile(page, testFile);
+    
+    // Wait for graph to render (should not show warning)
+    await page.waitForFunction(
+      () => {
+        const vizControls = document.getElementById('vizControls');
+        return vizControls && vizControls.style.display !== 'none';
+      },
+      { timeout: 10000 }
+    );
+    await page.waitForTimeout(500);
+    
+    // Verify warning is NOT shown
+    const warningVisible = await page.evaluate(() => {
+      const el = document.getElementById('warningMsg');
+      return el && el.style.display !== 'none';
+    });
+    
+    expect(warningVisible).toBe(false);
+    
+    // Verify graph is rendered (should have external owl:Thing node and edges)
+    const vizControlsVisible = await page.evaluate(() => {
+      const el = document.getElementById('vizControls');
+      return el && el.style.display !== 'none';
+    });
+    
+    expect(vizControlsVisible).toBe(true);
+  }, 10000);
 });

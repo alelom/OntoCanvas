@@ -1,0 +1,44 @@
+@prefix : <http://example.org/aec-drawing/v01/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/aec-drawing/v01/core> rdf:type owl:Ontology ;
+    rdfs:label "AEC Drawing Core Ontology" ;
+    rdfs:comment "Minimal shared primitives and cross-module contracts." ;
+    owl:imports <http://www.w3.org/2002/07/owl#>,
+                <http://www.w3.org/1999/02/22-rdf-syntax-ns#>,
+                <http://www.w3.org/XML/1998/namespace#>,
+                <http://www.w3.org/2001/XMLSchema#>,
+                <http://www.w3.org/2000/01/rdf-schema#> .
+
+#################################################################
+#    Annotation Properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:comment "Links a class or concept to an example image illustrating it."@en ;
+    rdfs:label "example image"@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:comment "When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour)." ;
+    rdfs:label "Labellable root" ;
+    rdfs:range xsd:boolean .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty ;
+    rdfs:comment "Direct containment or has-part relationship. Min cardinality 0 by default (can contain)." ;
+    rdfs:label "contains" ;
+    rdfs:range owl:Thing ;
+    rdfs:domain owl:Thing .
+
+:has rdf:type owl:ObjectProperty ;
+    rdfs:comment "Subject is characterised by a property." ;
+    rdfs:label "hasProperty" ;
+    rdfs:range owl:Thing ;
+    rdfs:domain owl:Thing .
