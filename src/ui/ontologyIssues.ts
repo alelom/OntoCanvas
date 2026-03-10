@@ -1,5 +1,5 @@
 import { Store } from 'n3';
-import { getAnnotationProperties, extractLocalName } from '../parser';
+import { getAnnotationProperties, extractLocalName, getMainOntologyBase, getClassNamespace } from '../parser';
 import type { AnnotationPropertyInfo } from '../types';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
@@ -38,17 +38,30 @@ function detectUnusedAnnotationProperties(store: Store): OntologyIssue[] {
     }
   }
   
-  // Also add base IRI versions for annotation properties that weren't found above
+  // Get the actual ontology base IRI from the store
+  const mainBase = getMainOntologyBase(store);
+  const classNs = getClassNamespace(store);
+  const actualBase = mainBase || classNs || BASE_IRI;
+  
+  // Add annotation property URIs from the annotationProperties list
+  // This ensures we catch all variations of the URI (from store, from base IRI, etc.)
   for (const ap of annotationProperties) {
-    const baseUri = BASE_IRI + ap.name;
-    if (!apUriToName.has(baseUri)) {
-      apUriToName.set(baseUri, ap.name);
+    // Use the annotation property's actual URI if available (this is the most reliable)
+    if (ap.uri) {
+      apUriToName.set(ap.uri, ap.name);
+    }
+    // Also add constructed URI from actual base IRI (in case URI format differs)
+    const baseUri = actualBase + ap.name;
+    apUriToName.set(baseUri, ap.name);
+    // Also add with the name as-is (in case it's already a full URI)
+    if (ap.name.startsWith('http://') || ap.name.startsWith('https://')) {
+      apUriToName.set(ap.name, ap.name);
     }
   }
   
   // Build a set of all annotation property URIs for quick lookup
   const allApUris = new Set(apUriToName.keys());
-  
+
   // Iterate through all quads ONCE to find which annotation properties are used
   const usedApUris = new Set<string>();
   for (const q of store) {
@@ -56,6 +69,16 @@ function detectUnusedAnnotationProperties(store: Store): OntologyIssue[] {
     const predVal = pred?.value ?? pred?.id;
     if (predVal && allApUris.has(predVal)) {
       usedApUris.add(predVal);
+      // Also mark all URI variations for this annotation property as used
+      const apName = apUriToName.get(predVal);
+      if (apName) {
+        // Mark all URIs for this annotation property name as used
+        for (const [uri, name] of apUriToName) {
+          if (name === apName) {
+            usedApUris.add(uri);
+          }
+        }
+      }
     }
   }
   

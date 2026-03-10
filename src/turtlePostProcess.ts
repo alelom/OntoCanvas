@@ -565,24 +565,54 @@ function addAttributionCommentLine(raw: string, attributionText: string): string
  * Add rdfs:comment to ontology declaration.
  */
 function addAttributionRdfsComment(raw: string, attributionText: string): string {
+  // First, remove ALL existing attribution comments from the entire output
+  // This prevents duplicates regardless of where they appear
+  let output = raw;
+  
+  // Remove ALL attribution strings - use simple, direct pattern matching
+  // Match the quoted attribution string itself (the pattern will match anywhere)
+  const exactPattern = /"Created\/edited with https:\/\/alelom\.github\.io\/OntoCanvas\/ version [^"]+"/g;
+  output = output.replace(exactPattern, '');
+  
+  // Also match more flexible variations
+  const flexiblePattern = /"[^"]*Created[^"]*\/edited[^"]*with[^"]*https[^"]*:\/\/alelom[^"]*\.github[^"]*\.io[^"]*\/OntoCanvas[^"]*\/[^"]*version[^"]*"/gi;
+  output = output.replace(flexiblePattern, '');
+  
+  // Catch-all for any variation with key identifiers
+  const catchAll = /"[^"]*alelom[^"]*\.github[^"]*\.io[^"]*\/OntoCanvas[^"]*version[^"]*"/gi;
+  let previousOutput = '';
+  let iterations = 0;
+  while (output !== previousOutput && iterations < 10) {
+    previousOutput = output;
+    output = output.replace(catchAll, '');
+    iterations++;
+  }
+  
+  // Clean up commas and formatting issues
+  output = output.replace(/,\s*,+/g, ','); // Multiple commas -> single comma
+  output = output.replace(/,\s*;/g, ';'); // Comma before semicolon -> semicolon
+  output = output.replace(/;\s*,+/g, ';'); // Semicolon before comma -> semicolon
+  output = output.replace(/rdfs:comment\s*,+/g, 'rdfs:comment '); // rdfs:comment followed by comma
+  output = output.replace(/\s*,\s*\./g, ' .'); // Comma before period -> period
+  
+  // Now check if current attribution already exists
+  if (output.includes(`"${attributionText}"`)) {
+    return output; // Already has current attribution
+  }
+  
   // Find the ontology declaration - match just the start: :Ontology rdf:type owl:Ontology
-  const ontologyPattern = /(:\w+|<[^>]+>)\s+rdf:type\s+owl:Ontology\s*[;]/;
-  const match = raw.match(ontologyPattern);
+  // Match with semicolon or period (or nothing if it's the start of a statement)
+  const ontologyPattern = /(:\w+|<[^>]+>)\s+rdf:type\s+owl:Ontology\s*[;.]?/;
+  const match = output.match(ontologyPattern);
   
   if (!match) {
     // No ontology declaration found, skip adding rdfs:comment
-    return raw;
+    return output;
   }
   
-  // Check if rdfs:comment with attribution already exists
-  const existingCommentPattern = new RegExp(`rdfs:comment\\s+"${attributionText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`);
-  if (existingCommentPattern.test(raw)) {
-    return raw;
-  }
-  
-  // Found ontology declaration, add rdfs:comment to it
+  // Found ontology declaration, extract the ontology block
   const ontologyStart = match.index!;
-  const afterStart = raw.slice(ontologyStart);
+  const afterStart = output.slice(ontologyStart);
   
   // Find the final period that closes the ontology statement
   let inString = false;
@@ -655,9 +685,72 @@ function addAttributionRdfsComment(raw: string, attributionText: string): string
     }
   }
   
-  const ontologyBlock = raw.slice(ontologyStart, ontologyEnd);
-  const before = raw.slice(0, ontologyStart);
-  const after = raw.slice(ontologyEnd);
+  // Re-extract ontology block from cleaned output
+  const cleanedOntologyStart = output.indexOf(match[0]);
+  const cleanedAfterStart = output.slice(cleanedOntologyStart);
+  
+  // Find the end of the ontology block in the cleaned output
+  let cleanedOntologyEnd = cleanedOntologyStart;
+  let foundEnd = false;
+  const cleanedCandidatePeriods: Array<{ pos: number; afterText: string }> = [];
+  
+  let inString2 = false;
+  let stringChar2 = '';
+  for (let i = 0; i < cleanedAfterStart.length; i++) {
+    const char = cleanedAfterStart[i];
+    const prevChar = i > 0 ? cleanedAfterStart[i - 1] : '';
+    
+    if ((char === '"' || char === "'") && prevChar !== '\\') {
+      if (!inString2) {
+        inString2 = true;
+        stringChar2 = char;
+      } else if (char === stringChar2) {
+        inString2 = false;
+        stringChar2 = '';
+      }
+      continue;
+    }
+    if (inString2) continue;
+    
+    if (char === '.') {
+      const afterPeriod = cleanedAfterStart.slice(i + 1);
+      const trimmedAfter = afterPeriod.trim();
+      if (/^\s*[\n\r]/.test(afterPeriod)) {
+        const afterNewline = trimmedAfter;
+        if (afterNewline.startsWith('#################################################################') ||
+            afterNewline.startsWith('#') ||
+            /^[:\<@]/.test(afterNewline)) {
+          cleanedCandidatePeriods.push({ pos: i, afterText: afterNewline });
+        }
+      }
+    }
+  }
+  
+  for (const candidate of cleanedCandidatePeriods) {
+    if (candidate.afterText.startsWith('#################################################################')) {
+      cleanedOntologyEnd = cleanedOntologyStart + candidate.pos + 1;
+      foundEnd = true;
+      break;
+    }
+  }
+  
+  if (!foundEnd && cleanedCandidatePeriods.length > 0) {
+    cleanedOntologyEnd = cleanedOntologyStart + cleanedCandidatePeriods[0].pos + 1;
+    foundEnd = true;
+  }
+  
+  if (!foundEnd) {
+    const fallbackMatch = cleanedAfterStart.match(/\.\s*[\n\r]\s*(#|$|[\n\r])/);
+    if (fallbackMatch && fallbackMatch.index != null) {
+      cleanedOntologyEnd = cleanedOntologyStart + fallbackMatch.index + 1;
+    } else {
+      cleanedOntologyEnd = cleanedOntologyStart + Math.min(500, cleanedAfterStart.length);
+    }
+  }
+  
+  const ontologyBlock = output.slice(cleanedOntologyStart, cleanedOntologyEnd);
+  const before = output.slice(0, cleanedOntologyStart);
+  const after = output.slice(cleanedOntologyEnd);
   
   // Check if it already has properties (contains semicolon)
   const hasSemicolon = ontologyBlock.includes(';');
@@ -698,12 +791,31 @@ export function postProcessTurtle(raw: string, externalRefs?: Array<{ url: strin
   return output;
 }
 
+// Standard RDF/OWL namespaces that should not be imported (they're built-in)
+const STANDARD_NAMESPACES = new Set([
+  'http://www.w3.org/2002/07/owl',
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns',
+  'http://www.w3.org/2000/01/rdf-schema',
+  'http://www.w3.org/2001/XMLSchema',
+  'http://www.w3.org/XML/1998/namespace',
+]);
+
 function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
   let output = raw;
   
+  // Filter out standard RDF/OWL namespaces - they shouldn't be imported
+  const filteredRefs = externalRefs.filter((ref) => {
+    const normalized = ref.url.replace(/[#\/]$/, '');
+    return !STANDARD_NAMESPACES.has(normalized);
+  });
+  
+  if (filteredRefs.length === 0) {
+    return output; // No refs to add after filtering
+  }
+  
   // First, add @prefix declarations for external ontologies that use prefixes
   const prefixesToAdd: Array<{ prefix: string; url: string }> = [];
-  for (const ref of externalRefs) {
+  for (const ref of filteredRefs) {
     if (ref.usePrefix && ref.prefix) {
       // Check if prefix already exists
       const prefixPattern = new RegExp(`@prefix\\s+${ref.prefix}\\s*:`);
@@ -755,7 +867,11 @@ function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix
         existingImports.add(importMatch[1]);
       }
       // Filter out external refs that already have imports
-      const newRefs = externalRefs.filter((ref) => !existingImports.has(ref.url));
+      const newRefs = filteredRefs.filter((ref) => {
+        const refUrl = ref.url;
+        const refNormalized = normalizeUrl(refUrl);
+        return !existingImports.has(refUrl) && !existingImports.has(refNormalized);
+      });
       if (newRefs.length === 0) {
         return output;
       }
@@ -853,16 +969,31 @@ function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix
   const before = output.slice(0, ontologyStart);
   const after = output.slice(ontologyEnd);
   
-  // Extract existing owl:imports from the ontology block
+  // Extract existing owl:imports from the ENTIRE output (not just ontology block)
+  // This prevents duplicates when the file is saved multiple times
   const existingImports = new Set<string>();
   const importPattern = /owl:imports\s+<([^>]+)>/g;
   let importMatch;
-  while ((importMatch = importPattern.exec(ontologyBlock)) !== null) {
-    existingImports.add(importMatch[1]);
+  // Check entire output for existing imports
+  while ((importMatch = importPattern.exec(output)) !== null) {
+    const url = importMatch[1];
+    // Normalize URL (remove trailing # or / for comparison)
+    const normalized = url.replace(/[#\/]$/, '');
+    existingImports.add(url); // Keep original for exact match
+    existingImports.add(normalized); // Also add normalized version
   }
   
-  // Filter out external refs that already have imports
-  const newRefs = externalRefs.filter((ref) => !existingImports.has(ref.url));
+  // Normalize external ref URLs for comparison
+  const normalizeUrl = (url: string): string => {
+    return url.replace(/[#\/]$/, '');
+  };
+  
+  // Filter out external refs that already have imports (check both exact and normalized)
+  const newRefs = filteredRefs.filter((ref) => {
+    const refUrl = ref.url;
+    const refNormalized = normalizeUrl(refUrl);
+    return !existingImports.has(refUrl) && !existingImports.has(refNormalized);
+  });
   
   // If all imports already exist, return unchanged
   if (newRefs.length === 0) {

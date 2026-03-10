@@ -4179,22 +4179,13 @@ function showRenameModal(
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
   const h3 = modalContent?.querySelector('h3') as HTMLElement;
   
-  // Ensure header structure exists (similar to rename modal)
-  let header = modalContent?.querySelector('.modal-header') as HTMLElement;
-  if (!header && h3) {
-    header = document.createElement('div');
-    header.className = 'modal-header';
-    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px;';
-    const headerIcons = document.createElement('div');
-    headerIcons.className = 'modal-header-icons';
-    headerIcons.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
-    header.appendChild(h3);
-    header.appendChild(headerIcons);
-    h3.parentNode?.insertBefore(header, h3);
-    h3.style.margin = '0'; // Remove default margin since header handles spacing
-  }
-  
-  const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
+  // Use the existing rename-modal-header structure (the HTML already has this)
+  let header = modalContent?.querySelector('.rename-modal-header') as HTMLElement;
+  // The header already exists in the HTML, so we don't need to create it
+  // Just get the header icons container
+  const headerIcons = header?.querySelector('.rename-modal-header-icons') as HTMLElement || 
+                      header?.querySelector('#renameModalHeaderIcons') as HTMLElement ||
+                      modalContent?.querySelector('#renameModalHeaderIcons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
   if (isImported && headerIcons) {
     if (!warningIcon) {
