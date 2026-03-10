@@ -18,20 +18,20 @@ In this context, an ontology is a structured map of meaning, shaped like a graph
 OntoCanvas helps you design and explore these maps in an intuitive, visual way, so you can discuss and refine how your world is organised without needing to touch code or learn formal ontology logic. 
 
 
-## Supported formats
+## Why use Ontocanvas?
 
-- **Open:** Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and other formats supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js).
-- **Save:** Turtle only.
+If you want a good hierarchical (taxonomical) view of ontologies, rather than a messy graph; if you want an intuitive, quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything.
 
 
 ## Features
-
  
-- **Layout styles** – Hierarchical (weighted) or force-directed
-- **Editing** – Visually add/remove nodes (classes) and edges (object properties) rename classes, add data relationships, undo/redo, ...
-- **Nodes and edges styling based on rules**: font size, line colour
+- **Layout styles** – Hierarchical (taxonomical/weighted) or force-directed
+- **Editing** – Visually add/remove nodes (classes) and edges (object properties) rename classes, add data relationships, Annotation Properties.
+- **Nodes and edges styling based on rules**: font size, line colour, rule based, great for presentations.
 - **Search** – Filter by node label or relationship type
 - **Relationships filters** – Show/hide by relationship type
+- **Open:** Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and other formats supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js).
+- **Save:** Turtle only.
 
 
 ## Comparison with other ontology editors and visualisers 
@@ -39,20 +39,20 @@ OntoCanvas helps you design and explore these maps in an intuitive, visual way, 
 | Tool | Pros | Cons |
 |------|------|------|
 | **OntoCanvas** (this tool) | **Hierarchical view** – clear tree layout for class hierarchies; **simple fast edits** – add/remove nodes and edges, rename, undo/redo; browser-based, no install; **multi-format load** (Turtle, RDF/XML, JSON-LD, etc.), save as Turtle; lightweight, no server | Limited OWL expressivity; no reasoner; no SPARQL; focused on class hierarchy + relationships |
-| **WebVOWL** | Web-based visualization; well-established tool; SVG export; good for exploring ontology structure | Primarily visualization only, no editing; **only "free nodes" mode (no hierarchical view)** – makes complex ontologies difficult to understand; only visualisation, no authoring |
-| **Protégé / WebProtégé** | Industry standard; full OWL support; reasoner integration; plugins; collaborative (WebProtégé) | Not very visual; steep learning curve; heavy; form-based, not graph-first |
-| **Onto4ALL** | Browser-based; box-and-arrow visual; simple | Limited features; basic editing; not widely maintained |
-| **OWLGrEd** | UML-style diagrams; good for drawing class diagrams; OWL export | Desktop app; less interactive; diagram-first, not live graph |
-| **VocBench 3** | Web-based; strong for SKOS; light OWL; validation | Focused on vocabularies, not full ontology modeling |
+| [**WebVOWL**](https://service.tib.eu/webvowl/) | Web-based visualization; well-established tool; SVG export; good for exploring ontology structure | Primarily visualization only, no editing; **only "free nodes" mode (no hierarchical view)** – makes complex ontologies difficult to understand; only visualisation, no authoring |
+| [**Protégé**](https://protege.stanford.edu/) / [**WebProtégé**](https://webprotege.stanford.edu/) | Industry standard; full OWL support; reasoner integration; plugins; collaborative (WebProtégé) | Not very visual; steep learning curve; heavy; form-based, not graph-first |
+| [**Onto4ALL**](https://github.com/Piazzi/Onto4ALL) | The most similar alternative, with box-and-arrow visual | currently host server not working; it's not a static page, so it requires a server to be maintained (PHP); fewer features, no custom display options, no display or management of imported ontologies, basic editing, etc.; not widely maintained |
+| **[yEd](https://www.yworks.com/products/yed) + manual export** | Generic graph editor; flexible layout; familiar | No ontology semantics; manual translation to TTL; no round-trip |
+| [**OWLGrEd**](https://owlgred.lumii.lv/) | UML-style diagrams; good for drawing class diagrams; OWL export | Desktop app; less interactive; diagram-first, not live graph |
+| **[VocBench 3](https://vocbench.uniroma2.it/)** | Web-based; strong for SKOS; light OWL; validation | Focused on vocabularies, not full ontology modeling; unintuitive. |
 | **metaphactory** | Commercial KG platform; visual ontology modeling; enterprise features | Paid; heavyweight; requires setup |
 | **GraphDB Workbench** | Triplestore UI; graph visualisation; SPARQL; query results as graph | Editor is secondary; not designed for ontology authoring |
 | **LinkedDataHub** | Low-code RDF/KG; forms + graph views; flexible | Complex setup; more data than schema oriented |
-| **yEd + manual export** | Generic graph editor; flexible layout; familiar | No ontology semantics; manual translation to TTL; no round-trip |
 | **TopBraid Composer** | Full OWL; visual + form; SPARQL; Eclipse-based | Commercial; desktop; heavyweight |
 | **Semaforer** | Lightweight; web-based; simple | Limited scope; less mature |
 | **Neon** | OWL 2; ontology evolution; change tracking | Research tool; less mainstream |
 
-**When to use this editor:** You want a quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything, with support for opening Turtle, OWL, JSON-LD and other RDF formats and saving as Turtle, plus undo/redo.
+
 
 
 
