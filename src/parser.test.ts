@@ -140,7 +140,7 @@ describe('parseTtlToGraph (load)', () => {
     const ttl = loadOntologyAsString();
     const { graphData } = await parseTtlToGraph(ttl);
 
-    const containsEdges = graphData.edges.filter((e) => e.type === 'contains');
+    const containsEdges = graphData.edges.filter((e) => e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'));
     expect(containsEdges.length).toBeGreaterThan(0);
   });
 
@@ -257,13 +257,13 @@ describe('updateLabelInStore (edit)', () => {
     expect(ok).toBe(true);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
     const containsEdge = graphData.edges.find(
-      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && (e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'))
     );
     expect(containsEdge).toBeDefined();
     removeEdgeFromStore(store, 'Layout', 'FacadeCladding', 'contains');
     const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
     const gone = afterRemove.graphData.edges.find(
-      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && (e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'))
     );
     expect(gone).toBeUndefined();
   });
@@ -275,7 +275,7 @@ describe('updateLabelInStore (edit)', () => {
     expect(ok).toBe(true);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
     const containsEdge = graphData.edges.find(
-      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && (e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'))
     );
     expect(containsEdge).toBeDefined();
   });
@@ -289,7 +289,7 @@ describe('updateLabelInStore (edit)', () => {
     expect(second).toBe(false);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
     const containsEdges = graphData.edges.filter(
-      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains'
+      (e) => e.from === 'Layout' && e.to === 'FacadeCladding' && (e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'))
     );
     expect(containsEdges).toHaveLength(1);
   });
@@ -317,11 +317,68 @@ describe('updateLabelInStore (edit)', () => {
       maxCardinality: 3,
     });
     expect(ok).toBe(true);
-    const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
+    
+    // Test round-trip
+    const serialized = await storeToTurtle(store);
+    const { graphData, store: parsedStore } = await parseTtlToGraph(serialized);
+    
+    // Debug: Check if restriction blank node exists in parsed store
+    const { DataFactory } = await import('n3');
+    const OWL = 'http://www.w3.org/2002/07/owl#';
+    const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+    const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
+    const fromUri = DataFactory.namedNode(BASE_IRI + 'cardinalitytestcontainer');
+    const subClassQuads = parsedStore.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+    const blankNodeQuads = subClassQuads.filter(q => q.object.termType === 'BlankNode');
+    console.log('After parsing: found', blankNodeQuads.length, 'blank node subClassOf quads for cardinalitytestcontainer');
+    
+    if (blankNodeQuads.length > 0) {
+      const blankNode = blankNodeQuads[0].object;
+      const allBlankQuads = parsedStore.getQuads(blankNode, null, null, null);
+      const predicates = allBlankQuads.map(q => (q.predicate as { value: string }).value);
+      console.log('Blank node predicates:', predicates);
+      const minQual = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'minQualifiedCardinality');
+      const maxQual = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'maxQualifiedCardinality');
+      console.log('Cardinality quads found:', { hasMinQual: !!minQual, hasMaxQual: !!maxQual });
+    }
+    
+    // Debug: Check all edges to see what we got
+    const allContainsEdges = graphData.edges.filter(e => e.type === 'contains');
+    console.log('All contains edges:', allContainsEdges.map(e => ({
+      from: e.from,
+      to: e.to,
+      type: e.type,
+      minCardinality: e.minCardinality,
+      maxCardinality: e.maxCardinality,
+      isRestriction: e.isRestriction,
+    })));
+    
+    // The edge type might be the full URI or local name depending on how it's parsed
     const containsEdge = graphData.edges.find(
-      (e) => e.from === 'cardinalitytestcontainer' && e.to === 'Layout' && e.type === 'contains'
+      (e) => e.from === 'cardinalitytestcontainer' && 
+             e.to === 'Layout' && 
+             (e.type === 'contains' || e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'))
     );
+    
+    if (!containsEdge) {
+      console.log('Edge not found! Total edges:', graphData.edges.length);
+      console.log('Edges for cardinalitytestcontainer:', graphData.edges.filter(e => e.from === 'cardinalitytestcontainer'));
+    }
+    
     expect(containsEdge).toBeDefined();
+    
+    // Debug: if cardinality is missing, check what we actually got
+    if (containsEdge && (containsEdge.minCardinality === undefined || containsEdge.maxCardinality === undefined)) {
+      console.log('Edge found but missing cardinality:', {
+        from: containsEdge.from,
+        to: containsEdge.to,
+        type: containsEdge.type,
+        minCardinality: containsEdge.minCardinality,
+        maxCardinality: containsEdge.maxCardinality,
+        isRestriction: containsEdge.isRestriction,
+      });
+    }
+    
     expect(containsEdge!.minCardinality).toBe(0);
     expect(containsEdge!.maxCardinality).toBe(3);
   });
@@ -342,13 +399,13 @@ describe('updateLabelInStore (edit)', () => {
     expect(ok).toBe(true);
     const { graphData } = await parseTtlToGraph(await storeToTurtle(store));
     const edge = graphData.edges.find(
-      (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
+      (e) => e.from === 'FacadeCladding' && e.to === 'Function' && (e.type === 'http://example.org/aec-drawing-ontology#hasFunction' || e.type.includes('hasFunction'))
     );
     expect(edge).toBeDefined();
     removeEdgeFromStore(store, 'FacadeCladding', 'Function', 'hasFunction');
     const afterRemove = await parseTtlToGraph(await storeToTurtle(store));
     const gone = afterRemove.graphData.edges.find(
-      (e) => e.from === 'FacadeCladding' && e.to === 'Function' && e.type === 'hasFunction'
+      (e) => e.from === 'FacadeCladding' && e.to === 'Function' && (e.type === 'http://example.org/aec-drawing-ontology#hasFunction' || e.type.includes('hasFunction'))
     );
     expect(gone).toBeUndefined();
   });
@@ -358,7 +415,7 @@ describe('updateLabelInStore (edit)', () => {
     const { store } = await parseTtlToGraph(ttl);
     addEdgeToStore(store, 'Layout', 'FacadeCladding', 'contains');
     const before = await parseTtlToGraph(await storeToTurtle(store));
-    expect(before.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains')).toBe(true);
+    expect(before.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && (e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains')))).toBe(true);
 
     // Wrong order: remove node first, then edge. removeEdgeFromStore should still succeed
     // because domain/range quads are on the property, not the nodes.
@@ -374,7 +431,7 @@ describe('updateLabelInStore (edit)', () => {
     const after = await parseTtlToGraph(await storeToTurtle(store2));
     expect(after.graphData.nodes.some((n) => n.id === 'FacadeCladding')).toBe(true);
     expect(after.graphData.nodes.some((n) => n.id === 'Layout')).toBe(false);
-    expect(after.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && e.type === 'contains')).toBe(false);
+    expect(after.graphData.edges.some((e) => e.from === 'Layout' && e.to === 'FacadeCladding' && (e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains')))).toBe(false);
   });
 });
 

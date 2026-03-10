@@ -36,10 +36,17 @@ function parseCardinalityFromRestriction(
   minCard: import('n3').Quad | undefined,
   maxCard: import('n3').Quad | undefined,
   someValuesFrom: import('n3').Quad | undefined,
-  propName?: string
+  propName?: string,
+  onClass?: import('n3').Quad | undefined
 ): { minCardinality?: number | null; maxCardinality?: number | null } {
-  const toInt = (q: import('n3').Quad | undefined): number | null =>
-    q?.object?.value != null ? parseInt(String(q.object.value), 10) : null;
+  const toInt = (q: import('n3').Quad | undefined): number | null => {
+    if (!q) return null;
+    const obj = q.object as { value?: unknown };
+    // Handle 0 correctly - check for null/undefined but allow 0
+    if (obj.value == null) return null;
+    const num = typeof obj.value === 'number' ? obj.value : parseInt(String(obj.value), 10);
+    return isNaN(num) ? null : num;
+  };
   const n = toInt(qualCard);
   if (n !== null && !isNaN(n)) {
     return { minCardinality: n, maxCardinality: n };
@@ -55,7 +62,8 @@ function parseCardinalityFromRestriction(
   if (maxQ !== null && !isNaN(maxQ)) {
     return { minCardinality: null, maxCardinality: maxQ };
   }
-  if (someValuesFrom) {
+  // If we have onClass or someValuesFrom but no explicit cardinality, return default
+  if (someValuesFrom || onClass) {
     return { minCardinality: propName === 'contains' ? 0 : 1, maxCardinality: null };
   }
   return {};
@@ -330,98 +338,99 @@ function buildParseResultFromStore(
       seenPairs.add(key);
       edges.push({ from: subjName, to: objName, type: 'subClassOf' });
     } else if (isBlankNode(obj)) {
-      const onProperty = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
-      const someValuesFrom = store.getQuads(obj, OWL + 'someValuesFrom', null, null)[0];
-      const onClass = store.getQuads(obj, OWL + 'onClass', null, null)[0];
-      const minQual = store.getQuads(obj, OWL + 'minQualifiedCardinality', null, null)[0];
-      const maxQual = store.getQuads(obj, OWL + 'maxQualifiedCardinality', null, null)[0];
-      const qualCard = store.getQuads(obj, OWL + 'qualifiedCardinality', null, null)[0];
-      const minCard = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
-      const maxCard = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
-
-      // Debug: Check if this is the describes restriction
-      if (onProperty) {
+      // Get all quads for this blank node.
+      // After serialization/parsing, blank node objects might be different, so we always
+      // find the blank node by matching the rdfs:subClassOf relationship.
+      // This ensures we get all quads even if the blank node object identity changed.
+      // Find all blank nodes that this subject has rdfs:subClassOf to
+      const matchingSubClassQuads = store.getQuads(
+        DataFactory.namedNode(subjUri),
+        DataFactory.namedNode(RDFS + 'subClassOf'),
+        null,
+        null
+      ).filter(q => isBlankNode(q.object));
+      
+      // Process ALL restriction blank nodes for this subject, not just the first one
+      // This handles cases where a class has multiple restrictions (e.g., DrawingSheet has 4 restrictions)
+      // Use a Set to track processed blank nodes by their onProperty + onClass/someValuesFrom combination
+      // (blank node IDs are not stable, so we can't use them directly)
+      const processedRestrictions = new Set<string>();
+      
+      for (const matchQuad of matchingSubClassQuads) {
+        const candidateBlank = matchQuad.object;
+        if (candidateBlank.termType !== 'BlankNode') continue;
+        
+        // Query for onProperty directly - this works even if blank node object identity changed
+        // because N3 matches by internal ID
+        const onPropQuads = store.getQuads(candidateBlank, DataFactory.namedNode(OWL + 'onProperty'), null, null);
+        if (onPropQuads.length === 0) continue; // Not a restriction blank node
+        
+        // This is a restriction blank node - get ALL its quads
+        const allBlankQuads = store.getQuads(candidateBlank, null, null, null);
+        
+        const onProperty = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'onProperty');
+        const someValuesFrom = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'someValuesFrom');
+        const onClass = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'onClass');
+        const minQual = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'minQualifiedCardinality');
+        const maxQual = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'maxQualifiedCardinality');
+        const qualCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'qualifiedCardinality');
+        const minCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'minCardinality');
+        const maxCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'maxCardinality');
+        
+        const targetQuad = someValuesFrom ?? onClass;
+        if (!onProperty || !targetQuad) {
+          continue; // Skip this blank node, continue to next one
+        }
+        const target = targetQuad.object;
+        if (target.termType !== 'NamedNode') {
+          continue; // Skip this blank node, continue to next one
+        }
+        const targetUri = (target as { value: string }).value;
+        const targetName = extractLocalName(targetUri);
+        
+        // Check if target class exists
+        if (!seenClasses.has(targetName)) {
+          continue; // Skip this blank node, continue to next one
+        }
+        
+        // Preserve full URI for external properties, use local name for local properties
         const propUri = (onProperty.object as { value: string }).value;
+        const mainBase = getMainOntologyBase(store);
+        // Check if property is external by comparing URI base
+        let isExternalProperty = false;
+        if (mainBase) {
+          const mainBaseNormalized = mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase;
+          const propBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.split('/').slice(0, -1).join('/');
+          isExternalProperty = propBase !== mainBaseNormalized;
+        } else {
+          isExternalProperty = !propUri.startsWith(BASE_IRI);
+        }
+        const propName = isExternalProperty ? propUri : extractLocalName(propUri);
+
+        // Create a unique key for this restriction to avoid processing duplicates
+        const restrictionKey = `${subjName}:${propUri}:${targetUri}`;
+        if (processedRestrictions.has(restrictionKey)) {
+          continue; // Already processed this restriction
+        }
+        processedRestrictions.add(restrictionKey);
+
+        // Debug: Check if this is the describes restriction
         if (propUri === describesPropertyUri || propUri.includes('describes')) {
           foundDescribesRestriction = true;
-          debugLog('[DEBUG] Found describes restriction:', {
-            subject: subjUri,
-            subjectName: subjName,
-            propertyUri: propUri,
-            someValuesFrom: someValuesFrom ? (someValuesFrom.object as { value: string }).value : null,
-            onClass: onClass ? (onClass.object as { value: string }).value : null,
-            subjectInSeenClasses: seenClasses.has(subjName),
-          });
         }
-      }
 
-      const targetQuad = someValuesFrom ?? onClass;
-      if (!onProperty || !targetQuad) {
-        // Debug: Log why restriction was skipped
-        if (!onProperty) {
-          debugLog(`[PARSER] Skipped restriction: missing onProperty for subject ${subjName}`);
-        }
-        if (!targetQuad) {
-          debugLog(`[PARSER] Skipped restriction: missing someValuesFrom/onClass for subject ${subjName}, property ${onProperty ? (onProperty.object as { value: string }).value : 'unknown'}`);
-        }
-        continue;
-      }
-      const target = targetQuad.object;
-      if (target.termType !== 'NamedNode') {
-        debugLog(`[DEBUG] Skipped restriction: target is not NamedNode for subject ${subjName}`);
-        continue;
-      }
-      const targetUri = (target as { value: string }).value;
-      const targetName = extractLocalName(targetUri);
-      
-      // Debug: Log node matching for describes
-      if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
-        debugLog('[DEBUG] Processing describes restriction:', {
-          subjectName: subjName,
-          targetUri: targetUri,
-          targetName: targetName,
-          targetInSeenClasses: seenClasses.has(targetName),
-          seenClassesList: Array.from(seenClasses).filter((n) => n.includes('Description') || n.includes('Display')),
-        });
-      }
-      
-      // Check if target class exists - try by local name first, then by URI matching
-      let targetFound = seenClasses.has(targetName);
-      if (!targetFound) {
-        // The target might be in a different namespace - check if we can find it by reconstructing the URI
-        // For now, if targetName isn't in seenClasses, we skip the edge
-        // This is correct behavior - we only create edges between classes that exist in the ontology
-        const propUri = (onProperty.object as { value: string }).value;
-        // Debug: Log when target node is missing (only in debug mode)
-        if (isDebugMode()) {
-          debugWarn(`[PARSER] Target node "${targetName}" (URI: ${targetUri}) not in seenClasses for property ${propUri}. Subject: ${subjName}. Available classes:`, Array.from(seenClasses));
-          debugWarn(`[PARSER] Nodes:`, nodes.map(n => ({ id: n.id, label: n.label })));
-        }
-        continue;
-      }
-      
-      // Preserve full URI for external properties, use local name for local properties
-      const propUri = (onProperty.object as { value: string }).value;
-      const mainBase = getMainOntologyBase(store);
-      // Check if property is external by comparing URI base
-      let isExternalProperty = false;
-      if (mainBase) {
-        const mainBaseNormalized = mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase;
-        const propBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.split('/').slice(0, -1).join('/');
-        isExternalProperty = propBase !== mainBaseNormalized;
-      } else {
-        isExternalProperty = !propUri.startsWith(BASE_IRI);
-      }
-      const propName = isExternalProperty ? propUri : extractLocalName(propUri);
+        const cardinality = parseCardinalityFromRestriction(
+          minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom, propName, onClass
+        );
 
-      const cardinality = parseCardinalityFromRestriction(
-        minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom, propName
-      );
-
-      const key = `${subjName}->${targetName}:${propName}`;
-      if (!seenPairs.has(key)) {
-        seenPairs.add(key);
-        const edge: GraphEdge = { 
+        const key = `${subjName}->${targetName}:${propName}`;
+        // If a domain/range edge already exists, replace it with the restriction edge
+        // (restrictions have cardinality and are more specific)
+        const existingEdgeIndex = edges.findIndex(
+          (e) => e.from === subjName && e.to === targetName && e.type === propName
+        );
+        
+        const restrictionEdge: GraphEdge = { 
           from: subjName, 
           to: targetName, 
           type: propName, 
@@ -429,48 +438,78 @@ function buildParseResultFromStore(
           isRestriction: true, // Mark as restriction (from OWL restriction)
         };
         
-        // Debug: Log DimensionChain contains edge specifically
-        if (subjName === 'DimensionChain' && targetName === 'Dimension' && propName.includes('contains')) {
-          debugLog('[DEBUG] Parsed DimensionChain->Dimension contains restriction:', {
-            edge,
+        // Debug: Log restriction edge creation for contains edges
+        if (propName.includes('contains') && (subjName.includes('cardinality') || isDebugMode())) {
+          debugLog('[DEBUG] Creating restriction edge:', { 
+            key, 
+            edge: restrictionEdge, 
             cardinality,
-            minQual: minQual ? (minQual.object as { value: string }).value : null,
-            maxQual: maxQual ? (maxQual.object as { value: string }).value : null,
-            qualCard: qualCard ? (qualCard.object as { value: string }).value : null,
-            minCard: minCard ? (minCard.object as { value: string }).value : null,
-            maxCard: maxCard ? (maxCard.object as { value: string }).value : null,
-            someValuesFrom: someValuesFrom ? (someValuesFrom.object as { value: string }).value : null,
+            hasMinQual: !!minQual,
+            hasMaxQual: !!maxQual,
+            minQualValue: minQual ? (minQual.object as { value: unknown }).value : null,
+            maxQualValue: maxQual ? (maxQual.object as { value: unknown }).value : null,
+            existingEdgeIndex,
+            alreadySeen: seenPairs.has(key),
           });
         }
         
-        edges.push(edge);
-        // Debug: Log external property edges
-        if (propName.startsWith('http://') || propName.startsWith('https://')) {
-          debugLog('[DEBUG] Parsed external property edge:', edge);
+        if (existingEdgeIndex >= 0) {
+          // Replace the existing domain/range edge with the restriction edge
+          edges[existingEdgeIndex] = restrictionEdge;
+          // Mark as seen to prevent domain/range from recreating it
+          if (!seenPairs.has(key)) {
+            seenPairs.add(key);
+          }
+          // Debug: Log replacement
+          if (propName.includes('contains') && (subjName.includes('cardinality') || isDebugMode())) {
+            debugLog('[DEBUG] Replaced domain/range edge with restriction edge:', { key, edge: restrictionEdge, cardinality });
+          }
+        } else if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          edges.push(restrictionEdge);
+          
+          // Debug: Log DimensionChain contains edge specifically
+          if (subjName === 'DimensionChain' && targetName === 'Dimension' && propName.includes('contains')) {
+            debugLog('[DEBUG] Parsed DimensionChain->Dimension contains restriction:', {
+              edge: restrictionEdge,
+              cardinality,
+              minQual: minQual ? (minQual.object as { value: string }).value : null,
+              maxQual: maxQual ? (maxQual.object as { value: string }).value : null,
+              qualCard: qualCard ? (qualCard.object as { value: string }).value : null,
+              minCard: minCard ? (minCard.object as { value: string }).value : null,
+              maxCard: maxCard ? (maxCard.object as { value: string }).value : null,
+              someValuesFrom: someValuesFrom ? (someValuesFrom.object as { value: string }).value : null,
+            });
+          }
+          
+          // Debug: Log external property edges
+          if (propName.startsWith('http://') || propName.startsWith('https://')) {
+            debugLog('[DEBUG] Parsed external property edge:', restrictionEdge);
+          }
+          // Debug: Specifically log describes edge
+          if (propName === describesPropertyUri || propName.includes('describes')) {
+            debugLog('[DEBUG] ✓ Successfully added describes edge:', restrictionEdge);
+          }
+          // Debug: Log contains edges to check for duplicates
+          if (propName.includes('contains')) {
+            debugLog('[DEBUG] Added contains restriction edge:', { key, edge: restrictionEdge, cardinality });
+          }
+        } else {
+          // Debug: Log duplicate edge
+          if (propName === describesPropertyUri || propName.includes('describes')) {
+            debugLog('[DEBUG] Duplicate describes edge skipped (key already exists):', key);
+          }
+          // Debug: Log duplicate contains edge
+          if (propName.includes('contains')) {
+            debugWarn('[DEBUG] ⚠ Duplicate contains edge skipped (key already exists):', key, {
+              subject: subjUri,
+              target: targetUri,
+              propUri: propUri
+            });
+          }
         }
-        // Debug: Specifically log describes edge
-        if (propName === describesPropertyUri || propName.includes('describes')) {
-          debugLog('[DEBUG] ✓ Successfully added describes edge:', edge);
-        }
-        // Debug: Log contains edges to check for duplicates
-        if (propName.includes('contains')) {
-          debugLog('[DEBUG] Added contains edge:', { key, edge, propName, propUri });
-        }
-      } else {
-        // Debug: Log duplicate edge
-        if (propName === describesPropertyUri || propName.includes('describes')) {
-          debugLog('[DEBUG] Duplicate describes edge skipped (key already exists):', key);
-        }
-        // Debug: Log duplicate contains edge
-        if (propName.includes('contains')) {
-          debugWarn('[DEBUG] ⚠ Duplicate contains edge skipped (key already exists):', key, {
-            subject: subjUri,
-            target: target.value,
-            propUri: propUri
-          });
-        }
-      }
-    }
+      } // End of processing this blank node restriction
+    } // End of loop through all matching blank nodes
   }
   
   // Debug: Summary
@@ -646,18 +685,14 @@ function buildParseResultFromStore(
       const domainUri = (domainQuad.object as { value: string }).value;
       if (domainUri === OWL_THING) {
         hasOwlThingDomain = true;
-        // When domain is owl:Thing, all classes can be the domain
+        // When domain is owl:Thing, skip creating domain/range edges
+        // Edges should only come from actual restrictions, not from owl:Thing domain/range
         break;
       }
       const domainName = extractLocalName(domainUri);
       if (seenClasses.has(domainName)) {
         validDomains.push(domainName);
       }
-    }
-    
-    // If domain is owl:Thing, use all classes as domains
-    if (hasOwlThingDomain) {
-      validDomains.push(...Array.from(seenClasses));
     }
     
     // Collect valid ranges
@@ -668,7 +703,8 @@ function buildParseResultFromStore(
       const rangeUri = (rangeQuad.object as { value: string }).value;
       if (rangeUri === OWL_THING) {
         hasOwlThingRange = true;
-        // When range is owl:Thing, all classes can be the range
+        // When range is owl:Thing, skip creating domain/range edges
+        // Edges should only come from actual restrictions, not from owl:Thing domain/range
         break;
       }
       const rangeName = extractLocalName(rangeUri);
@@ -677,18 +713,26 @@ function buildParseResultFromStore(
       }
     }
     
-    // If range is owl:Thing, use all classes as ranges
-    if (hasOwlThingRange) {
-      validRanges.push(...Array.from(seenClasses));
+    // Skip creating domain/range edges if domain or range is owl:Thing
+    // owl:Thing means "any class can be used", but it doesn't mean "create edges between all classes"
+    // Edges should only be created from actual restrictions (which are processed first)
+    if (hasOwlThingDomain || hasOwlThingRange) {
+      // Don't create domain/range edges for properties with owl:Thing domain/range
+      // The edges will come from actual restrictions if they exist
+      debugLog(`[PARSER] Skipping domain/range edges for property ${propName} (has owl:Thing domain/range)`);
+      continue;
     }
     
     // For each domain-range pair, create an edge if both classes exist
+    // But only if a restriction edge doesn't already exist (restrictions are processed first)
     for (const domainName of validDomains) {
       for (const rangeName of validRanges) {
         // Skip self-loops unless explicitly allowed
         if (domainName === rangeName) continue;
         
         // Only create edge if it doesn't already exist as a restriction
+        // Restrictions are processed first (lines 316-474), so if a restriction exists,
+        // seenPairs will already have the key and we skip creating a domain/range edge
         const key = `${domainName}->${rangeName}:${propName}`;
         if (!seenPairs.has(key)) {
           seenPairs.add(key);
@@ -704,6 +748,9 @@ function buildParseResultFromStore(
           if (propName.includes('describes') || propName.includes('contains') || propName.includes('connectsTo')) {
             debugLog('[DEBUG] Added edge from domain/range:', { edge, propUri, domainName, rangeName });
           }
+        } else {
+          // A restriction edge already exists for this key - don't create domain/range edge
+          // The restriction edge (with cardinality if present) takes precedence
         }
       }
     }
