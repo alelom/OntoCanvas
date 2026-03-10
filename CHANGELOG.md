@@ -1,3 +1,10 @@
+## [1.8.2](https://github.com/alelom/OntoCanvas/compare/v1.8.1...v1.8.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* enhance URI detection logic for external ontologies ([69267ba](https://github.com/alelom/OntoCanvas/commit/69267baa55e13462a1a6d2dd65398bcd5856b87a))
+
 ## [1.8.1](https://github.com/alelom/OntoCanvas/compare/v1.8.0...v1.8.1) (2026-03-10)
 
 
