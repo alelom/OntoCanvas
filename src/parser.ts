@@ -399,9 +399,10 @@ function buildParseResultFromStore(
         // Check if property is external by comparing URI base
         let isExternalProperty = false;
         if (mainBase) {
-          const mainBaseNormalized = mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase;
+          // Extract base IRI (before #) from both the ontology URI and property URI
+          const mainBaseIri = mainBase.includes('#') ? mainBase.slice(0, mainBase.indexOf('#')) : mainBase.replace(/#$/, '');
           const propBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.split('/').slice(0, -1).join('/');
-          isExternalProperty = propBase !== mainBaseNormalized;
+          isExternalProperty = propBase !== mainBaseIri;
         } else {
           isExternalProperty = !propUri.startsWith(BASE_IRI);
         }
