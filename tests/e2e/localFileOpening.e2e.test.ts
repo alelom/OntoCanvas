@@ -18,7 +18,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: false });
+  browser = await chromium.launch({ headless: true });
 });
 
 afterAll(async () => {

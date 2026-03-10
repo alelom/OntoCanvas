@@ -9,11 +9,6 @@ export default defineConfig({
   server: {
     fs: { allow: ['..'] },
     cors: true, // Enable CORS for local development
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
   },
   test: {
     include: ['src/**/*.test.ts', 'tests/e2e/**/*.e2e.test.ts'],

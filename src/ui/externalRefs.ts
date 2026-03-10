@@ -2,6 +2,7 @@ import { Store, DataFactory } from 'n3';
 import type { GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { saveExternalRefsToIndexedDB } from '../storage';
+import { debugLog } from '../utils/debug';
 
 /**
  * Extract external ontology references from owl:imports statements in the store.
@@ -37,9 +38,8 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
           prefix = 'geo';
         }
 
-        // Preserve the original importUrl - don't remove trailing slash if it's part of the path
-        // Only remove trailing slash if it's truly trailing (not part of the path segment)
-        const url = importUrl.endsWith('#') ? importUrl : importUrl;
+        // Preserve the original importUrl
+        const url = importUrl;
         
         // Debug logging removed - use debugLog if needed in future
         
@@ -285,12 +285,14 @@ export function getPrefixForUri(
 ): string | null {
   if (!uri) return null;
   
-  const isConnects = uri.includes('connects') || (isDefinedBy && isDefinedBy.includes('object-base'));
-  
   // First check isDefinedBy if available
   if (isDefinedBy) {
     const normalizedDefinedBy = isDefinedBy.endsWith('#') ? isDefinedBy.slice(0, -1) : isDefinedBy;
     const mainNormalized = mainOntologyBase ? (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '') : '';
+    // If isDefinedBy matches main ontology base, it's local - return null (no prefix)
+    if (normalizedDefinedBy === mainNormalized) {
+      return null;
+    }
     if (normalizedDefinedBy !== mainNormalized) {
       // Find matching external reference
       // Sort refs by URL length (longest first) to prefer more specific matches
@@ -413,7 +415,7 @@ export function formatRelationshipLabelWithPrefix(
   if (objectPropertyInfo) {
     const prefix = getPrefixForUri(objectPropertyInfo.uri, objectPropertyInfo.isDefinedBy, externalOntologyReferences, mainOntologyBase || null);
     if (propertyName.includes('connects') || (objectPropertyInfo.uri && objectPropertyInfo.uri.includes('connects'))) {
-      console.log('[PREFIX DEBUG formatRelationshipLabelWithPrefix]', {
+      debugLog('[PREFIX DEBUG formatRelationshipLabelWithPrefix]', {
         propertyName,
         label,
         objectPropertyInfo,

@@ -240,9 +240,8 @@ describe('Imported Object Properties and Edges E2E', () => {
                (typeInput && (typeInput.value.includes('base:') || typeInput.placeholder?.includes('base:')));
       });
 
-      // Note: This test may need adjustment based on actual implementation
-      // The important thing is that imported properties are available
-      expect(hasPrefixedProperty || true).toBe(true); // Allow test to pass if property is available without prefix
+      // Verify that the imported property is displayed with its prefix
+      expect(hasPrefixedProperty).toBe(true);
     });
   });
 });
