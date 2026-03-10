@@ -263,7 +263,26 @@ export function isUriFromExternalOntology(
     return true;
   }
   
-  // Fallback: check if URI belongs to an external reference
+  // Fallback: check if URI belongs to the main ontology first
+  if (mainOntologyBase) {
+    const mainBaseNormalized = (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '');
+    // Extract base URL from property URI
+    let uriBase: string;
+    if (uri.includes('#')) {
+      uriBase = uri.slice(0, uri.indexOf('#'));
+    } else {
+      const lastSlash = uri.lastIndexOf('/');
+      uriBase = lastSlash > 0 ? uri.substring(0, lastSlash) : uri;
+    }
+    uriBase = uriBase.replace(/\/$/, '');
+    
+    // If URI base matches main ontology base, it's local (not external)
+    if (uriBase === mainBaseNormalized || uri.startsWith(mainOntologyBase) || uri === mainOntologyBase.slice(0, -1)) {
+      return false;
+    }
+  }
+  
+  // Check if URI belongs to an external reference
   for (const ref of externalOntologyReferences) {
     const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
     if (uri.startsWith(refUrl) || uri.startsWith(refUrl + '#')) {
