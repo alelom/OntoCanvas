@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/alelom/OntoCanvas/compare/v1.8.0...v1.8.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* correct external property detection logic in parser ([5b5db13](https://github.com/alelom/OntoCanvas/commit/5b5db131713831ab2d8b7880e8be90c8bc70ff83))
+
 # [1.8.0](https://github.com/alelom/OntoCanvas/compare/v1.7.0...v1.8.0) (2026-03-10)
 
 
