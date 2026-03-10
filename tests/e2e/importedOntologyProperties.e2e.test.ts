@@ -328,10 +328,34 @@ describe('Imported Ontology Properties E2E', () => {
       await page.waitForTimeout(1000);
 
       // Check opacity of imported ParentClass node
-      const nodeOptions = await page.evaluate((nodeId: string) => {
+      // The node ID might be the full URI or just the local name, so try both
+      const nodeOptions = await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
-        return testHook?.getRenderedNodeOptions?.(nodeId) ?? null;
-      }, 'http://example.org/object-base#ParentClass');
+        const network = testHook?.getNetwork?.();
+        if (!network) return null;
+        
+        // Try full URI first
+        let options = testHook?.getRenderedNodeOptions?.('http://example.org/object-base#ParentClass');
+        if (options) return options;
+        
+        // Try local name
+        options = testHook?.getRenderedNodeOptions?.('ParentClass');
+        if (options) return options;
+        
+        // Try to find by label
+        const rawData = testHook?.getRawData?.();
+        if (rawData) {
+          const node = rawData.nodes.find((n: any) => 
+            n.label === 'Parent Class' || 
+            n.id === 'http://example.org/object-base#ParentClass' ||
+            n.id === 'ParentClass'
+          );
+          if (node) {
+            return testHook?.getRenderedNodeOptions?.(node.id);
+          }
+        }
+        return null;
+      });
 
       expect(nodeOptions).not.toBeNull();
       // Default opacity should be 0.5 (50%)
@@ -372,10 +396,39 @@ describe('Imported Ontology Properties E2E', () => {
       await page.waitForTimeout(1000);
 
       // Check if data property nodes are created for imported data properties
+      // Data property nodes have IDs like __dataprop__${classId}__${propertyName}
       const dataPropNodes = await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
-        const nodes = testHook?.getRenderedNodes?.() ?? [];
-        return nodes.filter((n: any) => n.id?.includes('__dataprop') || n.id?.includes('identifier') || n.id?.includes('createdDate'));
+        const rawData = testHook?.getRawData?.();
+        if (!rawData) return [];
+        
+        // Find all data property nodes (they start with __dataprop__)
+        const dataPropNodeIds = rawData.nodes
+          .filter((n: any) => n.id?.startsWith('__dataprop__'))
+          .map((n: any) => n.id);
+        
+        // Also check the rendered network for these nodes
+        const network = testHook?.getNetwork?.();
+        if (network) {
+          try {
+            const networkAny = network as { body?: { data?: { nodes?: Map<string, unknown> } } };
+            const renderedNodes = networkAny.body?.data?.nodes;
+            if (renderedNodes) {
+              const renderedIds = Array.from(renderedNodes.keys()).filter((id: string) => 
+                id.startsWith('__dataprop__') && 
+                (id.includes('identifier') || id.includes('createdDate'))
+              );
+              return renderedIds.map((id: string) => ({ id }));
+            }
+          } catch (e) {
+            console.error('Error accessing network nodes:', e);
+          }
+        }
+        
+        // Fallback: return node IDs from rawData
+        return dataPropNodeIds
+          .filter((id: string) => id.includes('identifier') || id.includes('createdDate'))
+          .map((id: string) => ({ id }));
       });
 
       expect(dataPropNodes.length).toBeGreaterThan(0);

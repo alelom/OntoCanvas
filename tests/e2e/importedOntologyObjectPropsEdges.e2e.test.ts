@@ -92,10 +92,14 @@ describe('Imported Object Properties and Edges E2E', () => {
         if (!rawData) return false;
         
         // Look for edge from ChildClassA to ChildClassB with connectsTo type
+        // The type might be 'connectsTo' (local) or 'http://example.org/object-base#connectsTo' (full URI)
         const edge = rawData.edges.find((e: any) => 
           e.from === 'ChildClassA' && 
           e.to === 'ChildClassB' &&
-          (e.type === 'connectsTo' || e.type.includes('connectsTo') || e.type.includes('connects to'))
+          (e.type === 'connectsTo' || 
+           e.type === 'http://example.org/object-base#connectsTo' ||
+           e.type.includes('connectsTo') || 
+           e.type.includes('connects to'))
         );
         return edge !== undefined;
       });
@@ -207,7 +211,7 @@ describe('Imported Object Properties and Edges E2E', () => {
       await waitForGraphRender(page);
       await page.waitForTimeout(1000);
 
-      // Configure prefix for external ontology
+      // Configure prefix for external ontology and trigger refresh
       await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
         const externalRefs = testHook?.getExternalOntologyReferences?.() || [];
@@ -217,8 +221,12 @@ describe('Imported Object Properties and Edges E2E', () => {
           baseRef.usePrefix = true;
           baseRef.prefix = 'base';
         }
+        // Trigger a filter refresh to update the UI
+        if (testHook?.applyFilter) {
+          testHook.applyFilter(true);
+        }
       });
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(1000);
 
       // Open Add Edge modal
       await page.evaluate(() => {

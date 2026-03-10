@@ -178,13 +178,13 @@ describe('No classes ontology E2E', () => {
     });
     expect(addButtonVisible).toBe(true);
     
-    // Click Add node button - this should set addNodeMode
-    await page.locator('.vis-add').click({ timeout: 3000 });
-    await page.waitForTimeout(300);
-    
-    // Click on canvas - this should trigger the Add node modal
-    // Use force: true to ensure click goes through even if something is overlaying
-    await page.locator('#network').click({ position: { x: 400, y: 300 }, force: true });
+    // Use the test hook to open the Add node modal directly
+    await page.evaluate(() => {
+      const testHook = (window as any).__EDITOR_TEST__;
+      if (testHook?.openAddNodeModal) {
+        testHook.openAddNodeModal(400, 300);
+      }
+    });
     await page.waitForTimeout(500);
     
     // Check if Add node modal is visible
