@@ -1,3 +1,17 @@
+# [1.7.0](https://github.com/alelom/OntoCanvas/compare/v1.6.0...v1.7.0) (2026-03-10)
+
+
+### Bug Fixes
+
+* several fixes to external references behaviours ([719bf9b](https://github.com/alelom/OntoCanvas/commit/719bf9b0594aa3c22bfb94e094986db0a901bcc7))
+
+
+### Features
+
+* added ontology parser and validation before rendering, with user-friendly error handling and clickable error messages. ([3c1e539](https://github.com/alelom/OntoCanvas/commit/3c1e53917fda1e92a8145bc22f67249b1745a6a6))
+* added warning bar after opening empty ontologies which made it seem like an error; added tests. ([b78b05c](https://github.com/alelom/OntoCanvas/commit/b78b05c2613090911a99279345e7bbfa01c46a8f))
+* enhance ontology loading logic to check for object properties with domain/range before displaying empty canvas warning; added functionality to load display config from sibling .display.json file ([f88fb5d](https://github.com/alelom/OntoCanvas/commit/f88fb5d4815d39d5e085749dc9a14aab20269e23))
+
 # [1.6.0](https://github.com/alelom/OntoCanvas/compare/v1.5.0...v1.6.0) (2026-03-08)
 
 
