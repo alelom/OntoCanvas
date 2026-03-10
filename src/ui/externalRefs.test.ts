@@ -318,7 +318,7 @@ describe('externalRefs', () => {
         { url: 'https://w3id.org/dano', usePrefix: true, prefix: 'dano' },
       ];
       const formatted = formatRelationshipLabelWithPrefix('https://w3id.org/dano#contains', 'contains', refs);
-      expect(formatted).toBe('dano: contains');
+      expect(formatted).toBe('dano:contains');
     });
     
     it('should return original label if no prefix', () => {
