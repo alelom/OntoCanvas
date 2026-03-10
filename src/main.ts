@@ -7428,11 +7428,16 @@ async function loadFromUrl(url: string): Promise<void> {
 
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
 
-    const { getDisplayFileUrl } = await import('./utils/urlParams');
-    const displayUrl = getDisplayFileUrl(url);
+    const { getAllDisplayFileUrls } = await import('./utils/urlParams');
+    const displayUrls = getAllDisplayFileUrls(url);
     let urlDisplayConfig: DisplayConfig | null = null;
-    if (displayUrl) {
+    
+    // Try all possible display file URLs (primary first, then alternatives)
+    for (const displayUrl of displayUrls) {
       urlDisplayConfig = await loadDisplayConfigFromUrl(displayUrl);
+      if (urlDisplayConfig) {
+        break; // Found it, stop trying alternatives
+      }
     }
 
     await loadTtlAndRender(ttl, fileName, null, url);

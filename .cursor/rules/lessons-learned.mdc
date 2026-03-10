@@ -210,6 +210,16 @@ const modalErrorText = await page.evaluate(() => {
 
 **Reference:** See `tests/e2e/corruptOntology.e2e.test.ts` for the fixed implementation.
 
+**Note:** This pattern works well when checking if a modal is already open before clicking to open it. However, it doesn't solve all modal-related test issues. Some tests fail because:
+- Button clicks don't trigger modal opening (button not found, click not registered)
+- Modals don't appear even after successful button clicks (timing issues, DOM not ready)
+- Modal content isn't rendered when expected (async rendering delays)
+
+For these cases, the defensive pattern helps but may not be sufficient. Consider:
+- Adding better error messages to understand why tests fail
+- Using test hooks to directly open modals instead of clicking buttons
+- Converting to unit tests when possible (see testing-priority.mdc)
+
 ## General Principles
 
 1. **Code should be self-documenting** - Remove redundant code that doesn't add value

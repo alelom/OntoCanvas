@@ -78,7 +78,8 @@ describe('Imported Object Property Edit Modal E2E', () => {
     // TODO: This test verifies DOM structure (h3 title visibility).
     // The core logic for determining if a property is imported (isUriFromExternalOntology) is tested in unit tests.
     // This E2E test frequently fails due to modal rendering timing and DOM state management.
-    // What we tried: waiting for modal selector, checking offsetParent, checking computed styles.
+    // What we tried: waiting for modal selector, checking offsetParent, checking computed styles, defensive modal state checks.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     // The modal structure is correct (verified manually), but timing is flaky in automated tests.
     it.skip('should display h3 title "Edit object property" in the modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
@@ -126,7 +127,8 @@ describe('Imported Object Property Edit Modal E2E', () => {
     // TODO: This test verifies DOM manipulation (warning icon display, field disabled state).
     // The core logic (isUriFromExternalOntology, getPrefixForUri) is tested in unit tests.
     // This E2E test frequently fails due to modal rendering timing and DOM state.
-    // What we tried: waiting for modal, checking header icons, checking input disabled state.
+    // What we tried: waiting for modal, checking header icons, checking input disabled state, defensive modal state checks.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     // The logic works correctly (verified in unit tests), but DOM timing is flaky.
     it.skip('should show warning icon and disable all fields when object property has isDefinedBy set (from parent ontology)', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
@@ -275,7 +277,8 @@ describe('Imported Object Property Edit Modal E2E', () => {
       expect(fieldsDisabled.labelOpacity).toBe('0.5');
     });
 
-    // TODO: Same as above - core logic tested in unit tests, DOM manipulation is flaky
+    // TODO: Same as above - core logic tested in unit tests, DOM manipulation is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should NOT show warning icon and enable fields when object property is locally defined', async () => {
       // Load parent ontology which defines connectsTo locally
       const parentFile = join(TEST_FIXTURES_DIR, 'object-props-parent.ttl');
@@ -353,6 +356,7 @@ describe('Imported Object Property Edit Modal E2E', () => {
     // TODO: This test verifies DOM tooltip behavior (title attribute on hover).
     // The warning message generation logic is tested indirectly in unit tests.
     // This E2E test frequently fails due to timing and DOM state.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should show correct warning message tooltip on hover', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -396,6 +400,7 @@ describe('Imported Object Property Edit Modal E2E', () => {
 
     // TODO: This test verifies DOM popover behavior (click to show/hide).
     // The popover display logic works correctly, but timing is flaky in E2E tests.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should show warning message popover when clicking warning icon', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -452,7 +457,8 @@ describe('Imported Object Property Edit Modal E2E', () => {
       expect(popoverInfo.message.length).toBeGreaterThan(0);
     });
 
-    // TODO: Same as above - DOM interaction timing is flaky
+    // TODO: Same as above - DOM interaction timing is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should hide warning popover when clicking outside', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -519,7 +525,8 @@ describe('Imported Object Property Edit Modal E2E', () => {
       expect(popoverVisibleAfter).toBe(false);
     });
 
-    // TODO: Same as above - DOM tooltip timing is flaky
+    // TODO: Same as above - DOM tooltip timing is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should show correct warning message when hovering over warning icon', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -562,6 +569,7 @@ describe('Imported Object Property Edit Modal E2E', () => {
 
     // TODO: This test verifies CSS class presence (warning-icon-pulse).
     // The class is added correctly, but DOM timing makes this test flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should have pulsating animation on warning icon', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);

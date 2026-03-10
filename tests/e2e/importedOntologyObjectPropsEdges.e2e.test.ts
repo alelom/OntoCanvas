@@ -183,6 +183,7 @@ describe('Imported Object Properties and Edges E2E', () => {
     // TODO: This test verifies DOM autocomplete/search behavior in Add Edge modal.
     // The core logic (getAllRelationshipTypes including external properties) is tested in unit tests.
     // This E2E test frequently fails due to modal rendering timing and DOM interactions.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should allow searching for imported object properties in Add Edge modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -218,6 +219,7 @@ describe('Imported Object Properties and Edges E2E', () => {
     });
 
     // TODO: Core logic tested in unit tests. UI rendering is flaky due to modal state.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported object properties with prefix in Add Edge modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);

@@ -64,6 +64,7 @@ export function getOntologyUrlFromParams(): string | null {
 /**
  * Construct the display file URL from an ontology URL.
  * If the ontology URL is {base}.html or {base}.ttl, returns {base}.display.json
+ * Handles both .html and .ttl URLs by extracting the base name (removing extension).
  * 
  * @param ontologyUrl - The ontology URL
  * @returns The display file URL, or null if the ontology URL is invalid
@@ -85,7 +86,7 @@ export function getDisplayFileUrl(ontologyUrl: string): string | null {
     
     let baseName: string;
     if (lastDotIndex > 0) {
-      // Has an extension, remove it
+      // Has an extension, remove it (works for both .html and .ttl)
       baseName = fileName.slice(0, lastDotIndex);
     } else {
       // No extension, use the full filename
@@ -104,4 +105,58 @@ export function getDisplayFileUrl(ontologyUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Get all possible display file URLs to try for a given ontology URL.
+ * Returns an array with the primary URL first, followed by alternatives.
+ * For .html URLs, also includes the .ttl-based display file URL.
+ * 
+ * @param ontologyUrl - The ontology URL
+ * @returns Array of display file URLs to try (primary first, then alternatives)
+ */
+export function getAllDisplayFileUrls(ontologyUrl: string): string[] {
+  const urls: string[] = [];
+  
+  // Primary URL (based on current extension)
+  const primaryUrl = getDisplayFileUrl(ontologyUrl);
+  if (primaryUrl) {
+    urls.push(primaryUrl);
+  }
+  
+  // For .html URLs, also try the .ttl-based display file
+  try {
+    const url = new URL(ontologyUrl);
+    const pathname = url.pathname;
+    
+    // Remove trailing slash if present
+    const cleanPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+    
+    // Extract the base name
+    const lastSlashIndex = cleanPath.lastIndexOf('/');
+    const fileName = lastSlashIndex >= 0 ? cleanPath.slice(lastSlashIndex + 1) : cleanPath;
+    
+    // Check if URL ends with .html
+    if (fileName.toLowerCase().endsWith('.html')) {
+      // Construct .ttl-based display file URL
+      const baseName = fileName.slice(0, -5); // Remove .html
+      const displayFileName = `${baseName}.display.json`;
+      const displayPath = lastSlashIndex >= 0 
+        ? cleanPath.slice(0, lastSlashIndex + 1) + displayFileName
+        : '/' + displayFileName;
+      
+      const altUrl = new URL(ontologyUrl);
+      altUrl.pathname = displayPath;
+      const altUrlString = altUrl.toString();
+      
+      // Only add if it's different from the primary URL
+      if (altUrlString !== primaryUrl) {
+        urls.push(altUrlString);
+      }
+    }
+  } catch {
+    // Ignore errors, just return what we have
+  }
+  
+  return urls;
 }

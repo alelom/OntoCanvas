@@ -210,7 +210,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(prefixInfo.displayText).not.toBe('connects to');
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported object property with prefix when editing the property', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -257,7 +258,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(hasPrefix).toBe(true);
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported object property with prefix in Edit Edge modal search', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -342,7 +344,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(prefixInfo.exactMatch).toBe(true);
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported object property with prefix when selected in Edit Edge modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -428,7 +431,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(inputValue).not.toBe('connects to'); // Should not be without prefix
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported object property with prefix when editing an existing edge', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -524,7 +528,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(inputValue.length).toBeGreaterThan('connectsTo'.length); // Should be longer with prefix
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported object property with prefix in Edit Edge modal when edge type is full URI', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -724,7 +729,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(localPropInfo.hasPrefix).toBe(false); // Local property should not have prefix
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported data property with prefix in Edit Data Property modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -776,6 +782,7 @@ describe('Imported Property Prefixes E2E', () => {
     });
 
     // TODO: Core logic tested in unit tests. UI rendering is flaky due to modal state.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should NOT display local data property with prefix in Edit Data Property modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -869,7 +876,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(prefixInfo.exactMatch).toBe(true);
     });
 
-    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky
+    // TODO: Same as above - core logic tested in unit tests, UI rendering is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should display imported annotation property with prefix in Edit Annotation Property modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'labellableRoot-child.ttl');
       await loadTestFile(page, childFile);

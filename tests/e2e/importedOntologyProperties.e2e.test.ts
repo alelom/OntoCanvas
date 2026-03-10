@@ -242,6 +242,7 @@ describe('Imported Ontology Properties E2E', () => {
     // TODO: This test verifies DOM manipulation (warning icon, input disabled state).
     // The core logic (isUriFromExternalOntology) is tested in unit tests.
     // This E2E test frequently fails due to modal rendering timing.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should show warning icon and disable editing for imported classes', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
       await loadTestFile(page, childFile);
@@ -279,7 +280,8 @@ describe('Imported Ontology Properties E2E', () => {
       expect(inputsDisabled).toBe(true);
     });
 
-    // TODO: Same as above - core logic tested in unit tests, DOM manipulation is flaky
+    // TODO: Same as above - core logic tested in unit tests, DOM manipulation is flaky.
+    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
     it.skip('should show warning icon for imported object properties in edit modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'properties-child.ttl');
       await loadTestFile(page, childFile);
