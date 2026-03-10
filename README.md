@@ -5,10 +5,6 @@
   <!-- Test Status Badges (shields.io) -->
   ![Unit Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=Unit%20Tests&branch=main)
   ![E2E Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=E2E%20Tests&branch=main)
-  
-  <!-- Coverage Badges (Codecov) -->
-  ![Unit Test Coverage](https://codecov.io/gh/alelom/OntoCanvas/branch/main/graph/badge.svg?flag=unittests&token=)
-  ![E2E Test Coverage](https://codecov.io/gh/alelom/OntoCanvas/branch/main/graph/badge.svg?flag=e2e&token=)
 </div>
 
 Interactive ontology editor and visualizer with multi-format RDF support.
