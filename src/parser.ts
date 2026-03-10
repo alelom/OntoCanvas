@@ -162,7 +162,11 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   return result.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] {
+export function getAnnotationProperties(
+  store: Store,
+  externalOntologyReferences?: Array<{ url: string }>,
+  mainOntologyBase?: string | null
+): AnnotationPropertyInfo[] {
   const result: AnnotationPropertyInfo[] = [];
   const seen = new Set<string>();
   // Map of subject URIs to their range values
@@ -207,11 +211,25 @@ export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] 
  * Build ParseResult (graph data + store + property lists) from an N3 Store.
  * Used by both quadsToParseResult and (indirectly) parseTtlToGraph / parseRdfToGraph.
  */
-function buildParseResultFromStore(store: Store): ParseResult {
+function buildParseResultFromStore(
+  store: Store,
+  additionalAnnotationProps?: AnnotationPropertyInfo[]
+): ParseResult {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenClasses = new Set<string>();
-  const annotationProps = getAnnotationProperties(store);
+  let annotationProps = getAnnotationProperties(store);
+  
+  // Merge additional annotation properties (e.g., used but not declared ones from external ontologies)
+  if (additionalAnnotationProps && additionalAnnotationProps.length > 0) {
+    const existingNames = new Set(annotationProps.map(ap => ap.name));
+    const existingUris = new Set(annotationProps.map(ap => ap.uri));
+    for (const ap of additionalAnnotationProps) {
+      if (!existingNames.has(ap.name) && !existingUris.has(ap.uri)) {
+        annotationProps.push(ap);
+      }
+    }
+  }
   
   // Debug: Log at start of parsing (only in debug mode)
   if (isDebugMode()) {

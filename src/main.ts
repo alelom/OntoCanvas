@@ -2325,24 +2325,35 @@ function showEditAnnotationPropertyModal(name: string): void {
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
   const h3 = modalContent?.querySelector('h3') as HTMLElement;
   
-  // Ensure header structure exists (similar to rename modal)
+  // Ensure header structure exists (similar to editRelationshipTypeModal and editDataPropertyModal)
   let header = modalContent?.querySelector('.modal-header') as HTMLElement;
-  if (!header && h3) {
+  if (!header && h3 && h3.parentNode) {
+    // Create header wrapper
     header = document.createElement('div');
     header.className = 'modal-header';
     header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px;';
+    
+    // Create icons container
     const headerIcons = document.createElement('div');
     headerIcons.className = 'modal-header-icons';
     headerIcons.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+    
+    // Insert header before h3, then move h3 and add icons
+    h3.parentNode.insertBefore(header, h3);
     header.appendChild(h3);
     header.appendChild(headerIcons);
-    h3.parentNode?.insertBefore(header, h3);
     h3.style.margin = '0'; // Remove default margin since header handles spacing
   }
   
   const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-  if (isImported && headerIcons) {
+  const hasValidDefinedBy = ap?.isDefinedBy && (ap.isDefinedBy.startsWith('http://') || ap.isDefinedBy.startsWith('https://'));
+  const isImportedWithValidUrl = isImported && hasValidDefinedBy;
+  
+  if (isImportedWithValidUrl && headerIcons) {
+    const ontologyUrl = ap.isDefinedBy || (ap.uri ? getDefiningOntologyFromUri(ap.uri, externalOntologyReferences) : 'an external ontology');
+    const warningMessage = `This annotation property is defined in the external ontology ${ontologyUrl !== 'an external ontology' ? ontologyUrl : ''}, so it must be edited by opening that ontology instead.`;
+    
     if (!warningIcon) {
       warningIcon = document.createElement('span');
       warningIcon.className = 'imported-warning-icon warning-icon-pulse';
@@ -2350,13 +2361,41 @@ function showEditAnnotationPropertyModal(name: string): void {
       warningIcon.style.cssText = 'cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none;';
       warningIcon.setAttribute('role', 'button');
       warningIcon.setAttribute('tabindex', '0');
+      warningIcon.title = warningMessage;
+      
+      // Add click handler to show popover
+      warningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(warningIcon, warningMessage, modal);
+      });
+      warningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(warningIcon, warningMessage, modal);
+        }
+      });
+      
       headerIcons.appendChild(warningIcon);
     } else {
       warningIcon.style.display = 'inline';
       warningIcon.classList.add('warning-icon-pulse');
+      warningIcon.title = warningMessage;
+      // Update click handler with new message by cloning to remove old listeners
+      const oldIcon = warningIcon;
+      const newWarningIcon = oldIcon.cloneNode(true) as HTMLElement;
+      oldIcon.parentNode?.replaceChild(newWarningIcon, oldIcon);
+      newWarningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(newWarningIcon, warningMessage, modal);
+      });
+      newWarningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(newWarningIcon, warningMessage, modal);
+        }
+      });
+      warningIcon = newWarningIcon;
     }
-    const ontologyUrl = ap.isDefinedBy || (ap.uri ? getDefiningOntologyFromUri(ap.uri, externalOntologyReferences) : 'an external ontology');
-    warningIcon.title = `This annotation property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
   } else if (warningIcon) {
     warningIcon.style.display = 'none';
     warningIcon.classList.remove('warning-icon-pulse');
@@ -6353,6 +6392,207 @@ async function loadTtlAndRender(
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = parseResult;
+    
+    // Merge external refs early so we can detect used annotation properties before processing nodes
+    const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
+    const mergedRefs: ExternalOntologyReference[] = [];
+    const seenUrls = new Set<string>();
+    
+    // First add DB refs (they have user preferences like prefix)
+    for (const dbRef of dbRefs) {
+      const normalizedUrl = dbRef.url.endsWith('#') ? dbRef.url.slice(0, -1) : dbRef.url;
+      mergedRefs.push(dbRef);
+      seenUrls.add(normalizedUrl);
+    }
+    
+    // Then add extracted refs that aren't in DB
+    for (const extRef of extractedRefs) {
+      const normalizedUrl = extRef.url.endsWith('#') ? extRef.url.slice(0, -1) : extRef.url;
+      if (!seenUrls.has(normalizedUrl)) {
+        mergedRefs.push(extRef);
+        seenUrls.add(normalizedUrl);
+      }
+    }
+    
+    // Add refs from TTL @prefix so inlined externals (e.g. geo:) get a prefix even without owl:imports
+    const mainBaseForPrefixes = getMainOntologyBase(store);
+    for (const [prefix, url] of Object.entries(prefixMap)) {
+      const urlStr = String(url);
+      const normalizedUrl = (urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr).replace(/\/$/, '');
+      const mainNormalized = mainBaseForPrefixes ? (mainBaseForPrefixes.endsWith('#') ? mainBaseForPrefixes.slice(0, -1) : mainBaseForPrefixes).replace(/\/$/, '') : '';
+      
+      // Skip if this prefix matches the main ontology base
+      if (normalizedUrl === mainNormalized) continue;
+      
+      if (!seenUrls.has(normalizedUrl)) {
+        mergedRefs.push({ url: urlStr, prefix, usePrefix: true });
+        seenUrls.add(normalizedUrl);
+      } else {
+        // Update existing ref with prefix if not set
+        const existingRef = mergedRefs.find(r => {
+          const rUrl = (r.url.endsWith('#') ? r.url.slice(0, -1) : r.url).replace(/\/$/, '');
+          return rUrl === normalizedUrl;
+        });
+        if (existingRef && !existingRef.prefix) {
+          existingRef.prefix = prefix;
+          existingRef.usePrefix = true;
+        }
+      }
+    }
+    
+    externalOntologyReferences = mergedRefs;
+    
+    // Now detect used annotation properties BEFORE we process nodes for styling
+    // This ensures imported annotation properties like core:labellableRoot are available
+    const mainBaseForAnnotProps = getMainOntologyBase(store);
+    const usedAnnotationProps = new Set<string>();
+    const usedAnnotationPropsWithUri = new Map<string, string>(); // localName -> full URI
+    const RDFS_NS = 'http://www.w3.org/2000/01/rdf-schema#';
+    const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
+    
+    // Find all predicates used in the store that might be annotation properties
+    for (const q of store) {
+      const pred = q.predicate as { termType?: string; value?: string };
+      if (pred.termType !== 'NamedNode') continue;
+      const predUri = pred.value;
+      if (!predUri) continue;
+      
+      // Skip standard RDF/OWL properties
+      if (predUri.startsWith('http://www.w3.org/1999/02/22-rdf-syntax-ns#') ||
+          predUri.startsWith('http://www.w3.org/2000/01/rdf-schema#') ||
+          predUri.startsWith('http://www.w3.org/2002/07/owl#')) {
+        continue;
+      }
+      
+      // Check if this predicate is already in annotationProperties
+      const localName = extractLocalName(predUri);
+      const alreadyExists = annotationProps.some((ap) => ap.name === localName || ap.uri === predUri);
+      if (alreadyExists) continue;
+      
+      // Check if this predicate belongs to an external ontology
+      const isExternal = isUriFromExternalOntology(predUri, null, externalOntologyReferences, mainBaseForAnnotProps);
+      if (isExternal) {
+        usedAnnotationProps.add(localName);
+        usedAnnotationPropsWithUri.set(localName, predUri);
+      }
+    }
+    
+    // Add used annotation properties that are from external ontologies to annotationProps
+    for (const [localName, fullUri] of usedAnnotationPropsWithUri) {
+      // Check if it's not already in the list
+      if (!annotationProps.some((ap) => ap.name === localName || ap.uri === fullUri)) {
+        // Try to get range from store (might be in parent ontology, but we can check)
+        const { DataFactory } = await import('n3');
+        let rangeQuads = store.getQuads(DataFactory.namedNode(fullUri), DataFactory.namedNode(RDFS_NS + 'range'), null, null);
+        let range = rangeQuads.length > 0 ? (rangeQuads[0].object as { value?: string }).value ?? null : null;
+        
+        // If range is not in store, try to infer it from usage patterns
+        if (!range) {
+          const XSD_BOOLEAN_URI = XSD_NS + 'boolean';
+          const usedWithBoolean = store.getQuads(null, DataFactory.namedNode(fullUri), null, null).some((q) => {
+            const obj = q.object;
+            if (obj.termType === 'Literal') {
+              const objLit = obj as { datatype?: { value?: string }; value?: string };
+              const datatype = objLit.datatype?.value;
+              if (datatype === XSD_BOOLEAN_URI || datatype?.endsWith('#boolean')) {
+                return true;
+              }
+              const value = objLit.value;
+              if (value === 'true' || value === 'false') {
+                return true;
+              }
+            }
+            return false;
+          });
+          
+          if (usedWithBoolean) {
+            range = XSD_BOOLEAN_URI;
+          }
+        }
+        
+        const isBoolean = range === XSD_NS + 'boolean' || range?.endsWith('#boolean') || false;
+        
+        // Get isDefinedBy if present
+        const isDefinedByQuads = store.getQuads(DataFactory.namedNode(fullUri), DataFactory.namedNode(RDFS_NS + 'isDefinedBy'), null, null);
+        let isDefinedBy: string | undefined = undefined;
+        if (isDefinedByQuads.length > 0 && isDefinedByQuads[0].object.termType === 'NamedNode') {
+          isDefinedBy = (isDefinedByQuads[0].object as { value?: string }).value ?? undefined;
+        } else {
+          // Extract base URL from the URI
+          const hashIndex = fullUri.indexOf('#');
+          const slashIndex = fullUri.lastIndexOf('/');
+          if (hashIndex > -1) {
+            isDefinedBy = fullUri.slice(0, hashIndex);
+          } else if (slashIndex > -1) {
+            isDefinedBy = fullUri.slice(0, slashIndex + 1);
+          }
+          if (!isDefinedBy) {
+            const definingOntology = getDefiningOntologyFromUri(fullUri, externalOntologyReferences);
+            isDefinedBy = definingOntology !== 'an external ontology' ? definingOntology : undefined;
+          }
+        }
+        
+        annotationProps.push({
+          name: localName,
+          isBoolean,
+          range: range ?? null,
+          uri: fullUri,
+          isDefinedBy: isDefinedBy,
+        });
+      }
+    }
+    
+    // Now re-process nodes to extract annotation values using the complete annotation properties list
+    // This is necessary because imported annotation properties weren't available during initial parsing
+    const RDF_NS_FOR_NODES = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+    const OWL_NS_FOR_NODES = 'http://www.w3.org/2002/07/owl#';
+    const updatedNodes = graphData.nodes.map(node => {
+      // Find the subject for this node by matching local name
+      const classQuads = store.getQuads(null, DataFactory.namedNode(RDF_NS_FOR_NODES + 'type'), DataFactory.namedNode(OWL_NS_FOR_NODES + 'Class'), null);
+      let subj: { termType: string; value: string } | null = null;
+      for (const q of classQuads) {
+        const subject = q.subject as { termType?: string; value?: string };
+        if (subject.termType === 'NamedNode' && subject.value) {
+          const subjUri = subject.value;
+          const localName = extractLocalName(subjUri);
+          if (localName === node.id) {
+            subj = subject as { termType: string; value: string };
+            break;
+          }
+        }
+      }
+      
+      if (!subj) return node;
+      
+      let labellableRoot: boolean | null = node.labellableRoot;
+      const annotations: Record<string, string | boolean | null> = { ...(node.annotations || {}) };
+      
+      const outQuads = store.getQuads(subj, null, null, null);
+      for (const oq of outQuads) {
+        const predName = extractLocalName((oq.predicate as { value: string }).value);
+        const isAnnotation = annotationProps.some((ap) => ap.name === predName);
+        if (!isAnnotation) continue;
+        const obj = oq.object;
+        const apInfo = annotationProps.find((ap) => ap.name === predName);
+        if (apInfo?.isBoolean) {
+          const val = (obj as { value: unknown }).value;
+          const str = String(val).toLowerCase();
+          const b = val === true || str === 'true' ? true : val === false || str === 'false' ? false : null;
+          annotations[predName] = b;
+          if (predName === 'labellableRoot') labellableRoot = b;
+        } else {
+          annotations[predName] = (obj as { value: unknown }).value != null ? String((obj as { value: unknown }).value) : null;
+        }
+      }
+      
+      return {
+        ...node,
+        labellableRoot,
+        annotations,
+      };
+    });
+    
+    graphData.nodes = updatedNodes;
 
     // Validate ontology structure before proceeding
     const validationResult = validateOntologyStructure(graphData.nodes, graphData.edges);
@@ -6478,76 +6718,21 @@ async function loadTtlAndRender(
       debugLog('Extracted prefixes:', prefixMap);
     }
 
-    // Load external references from IndexedDB and merge with extracted ones
-    const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
-    // Debug logging (only in debug mode)
-    if (isDebugMode()) {
-      debugLog('Loaded external references from IndexedDB:', dbRefs);
-    }
+    // Note: External references are already merged earlier (before node re-processing)
+    // This ensures external ontology references are available when detecting used annotation properties
     
-    // Merge: use DB refs if they exist, otherwise use extracted ones
-    // For each extracted ref, check if there's a DB ref with the same URL
-    const mergedRefs: ExternalOntologyReference[] = [];
-    const seenUrls = new Set<string>();
-    
-    // First add DB refs (they have user preferences like prefix)
-    for (const dbRef of dbRefs) {
-      const normalizedUrl = dbRef.url.endsWith('#') ? dbRef.url.slice(0, -1) : dbRef.url;
-      mergedRefs.push(dbRef);
-      seenUrls.add(normalizedUrl);
-    }
-    
-    // Then add extracted refs that aren't in DB
-    for (const extRef of extractedRefs) {
-      const normalizedUrl = extRef.url.endsWith('#') ? extRef.url.slice(0, -1) : extRef.url;
-      if (!seenUrls.has(normalizedUrl)) {
-        mergedRefs.push(extRef);
-        seenUrls.add(normalizedUrl);
-      }
-    }
-    
-    // Add refs from TTL @prefix so inlined externals (e.g. geo:) get a prefix even without owl:imports
-    // Also update existing refs if they match a prefix from the TTL file
-    const mainBase = getMainOntologyBase(ttlStore);
-    for (const [prefix, url] of Object.entries(prefixMap)) {
-      const urlStr = String(url);
-      const normalized = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr.replace(/\/$/, '');
-      const mainNormalized = mainBase != null ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase).replace(/\/$/, '') : '';
-      
-      // Check if this prefix matches an existing ref
-      // Normalize both URLs by removing # and trailing slashes for comparison
-      let foundExisting = false;
-      for (const ref of mergedRefs) {
-        const refNormalized = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
-        const refNormalizedNoSlash = refNormalized.replace(/\/$/, '');
-        const normalizedNoSlash = normalized.replace(/\/$/, '');
-        // Match with or without trailing slash, and with or without #
-        if (normalized === refNormalized || 
-            normalizedNoSlash === refNormalizedNoSlash ||
-            normalized === refNormalizedNoSlash ||
-            normalizedNoSlash === refNormalized) {
-          // Update existing ref with prefix from TTL
-          ref.prefix = prefix;
-          ref.usePrefix = true;
-          foundExisting = true;
-          break;
-        }
-      }
-      
-      if (!foundExisting && normalized !== mainNormalized && !seenUrls.has(normalized)) {
-        mergedRefs.push({ url: urlStr.replace(/\/$/, ''), usePrefix: true, prefix });
-        seenUrls.add(normalized);
-      }
-    }
-
     // Add refs from namespaces used in the store (e.g. DANO loaded as RDF/XML has no owl:imports and no TTL prefixes)
-    for (const ref of extractUsedNamespaceRefsFromStore(ttlStore, mainBase)) {
+    const mainBaseForNamespaceRefs = getMainOntologyBase(ttlStore);
+    for (const ref of extractUsedNamespaceRefsFromStore(ttlStore, mainBaseForNamespaceRefs)) {
       const normalized = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url.replace(/\/$/, '');
       if (!seenUrls.has(normalized)) {
         mergedRefs.push(ref);
         seenUrls.add(normalized);
       }
     }
+
+    sortExternalRefsByUrl(mergedRefs);
+    externalOntologyReferences = mergedRefs;
 
     sortExternalRefsByUrl(mergedRefs);
     externalOntologyReferences = mergedRefs;
@@ -6606,79 +6791,8 @@ async function loadTtlAndRender(
     }
     objectProperties.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Detect annotation properties that are used but not explicitly declared
-    // (e.g., imported annotation properties like core:labellableRoot)
-    const mainBaseForAnnotProps = getMainOntologyBase(ttlStore);
-    const usedAnnotationProps = new Set<string>();
-    const usedAnnotationPropsWithUri = new Map<string, string>(); // localName -> full URI
-    const RDFS_NS = 'http://www.w3.org/2000/01/rdf-schema#';
-    
-    // Find all predicates used in the store that might be annotation properties
-    for (const q of ttlStore) {
-      const pred = q.predicate as { termType?: string; value?: string };
-      if (pred.termType !== 'NamedNode') continue;
-      const predUri = pred.value;
-      if (!predUri) continue;
-      
-      // Skip standard RDF/OWL properties
-      if (predUri.startsWith('http://www.w3.org/1999/02/22-rdf-syntax-ns#') ||
-          predUri.startsWith('http://www.w3.org/2000/01/rdf-schema#') ||
-          predUri.startsWith('http://www.w3.org/2002/07/owl#')) {
-        continue;
-      }
-      
-      // Check if this predicate is already in annotationProperties
-      const localName = extractLocalName(predUri);
-      const alreadyExists = annotationProperties.some((ap) => ap.name === localName || ap.uri === predUri);
-      if (alreadyExists) continue;
-      
-      // Check if this predicate belongs to an external ontology
-      const isExternal = isUriFromExternalOntology(predUri, null, externalOntologyReferences, mainBaseForAnnotProps);
-      if (isExternal) {
-        usedAnnotationProps.add(localName);
-        usedAnnotationPropsWithUri.set(localName, predUri);
-      }
-    }
-    
-    // Add used annotation properties that are from external ontologies
-    for (const [localName, fullUri] of usedAnnotationPropsWithUri) {
-      // Check if it's not already in the list
-      if (!annotationProperties.some((ap) => ap.name === localName || ap.uri === fullUri)) {
-        // Try to get range from store (might be in parent ontology, but we can check)
-        const rangeQuads = ttlStore.getQuads(DataFactory.namedNode(fullUri), DataFactory.namedNode(RDFS_NS + 'range'), null, null);
-        const range = rangeQuads.length > 0 ? (rangeQuads[0].object as { value?: string }).value ?? null : null;
-        const isBoolean = range === XSD_NS + 'boolean' || range?.endsWith('#boolean') || false;
-        
-        // Get isDefinedBy if present
-        const isDefinedByQuads = ttlStore.getQuads(DataFactory.namedNode(fullUri), DataFactory.namedNode(RDFS_NS + 'isDefinedBy'), null, null);
-        let isDefinedBy: string | undefined = undefined;
-        if (isDefinedByQuads.length > 0 && isDefinedByQuads[0].object.termType === 'NamedNode') {
-          isDefinedBy = (isDefinedByQuads[0].object as { value?: string }).value ?? undefined;
-        } else {
-          // Extract base URL from the URI (e.g., http://example.org/core#labellableRoot -> http://example.org/core)
-          const hashIndex = fullUri.indexOf('#');
-          const slashIndex = fullUri.lastIndexOf('/');
-          if (hashIndex > -1) {
-            isDefinedBy = fullUri.slice(0, hashIndex);
-          } else if (slashIndex > -1) {
-            isDefinedBy = fullUri.slice(0, slashIndex + 1);
-          }
-          // If we couldn't extract it, try getDefiningOntologyFromUri
-          if (!isDefinedBy) {
-            const definingOntology = getDefiningOntologyFromUri(fullUri, externalOntologyReferences);
-            isDefinedBy = definingOntology !== 'an external ontology' ? definingOntology : undefined;
-          }
-        }
-        
-        annotationProperties.push({
-          name: localName,
-          isBoolean,
-          range: range ?? null,
-          uri: fullUri,
-          isDefinedBy: isDefinedBy,
-        });
-      }
-    }
+    // Note: Used annotation properties are already detected and added earlier (before node re-processing)
+    // This ensures imported annotation properties like core:labellableRoot are available when nodes are processed
     annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
 
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
@@ -8549,6 +8663,7 @@ attachEditorTestHook({
   showAddNodeModal,
   showEditDataPropertyModal,
   getDataProperties: () => dataProperties,
+  getAnnotationProperties: () => annotationProperties,
   getTtlStore: () => ttlStore,
   storeToTurtle,
   applyFilter,

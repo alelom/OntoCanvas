@@ -243,18 +243,24 @@ export function isUriFromExternalOntology(
   
   // First check isDefinedBy if available
   if (isDefinedBy) {
-    const normalizedDefinedBy = isDefinedBy.endsWith('#') ? isDefinedBy.slice(0, -1) : isDefinedBy;
+    // Normalize both URLs for comparison (remove trailing # and /)
+    const normalizedDefinedBy = (isDefinedBy.endsWith('#') ? isDefinedBy.slice(0, -1) : isDefinedBy).replace(/\/$/, '');
     const mainNormalized = mainOntologyBase ? (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '') : '';
-    if (normalizedDefinedBy !== mainNormalized) {
-      // Check if it matches any external reference
-      for (const ref of externalOntologyReferences) {
-        const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
-        if (normalizedDefinedBy === refUrl || normalizedDefinedBy.startsWith(refUrl + '/') || normalizedDefinedBy.startsWith(refUrl + '#')) {
-          return true;
-        }
-      }
-      return true; // isDefinedBy points to external ontology
+    
+    // If isDefinedBy matches the main ontology base, it's not imported
+    if (normalizedDefinedBy === mainNormalized) {
+      return false;
     }
+    
+    // Check if it matches any external reference
+    for (const ref of externalOntologyReferences) {
+      const refUrl = (ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url).replace(/\/$/, '');
+      if (normalizedDefinedBy === refUrl || normalizedDefinedBy.startsWith(refUrl + '/') || normalizedDefinedBy.startsWith(refUrl + '#')) {
+        return true;
+      }
+    }
+    // If isDefinedBy is set and doesn't match main base, it's external
+    return true;
   }
   
   // Fallback: check if URI belongs to an external reference

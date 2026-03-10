@@ -29,6 +29,7 @@ export interface EditorTestDeps {
   showAddNodeModal: (x: number, y: number) => void;
   showEditDataPropertyModal: (name: string) => void;
   getDataProperties: () => DataPropertyInfo[];
+  getAnnotationProperties: () => Array<{ name: string; isBoolean: boolean; range: string | null | undefined; uri?: string; isDefinedBy?: string }>;
   getTtlStore: () => Store | null;
   storeToTurtle: (store: Store, externalOntologyReferences: ExternalOntologyReference[]) => Promise<string>;
   applyFilter: (preservePositions: boolean) => void;
@@ -62,6 +63,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     showAddNodeModal,
     showEditDataPropertyModal,
     getDataProperties,
+    getAnnotationProperties,
     getTtlStore,
     storeToTurtle,
     applyFilter,
@@ -259,6 +261,9 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       const dp = getDataProperties().find((p) => p.name === name);
       if (!dp) return null;
       return { domains: dp.domains ?? [], uri: dp.uri };
+    },
+    getAnnotationProperties: (): Array<{ name: string; isBoolean: boolean; range: string | null | undefined; uri?: string; isDefinedBy?: string }> => {
+      return getAnnotationProperties();
     },
     getSerializedTurtle: async (): Promise<string | null> => {
       const store = getTtlStore();
