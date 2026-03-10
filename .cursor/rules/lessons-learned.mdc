@@ -1,0 +1,168 @@
+---
+alwaysApply: true
+description: Lessons learned from development - debug logging, code quality, and best practices
+---
+
+# Lessons Learned
+
+## Debug Logging
+
+### Always Use `debugLog` Instead of `console.log` in Production Code
+
+**Why?**
+- `console.log` statements pollute the browser console for all users, even in production
+- Debug information should only be visible when explicitly enabled
+- Reduces noise and improves performance in production builds
+
+**How?**
+- Import `debugLog`, `debugWarn`, or `debugError` from `src/utils/debug.ts`
+- Use `debugLog(...)` instead of `console.log(...)`
+- Debug mode is enabled via:
+  - URL parameter `?debug` (any value)
+  - `localStorage.setItem('ontologyEditorDebug', 'true')`
+- In Node.js environments (unit tests), `isDebugMode()` returns `false` automatically
+
+**Example:**
+```typescript
+// ❌ Bad - pollutes console for all users
+if (propertyName.includes('connects')) {
+  console.log('[DEBUG]', { propertyName, prefix });
+}
+
+// ✅ Good - only logs when debug mode is enabled
+import { debugLog } from '../utils/debug';
+if (propertyName.includes('connects')) {
+  debugLog('[DEBUG]', { propertyName, prefix });
+}
+```
+
+**Reference:** See [src/utils/debug.ts](mdc:src/utils/debug.ts) for implementation details.
+
+## Code Quality
+
+### Avoid No-Op Code
+
+**Issue:** Redundant code that doesn't change behavior is misleading and should be simplified.
+
+**Example:**
+```typescript
+// ❌ Bad - no-op ternary
+const url = importUrl.endsWith('#') ? importUrl : importUrl;
+
+// ✅ Good - simplified
+const url = importUrl;
+```
+
+### Remove Unused Variables
+
+**Issue:** Unused variables clutter the code and can mislead readers about intent.
+
+**Example:**
+```typescript
+// ❌ Bad - variable declared but never used
+const isConnects = uri.includes('connects') || (isDefinedBy && isDefinedBy.includes('object-base'));
+// ... code that never uses isConnects
+
+// ✅ Good - removed if not needed
+// (or use it if it was intended to be used)
+```
+
+### Write Meaningful Test Assertions
+
+**Issue:** Test assertions that always pass don't catch regressions.
+
+**Example:**
+```typescript
+// ❌ Bad - always passes, can't catch regressions
+expect(hasPrefixedProperty || true).toBe(true);
+
+// ✅ Good - actually tests the condition
+expect(hasPrefixedProperty).toBe(true);
+```
+
+### Avoid Redundant Configuration
+
+**Issue:** Duplicate or redundant configuration is confusing and can lead to maintenance issues.
+
+**Example:**
+```typescript
+// ❌ Bad - cors: true already enables CORS, headers are redundant
+server: {
+  cors: true,
+  headers: {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  },
+}
+
+// ✅ Good - let cors: true handle it
+server: {
+  cors: true,
+}
+```
+
+## Prefix Handling for Imported Properties
+
+### Early Return for Local Properties
+
+**Issue:** When checking if a property is imported, we must return early if `isDefinedBy` matches the main ontology base.
+
+**Pattern:**
+```typescript
+// ✅ Good - early return prevents fallback logic from incorrectly adding prefix
+if (isDefinedBy) {
+  const normalizedDefinedBy = isDefinedBy.endsWith('#') ? isDefinedBy.slice(0, -1) : isDefinedBy;
+  const mainNormalized = mainOntologyBase ? (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '') : '';
+  
+  // Early return for local properties
+  if (normalizedDefinedBy === mainNormalized) {
+    return null; // No prefix for local properties
+  }
+  
+  // ... rest of logic for external properties
+}
+```
+
+**Why?** Without the early return, the fallback logic might incorrectly match the URI itself and add a prefix to local properties.
+
+## E2E Test Configuration
+
+### Use Headless Mode for CI/CD
+
+**Issue:** E2E tests that open visible browser windows break automated pipelines and are inconsistent with project conventions.
+
+**Pattern:**
+```typescript
+// ❌ Bad - opens visible browser in CI
+beforeAll(async () => {
+  browser = await chromium.launch({ headless: false });
+});
+
+// ✅ Good - headless mode for all environments
+beforeAll(async () => {
+  browser = await chromium.launch({ headless: true });
+});
+```
+
+**Why?** 
+- CI/CD pipelines don't have displays
+- Consistent with other E2E tests in the project
+- Faster execution
+- Can still debug locally by temporarily changing to `headless: false`
+
+## Testing Strategy
+
+### Prefer Unit Tests Over E2E When Possible
+
+**See:** [.cursor/rules/testing-priority.mdc](mdc:.cursor/rules/testing-priority.mdc) for detailed guidelines.
+
+**Key Principle:** If you can test the logic with direct function calls, do it. Only use E2E tests when browser automation is absolutely necessary.
+
+## General Principles
+
+1. **Code should be self-documenting** - Remove redundant code that doesn't add value
+2. **Tests should catch regressions** - Meaningless assertions defeat the purpose of testing
+3. **Configuration should be minimal** - Avoid redundancy and overly permissive settings
+4. **Debug tools should be opt-in** - Don't pollute production logs with debug information
+5. **Early returns improve clarity** - Handle edge cases (like local properties) before main logic
