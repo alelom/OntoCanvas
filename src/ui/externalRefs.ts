@@ -159,12 +159,34 @@ export function extractPrefixesFromTtl(ttlString: string): Record<string, string
 }
 
 /**
- * Extract ontology URL from a node comment that contains "(Imported from ...)"
+ * Extract ontology URL from a node.
+ * Checks externalOntologyUrl property first, then falls back to comment, then node ID.
  */
 export function getNodeOntologyUrl(node: GraphNode): string | null {
-  if (!node.comment) return null;
-  const match = node.comment.match(/\(Imported from ([^)]+)\)/);
-  return match ? match[1] : null;
+  // First check if node has externalOntologyUrl property (for external nodes)
+  const nodeWithExternal = node as GraphNode & { externalOntologyUrl?: string };
+  if (nodeWithExternal.externalOntologyUrl) {
+    return nodeWithExternal.externalOntologyUrl;
+  }
+  // Fallback: check comment for "(Imported from ...)" pattern
+  if (node.comment) {
+    const match = node.comment.match(/\(Imported from ([^)]+)\)/);
+    if (match) return match[1];
+  }
+  // Fallback: if node ID is a full URI (starts with http:// or https://), extract base URL
+  if (node.id && (node.id.startsWith('http://') || node.id.startsWith('https://'))) {
+    // Extract base URL from node ID (remove fragment/local name)
+    if (node.id.includes('#')) {
+      return node.id.slice(0, node.id.indexOf('#') + 1);
+    }
+    // If no #, try to extract base URL (everything up to last /)
+    const lastSlash = node.id.lastIndexOf('/');
+    if (lastSlash > 0) {
+      return node.id.slice(0, lastSlash + 1);
+    }
+    return node.id;
+  }
+  return null;
 }
 
 /**
@@ -176,12 +198,36 @@ export function getNodePrefix(
 ): string | null {
   const ontologyUrl = getNodeOntologyUrl(node);
   if (!ontologyUrl) return null;
-  const ref = externalOntologyReferences.find((r) => {
-    const refUrl = r.url.endsWith('#') ? r.url.slice(0, -1) : r.url;
-    const nodeUrl = ontologyUrl.endsWith('#') ? ontologyUrl.slice(0, -1) : ontologyUrl;
-    return refUrl === nodeUrl;
+  
+  // Sort refs by URL length (longest first) to prefer more specific matches
+  const sortedRefs = [...externalOntologyReferences].sort((a, b) => {
+    const aUrl = a.url.endsWith('#') ? a.url.slice(0, -1) : a.url;
+    const bUrl = b.url.endsWith('#') ? b.url.slice(0, -1) : b.url;
+    return bUrl.length - aUrl.length; // Longer URLs first
   });
-  return ref?.usePrefix && ref.prefix ? ref.prefix : null;
+  
+  const nodeUrlNormalized = ontologyUrl.endsWith('#') ? ontologyUrl.slice(0, -1) : ontologyUrl;
+  const nodeUrlNoSlash = nodeUrlNormalized.replace(/\/$/, '');
+  
+  for (const ref of sortedRefs) {
+    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    const refUrlNoSlash = refUrl.replace(/\/$/, '');
+    
+    // Exact match (with or without trailing slash/#)
+    if (nodeUrlNormalized === refUrl || nodeUrlNoSlash === refUrlNoSlash) {
+      return ref?.usePrefix && ref.prefix ? ref.prefix : null;
+    }
+    // Check if nodeUrl starts with refUrl (ref is a prefix of nodeUrl)
+    if (nodeUrlNormalized.startsWith(refUrl + '/') || nodeUrlNormalized.startsWith(refUrl + '#')) {
+      return ref?.usePrefix && ref.prefix ? ref.prefix : null;
+    }
+    // Check if refUrl starts with nodeUrl (nodeUrl is a prefix of ref - less common)
+    if (refUrl.startsWith(nodeUrlNormalized + '/') || refUrl.startsWith(nodeUrlNormalized + '#')) {
+      return ref?.usePrefix && ref.prefix ? ref.prefix : null;
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -276,7 +322,14 @@ export function getPrefixForUri(
   }
   
   // Fallback: check if URI belongs to an external reference
-  for (const ref of externalOntologyReferences) {
+  // Sort refs by URL length (longest first) to prefer more specific matches
+  const sortedRefs = [...externalOntologyReferences].sort((a, b) => {
+    const aUrl = a.url.endsWith('#') ? a.url.slice(0, -1) : a.url;
+    const bUrl = b.url.endsWith('#') ? b.url.slice(0, -1) : b.url;
+    return bUrl.length - aUrl.length; // Longer URLs first
+  });
+  
+  for (const ref of sortedRefs) {
     const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
     const refUrlNoSlash = refUrl.replace(/\/$/, '');
     const uriNoSlash = uri.replace(/\/$/, '');

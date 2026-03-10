@@ -3243,6 +3243,16 @@ function buildNetworkData(
           )
         : maxFontSize;
     const style = getNodeStyleFromAnnotations(n, filter.annotationStyleConfig);
+    // Debug: Log node info before formatting label
+    if (isDebugMode() && (n.id?.includes('BaseEntity') || n.label?.includes('Base Entity'))) {
+      debugLog('[PREFIX DEBUG] Formatting label for node:', {
+        id: n.id,
+        label: n.label,
+        isExternal: (n as GraphNode & { isExternal?: boolean }).isExternal,
+        externalOntologyUrl: (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl,
+        externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
+      });
+    }
     const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
     
     // Apply search transparency if search query is active; external nodes use configured opacity
@@ -3547,11 +3557,22 @@ function buildNetworkData(
         dataPropFontColor = applyOpacityToColor('#2c3e50', baseDataPropOpacity);
       }
       
-      // Format the node label as "property label (datatype)" - e.g., "inferred at (xsd:date)"
-      const nodeLabel = `${dataProp.label} (${rangeLabel})`;
+      // Get prefix for data property if it's imported
+      const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : null;
+      const dataPropDisplayLabel = dataPropPrefix ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
+      
+      // Format the node label as "prefix:property label (datatype)" - e.g., "dpbase:createdDate (xsd:dateTime)"
+      const nodeLabel = `${dataPropDisplayLabel} (${rangeLabel})`;
+      
+      // Build tooltip: include comment if present, and add import hint if imported
+      let tooltip = dp?.comment || '';
+      if (isDataPropImported && definingOntologyUrl) {
+        const importHint = `(Imported from ${definingOntologyUrl})`;
+        tooltip = tooltip ? `${tooltip}\n\n${importHint}` : importHint;
+      }
       
       // Debug: Log the actual label being set for the node
-      debugLog(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", rangeLabel="${rangeLabel}", rangeUri="${dp?.range ?? 'N/A'}"`);
+      debugLog(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", prefix="${dataPropPrefix}", isImported="${isDataPropImported}", tooltip="${tooltip}"`);
         
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
@@ -3564,7 +3585,7 @@ function buildNetworkData(
         physics: false,
         x: finalDataPropPos.x,
         y: finalDataPropPos.y,
-        ...(dp?.comment && { title: dp.comment }),
+        ...(tooltip && { title: tooltip }),
       };
       
       // Apply opacity property if less than 1.0
@@ -6585,6 +6606,81 @@ async function loadTtlAndRender(
     }
     objectProperties.sort((a, b) => a.name.localeCompare(b.name));
 
+    // Detect annotation properties that are used but not explicitly declared
+    // (e.g., imported annotation properties like core:labellableRoot)
+    const mainBaseForAnnotProps = getMainOntologyBase(ttlStore);
+    const usedAnnotationProps = new Set<string>();
+    const usedAnnotationPropsWithUri = new Map<string, string>(); // localName -> full URI
+    const RDFS_NS = 'http://www.w3.org/2000/01/rdf-schema#';
+    
+    // Find all predicates used in the store that might be annotation properties
+    for (const q of ttlStore) {
+      const pred = q.predicate as { termType?: string; value?: string };
+      if (pred.termType !== 'NamedNode') continue;
+      const predUri = pred.value;
+      if (!predUri) continue;
+      
+      // Skip standard RDF/OWL properties
+      if (predUri.startsWith('http://www.w3.org/1999/02/22-rdf-syntax-ns#') ||
+          predUri.startsWith('http://www.w3.org/2000/01/rdf-schema#') ||
+          predUri.startsWith('http://www.w3.org/2002/07/owl#')) {
+        continue;
+      }
+      
+      // Check if this predicate is already in annotationProperties
+      const localName = extractLocalName(predUri);
+      const alreadyExists = annotationProperties.some((ap) => ap.name === localName || ap.uri === predUri);
+      if (alreadyExists) continue;
+      
+      // Check if this predicate belongs to an external ontology
+      const isExternal = isUriFromExternalOntology(predUri, null, externalOntologyReferences, mainBaseForAnnotProps);
+      if (isExternal) {
+        usedAnnotationProps.add(localName);
+        usedAnnotationPropsWithUri.set(localName, predUri);
+      }
+    }
+    
+    // Add used annotation properties that are from external ontologies
+    for (const [localName, fullUri] of usedAnnotationPropsWithUri) {
+      // Check if it's not already in the list
+      if (!annotationProperties.some((ap) => ap.name === localName || ap.uri === fullUri)) {
+        // Try to get range from store (might be in parent ontology, but we can check)
+        const rangeQuads = ttlStore.getQuads(DataFactory.namedNode(fullUri), DataFactory.namedNode(RDFS_NS + 'range'), null, null);
+        const range = rangeQuads.length > 0 ? (rangeQuads[0].object as { value?: string }).value ?? null : null;
+        const isBoolean = range === XSD_NS + 'boolean' || range?.endsWith('#boolean') || false;
+        
+        // Get isDefinedBy if present
+        const isDefinedByQuads = ttlStore.getQuads(DataFactory.namedNode(fullUri), DataFactory.namedNode(RDFS_NS + 'isDefinedBy'), null, null);
+        let isDefinedBy: string | undefined = undefined;
+        if (isDefinedByQuads.length > 0 && isDefinedByQuads[0].object.termType === 'NamedNode') {
+          isDefinedBy = (isDefinedByQuads[0].object as { value?: string }).value ?? undefined;
+        } else {
+          // Extract base URL from the URI (e.g., http://example.org/core#labellableRoot -> http://example.org/core)
+          const hashIndex = fullUri.indexOf('#');
+          const slashIndex = fullUri.lastIndexOf('/');
+          if (hashIndex > -1) {
+            isDefinedBy = fullUri.slice(0, hashIndex);
+          } else if (slashIndex > -1) {
+            isDefinedBy = fullUri.slice(0, slashIndex + 1);
+          }
+          // If we couldn't extract it, try getDefiningOntologyFromUri
+          if (!isDefinedBy) {
+            const definingOntology = getDefiningOntologyFromUri(fullUri, externalOntologyReferences);
+            isDefinedBy = definingOntology !== 'an external ontology' ? definingOntology : undefined;
+          }
+        }
+        
+        annotationProperties.push({
+          name: localName,
+          isBoolean,
+          range: range ?? null,
+          uri: fullUri,
+          isDefinedBy: isDefinedBy,
+        });
+      }
+    }
+    annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
@@ -7384,6 +7480,23 @@ function setupEventListeners(): void {
     onUpdate: () => {
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
+      // Refresh all UI elements that display prefixes
+      if (ttlStore) {
+        const edgeStylesContent = document.getElementById('edgeStylesContent');
+        if (edgeStylesContent) {
+          initEdgeStylesMenu(edgeStylesContent, () => applyFilter(true));
+        }
+        const dataPropsContent = document.getElementById('dataPropsContent');
+        if (dataPropsContent) {
+          initDataPropsMenu(dataPropsContent);
+        }
+        const annotationPropsContent = document.getElementById('annotationPropsContent');
+        if (annotationPropsContent) {
+          initAnnotationPropsMenu(annotationPropsContent);
+        }
+        // Rebuild the graph to update class node labels
+        applyFilter(true);
+      }
     },
     onSave: () => {
       // Additional save logic if needed
