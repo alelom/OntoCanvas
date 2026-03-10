@@ -51,14 +51,15 @@ describe('relationshipUtils', () => {
       expect(types).toContain('partOf');
     });
     
-    it('should only include external properties if used in edges', () => {
+    it('should always include external properties even if not used in edges', () => {
       objectProperties.push({
         name: 'https://w3id.org/dano#hasPart',
         label: 'Has Part',
         hasCardinality: true,
       });
       const types = getAllRelationshipTypes(rawData, objectProperties);
-      expect(types).not.toContain('https://w3id.org/dano#hasPart');
+      // External properties are always included (they may be referenced in restrictions or domain/range)
+      expect(types).toContain('https://w3id.org/dano#hasPart');
     });
   });
   

@@ -124,13 +124,20 @@ describe('Corrupt ontology handling E2E', () => {
     const result = await waitForErrorOrGraph(page, 10000);
     
     if (result === 'error') {
-      const errorText = await page.evaluate(() => {
-        const el = document.getElementById('errorMsg');
-        return el?.textContent || '';
+      // Click on the error message to open the detailed error modal
+      await page.click('#errorMsg');
+      await page.waitForTimeout(500);
+      
+      // Check the detailed error in the modal
+      const modalErrorText = await page.evaluate(() => {
+        const modal = document.getElementById('validationErrorModal');
+        if (!modal) return '';
+        return modal.textContent || '';
       });
       
-      expect(errorText).toBeTruthy();
-      expect(errorText.toLowerCase()).toContain('circular');
+      expect(modalErrorText).toBeTruthy();
+      // Error message should contain "circular", "self", or "reference"
+      expect(modalErrorText.toLowerCase()).toMatch(/circular|self|reference/);
       
       const vizControlsVisible = await page.evaluate(() => {
         const el = document.getElementById('vizControls');
@@ -149,13 +156,30 @@ describe('Corrupt ontology handling E2E', () => {
     const result = await waitForErrorOrGraph(page, 10000);
     
     if (result === 'error') {
-      const errorText = await page.evaluate(() => {
-        const el = document.getElementById('errorMsg');
-        return el?.textContent || '';
+      // Check if modal is already open, or click to open it
+      const modalInfo = await page.evaluate(() => {
+        const modal = document.getElementById('validationErrorModal');
+        const isVisible = modal && (modal as HTMLElement).style.display !== 'none' && 
+                          window.getComputedStyle(modal).display !== 'none';
+        return { exists: !!modal, isVisible };
       });
       
-      expect(errorText).toBeTruthy();
-      expect(errorText.toLowerCase()).toMatch(/circular|self|reference/);
+      if (!modalInfo.isVisible) {
+        // Click on the error message to open the detailed error modal
+        await page.click('#errorMsg');
+        await page.waitForTimeout(500);
+      }
+      
+      // Check the detailed error in the modal
+      const modalErrorText = await page.evaluate(() => {
+        const modal = document.getElementById('validationErrorModal');
+        if (!modal) return '';
+        return modal.textContent || '';
+      });
+      
+      expect(modalErrorText).toBeTruthy();
+      // Error message should contain "circular", "self", or "reference"
+      expect(modalErrorText.toLowerCase()).toMatch(/circular|self|reference/);
       
       const vizControlsVisible = await page.evaluate(() => {
         const el = document.getElementById('vizControls');

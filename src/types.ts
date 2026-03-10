@@ -29,6 +29,10 @@ export interface AnnotationPropertyInfo {
   isBoolean: boolean; // Deprecated: kept for backward compatibility, use range instead
   /** Full URI of the datatype range (e.g. http://www.w3.org/2001/XMLSchema#boolean). null means no range specified. */
   range?: string | null;
+  /** Full URI of the annotation property */
+  uri?: string;
+  /** rdfs:isDefinedBy (URI of defining ontology). If set, property is imported. */
+  isDefinedBy?: string | null;
 }
 
 export interface ObjectPropertyInfo {

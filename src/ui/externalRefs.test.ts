@@ -313,18 +313,90 @@ describe('externalRefs', () => {
   });
   
   describe('formatRelationshipLabelWithPrefix', () => {
-    it('should format relationship label with prefix', () => {
+    it('should format relationship label with prefix using objectPropertyInfo', () => {
+      const refs: ExternalOntologyReference[] = [
+        { url: 'http://example.org/base', usePrefix: true, prefix: 'base' },
+      ];
+      const objectPropertyInfo = {
+        uri: 'http://example.org/base#connectsTo',
+        isDefinedBy: 'http://example.org/base',
+      };
+      const formatted = formatRelationshipLabelWithPrefix(
+        'connectsTo',
+        'connectsTo',
+        refs,
+        objectPropertyInfo,
+        'http://example.org/child#'
+      );
+      expect(formatted).toBe('base:connectsTo');
+    });
+    
+    it('should format relationship label with prefix from propertyName when objectPropertyInfo not provided', () => {
       const refs: ExternalOntologyReference[] = [
         { url: 'https://w3id.org/dano', usePrefix: true, prefix: 'dano' },
       ];
       const formatted = formatRelationshipLabelWithPrefix('https://w3id.org/dano#contains', 'contains', refs);
-      expect(formatted).toBe('dano: contains');
+      expect(formatted).toBe('dano:contains');
     });
     
-    it('should return original label if no prefix', () => {
+    it('should return original label if no prefix found', () => {
       const refs: ExternalOntologyReference[] = [];
       const formatted = formatRelationshipLabelWithPrefix('contains', 'contains', refs);
       expect(formatted).toBe('contains');
+    });
+    
+    it('should return original label if prefix is disabled', () => {
+      const refs: ExternalOntologyReference[] = [
+        { url: 'https://w3id.org/dano', usePrefix: false, prefix: 'dano' },
+      ];
+      const formatted = formatRelationshipLabelWithPrefix('https://w3id.org/dano#contains', 'contains', refs);
+      expect(formatted).toBe('contains');
+    });
+    
+    it('should prefer objectPropertyInfo over propertyName for prefix detection', () => {
+      const refs: ExternalOntologyReference[] = [
+        { url: 'http://example.org/base', usePrefix: true, prefix: 'base' },
+        { url: 'http://example.org/other', usePrefix: true, prefix: 'other' },
+      ];
+      const objectPropertyInfo = {
+        uri: 'http://example.org/base#connectsTo',
+        isDefinedBy: 'http://example.org/base',
+      };
+      // propertyName might match 'other' but objectPropertyInfo should take precedence
+      const formatted = formatRelationshipLabelWithPrefix(
+        'http://example.org/other#connectsTo',
+        'connectsTo',
+        refs,
+        objectPropertyInfo,
+        'http://example.org/child#'
+      );
+      expect(formatted).toBe('base:connectsTo');
+    });
+    
+    it('should handle local properties (isDefinedBy matches mainOntologyBase)', () => {
+      const refs: ExternalOntologyReference[] = [
+        { url: 'http://example.org/base', usePrefix: true, prefix: 'base' },
+      ];
+      const objectPropertyInfo = {
+        uri: 'http://example.org/base#localProp',
+        isDefinedBy: 'http://example.org/base',
+      };
+      // When isDefinedBy matches mainOntologyBase, getPrefixForUri should return null
+      // because normalizedDefinedBy === mainNormalized, so the first block is skipped
+      // However, the fallback might still match the URI itself
+      // Note: This test documents current behavior - ideally local properties shouldn't get prefixes
+      const formatted = formatRelationshipLabelWithPrefix(
+        'localProp',
+        'localProp',
+        refs,
+        objectPropertyInfo,
+        'http://example.org/base#'
+      );
+      // Current implementation: getPrefixForUri returns null when isDefinedBy matches mainBase
+      // (the first block is skipped, and fallback might not match if URI doesn't start with refUrl)
+      // But if the URI itself matches, it might still get a prefix
+      // For now, verify it doesn't get a prefix when isDefinedBy matches mainBase
+      expect(formatted).toBe('localProp');
     });
   });
 

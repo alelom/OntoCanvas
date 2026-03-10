@@ -1,0 +1,21 @@
+@prefix : <http://example.org/comprehensive-specialized#> .
+@prefix extended: <http://example.org/comprehensive-extended#> .
+@prefix base: <http://example.org/comprehensive-base#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/comprehensive-specialized> rdf:type owl:Ontology ;
+    rdfs:label "Comprehensive Specialized Ontology" ;
+    owl:imports <http://example.org/comprehensive-extended> .
+
+:SpecializedExtendedClass rdf:type owl:Class ;
+    rdfs:label "Specialized Extended Class" ;
+    rdfs:subClassOf extended:ExtendedClass ;
+    base:labellableRoot "true"^^xsd:boolean ;
+    rdfs:subClassOf [
+        rdf:type owl:Restriction ;
+        owl:onProperty base:importedDataProp ;
+        owl:onDataRange xsd:string
+    ] .

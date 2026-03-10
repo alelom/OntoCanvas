@@ -48,7 +48,7 @@ export type OnSelectionChangedCallback = () => void;
 /**
  * Callback when "Open external ontology" is chosen for an external node.
  */
-export type OnOpenExternalOntologyCallback = (url: string) => void;
+export type OnOpenExternalOntologyCallback = (url: string) => Promise<void>;
 
 export interface ExternalRefForContextMenu {
   url: string;
@@ -296,8 +296,8 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       externalUrl &&
       currentExternalRefs?.some((ref) => normalizeUrl(ref.url) === normalizeUrl(externalUrl));
     if (canOpenExternal && onOpenExternalOntologyCallback) {
-      const openExternalBtn = createMenuItem('Open external ontology', () => {
-        onOpenExternalOntologyCallback!(externalUrl!);
+      const openExternalBtn = createMenuItem('Open external ontology', async () => {
+        await onOpenExternalOntologyCallback!(externalUrl!);
         hideContextMenu();
       });
       contextMenuElement.appendChild(copyBtn);

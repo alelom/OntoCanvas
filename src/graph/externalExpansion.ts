@@ -39,13 +39,27 @@ function getNamespace(uri: string): string {
 
 /**
  * Find the external ref whose URL matches the namespace of the given URI.
+ * Sorts refs by URL length (longest first) to prefer more specific matches.
  */
 function findRefForUri(uri: string, refs: ExternalOntologyReference[]): ExternalOntologyReference | null {
   const ns = getNamespace(uri);
   const nsNormalized = normalizeRefUrl(ns);
-  for (const ref of refs) {
+  
+  // Sort refs by URL length (longest first) to prefer more specific matches
+  const sortedRefs = [...refs].sort((a, b) => {
+    const aUrl = normalizeRefUrl(a.url);
+    const bUrl = normalizeRefUrl(b.url);
+    return bUrl.length - aUrl.length; // Longer URLs first
+  });
+  
+  for (const ref of sortedRefs) {
     const refNorm = normalizeRefUrl(ref.url);
-    if (nsNormalized === refNorm || ref.url.startsWith(nsNormalized) || ns.startsWith(refNorm)) return ref;
+    // Exact match (with or without trailing slash/#)
+    if (nsNormalized === refNorm) return ref;
+    // Check if namespace starts with ref URL (ref is a prefix of namespace)
+    if (nsNormalized.startsWith(refNorm + '/') || nsNormalized.startsWith(refNorm + '#')) return ref;
+    // Check if ref URL starts with namespace (namespace is a prefix of ref - less common)
+    if (refNorm.startsWith(nsNormalized + '/') || refNorm.startsWith(nsNormalized + '#')) return ref;
   }
   return null;
 }
@@ -163,6 +177,43 @@ export function expandWithExternalRefs(
               y: options.nodePositions?.[rangeUri]?.y,
             });
           }
+        }
+      }
+    }
+  }
+
+  // Add external classes referenced in subClassOf relationships
+  const RDFS_SUBCLASS_OF = RDFS + 'subClassOf';
+  const subClassOfQuads = store.getQuads(null, DataFactory.namedNode(RDFS_SUBCLASS_OF), null, null);
+  for (const q of subClassOfQuads) {
+    // Only process direct subClassOf relationships (not restrictions - those are blank nodes)
+    if (q.object.termType !== 'NamedNode') continue;
+    const superClassUri = (q.object as { value: string }).value;
+    const superClassIsLocal = isLocalUri(superClassUri, mainBase);
+    if (!superClassIsLocal) {
+      const ref = findRefForUri(superClassUri, externalRefs);
+      if (ref && !externalClassNodes.has(superClassUri)) {
+        const cached = getCachedExternalClasses(ref.url);
+        const label = getExternalClassLabel(superClassUri, cached);
+        externalClassNodes.set(superClassUri, {
+          id: superClassUri,
+          label,
+          labellableRoot: null,
+          isExternal: true,
+          externalOntologyUrl: ref.url,
+          x: options.nodePositions?.[superClassUri]?.x,
+          y: options.nodePositions?.[superClassUri]?.y,
+        });
+      }
+      // Also create the subClassOf edge if the subclass is local
+      const subClassUri = (q.subject as { value: string }).value;
+      const subClassIsLocal = isLocalUri(subClassUri, mainBase);
+      if (subClassIsLocal) {
+        const subClassLocalName = extractLocalName(subClassUri);
+        const edgeKey = `${subClassLocalName}->${superClassUri}:subClassOf`;
+        if (!existingEdgeKeys.has(edgeKey)) {
+          newEdges.push({ from: subClassLocalName, to: superClassUri, type: 'subClassOf', isRestriction: false });
+          existingEdgeKeys.add(edgeKey);
         }
       }
     }

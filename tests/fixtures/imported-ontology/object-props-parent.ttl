@@ -1,0 +1,17 @@
+@prefix : <http://example.org/object-base#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/object-base> rdf:type owl:Ontology ;
+    rdfs:label "Object Properties Base" ;
+    rdfs:comment "Parent ontology defining classes and object properties" .
+
+:ParentClass rdf:type owl:Class ;
+    rdfs:label "Parent Class" .
+
+:connectsTo rdf:type owl:ObjectProperty ;
+    rdfs:label "connects to" ;
+    rdfs:domain owl:Thing ;
+    rdfs:range :ParentClass ;
+    rdfs:isDefinedBy <http://example.org/object-base> .

@@ -8,6 +8,7 @@ export default defineConfig({
   },
   server: {
     fs: { allow: ['..'] },
+    cors: true, // Enable CORS for local development
   },
   test: {
     include: ['src/**/*.test.ts', 'tests/e2e/**/*.e2e.test.ts'],

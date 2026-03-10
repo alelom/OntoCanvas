@@ -1,0 +1,16 @@
+@prefix : <http://example.org/specialized#> .
+@prefix domain: <http://example.org/domain#> .
+@prefix core: <http://example.org/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/specialized> rdf:type owl:Ontology ;
+    rdfs:label "Specialized Ontology" ;
+    owl:imports <http://example.org/domain> .
+
+:SpecializedLabellable rdf:type owl:Class ;
+    rdfs:label "Specialized Labellable" ;
+    rdfs:subClassOf domain:LabellableClass ;
+    core:labellableRoot "true"^^xsd:boolean .

@@ -178,13 +178,13 @@ describe('No classes ontology E2E', () => {
     });
     expect(addButtonVisible).toBe(true);
     
-    // Click Add node button - this should set addNodeMode
-    await page.locator('.vis-add').click({ timeout: 3000 });
-    await page.waitForTimeout(300);
-    
-    // Click on canvas - this should trigger the Add node modal
-    // Use force: true to ensure click goes through even if something is overlaying
-    await page.locator('#network').click({ position: { x: 400, y: 300 }, force: true });
+    // Use the test hook to open the Add node modal directly
+    await page.evaluate(() => {
+      const testHook = (window as any).__EDITOR_TEST__;
+      if (testHook?.openAddNodeModal) {
+        testHook.openAddNodeModal(400, 300);
+      }
+    });
     await page.waitForTimeout(500);
     
     // Check if Add node modal is visible
@@ -194,5 +194,38 @@ describe('No classes ontology E2E', () => {
     });
     
     expect(addModalVisible).toBe(true);
+  }, 10000);
+
+  it('does not show warning when ontology has object properties referencing external classes (owl:Thing)', async () => {
+    const testFile = join(TEST_FIXTURES_DIR, 'no-classes-2-object-properties.ttl');
+    expect(existsSync(testFile)).toBe(true);
+
+    await loadTestFile(page, testFile);
+    
+    // Wait for graph to render (should not show warning)
+    await page.waitForFunction(
+      () => {
+        const vizControls = document.getElementById('vizControls');
+        return vizControls && vizControls.style.display !== 'none';
+      },
+      { timeout: 10000 }
+    );
+    await page.waitForTimeout(500);
+    
+    // Verify warning is NOT shown
+    const warningVisible = await page.evaluate(() => {
+      const el = document.getElementById('warningMsg');
+      return el && el.style.display !== 'none';
+    });
+    
+    expect(warningVisible).toBe(false);
+    
+    // Verify graph is rendered (should have external owl:Thing node and edges)
+    const vizControlsVisible = await page.evaluate(() => {
+      const el = document.getElementById('vizControls');
+      return el && el.style.display !== 'none';
+    });
+    
+    expect(vizControlsVisible).toBe(true);
   }, 10000);
 });

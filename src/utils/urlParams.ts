@@ -3,6 +3,17 @@
  */
 
 /**
+ * Get the local file token from the 'localFile' URL parameter.
+ * 
+ * @returns The token if present, or null if not found
+ */
+export function getLocalFileTokenFromParams(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('localFile');
+  return token || null;
+}
+
+/**
  * Get the ontology URL from the 'onto' URL parameter.
  * Supports both encoded and unencoded URLs.
  * 

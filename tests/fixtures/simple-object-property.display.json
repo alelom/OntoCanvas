@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "nodePositions": {
+    "http://example.org/test#ClassA": { "x": 100, "y": 100 },
+    "http://example.org/test#ClassB": { "x": 300, "y": 100 }
+  },
+  "edgeStyleConfig": {
+    "http://example.org/test#hasProperty": {
+      "show": true,
+      "showLabel": true,
+      "color": "#ff0000"
+    }
+  },
+  "wrapChars": 20,
+  "minFontSize": 12,
+  "maxFontSize": 16,
+  "relationshipFontSize": 12,
+  "layoutMode": "hierarchical03",
+  "searchQuery": "",
+  "includeNeighbors": false
+}
