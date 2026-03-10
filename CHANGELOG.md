@@ -1,3 +1,16 @@
+# [1.8.0](https://github.com/alelom/OntoCanvas/compare/v1.7.0...v1.8.0) (2026-03-10)
+
+
+### Bug Fixes
+
+* refine circular reference detection in ontology validation ([df0e870](https://github.com/alelom/OntoCanvas/commit/df0e8701565cf03e69e6a6fc74a3b4780cf78f53))
+* update edge type checks in parser tests to handle full URIs and local names ([3b46131](https://github.com/alelom/OntoCanvas/commit/3b4613128d18f7779288868d66de4f9b4e07cfc6))
+
+
+### Features
+
+* add AEC drawing metadata ontology and unit tests for edge creation ([b311058](https://github.com/alelom/OntoCanvas/commit/b311058be7eea1baa1b4857b0ebcdb73a9b9f1e5))
+
 # [1.7.0](https://github.com/alelom/OntoCanvas/compare/v1.6.0...v1.7.0) (2026-03-10)
 
 
