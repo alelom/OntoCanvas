@@ -159,6 +159,57 @@ beforeAll(async () => {
 
 **Key Principle:** If you can test the logic with direct function calls, do it. Only use E2E tests when browser automation is absolutely necessary.
 
+## E2E Test Isolation and Modal State Management
+
+### Always Check Modal State Before Interacting
+
+**Issue:** E2E tests can fail when modals are already open from previous tests or due to timing issues. Tests should be defensive and check modal state before attempting interactions.
+
+**Problem:** In `corruptOntology.e2e.test.ts`, the test was trying to click `#errorMsg` to open the validation error modal, but the modal was already open (possibly from a previous test or due to a race condition), causing the click to be intercepted by the modal overlay.
+
+**Solution:**
+```typescript
+// ❌ Bad - assumes modal is closed, fails if already open
+await page.click('#errorMsg');
+await page.waitForTimeout(500);
+const modalErrorText = await page.evaluate(() => {
+  const modal = document.getElementById('validationErrorModal');
+  return modal?.textContent || '';
+});
+
+// ✅ Good - checks if modal is already open before clicking
+const modalInfo = await page.evaluate(() => {
+  const modal = document.getElementById('validationErrorModal');
+  const isVisible = modal && (modal as HTMLElement).style.display !== 'none' && 
+                    window.getComputedStyle(modal).display !== 'none';
+  return { exists: !!modal, isVisible };
+});
+
+if (!modalInfo.isVisible) {
+  await page.click('#errorMsg');
+  await page.waitForTimeout(500);
+}
+
+const modalErrorText = await page.evaluate(() => {
+  const modal = document.getElementById('validationErrorModal');
+  return modal?.textContent || '';
+});
+```
+
+**Why?**
+- Modals can persist between tests if not properly cleaned up
+- Race conditions can cause modals to open before test interactions
+- Defensive checks make tests more robust and less flaky
+- Tests should verify state before assuming it
+
+**Best Practices:**
+1. Always check if a modal is already visible before trying to open it
+2. Clean up modals in `afterEach` hooks when possible
+3. Use `page.evaluate()` to check DOM state before interactions
+4. Consider using test hooks to explicitly close modals between tests
+
+**Reference:** See `tests/e2e/corruptOntology.e2e.test.ts` for the fixed implementation.
+
 ## General Principles
 
 1. **Code should be self-documenting** - Remove redundant code that doesn't add value
@@ -166,3 +217,4 @@ beforeAll(async () => {
 3. **Configuration should be minimal** - Avoid redundancy and overly permissive settings
 4. **Debug tools should be opt-in** - Don't pollute production logs with debug information
 5. **Early returns improve clarity** - Handle edge cases (like local properties) before main logic
+6. **E2E tests should be defensive** - Check state before assuming it, handle race conditions gracefully

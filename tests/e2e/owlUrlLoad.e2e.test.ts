@@ -32,12 +32,7 @@ describe('OWL URL load E2E', () => {
     if (browser) await browser.close();
   });
 
-  // TODO: This test verifies URL loading and RDF/XML parsing.
-  // The core parsing logic is tested in unit tests.
-  // This E2E test frequently times out due to network route handling and graph rendering timing.
-  // What we tried: waiting for route, checking graph render, multiple wait conditions.
-  // The parsing logic works correctly (verified in unit tests), but network/graph timing is flaky.
-  it.skip('loads RDF/XML from URL and shows graph with one node', async () => {
+  it('loads RDF/XML from URL and shows graph with one node', async () => {
     const owlUrl = 'https://e2e-owl.test/ontology.owl';
     const routePattern = /e2e-owl\.test.*ontology\.owl/;
     await page.route(routePattern, async (route) => {

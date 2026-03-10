@@ -147,12 +147,7 @@ describe('Corrupt ontology handling E2E', () => {
     }
   }, 10000);
 
-  // TODO: This test verifies error modal display after clicking error message.
-  // The core validation logic (validateOntologyStructure) is tested in unit tests.
-  // This E2E test frequently fails due to error modal timing and DOM state.
-  // What we tried: clicking error message, waiting for modal, checking text content.
-  // The validation logic works correctly (verified in unit tests), but DOM timing is flaky.
-  it.skip('shows meaningful error for self-referential class', async () => {
+  it('shows meaningful error for self-referential class', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'potentially-corrupt-ontology-03-self-reference.ttl');
     expect(existsSync(testFile)).toBe(true);
 
@@ -161,9 +156,19 @@ describe('Corrupt ontology handling E2E', () => {
     const result = await waitForErrorOrGraph(page, 10000);
     
     if (result === 'error') {
-      // Click on the error message to open the detailed error modal
-      await page.click('#errorMsg');
-      await page.waitForTimeout(500);
+      // Check if modal is already open, or click to open it
+      const modalInfo = await page.evaluate(() => {
+        const modal = document.getElementById('validationErrorModal');
+        const isVisible = modal && (modal as HTMLElement).style.display !== 'none' && 
+                          window.getComputedStyle(modal).display !== 'none';
+        return { exists: !!modal, isVisible };
+      });
+      
+      if (!modalInfo.isVisible) {
+        // Click on the error message to open the detailed error modal
+        await page.click('#errorMsg');
+        await page.waitForTimeout(500);
+      }
       
       // Check the detailed error in the modal
       const modalErrorText = await page.evaluate(() => {
