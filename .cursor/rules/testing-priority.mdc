@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+description: Testing priority guidelines - prefer unit tests over E2E when possible
+---
+
+# Testing Priority Guidelines
+
+## Prefer Unit Tests Over E2E Tests
+
+When writing tests, **always prioritize unit tests that use direct function calls** over E2E tests that require DOM interactions and complex wait conditions.
+
+### Why?
+- E2E tests frequently timeout due to DOM waiting conditions, file input interactions, and complex async operations
+- Unit tests run faster (typically < 1 second vs 30+ seconds for E2E)
+- Unit tests are more reliable and don't depend on browser state or timing
+- Unit tests can verify the core logic without the overhead of browser automation
+
+### When to Use Unit Tests:
+- Testing parser logic (e.g., `parseRdfToGraph`, `buildParseResultFromStore`)
+- Testing data extraction from RDF stores
+- Testing annotation property detection
+- Testing node/edge processing logic
+- Testing utility functions
+- Verifying that data exists in the store and can be extracted correctly
+
+### Example Pattern:
+Instead of E2E tests that:
+- Load files via file input
+- Wait for DOM elements
+- Interact with browser UI
+- Risk timeouts
+
+Use unit tests that:
+- Directly call parser functions: `parseRdfToGraph(content, options)`
+- Access the store directly: `store.getQuads(...)`
+- Simulate re-processing logic to verify fixes
+- Use `readFileSync` to load fixtures
+- Log results for verification
+
+### When E2E Tests Are Still Needed:
+- Testing complete user workflows that require UI interaction
+- Testing modal behavior and user interactions
+- Testing visual rendering (colors, positions, etc.)
+- Testing file system operations that require browser APIs
+
+### Reference Implementation:
+See [tests/unit/labellableRootColor.test.ts](mdc:tests/unit/labellableRootColor.test.ts) for a good example of:
+- Using `parseRdfToGraph` directly
+- Accessing the store to verify data
+- Simulating re-processing logic
+- Avoiding DOM interactions and timeouts
+
+### Key Principle:
+**If you can test the logic with direct function calls, do it. Only use E2E tests when browser automation is absolutely necessary.**
