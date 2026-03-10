@@ -20,13 +20,14 @@ export function getAllRelationshipTypes(
   // Include subClassOf always
   usedTypes.add('subClassOf');
   
-  // Local properties: always include. External (URI) properties: only include if used in edges
+  // Local properties: always include. External (URI) properties: always include (they may be used even without edges)
   objectProperties.forEach((op) => {
     const isExternal = op.name.startsWith('http://') || op.name.startsWith('https://');
     if (!isExternal) {
       usedTypes.add(op.name);
-    } else if (usedTypes.has(op.name)) {
-      usedTypes.add(op.name); // already in from edges; ensure we keep it
+    } else {
+      // External properties: always include (they may be referenced in restrictions or domain/range)
+      usedTypes.add(op.name);
     }
   });
   

@@ -37,6 +37,8 @@ export interface ExternalOntologyReference {
   url: string;
   usePrefix: boolean;
   prefix?: string; // Optional prefix name (e.g., 'dc', 'schema')
+  /** Opacity for imported classes and data properties from this ontology (0.1 to 1.0, default 0.5) */
+  opacity?: number;
 }
 
 export const DISPLAY_CONFIG_VERSION = 1;

@@ -37,7 +37,12 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
           prefix = 'geo';
         }
 
-        const url = importUrl.endsWith('#') ? importUrl : importUrl.replace(/\/$/, '');
+        // Preserve the original importUrl - don't remove trailing slash if it's part of the path
+        // Only remove trailing slash if it's truly trailing (not part of the path segment)
+        const url = importUrl.endsWith('#') ? importUrl : importUrl;
+        
+        // Debug logging removed - use debugLog if needed in future
+        
         refs.push({
           url,
           usePrefix: prefix !== undefined,
@@ -180,6 +185,119 @@ export function getNodePrefix(
 }
 
 /**
+ * Check if a URI belongs to an external ontology
+ */
+export function isUriFromExternalOntology(
+  uri: string | null | undefined,
+  isDefinedBy: string | null | undefined,
+  externalOntologyReferences: ExternalOntologyReference[],
+  mainOntologyBase: string | null
+): boolean {
+  if (!uri) return false;
+  
+  // First check isDefinedBy if available
+  if (isDefinedBy) {
+    const normalizedDefinedBy = isDefinedBy.endsWith('#') ? isDefinedBy.slice(0, -1) : isDefinedBy;
+    const mainNormalized = mainOntologyBase ? (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '') : '';
+    if (normalizedDefinedBy !== mainNormalized) {
+      // Check if it matches any external reference
+      for (const ref of externalOntologyReferences) {
+        const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+        if (normalizedDefinedBy === refUrl || normalizedDefinedBy.startsWith(refUrl + '/') || normalizedDefinedBy.startsWith(refUrl + '#')) {
+          return true;
+        }
+      }
+      return true; // isDefinedBy points to external ontology
+    }
+  }
+  
+  // Fallback: check if URI belongs to an external reference
+  for (const ref of externalOntologyReferences) {
+    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    if (uri.startsWith(refUrl) || uri.startsWith(refUrl + '#')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Get prefix for a property/class URI if it's from an external ontology
+ */
+export function getPrefixForUri(
+  uri: string | null | undefined,
+  isDefinedBy: string | null | undefined,
+  externalOntologyReferences: ExternalOntologyReference[],
+  mainOntologyBase: string | null
+): string | null {
+  if (!uri) return null;
+  
+  const isConnects = uri.includes('connects') || (isDefinedBy && isDefinedBy.includes('object-base'));
+  
+  // First check isDefinedBy if available
+  if (isDefinedBy) {
+    const normalizedDefinedBy = isDefinedBy.endsWith('#') ? isDefinedBy.slice(0, -1) : isDefinedBy;
+    const mainNormalized = mainOntologyBase ? (mainOntologyBase.endsWith('#') ? mainOntologyBase.slice(0, -1) : mainOntologyBase).replace(/\/$/, '') : '';
+    if (normalizedDefinedBy !== mainNormalized) {
+      // Find matching external reference
+      // Sort refs by URL length (longest first) to prefer more specific matches
+      const sortedRefs = [...externalOntologyReferences].sort((a, b) => {
+        const aUrl = a.url.endsWith('#') ? a.url.slice(0, -1) : a.url;
+        const bUrl = b.url.endsWith('#') ? b.url.slice(0, -1) : b.url;
+        return bUrl.length - aUrl.length; // Longer URLs first
+      });
+      
+      const normalizedDefinedByNoSlash = normalizedDefinedBy.replace(/\/$/, '');
+      
+      for (const ref of sortedRefs) {
+        const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+        const refUrlNoSlash = refUrl.replace(/\/$/, '');
+        
+        // Exact match (with or without trailing slash)
+        if (normalizedDefinedBy === refUrl || normalizedDefinedByNoSlash === refUrlNoSlash) {
+          // Debug logging removed - use debugLog if needed in future
+          return ref.usePrefix && ref.prefix ? ref.prefix : null;
+        }
+        
+        // Prefix match: normalizedDefinedBy should start with refUrl + '/' or refUrl + '#'
+        // Only match if refUrl is a proper namespace prefix (ends with / or #)
+        const refUrlWithSlash = refUrlNoSlash + '/';
+        const refUrlWithHash = refUrlNoSlash + '#';
+        if (normalizedDefinedBy.startsWith(refUrlWithSlash) || 
+            normalizedDefinedBy.startsWith(refUrlWithHash) ||
+            normalizedDefinedByNoSlash.startsWith(refUrlWithSlash) ||
+            normalizedDefinedByNoSlash.startsWith(refUrlWithHash)) {
+          // Debug logging removed - use debugLog if needed in future
+          return ref.usePrefix && ref.prefix ? ref.prefix : null;
+        }
+      }
+    }
+  }
+  
+  // Fallback: check if URI belongs to an external reference
+  for (const ref of externalOntologyReferences) {
+    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    const refUrlNoSlash = refUrl.replace(/\/$/, '');
+    const uriNoSlash = uri.replace(/\/$/, '');
+    if (uri.startsWith(refUrl) || 
+        uri.startsWith(refUrl + '#') ||
+        uriNoSlash.startsWith(refUrlNoSlash) ||
+        uriNoSlash.startsWith(refUrlNoSlash + '#')) {
+      // Debug logging removed - use debugLog if needed in future
+      return ref.usePrefix && ref.prefix ? ref.prefix : null;
+    }
+  }
+  
+  // Fallback: known namespaces when no ref (e.g. inlined without owl:imports)
+  if (uri.includes('opengis.net/ont/geosparql')) return 'geo';
+  if (uri.includes('w3.org/1999/02/22-rdf-syntax-ns#')) return 'rdf';
+  if (uri.includes('w3.org/2000/01/rdf-schema#')) return 'rdfs';
+  if (uri.includes('w3.org/2002/07/owl#')) return 'owl';
+  return null;
+}
+
+/**
  * Get prefix for an object property if it's from an external ontology
  * Object properties from external ontologies would have their URI stored in the name
  */
@@ -228,19 +346,55 @@ export function formatNodeLabelWithPrefix(
 export function formatRelationshipLabelWithPrefix(
   propertyName: string,
   label: string,
-  externalOntologyReferences: ExternalOntologyReference[]
+  externalOntologyReferences: ExternalOntologyReference[],
+  objectPropertyInfo?: { uri?: string; isDefinedBy?: string | null },
+  mainOntologyBase?: string | null
 ): string {
+  // First try to get prefix from property info (uri and isDefinedBy)
+  if (objectPropertyInfo) {
+    const prefix = getPrefixForUri(objectPropertyInfo.uri, objectPropertyInfo.isDefinedBy, externalOntologyReferences, mainOntologyBase || null);
+    if (propertyName.includes('connects') || (objectPropertyInfo.uri && objectPropertyInfo.uri.includes('connects'))) {
+      console.log('[PREFIX DEBUG formatRelationshipLabelWithPrefix]', {
+        propertyName,
+        label,
+        objectPropertyInfo,
+        prefix,
+        externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
+        mainOntologyBase,
+      });
+    }
+    if (prefix) {
+      return `${prefix}:${label}`;
+    }
+  }
+  
+  // Fallback: check if property name is a full URI
   const prefix = getObjectPropertyPrefix(propertyName, externalOntologyReferences);
+  // Debug logging removed - use debugLog if needed in future
   if (prefix) {
-    // Extract local name from property name
-    const localName = propertyName.includes('#') 
-      ? propertyName.split('#').pop() || propertyName
-      : propertyName.includes('/')
-      ? propertyName.split('/').pop() || propertyName
-      : propertyName;
-    return `${prefix}: ${label}`;
+    return `${prefix}:${label}`;
   }
   return label;
+}
+
+/**
+ * Get opacity for an external ontology URL
+ */
+export function getOpacityForExternalOntology(
+  ontologyUrl: string | null | undefined,
+  externalOntologyReferences: ExternalOntologyReference[]
+): number {
+  if (!ontologyUrl) return 1.0;
+  
+  for (const ref of externalOntologyReferences) {
+    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    const normalizedUrl = ontologyUrl.endsWith('#') ? ontologyUrl.slice(0, -1) : ontologyUrl;
+    if (normalizedUrl === refUrl || normalizedUrl.startsWith(refUrl + '/') || normalizedUrl.startsWith(refUrl + '#')) {
+      return ref.opacity ?? 0.5; // Default 50% if not specified
+    }
+  }
+  
+  return 0.5; // Default for external ontologies not in the list
 }
 
 /**
@@ -277,18 +431,28 @@ export function renderExternalRefsList(
   
   listEl.innerHTML = externalOntologyReferences.map((ref, index) => {
     const urlDisplay = ref.url.length > 60 ? ref.url.substring(0, 60) + '...' : ref.url;
+    const opacity = ref.opacity ?? 0.5; // Default 50%
     return `
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px; margin-bottom: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
         <div style="flex: 1;">
           <a href="${ref.url}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #3498db; text-decoration: none; word-break: break-all;" title="${ref.url}">${urlDisplay}</a>
-          <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
-            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">
-              <input type="checkbox" class="external-ref-use-prefix" data-index="${index}" ${ref.usePrefix ? 'checked' : ''}>
-              Use prefix
-            </label>
-            ${ref.usePrefix ? `
-              <input type="text" class="external-ref-prefix" data-index="${index}" value="${ref.prefix || ''}" placeholder="prefix name" style="padding: 4px 6px; font-size: 11px; width: 100px; border: 1px solid #ccc; border-radius: 4px;">
-            ` : ''}
+          <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">
+                <input type="checkbox" class="external-ref-use-prefix" data-index="${index}" ${ref.usePrefix ? 'checked' : ''}>
+                Use prefix
+              </label>
+              ${ref.usePrefix ? `
+                <input type="text" class="external-ref-prefix" data-index="${index}" value="${ref.prefix || ''}" placeholder="prefix name" style="padding: 4px 6px; font-size: 11px; width: 100px; border: 1px solid #ccc; border-radius: 4px;">
+              ` : ''}
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
+                <span>Opacity:</span>
+                <input type="range" class="external-ref-opacity" data-index="${index}" min="0.1" max="1.0" step="0.1" value="${opacity}" style="width: 100px;">
+                <span style="font-size: 10px; min-width: 35px;">${Math.round(opacity * 100)}%</span>
+              </label>
+            </div>
           </div>
         </div>
         <button type="button" class="external-ref-delete" data-index="${index}" style="padding: 4px 8px; font-size: 11px; color: #c0392b; background: none; border: 1px solid #c0392b; border-radius: 4px; cursor: pointer;">Delete</button>
@@ -312,6 +476,22 @@ export function renderExternalRefsList(
     (input as HTMLElement).addEventListener('change', ((e: Event) => {
       const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
       externalOntologyReferences[index].prefix = (e.target as HTMLInputElement).value.trim() || undefined;
+      saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName).catch(() => {});
+      callbacks.onUpdate();
+      callbacks.onSave();
+    }) as EventListener);
+  });
+  
+  listEl.querySelectorAll('.external-ref-opacity').forEach((input) => {
+    (input as HTMLElement).addEventListener('input', ((e: Event) => {
+      const index = parseInt((e.target as HTMLElement).dataset.index || '0', 10);
+      const opacity = parseFloat((e.target as HTMLInputElement).value);
+      externalOntologyReferences[index].opacity = opacity;
+      // Update the display
+      const displaySpan = (e.target as HTMLElement).parentElement?.querySelector('span:last-child');
+      if (displaySpan) {
+        displaySpan.textContent = `${Math.round(opacity * 100)}%`;
+      }
       saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName).catch(() => {});
       callbacks.onUpdate();
       callbacks.onSave();

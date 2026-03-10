@@ -1,0 +1,29 @@
+@prefix : <http://example.org/comprehensive-base#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/comprehensive-base> rdf:type owl:Ontology ;
+    rdfs:label "Comprehensive Base Ontology" ;
+    rdfs:comment "Parent ontology with all types of properties and classes" .
+
+:BaseClass rdf:type owl:Class ;
+    rdfs:label "Base Class" .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label "Labellable root" ;
+    rdfs:range xsd:boolean ;
+    rdfs:isDefinedBy <http://example.org/comprehensive-base> .
+
+:importedObjectProp rdf:type owl:ObjectProperty ;
+    rdfs:label "imported object property" ;
+    rdfs:domain :BaseClass ;
+    rdfs:range :BaseClass ;
+    rdfs:isDefinedBy <http://example.org/comprehensive-base> .
+
+:importedDataProp rdf:type owl:DatatypeProperty ;
+    rdfs:label "imported data property" ;
+    rdfs:domain :BaseClass ;
+    rdfs:range xsd:string ;
+    rdfs:isDefinedBy <http://example.org/comprehensive-base> .

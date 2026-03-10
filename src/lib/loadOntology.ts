@@ -64,10 +64,16 @@ export async function loadOntologyFromContent(
   // Enhance extracted refs with prefixes from source (Turtle only has @prefix)
   for (const ref of extractedRefs) {
     const urlWithoutHash = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    const urlWithoutTrailingSlash = urlWithoutHash.replace(/\/$/, '');
     for (const [prefix, url] of Object.entries(prefixMap)) {
       const urlStr = String(url);
       const prefixUrlWithoutHash = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr;
-      if (urlWithoutHash === prefixUrlWithoutHash) {
+      const prefixUrlNormalized = prefixUrlWithoutHash.replace(/\/$/, '');
+      // Match with or without trailing slash, and with or without #
+      if (urlWithoutHash === prefixUrlWithoutHash || 
+          urlWithoutTrailingSlash === prefixUrlNormalized ||
+          urlWithoutHash === prefixUrlNormalized ||
+          urlWithoutTrailingSlash === prefixUrlWithoutHash) {
         ref.prefix = prefix;
         ref.usePrefix = true;
         break;

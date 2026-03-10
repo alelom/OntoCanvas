@@ -190,7 +190,15 @@ export function getAnnotationProperties(store: Store): AnnotationPropertyInfo[] 
     seen.add(name);
     const range = rangeMap.get(subjUri) ?? null;
     const isBoolean = range === XSD_BOOLEAN || range?.endsWith('#boolean') || false;
-    result.push({ name, isBoolean, range });
+    
+    // Extract isDefinedBy if present
+    const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
+    let isDefinedBy: string | null = null;
+    if (isDefinedByQuad?.object?.termType === 'NamedNode') {
+      isDefinedBy = (isDefinedByQuad.object as { value: string }).value;
+    }
+    
+    result.push({ name, isBoolean, range, uri: subjUri, isDefinedBy: isDefinedBy ?? undefined });
   }
   return result;
 }
@@ -204,6 +212,11 @@ function buildParseResultFromStore(store: Store): ParseResult {
   const edges: GraphEdge[] = [];
   const seenClasses = new Set<string>();
   const annotationProps = getAnnotationProperties(store);
+  
+  // Debug: Log at start of parsing (only in debug mode)
+  if (isDebugMode()) {
+    debugLog('[PARSER] Starting buildParseResultFromStore');
+  }
 
   const excludeNamespaces = [
     'http://www.w3.org/2002/07/owl#',
@@ -260,14 +273,23 @@ function buildParseResultFromStore(store: Store): ParseResult {
       exampleImages: exampleImages.length > 0 ? exampleImages : undefined,
     });
   }
+  
+  // Debug: Log parsed classes (only in debug mode)
+  if (isDebugMode()) {
+    debugLog(`[PARSER] Parsed ${nodes.length} classes:`, nodes.map(n => n.id));
+  }
 
   // subClassOf edges
   const subClassQuads = store.getQuads(null, RDFS + 'subClassOf', null, null);
   const seenPairs = new Set<string>();
 
-  // Debug: Log all blank node restrictions to find describes edge
-  const blankNodeRestrictions = subClassQuads.filter((q) => isBlankNode(q.object));
-  debugLog(`[DEBUG] Found ${blankNodeRestrictions.length} blank node restrictions (potential edges)`);
+  // Debug: Log all blank node restrictions to find describes edge (only in debug mode)
+  if (isDebugMode()) {
+    const blankNodeRestrictions = subClassQuads.filter((q) => isBlankNode(q.object));
+    debugLog(`[PARSER] Found ${blankNodeRestrictions.length} blank node restrictions (potential edges). Total subClassOf quads: ${subClassQuads.length}`);
+    debugLog(`[PARSER] Seen classes:`, Array.from(seenClasses));
+    debugLog(`[PARSER] Nodes:`, nodes.map(n => ({ id: n.id, label: n.label })));
+  }
   
   // Debug: Specifically look for describes property
   const describesPropertyUri = 'https://w3id.org/dano#describes';
@@ -319,10 +341,10 @@ function buildParseResultFromStore(store: Store): ParseResult {
       if (!onProperty || !targetQuad) {
         // Debug: Log why restriction was skipped
         if (!onProperty) {
-          debugLog(`[DEBUG] Skipped restriction: missing onProperty for subject ${subjName}`);
+          debugLog(`[PARSER] Skipped restriction: missing onProperty for subject ${subjName}`);
         }
         if (!targetQuad) {
-          debugLog(`[DEBUG] Skipped restriction: missing someValuesFrom/onClass for subject ${subjName}, property ${onProperty ? (onProperty.object as { value: string }).value : 'unknown'}`);
+          debugLog(`[PARSER] Skipped restriction: missing someValuesFrom/onClass for subject ${subjName}, property ${onProperty ? (onProperty.object as { value: string }).value : 'unknown'}`);
         }
         continue;
       }
@@ -331,30 +353,47 @@ function buildParseResultFromStore(store: Store): ParseResult {
         debugLog(`[DEBUG] Skipped restriction: target is not NamedNode for subject ${subjName}`);
         continue;
       }
-      const targetName = extractLocalName(target.value);
+      const targetUri = (target as { value: string }).value;
+      const targetName = extractLocalName(targetUri);
       
       // Debug: Log node matching for describes
       if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
         debugLog('[DEBUG] Processing describes restriction:', {
           subjectName: subjName,
-          targetUri: target.value,
+          targetUri: targetUri,
           targetName: targetName,
           targetInSeenClasses: seenClasses.has(targetName),
           seenClassesList: Array.from(seenClasses).filter((n) => n.includes('Description') || n.includes('Display')),
         });
       }
       
-      if (!seenClasses.has(targetName)) {
-        // Debug: Log when target node is missing
-        if (onProperty && ((onProperty.object as { value: string }).value === describesPropertyUri || (onProperty.object as { value: string }).value.includes('describes'))) {
-          debugWarn(`[DEBUG] Target node "${targetName}" not in seenClasses. Available classes:`, Array.from(seenClasses));
+      // Check if target class exists - try by local name first, then by URI matching
+      let targetFound = seenClasses.has(targetName);
+      if (!targetFound) {
+        // The target might be in a different namespace - check if we can find it by reconstructing the URI
+        // For now, if targetName isn't in seenClasses, we skip the edge
+        // This is correct behavior - we only create edges between classes that exist in the ontology
+        const propUri = (onProperty.object as { value: string }).value;
+        // Debug: Log when target node is missing (only in debug mode)
+        if (isDebugMode()) {
+          debugWarn(`[PARSER] Target node "${targetName}" (URI: ${targetUri}) not in seenClasses for property ${propUri}. Subject: ${subjName}. Available classes:`, Array.from(seenClasses));
+          debugWarn(`[PARSER] Nodes:`, nodes.map(n => ({ id: n.id, label: n.label })));
         }
         continue;
       }
       
       // Preserve full URI for external properties, use local name for local properties
       const propUri = (onProperty.object as { value: string }).value;
-      const isExternalProperty = !propUri.startsWith(BASE_IRI);
+      const mainBase = getMainOntologyBase(store);
+      // Check if property is external by comparing URI base
+      let isExternalProperty = false;
+      if (mainBase) {
+        const mainBaseNormalized = mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase;
+        const propBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.split('/').slice(0, -1).join('/');
+        isExternalProperty = propBase !== mainBaseNormalized;
+      } else {
+        isExternalProperty = !propUri.startsWith(BASE_IRI);
+      }
       const propName = isExternalProperty ? propUri : extractLocalName(propUri);
 
       const cardinality = parseCardinalityFromRestriction(
@@ -425,6 +464,120 @@ function buildParseResultFromStore(store: Store): ParseResult {
   debugLog(`[DEBUG] Describes edges in parsed edges: ${describesEdges.length}`, describesEdges);
 
   const objectProps = getObjectProperties(store);
+  
+  // Track object properties referenced in restrictions that might not be in the store
+  const referencedObjectPropUris = new Set<string>();
+  for (const q of store.getQuads(null, RDFS + 'subClassOf', null, null)) {
+    const obj = q.object;
+    if (!isBlankNode(obj)) continue;
+    const onProperty = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
+    if (onProperty && onProperty.object.termType === 'NamedNode') {
+      const propUri = (onProperty.object as { value: string }).value;
+      referencedObjectPropUris.add(propUri);
+    }
+  }
+  
+  // Add referenced object properties that aren't declared in the store
+  for (const propUri of referencedObjectPropUris) {
+    const propName = extractLocalName(propUri);
+    // Check if already in objectProps (by name or URI)
+    if (!objectProps.some((op) => op.name === propName || op.uri === propUri)) {
+      // Try to get label and other info from store, but if not found, use defaults
+      const propQuads = store.getQuads(DataFactory.namedNode(propUri), null, null, null);
+      let label = propName;
+      let comment: string | undefined = undefined;
+      let domain: string | undefined = undefined;
+      let range: string | undefined = undefined;
+      let hasCardinality = true;
+      let isDefinedBy: string | undefined = undefined;
+      let subPropertyOf: string | undefined = undefined;
+      
+      for (const q of propQuads) {
+        const pred = (q.predicate as { value?: string }).value;
+        if (pred === RDFS + 'label') {
+          label = (q.object as { value?: string }).value ?? propName;
+        } else if (pred === RDFS + 'comment') {
+          comment = (q.object as { value?: string }).value ?? undefined;
+        } else if (pred === RDFS + 'domain') {
+          const domainUri = (q.object as { value?: string }).value;
+          if (domainUri && domainUri !== OWL + 'Thing') {
+            domain = extractLocalName(domainUri);
+          }
+        } else if (pred === RDFS + 'range') {
+          const rangeUri = (q.object as { value?: string }).value;
+          if (rangeUri && rangeUri !== OWL + 'Thing') {
+            range = extractLocalName(rangeUri);
+          }
+        } else if (pred === RDFS + 'isDefinedBy') {
+          if (q.object.termType === 'NamedNode') {
+            isDefinedBy = (q.object as { value: string }).value;
+          }
+        } else if (pred === RDFS + 'subPropertyOf') {
+          if (q.object.termType === 'NamedNode') {
+            subPropertyOf = (q.object as { value: string }).value;
+          }
+        }
+      }
+      
+      // Check if URI belongs to an external ontology (not the main ontology base)
+      // If isDefinedBy is not found in store, check if URI belongs to external ontology
+      if (!isDefinedBy) {
+        const mainBase = getMainOntologyBase(store);
+        const mainBaseNormalized = mainBase ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase).replace(/\/$/, '') : null;
+        const mainBaseWithHash = mainBase || '';
+        
+        // Extract base URL from property URI
+        let uriBase: string;
+        if (propUri.includes('#')) {
+          uriBase = propUri.slice(0, propUri.indexOf('#'));
+        } else {
+          const lastSlash = propUri.lastIndexOf('/');
+          uriBase = lastSlash > 0 ? propUri.substring(0, lastSlash) : propUri;
+        }
+        uriBase = uriBase.replace(/\/$/, '');
+        
+        // If URI base doesn't match main ontology base, it's from an external ontology
+        if (uriBase && uriBase !== mainBaseNormalized && uriBase !== mainBaseWithHash.replace(/\/$/, '').replace(/#$/, '')) {
+          // Check if it matches any owl:imports
+          const importQuads = store.getQuads(null, DataFactory.namedNode(OWL + 'imports'), null, null);
+          for (const importQuad of importQuads) {
+            if (importQuad.object.termType === 'NamedNode') {
+              const importUrl = (importQuad.object as { value: string }).value;
+              const importUrlNormalized = importUrl.endsWith('#') ? importUrl.slice(0, -1) : importUrl;
+              const importUrlBase = importUrlNormalized.replace(/\/$/, '');
+              if (uriBase === importUrlBase || uriBase.startsWith(importUrlBase + '/') || uriBase.startsWith(importUrlBase + '#')) {
+                isDefinedBy = importUrlNormalized;
+                break;
+              }
+            }
+          }
+          // If no matching import found but URI is clearly external, use the URI base
+          if (!isDefinedBy) {
+            isDefinedBy = uriBase;
+          }
+        }
+      }
+      
+      // For external properties, use full URI as name (consistent with getObjectProperties behavior)
+      // This ensures the name matches edge types which are stored as full URIs for external properties
+      // Determine if this is an external property
+      const isExternal = isDefinedBy || (propUri !== propName && (propUri.startsWith('http://') || propUri.startsWith('https://')));
+      const finalName = isExternal ? propUri : propName; // Use full URI for external properties, local name for local
+      
+      objectProps.push({
+        name: finalName,
+        label: String(label),
+        hasCardinality,
+        comment,
+        domain,
+        range,
+        uri: propUri,
+        isDefinedBy,
+        subPropertyOf,
+      });
+    }
+  }
+  
   const dataProps = getDataProperties(store);
 
   // Create edges from object property domain/range definitions
@@ -461,22 +614,61 @@ function buildParseResultFromStore(store: Store): ParseResult {
     const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), null, null);
     const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), null, null);
     
-    // For each domain-range pair, create an edge if both classes exist
+    const OWL_THING = OWL + 'Thing';
+    
+    // Use full URI for external properties, local name for local properties
+    const isExternalProperty = !propUri.startsWith(BASE_IRI);
+    const propName = isExternalProperty ? propUri : op.name;
+    
+    // Collect valid domains and ranges
+    const validDomains: string[] = [];
+    let hasOwlThingDomain = false;
     for (const domainQuad of domainQuads) {
       if (domainQuad.object.termType !== 'NamedNode') continue;
       const domainUri = (domainQuad.object as { value: string }).value;
+      if (domainUri === OWL_THING) {
+        hasOwlThingDomain = true;
+        // When domain is owl:Thing, all classes can be the domain
+        break;
+      }
       const domainName = extractLocalName(domainUri);
-      if (!seenClasses.has(domainName)) continue;
-      
-      for (const rangeQuad of rangeQuads) {
-        if (rangeQuad.object.termType !== 'NamedNode') continue;
-        const rangeUri = (rangeQuad.object as { value: string }).value;
-        const rangeName = extractLocalName(rangeUri);
-        if (!seenClasses.has(rangeName)) continue;
-        
-        // Use full URI for external properties, local name for local properties
-        const isExternalProperty = !propUri.startsWith(BASE_IRI);
-        const propName = isExternalProperty ? propUri : op.name;
+      if (seenClasses.has(domainName)) {
+        validDomains.push(domainName);
+      }
+    }
+    
+    // If domain is owl:Thing, use all classes as domains
+    if (hasOwlThingDomain) {
+      validDomains.push(...Array.from(seenClasses));
+    }
+    
+    // Collect valid ranges
+    const validRanges: string[] = [];
+    let hasOwlThingRange = false;
+    for (const rangeQuad of rangeQuads) {
+      if (rangeQuad.object.termType !== 'NamedNode') continue;
+      const rangeUri = (rangeQuad.object as { value: string }).value;
+      if (rangeUri === OWL_THING) {
+        hasOwlThingRange = true;
+        // When range is owl:Thing, all classes can be the range
+        break;
+      }
+      const rangeName = extractLocalName(rangeUri);
+      if (seenClasses.has(rangeName)) {
+        validRanges.push(rangeName);
+      }
+    }
+    
+    // If range is owl:Thing, use all classes as ranges
+    if (hasOwlThingRange) {
+      validRanges.push(...Array.from(seenClasses));
+    }
+    
+    // For each domain-range pair, create an edge if both classes exist
+    for (const domainName of validDomains) {
+      for (const rangeName of validRanges) {
+        // Skip self-loops unless explicitly allowed
+        if (domainName === rangeName) continue;
         
         // Only create edge if it doesn't already exist as a restriction
         const key = `${domainName}->${rangeName}:${propName}`;
@@ -491,8 +683,8 @@ function buildParseResultFromStore(store: Store): ParseResult {
           edges.push(edge);
           
           // Debug: Log domain/range edges
-          if (propName.includes('describes') || propName.includes('contains')) {
-            debugLog('[DEBUG] Added edge from domain/range:', { edge, propUri, domainUri, rangeUri });
+          if (propName.includes('describes') || propName.includes('contains') || propName.includes('connectsTo')) {
+            debugLog('[DEBUG] Added edge from domain/range:', { edge, propUri, domainName, rangeName });
           }
         }
       }
@@ -501,6 +693,7 @@ function buildParseResultFromStore(store: Store): ParseResult {
 
   // Parse data property restrictions (class subClassOf [ owl:onProperty dp ; owl:onDataRange ... ])
   const OWL_ON_DATA_RANGE = OWL + 'onDataRange';
+  const referencedDataPropUris = new Set<string>(); // Track data properties referenced in restrictions
   for (const q of store.getQuads(null, RDFS + 'subClassOf', null, null)) {
     const subj = q.subject;
     const obj = q.object;
@@ -508,7 +701,9 @@ function buildParseResultFromStore(store: Store): ParseResult {
     const onProp = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
     const onDataRange = store.getQuads(obj, DataFactory.namedNode(OWL_ON_DATA_RANGE), null, null)[0];
     if (!onProp || !onDataRange) continue;
-    const propName = extractLocalName((onProp.object as { value: string }).value);
+    const propUri = (onProp.object as { value: string }).value;
+    const propName = extractLocalName(propUri);
+    referencedDataPropUris.add(propUri); // Track full URI
     const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
     const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
     const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
@@ -528,6 +723,67 @@ function buildParseResultFromStore(store: Store): ParseResult {
         propertyName: propName,
         minCardinality: minCard ?? undefined,
         maxCardinality: maxCard ?? undefined,
+      });
+    }
+  }
+  
+  // Add referenced data properties that aren't declared in the store
+  for (const propUri of referencedDataPropUris) {
+    const propName = extractLocalName(propUri);
+    // Check if already in dataProps
+    if (!dataProps.some((dp) => dp.name === propName && dp.uri === propUri)) {
+      // Try to get label and other info from store, but if not found, use defaults
+      const propQuads = store.getQuads(DataFactory.namedNode(propUri), null, null, null);
+      let label = propName;
+      let comment: string | undefined = undefined;
+      let range = XSD_NS + 'string';
+      let domains: string[] = [];
+      
+      for (const q of propQuads) {
+        const pred = (q.predicate as { value?: string }).value;
+        if (pred === RDFS + 'label') {
+          label = (q.object as { value?: string }).value ?? propName;
+        } else if (pred === RDFS + 'comment') {
+          comment = (q.object as { value?: string }).value ?? undefined;
+        } else if (pred === RDFS + 'range') {
+          range = (q.object as { value?: string }).value ?? XSD_NS + 'string';
+        } else if (pred === RDFS + 'domain') {
+          const domainUri = (q.object as { value?: string }).value;
+          if (domainUri && domainUri !== OWL + 'Thing') {
+            const domainName = extractLocalName(domainUri);
+            if (!domains.includes(domainName)) {
+              domains.push(domainName);
+            }
+          }
+        }
+      }
+      
+      // Check if URI belongs to an external ontology (not the main ontology base)
+      const isDefinedByQuad = store.getQuads(DataFactory.namedNode(propUri), DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
+      let isDefinedBy: string | undefined = undefined;
+      if (isDefinedByQuad?.object?.termType === 'NamedNode') {
+        isDefinedBy = (isDefinedByQuad.object as { value: string }).value;
+      } else {
+        // If no isDefinedBy, check if URI doesn't belong to main ontology
+        const mainBase = getMainOntologyBase(store);
+        const mainBaseNormalized = mainBase ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase) : null;
+        if (mainBaseNormalized && !propUri.startsWith(mainBaseNormalized) && !propUri.startsWith(mainBase)) {
+          // Extract base URL from property URI
+          const uriBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.substring(0, propUri.lastIndexOf('/'));
+          if (uriBase && uriBase !== mainBaseNormalized && uriBase !== mainBase) {
+            isDefinedBy = uriBase;
+          }
+        }
+      }
+      
+      dataProps.push({
+        name: propName,
+        label: String(label),
+        comment,
+        range,
+        domains,
+        uri: propUri,
+        isDefinedBy,
       });
     }
   }

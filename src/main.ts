@@ -141,6 +141,9 @@ import {
   hideExternalRefsModal,
   sortExternalRefsByUrl,
   type ExternalRefsModalCallbacks,
+  getPrefixForUri,
+  isUriFromExternalOntology,
+  getOpacityForExternalOntology,
 } from './ui/externalRefs';
 import {
   initRenameModalHeaderIcons,
@@ -371,7 +374,10 @@ function applyDisplayConfig(config: DisplayConfig): void {
   });
   loadedEdgeStyleConfig = upgradedEdgeStyleConfig;
   
-  console.log(`[DISPLAY CONFIG] Stored edge style config for ${Object.keys(upgradedEdgeStyleConfig).length} edge types`);
+  // Debug logging (only in debug mode)
+  if (isDebugMode()) {
+    debugLog(`[DISPLAY CONFIG] Stored edge style config for ${Object.keys(upgradedEdgeStyleConfig).length} edge types`);
+  }
   
   if (document.getElementById('edgeStylesContent')) {
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
@@ -399,7 +405,10 @@ function applyDisplayConfig(config: DisplayConfig): void {
         }
       }
     });
-    console.log(`[DISPLAY CONFIG] Applied edge styles to ${appliedToCheckboxes} checkboxes in DOM`);
+    // Debug logging (only in debug mode)
+    if (isDebugMode()) {
+      debugLog(`[DISPLAY CONFIG] Applied edge styles to ${appliedToCheckboxes} checkboxes in DOM`);
+    }
     // For types not in saved config, ensure they have default colors
     // This ensures that even if no saved config exists, all types get their spectrum colors
     types.forEach((type) => {
@@ -921,10 +930,12 @@ function setupPropertySelector(inputId: string, resultsId: string, getExcludeTyp
     const excludeType = getExcludeType?.() ?? (document.getElementById('editRelationshipTypeModal') as HTMLElement)?.dataset?.type ?? null;
     const types = getAllRelationshipTypes(rawData, objectProperties).filter((t) => t !== excludeType && t !== 'subClassOf');
     const q = (query || '').toLowerCase().trim();
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
     const filtered = q
       ? types.filter((t) => {
           const baseLabel = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-          const display = formatRelationshipLabelWithPrefix(t, baseLabel, externalOntologyReferences);
+          const op = objectProperties.find((p) => p.name === t || p.uri === t);
+          const display = formatRelationshipLabelWithPrefix(t, baseLabel, externalOntologyReferences, op, mainBase);
           return t.toLowerCase().includes(q) || baseLabel.toLowerCase().includes(q) || display.toLowerCase().includes(q);
         })
       : types;
@@ -932,7 +943,8 @@ function setupPropertySelector(inputId: string, resultsId: string, getExcludeTyp
     resultsDiv.innerHTML = '';
     filtered.slice(0, limit).forEach((type) => {
       const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
-      const display = formatRelationshipLabelWithPrefix(type, baseLabel, externalOntologyReferences);
+      const op = objectProperties.find((p) => p.name === type || p.uri === type);
+      const display = formatRelationshipLabelWithPrefix(type, baseLabel, externalOntologyReferences, op, mainBase);
       const div = document.createElement('div');
       div.className = 'rel-type-property-option';
       div.dataset.type = type;
@@ -978,13 +990,22 @@ function updateEditRelTypeIdentifierAndValidation(): void {
   const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
   const okBtn = document.getElementById('editRelTypeConfirm') as HTMLButtonElement;
-  const op = objectProperties.find((p) => p.name === type);
+  const op = objectProperties.find((p) => p.name === type || p.uri === type);
   const baseWithHash = getDisplayBase(ttlStore);
-  const isImported = !!(op?.isDefinedBy);
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const hasValidDefinedBy = op?.isDefinedBy && (op.isDefinedBy.startsWith('http://') || op.isDefinedBy.startsWith('https://'));
+  const isImported = op ? (hasValidDefinedBy ? isUriFromExternalOntology(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(op.uri, null, externalOntologyReferences, mainBase)) : false;
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
-    if (isImported) {
-      identifierEl.textContent = op?.uri ?? baseWithHash + (op?.name ?? type);
+    if (isImported && op) {
+      // For imported properties, show with prefix format (e.g., "base:connectsTo")
+      const label = op.label || extractLocalName(op.uri || op.name || type);
+      const prefix = getPrefixForUri(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase);
+      if (prefix) {
+        identifierEl.textContent = `${prefix}:${label}`;
+      } else {
+        identifierEl.textContent = op.uri ?? baseWithHash + (op.name ?? type);
+      }
     } else {
       const derived = labelToCamelCaseIdentifier(lbl) || (op?.name ?? type);
       identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
@@ -1148,7 +1169,90 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const rangeResults = document.getElementById('editRelTypeRangeResults');
   const subPropertyOfInput = document.getElementById('editRelTypeSubPropertyOf') as HTMLInputElement;
   const subPropertyOfResults = document.getElementById('editRelTypeSubPropertyOfResults');
-  const op = objectProperties.find((p) => p.name === type);
+  // Find property by name or URI (type might be full URI for external properties)
+  const op = objectProperties.find((p) => p.name === type || p.uri === type || (type.startsWith('http') && p.uri === type));
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  // Check if imported: use isDefinedBy if present and valid URL, otherwise check if URI belongs to external ontology
+  const hasValidDefinedBy = op?.isDefinedBy && (op.isDefinedBy.startsWith('http://') || op.isDefinedBy.startsWith('https://'));
+  const isImported = op ? (hasValidDefinedBy ? isUriFromExternalOntology(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(op.uri, null, externalOntologyReferences, mainBase)) : false;
+  
+  // Add/update warning icon if imported - place it in header aligned with h3
+  const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+  const h3 = modalContent?.querySelector('h3') as HTMLElement;
+  
+  // Ensure header structure exists (similar to rename modal)
+  let header = modalContent?.querySelector('.modal-header') as HTMLElement;
+  if (!header && h3 && h3.parentNode) {
+    // Create header wrapper
+    header = document.createElement('div');
+    header.className = 'modal-header';
+    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px;';
+    
+    // Create icons container
+    const headerIcons = document.createElement('div');
+    headerIcons.className = 'modal-header-icons';
+    headerIcons.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+    
+    // Insert header before h3, then move h3 and add icons
+    h3.parentNode.insertBefore(header, h3);
+    header.appendChild(h3);
+    header.appendChild(headerIcons);
+    h3.style.margin = '0'; // Remove default margin since header handles spacing
+  }
+  
+  const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
+  let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
+  if (isImported && headerIcons) {
+    const ontologyUrl = hasValidDefinedBy ? op.isDefinedBy : (op.uri ? getDefiningOntologyFromUri(op.uri, externalOntologyReferences) : 'an external ontology');
+    const warningMessage = `This object property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
+    
+    if (!warningIcon) {
+      warningIcon = document.createElement('span');
+      warningIcon.className = 'imported-warning-icon warning-icon-pulse';
+      warningIcon.textContent = '⚠️';
+      warningIcon.style.cssText = 'cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none;';
+      warningIcon.setAttribute('role', 'button');
+      warningIcon.setAttribute('tabindex', '0');
+      warningIcon.title = warningMessage;
+      
+      // Add click handler to show popover
+      warningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(warningIcon, warningMessage, modal);
+      });
+      warningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(warningIcon, warningMessage, modal);
+        }
+      });
+      
+      headerIcons.appendChild(warningIcon);
+    } else {
+      warningIcon.style.display = 'inline';
+      warningIcon.classList.add('warning-icon-pulse');
+      warningIcon.title = warningMessage;
+      // Update click handler with new message by cloning to remove old listeners
+      const oldIcon = warningIcon;
+      const newWarningIcon = oldIcon.cloneNode(true) as HTMLElement;
+      oldIcon.parentNode?.replaceChild(newWarningIcon, oldIcon);
+      newWarningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(newWarningIcon, warningMessage, modal);
+      });
+      newWarningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(newWarningIcon, warningMessage, modal);
+        }
+      });
+      warningIcon = newWarningIcon;
+    }
+  } else if (warningIcon) {
+    warningIcon.style.display = 'none';
+    warningIcon.classList.remove('warning-icon-pulse');
+  }
+  
   if (labelInput) labelInput.value = op?.label ?? type;
   if (commentInput) commentInput.value = op?.comment ?? '';
   if (domainInput) domainInput.value = op?.domain ?? '';
@@ -1166,16 +1270,51 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
   const baseWithHash = getDisplayBase(ttlStore);
-  const isImported = !!(op?.isDefinedBy);
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
-    const currentId = isImported ? (op?.uri ?? op?.name ?? type) : (op?.uri ?? baseWithHash + (op?.name ?? type));
-    identifierEl.textContent = (currentId.startsWith('http') ? currentId : baseWithHash + currentId);
+    if (isImported && op) {
+      // For imported properties, show with prefix format (e.g., "base:connectsTo")
+      const label = op.label || extractLocalName(op.uri || op.name || type);
+      const prefix = getPrefixForUri(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase);
+      if (prefix) {
+        identifierEl.textContent = `${prefix}:${label}`;
+      } else {
+        const currentId = op.uri ?? op.name ?? type;
+        identifierEl.textContent = (currentId.startsWith('http') ? currentId : baseWithHash + currentId);
+      }
+    } else {
+      const currentId = op?.uri ?? baseWithHash + (op?.name ?? type);
+      identifierEl.textContent = (currentId.startsWith('http') ? currentId : baseWithHash + currentId);
+    }
   }
-  if (definedByInput) definedByInput.value = op?.isDefinedBy ?? '';
+  if (definedByInput) {
+    definedByInput.value = op?.isDefinedBy ?? '';
+    // Always disable definedBy field
+    definedByInput.disabled = true;
+    definedByInput.style.opacity = '0.5';
+    definedByInput.title = 'This field cannot be edited.';
+  }
   if (labelInput) {
     labelInput.disabled = isImported;
+    labelInput.style.opacity = isImported ? '0.5' : '1';
     labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
+  }
+  if (commentInput) {
+    commentInput.disabled = isImported;
+    commentInput.style.opacity = isImported ? '0.5' : '1';
+    commentInput.title = isImported ? 'Comment cannot be changed for imported properties.' : '';
+  }
+  if (domainInput) {
+    domainInput.disabled = isImported;
+    domainInput.style.opacity = isImported ? '0.5' : '1';
+  }
+  if (rangeInput) {
+    rangeInput.disabled = isImported;
+    rangeInput.style.opacity = isImported ? '0.5' : '1';
+  }
+  if (subPropertyOfInput) {
+    subPropertyOfInput.disabled = isImported;
+    subPropertyOfInput.style.opacity = isImported ? '0.5' : '1';
   }
   if (labelValidationEl) {
     labelValidationEl.style.display = 'none';
@@ -1214,7 +1353,58 @@ function initEdgeStylesMenu(
     // HTML attributes can contain # without escaping, but we need to escape quotes
     const htmlEscapedType = type.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
-    const displayLabel = formatRelationshipLabelWithPrefix(type, baseLabel, externalOntologyReferences);
+    // Find property by name, URI, or local name extracted from URI
+    // For external properties, name should be full URI (after parser fix), and type might be full URI or local name
+    let op = objectProperties.find((p) => {
+      // Direct match by name or URI
+      if (p.name === type || p.uri === type) return true;
+      
+      // If type is a full URI, check if it matches p.uri or p.name (both should be full URI for external)
+      if (type.startsWith('http://') || type.startsWith('https://')) {
+        if (p.uri === type || p.name === type) return true;
+        // Also check if p.uri or p.name contains the type (for partial matches)
+        if (p.uri && (type.includes(p.uri) || p.uri.includes(type))) return true;
+        if (p.name && p.name.startsWith('http') && (type.includes(p.name) || p.name.includes(type))) return true;
+      }
+      
+      // If type is a local name, extract local name from p.uri or p.name and compare
+      if (!type.startsWith('http://') && !type.startsWith('https://')) {
+        // Extract local name from URI
+        if (p.uri) {
+          const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
+          if (uriLocalName === type) return true;
+        }
+        // Extract local name from name (if name is a full URI)
+        if (p.name && (p.name.startsWith('http://') || p.name.startsWith('https://'))) {
+          const nameLocalName = p.name.includes('#') ? p.name.split('#').pop() : p.name.split('/').pop();
+          if (nameLocalName === type) return true;
+        }
+        // Direct match if p.name is the local name
+        if (p.name === type && !p.name.startsWith('http://') && !p.name.startsWith('https://')) return true;
+      }
+      
+      return false;
+    });
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    // Use op.uri or op.name (if full URI) for prefix detection, otherwise use type
+    // This ensures imported properties get their prefix even if type is a local name
+    const propertyNameForPrefix = op?.uri || (op?.name && (op.name.startsWith('http://') || op.name.startsWith('https://')) ? op.name : null) || type;
+    
+    // Debug: Log prefix detection for connectsTo (only in debug mode)
+    if (isDebugMode() && (type.includes('connects') || (op && (op.name?.includes('connects') || op.uri?.includes('connects'))))) {
+      debugLog('[PREFIX DEBUG]', {
+        type,
+        opFound: !!op,
+        opName: op?.name,
+        opUri: op?.uri,
+        opIsDefinedBy: op?.isDefinedBy,
+        propertyNameForPrefix,
+        baseLabel,
+        externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
+      });
+    }
+    
+    const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, externalOntologyReferences, op, mainBase);
     row.innerHTML = `
       <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${displayLabel}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
@@ -1408,11 +1598,20 @@ function formatRangeUri(rangeUri: string): string {
 
 function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  
+  // Helper to format property name with prefix
+  const formatPropName = (dp: DataPropertyInfo): string => {
+    const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
+    return prefix ? `${prefix}:${dp.label}` : dp.label;
+  };
+  
   dataProperties.forEach((dp) => {
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
+    const propDisplayName = formatPropName(dp);
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${dp.label}</span>
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${propDisplayName}</span>
       <span style="font-size: 11px; color: #666;">${dp.range.includes('string') ? 'string' : dp.range.includes('integer') ? 'integer' : dp.range.split('#').pop() ?? dp.range}</span>
       <button type="button" class="data-prop-edit-btn" data-name="${dp.name}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
       <button type="button" class="data-prop-delete-btn" data-name="${dp.name}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
@@ -1473,6 +1672,158 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   });
 }
 
+// Helper to get defining ontology from URI
+function getDefiningOntologyFromUri(uri: string | null | undefined, externalOntologyReferences: ExternalOntologyReference[]): string {
+  if (!uri) return 'an external ontology';
+  for (const ref of externalOntologyReferences) {
+    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+    if (uri.startsWith(refUrl) || uri.startsWith(refUrl + '#')) {
+      return ref.url;
+    }
+  }
+  return 'an external ontology';
+}
+
+// Helper to show warning icon popover (similar to rename modal popover)
+function showWarningIconPopover(anchor: HTMLElement, message: string, modal: HTMLElement): void {
+  const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+  if (!modalContent) return;
+  
+  // Get or create popover element
+  let popover = modalContent.querySelector('.warning-icon-popover') as HTMLElement;
+  if (!popover) {
+    popover = document.createElement('div');
+    popover.className = 'warning-icon-popover rename-popover';
+    popover.setAttribute('role', 'tooltip');
+    modalContent.appendChild(popover);
+  }
+  
+  // Position and show popover
+  const rect = anchor.getBoundingClientRect();
+  popover.style.position = 'fixed';
+  popover.style.left = `${rect.left}px`;
+  popover.style.top = `${rect.bottom + 6}px`;
+  popover.style.maxWidth = 'min(320px, calc(100vw - 24px))';
+  popover.textContent = message;
+  
+  // Prefer opening above if too close to bottom
+  const popoverHeight = 80;
+  if (rect.bottom + popoverHeight + 8 > window.innerHeight && rect.top - popoverHeight - 8 > 0) {
+    popover.style.top = `${rect.top - popoverHeight - 8}px`;
+  }
+  
+  popover.classList.add('rename-popover-visible');
+  
+  // Hide popover when clicking outside
+  const hidePopover = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.warning-icon-popover') && !target.closest('.imported-warning-icon')) {
+      popover.classList.remove('rename-popover-visible');
+      document.removeEventListener('click', hidePopover);
+    }
+  };
+  
+  // Use setTimeout to avoid immediate hiding
+  setTimeout(() => {
+    document.addEventListener('click', hidePopover);
+  }, 0);
+}
+
+// Update editable state when isDefinedBy changes
+function updateDataPropEditableState(): void {
+  const modal = document.getElementById('editDataPropertyModal');
+  if (!modal || (modal as HTMLElement).style.display === 'none') return;
+  const name = (modal as HTMLElement).dataset.dataPropName;
+  if (!name) return;
+  const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
+  const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
+  const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
+  const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
+  const dp = dataProperties.find((p) => p.name === name);
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const newDefinedBy = definedByInput?.value?.trim() || null;
+  // Check if imported: use newDefinedBy if present, otherwise check if URI belongs to external ontology
+  const isImported = dp ? (newDefinedBy ? isUriFromExternalOntology(dp.uri, newDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+  
+  // Update warning icon in header
+  const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+  const header = modalContent?.querySelector('.modal-header') as HTMLElement;
+  const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
+  let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
+  const hasValidDefinedBy = newDefinedBy && (newDefinedBy.startsWith('http://') || newDefinedBy.startsWith('https://'));
+  const isImportedWithValidUrl = isImported && hasValidDefinedBy;
+  
+  if (isImported && headerIcons) {
+    const ontologyUrl = newDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
+    const warningMessage = `This data property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
+    
+    if (!warningIcon) {
+      warningIcon = document.createElement('span');
+      warningIcon.className = 'imported-warning-icon warning-icon-pulse';
+      warningIcon.textContent = '⚠️';
+      warningIcon.style.cssText = 'cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none;';
+      warningIcon.setAttribute('role', 'button');
+      warningIcon.setAttribute('tabindex', '0');
+      warningIcon.title = warningMessage;
+      
+      // Add click handler to show popover
+      warningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(warningIcon, warningMessage, modal);
+      });
+      warningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(warningIcon, warningMessage, modal);
+        }
+      });
+      
+      headerIcons.appendChild(warningIcon);
+    } else {
+      warningIcon.style.display = 'inline';
+      warningIcon.classList.add('warning-icon-pulse');
+      warningIcon.title = warningMessage;
+      // Update click handler with new message by cloning to remove old listeners
+      const oldIcon = warningIcon;
+      const newWarningIcon = oldIcon.cloneNode(true) as HTMLElement;
+      oldIcon.parentNode?.replaceChild(newWarningIcon, oldIcon);
+      newWarningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(newWarningIcon, warningMessage, modal);
+      });
+      newWarningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(newWarningIcon, warningMessage, modal);
+        }
+      });
+      warningIcon = newWarningIcon;
+    }
+  } else if (warningIcon) {
+    warningIcon.style.display = 'none';
+    warningIcon.classList.remove('warning-icon-pulse');
+  }
+  
+  // Update input states
+  if (labelInput) {
+    labelInput.disabled = isImported;
+    labelInput.style.opacity = isImported ? '0.5' : '1';
+    labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
+  }
+  if (commentInput) {
+    commentInput.disabled = isImported;
+    commentInput.style.opacity = isImported ? '0.5' : '1';
+    commentInput.title = isImported ? 'Comment cannot be changed for imported properties.' : '';
+  }
+  if (rangeSel) {
+    rangeSel.disabled = isImported;
+    rangeSel.style.opacity = isImported ? '0.5' : '1';
+    rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
+  }
+  
+  updateEditDataPropIdentifierAndValidation();
+}
+
 function updateEditDataPropIdentifierAndValidation(): void {
   const modal = document.getElementById('editDataPropertyModal');
   if (!modal || (modal as HTMLElement).style.display === 'none') return;
@@ -1482,9 +1833,13 @@ function updateEditDataPropIdentifierAndValidation(): void {
   const identifierEl = document.getElementById('editDataPropIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editDataPropLabelValidation') as HTMLElement;
   const okBtn = document.getElementById('editDataPropConfirm') as HTMLButtonElement;
+  const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
   const dp = dataProperties.find((p) => p.name === name);
   const baseWithHash = getDisplayBase(ttlStore);
-  const isImported = !!(dp?.isDefinedBy);
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const newDefinedBy = definedByInput?.value?.trim() || null;
+  // Check if imported: use newDefinedBy if present, otherwise check if URI belongs to external ontology
+  const isImported = dp ? (newDefinedBy ? isUriFromExternalOntology(dp.uri, newDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
     if (isImported) {
@@ -1533,6 +1888,7 @@ function initEditDataPropertyHandlers(): void {
   if (editDataPropertyHandlersInitialized) return;
   editDataPropertyHandlersInitialized = true;
   document.getElementById('editDataPropLabel')?.addEventListener('input', updateEditDataPropIdentifierAndValidation);
+  document.getElementById('editDataPropDefinedBy')?.addEventListener('input', updateDataPropEditableState);
   document.getElementById('editDataPropCancel')?.addEventListener('click', () => {
     document.getElementById('editDataPropertyModal')!.style.display = 'none';
   });
@@ -1754,7 +2110,90 @@ function showEditDataPropertyModal(name: string): void {
   const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
   const dp = dataProperties.find((p) => p.name === name);
   const baseWithHash = getDisplayBase(ttlStore);
-  const isImported = !!(dp?.isDefinedBy);
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  // Check if imported: use isDefinedBy if present, otherwise check if URI belongs to external ontology
+  const isImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+  
+  // Add/update warning icon if imported - place it in header aligned with h3
+  const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+  const h3 = modalContent?.querySelector('h3') as HTMLElement;
+  
+  // Ensure header structure exists (similar to editRelationshipTypeModal)
+  let header = modalContent?.querySelector('.modal-header') as HTMLElement;
+  if (!header && h3 && h3.parentNode) {
+    // Create header wrapper
+    header = document.createElement('div');
+    header.className = 'modal-header';
+    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px;';
+    
+    // Create icons container
+    const headerIcons = document.createElement('div');
+    headerIcons.className = 'modal-header-icons';
+    headerIcons.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+    
+    // Insert header before h3, then move h3 and add icons
+    h3.parentNode.insertBefore(header, h3);
+    header.appendChild(h3);
+    header.appendChild(headerIcons);
+    h3.style.margin = '0'; // Remove default margin since header handles spacing
+  }
+  
+  const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
+  let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
+  const hasValidDefinedBy = dp?.isDefinedBy && (dp.isDefinedBy.startsWith('http://') || dp.isDefinedBy.startsWith('https://'));
+  const isImportedWithValidUrl = isImported && hasValidDefinedBy;
+  
+  if (isImported && headerIcons) {
+    const ontologyUrl = hasValidDefinedBy ? dp.isDefinedBy : (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
+    const warningMessage = `This data property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
+    
+    if (!warningIcon) {
+      warningIcon = document.createElement('span');
+      warningIcon.className = 'imported-warning-icon warning-icon-pulse';
+      warningIcon.textContent = '⚠️';
+      warningIcon.style.cssText = 'cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none;';
+      warningIcon.setAttribute('role', 'button');
+      warningIcon.setAttribute('tabindex', '0');
+      warningIcon.title = warningMessage;
+      
+      // Add click handler to show popover
+      warningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(warningIcon, warningMessage, modal);
+      });
+      warningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(warningIcon, warningMessage, modal);
+        }
+      });
+      
+      headerIcons.appendChild(warningIcon);
+    } else {
+      warningIcon.style.display = 'inline';
+      warningIcon.classList.add('warning-icon-pulse');
+      warningIcon.title = warningMessage;
+      // Update click handler with new message by cloning to remove old listeners
+      const oldIcon = warningIcon;
+      const newWarningIcon = oldIcon.cloneNode(true) as HTMLElement;
+      oldIcon.parentNode?.replaceChild(newWarningIcon, oldIcon);
+      newWarningIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showWarningIconPopover(newWarningIcon, warningMessage, modal);
+      });
+      newWarningIcon.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showWarningIconPopover(newWarningIcon, warningMessage, modal);
+        }
+      });
+      warningIcon = newWarningIcon;
+    }
+  } else if (warningIcon) {
+    warningIcon.style.display = 'none';
+    warningIcon.classList.remove('warning-icon-pulse');
+  }
+  
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
     const fullUri = dp?.uri ?? baseWithHash + (dp?.name ?? name);
@@ -1764,18 +2203,32 @@ function showEditDataPropertyModal(name: string): void {
     labelValidationEl.style.display = 'none';
     labelValidationEl.textContent = '';
   }
-  if (definedByInput) definedByInput.value = dp?.isDefinedBy ?? '';
+  if (definedByInput) {
+    definedByInput.value = dp?.isDefinedBy ?? '';
+    // Add listener to update editable state when isDefinedBy changes
+    definedByInput.removeEventListener('input', updateDataPropEditableState);
+    definedByInput.addEventListener('input', updateDataPropEditableState);
+  }
   if (labelInput) {
     labelInput.value = dp?.label ?? name;
     labelInput.disabled = isImported;
+    labelInput.style.opacity = isImported ? '0.5' : '1';
     labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
   }
-  if (commentInput) commentInput.value = dp?.comment ?? '';
+  if (commentInput) {
+    commentInput.value = dp?.comment ?? '';
+    commentInput.disabled = isImported;
+    commentInput.style.opacity = isImported ? '0.5' : '1';
+    commentInput.title = isImported ? 'Comment cannot be changed for imported properties.' : '';
+  }
   const rangeOptions = [...DATA_PROPERTY_RANGE_OPTIONS];
   if (dp?.range && !rangeOptions.some((o) => o.value === dp.range)) {
     rangeOptions.push({ value: dp.range, label: dp.range.includes('#') ? dp.range.split('#').pop()! : dp.range });
   }
   rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${dp?.range === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
+  rangeSel.disabled = isImported;
+  rangeSel.style.opacity = isImported ? '0.5' : '1';
+  rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
   const originalDomains = dp ? [...(dp.domains || [])] : [];
   (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
   if (domainsListEl && dp) {
@@ -1865,12 +2318,77 @@ function showEditAnnotationPropertyModal(name: string): void {
   const commentInput = document.getElementById('editAnnotationPropComment') as HTMLTextAreaElement;
   const rangeSel = document.getElementById('editAnnotationPropRange') as HTMLSelectElement;
   const ap = annotationProperties.find((p) => p.name === name);
-  if (nameEl) nameEl.textContent = `Identifier: ${name} (used in ontology)`;
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const isImported = ap ? isUriFromExternalOntology(ap.uri, ap.isDefinedBy, externalOntologyReferences, mainBase) : false;
+  
+  // Add/update warning icon if imported - place it in header aligned with h3
+  const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+  const h3 = modalContent?.querySelector('h3') as HTMLElement;
+  
+  // Ensure header structure exists (similar to rename modal)
+  let header = modalContent?.querySelector('.modal-header') as HTMLElement;
+  if (!header && h3) {
+    header = document.createElement('div');
+    header.className = 'modal-header';
+    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px;';
+    const headerIcons = document.createElement('div');
+    headerIcons.className = 'modal-header-icons';
+    headerIcons.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+    header.appendChild(h3);
+    header.appendChild(headerIcons);
+    h3.parentNode?.insertBefore(header, h3);
+    h3.style.margin = '0'; // Remove default margin since header handles spacing
+  }
+  
+  const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
+  let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
+  if (isImported && headerIcons) {
+    if (!warningIcon) {
+      warningIcon = document.createElement('span');
+      warningIcon.className = 'imported-warning-icon warning-icon-pulse';
+      warningIcon.textContent = '⚠️';
+      warningIcon.style.cssText = 'cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none;';
+      warningIcon.setAttribute('role', 'button');
+      warningIcon.setAttribute('tabindex', '0');
+      headerIcons.appendChild(warningIcon);
+    } else {
+      warningIcon.style.display = 'inline';
+      warningIcon.classList.add('warning-icon-pulse');
+    }
+    const ontologyUrl = ap.isDefinedBy || (ap.uri ? getDefiningOntologyFromUri(ap.uri, externalOntologyReferences) : 'an external ontology');
+    warningIcon.title = `This annotation property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
+  } else if (warningIcon) {
+    warningIcon.style.display = 'none';
+    warningIcon.classList.remove('warning-icon-pulse');
+  }
+  
+  if (nameEl) {
+    const prefix = ap ? getPrefixForUri(ap.uri, ap.isDefinedBy, externalOntologyReferences, mainBase) : null;
+    const displayName = prefix ? `${prefix}:${name}` : name;
+    nameEl.textContent = `Identifier: ${displayName} (used in ontology)`;
+  }
+  
+  // Disable inputs if imported
+  if (labelInput) {
+    labelInput.disabled = isImported;
+    labelInput.style.opacity = isImported ? '0.5' : '1';
+    labelInput.title = isImported ? 'Label cannot be changed for imported properties.' : '';
+  }
+  if (commentInput) {
+    commentInput.disabled = isImported;
+    commentInput.style.opacity = isImported ? '0.5' : '1';
+    commentInput.title = isImported ? 'Comment cannot be changed for imported properties.' : '';
+  }
+  if (rangeSel) {
+    rangeSel.disabled = isImported;
+    rangeSel.style.opacity = isImported ? '0.5' : '1';
+    rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
+  }
   // Get label from store - annotation properties may have rdfs:label
   if (labelInput) {
-    if (ttlStore) {
-      const propUri = 'http://example.org/aec-drawing-ontology#' + name;
-      const labelQuads = ttlStore.getQuads(propUri, 'http://www.w3.org/2000/01/rdf-schema#label', null, null);
+    if (ttlStore && ap?.uri) {
+      const propUri = ap.uri;
+      const labelQuads = ttlStore.getQuads(propUri as any, 'http://www.w3.org/2000/01/rdf-schema#label', null, null);
       if (labelQuads.length > 0) {
         const labelObj = labelQuads[0].object as { value?: string };
         labelInput.value = labelObj?.value ?? name;
@@ -1883,9 +2401,9 @@ function showEditAnnotationPropertyModal(name: string): void {
   }
   if (commentInput) {
     // Try to get comment from store
-    if (ttlStore) {
-      const propUri = 'http://example.org/aec-drawing-ontology#' + name;
-      const commentQuads = ttlStore.getQuads(propUri, 'http://www.w3.org/2000/01/rdf-schema#comment', null, null);
+    if (ttlStore && ap?.uri) {
+      const propUri = ap.uri;
+      const commentQuads = ttlStore.getQuads(propUri as any, 'http://www.w3.org/2000/01/rdf-schema#comment', null, null);
       if (commentQuads.length > 0) {
         const commentObj = commentQuads[0].object as { value?: string };
         commentInput.value = commentObj?.value ?? '';
@@ -2080,6 +2598,14 @@ function initAnnotationPropsMenu(
   const signal = annotationPropsMenuClickAbort.signal;
 
   container.innerHTML = '';
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  
+  // Helper to format property name with prefix
+  const formatPropName = (ap: AnnotationPropertyInfo): string => {
+    const prefix = getPrefixForUri(ap.uri, ap.isDefinedBy, externalOntologyReferences, mainBase);
+    return prefix ? `${prefix}:${ap.name}` : ap.name;
+  };
+  
   const boolProps = annotationProperties.filter((ap) => ap.isBoolean);
   const textProps = annotationProperties.filter((ap) => !ap.isBoolean);
 
@@ -2090,6 +2616,7 @@ function initAnnotationPropsMenu(
     boolProps.forEach((ap) => {
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
+      const propDisplayName = formatPropName(ap);
       const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }) => {
         const dataVal = val === 'undefined' ? 'undefined' : val;
         return `
@@ -2105,7 +2632,7 @@ function initAnnotationPropsMenu(
       };
       row.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${ap.name}</div>
+          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${propDisplayName}</div>
           <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
           <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
         </div>
@@ -2126,9 +2653,10 @@ function initAnnotationPropsMenu(
     textProps.forEach((ap) => {
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
+      const propDisplayName = formatPropName(ap);
       row.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${ap.name}</div>
+          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${propDisplayName}</div>
           <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
           <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
         </div>
@@ -2717,25 +3245,27 @@ function buildNetworkData(
     const style = getNodeStyleFromAnnotations(n, filter.annotationStyleConfig);
     const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
     
-    // Apply search transparency if search query is active; external nodes start at 50% and are more transparent when search is active
-    let nodeOpacity = (n as GraphNode & { isExternal?: boolean }).isExternal ? 0.5 : 1.0;
+    // Apply search transparency if search query is active; external nodes use configured opacity
+    const isExternal = (n as GraphNode & { isExternal?: boolean; externalOntologyUrl?: string }).isExternal;
+    const externalUrl = (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl;
+    const baseOpacity = isExternal ? getOpacityForExternalOntology(externalUrl, externalOntologyReferences) : 1.0;
+    let nodeOpacity = baseOpacity;
     let backgroundColor = style.background;
     let borderColor = style.border;
     let fontColor = '#2c3e50';
     
     if (searchQuery) {
       const searchOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
-      const isExternal = (n as GraphNode & { isExternal?: boolean }).isExternal;
-      nodeOpacity = isExternal ? searchOpacity * 0.5 : searchOpacity;
+      nodeOpacity = isExternal ? searchOpacity * baseOpacity : searchOpacity;
       if (nodeOpacity < 1.0) {
         backgroundColor = applyOpacityToColor(style.background, nodeOpacity);
         borderColor = applyOpacityToColor(style.border, nodeOpacity);
         fontColor = applyOpacityToColor('#2c3e50', nodeOpacity);
       }
-    } else if ((n as GraphNode & { isExternal?: boolean }).isExternal) {
-      backgroundColor = applyOpacityToColor(style.background, 0.5);
-      borderColor = applyOpacityToColor(style.border, 0.5);
-      fontColor = applyOpacityToColor('#2c3e50', 0.5);
+    } else if (isExternal) {
+      backgroundColor = applyOpacityToColor(style.background, baseOpacity);
+      borderColor = applyOpacityToColor(style.border, baseOpacity);
+      fontColor = applyOpacityToColor('#2c3e50', baseOpacity);
     }
     
     const node: Record<string, unknown> = {
@@ -2986,21 +3516,35 @@ function buildNetworkData(
       // Format the range URI to short format (e.g., "xsd:string")
       const rangeLabel = dp?.range ? formatRangeUri(dp.range) : 'xsd:string';
       
+      // Check if data property is imported and get its opacity
+      // Use isDefinedBy if present, otherwise check if URI belongs to external ontology
+      const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+      const isDataPropImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+      // Get the defining ontology URL for opacity lookup
+      const definingOntologyUrl = dp?.isDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
+      const baseDataPropOpacity = isDataPropImported ? getOpacityForExternalOntology(definingOntologyUrl, externalOntologyReferences) : 1.0;
+      
       // Apply search transparency if search query is active
-      // Data property nodes inherit opacity from their associated class node
-      let dataPropNodeOpacity = 1.0;
+      // Data property nodes use imported opacity if applicable, otherwise inherit from class node
+      let dataPropNodeOpacity = baseDataPropOpacity;
       let dataPropBackgroundColor = '#e8f4f8';
       let dataPropBorderColor = '#4a90a4';
       let dataPropFontColor = '#2c3e50';
       
       if (searchQuery) {
-        // Use the class node's opacity category
-        dataPropNodeOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
+        // Use the class node's opacity category, but multiply by base opacity if imported
+        const searchOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
+        dataPropNodeOpacity = isDataPropImported ? searchOpacity * baseDataPropOpacity : searchOpacity;
         if (dataPropNodeOpacity < 1.0) {
           dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', dataPropNodeOpacity);
           dataPropBorderColor = applyOpacityToColor('#4a90a4', dataPropNodeOpacity);
           dataPropFontColor = applyOpacityToColor('#2c3e50', dataPropNodeOpacity);
         }
+      } else if (isDataPropImported) {
+        // Apply imported opacity
+        dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', baseDataPropOpacity);
+        dataPropBorderColor = applyOpacityToColor('#4a90a4', baseDataPropOpacity);
+        dataPropFontColor = applyOpacityToColor('#2c3e50', baseDataPropOpacity);
       }
       
       // Format the node label as "property label (datatype)" - e.g., "inferred at (xsd:date)"
@@ -3567,8 +4111,63 @@ function showRenameModal(
   if (renameDupErr) { renameDupErr.style.display = 'none'; renameDupErr.textContent = ''; }
   refreshRenameModalFromInput();
   const node = rawData.nodes.find((n) => n.id === nodeId);
+  const isExternal = node?.isExternal && node?.externalOntologyUrl;
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const isImported = isExternal || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, externalOntologyReferences, mainBase));
+  
+  // Add/update warning icon if imported - place it in header aligned with h3
+  const modalContent = modal.querySelector('.modal-content') as HTMLElement;
+  const h3 = modalContent?.querySelector('h3') as HTMLElement;
+  
+  // Ensure header structure exists (similar to rename modal)
+  let header = modalContent?.querySelector('.modal-header') as HTMLElement;
+  if (!header && h3) {
+    header = document.createElement('div');
+    header.className = 'modal-header';
+    header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px;';
+    const headerIcons = document.createElement('div');
+    headerIcons.className = 'modal-header-icons';
+    headerIcons.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+    header.appendChild(h3);
+    header.appendChild(headerIcons);
+    h3.parentNode?.insertBefore(header, h3);
+    h3.style.margin = '0'; // Remove default margin since header handles spacing
+  }
+  
+  const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
+  let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
+  if (isImported && headerIcons) {
+    if (!warningIcon) {
+      warningIcon = document.createElement('span');
+      warningIcon.className = 'imported-warning-icon warning-icon-pulse';
+      warningIcon.textContent = '⚠️';
+      warningIcon.style.cssText = 'cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; user-select: none;';
+      warningIcon.setAttribute('role', 'button');
+      warningIcon.setAttribute('tabindex', '0');
+      headerIcons.appendChild(warningIcon);
+    } else {
+      warningIcon.style.display = 'inline';
+      warningIcon.classList.add('warning-icon-pulse');
+    }
+    const ontologyUrl = node?.externalOntologyUrl || 'an external ontology';
+    warningIcon.title = `This class is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
+  } else if (warningIcon) {
+    warningIcon.style.display = 'none';
+    warningIcon.classList.remove('warning-icon-pulse');
+  }
+  
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
-  if (commentInput) commentInput.value = node?.comment ?? '';
+  if (commentInput) {
+    commentInput.value = node?.comment ?? '';
+    commentInput.disabled = isImported;
+    commentInput.style.opacity = isImported ? '0.5' : '1';
+    commentInput.title = isImported ? 'Comment cannot be changed for imported classes.' : '';
+  }
+  if (input) {
+    input.disabled = isImported;
+    input.style.opacity = isImported ? '0.5' : '1';
+    input.title = isImported ? 'Label cannot be changed for imported classes.' : '';
+  }
 
   const renameIdentifierLabel = document.getElementById('renameIdentifierLabel');
   const renameIdentifier = document.getElementById('renameIdentifier');
@@ -3815,8 +4414,11 @@ async function handleExternalClassSearch(query: string): Promise<void> {
   }
   
   // Debug logging
-  console.log('Search query:', query);
-  console.log('External references:', externalOntologyReferences);
+  // Debug logging (only in debug mode)
+  if (isDebugMode()) {
+    debugLog('Search query:', query);
+    debugLog('External references:', externalOntologyReferences);
+  }
   
   if (externalOntologyReferences.length === 0) {
     if (resultsDiv) {
@@ -3853,7 +4455,10 @@ async function handleExternalClassSearch(query: string): Promise<void> {
     const fromFetched = fetched.filter((c) => !seenUris.has(c.uri));
     fromFetched.forEach((c) => seenUris.add(c.uri));
     const results = [...referencedMatches, ...fromFetched];
-    console.log('Search results:', results);
+    // Debug logging (only in debug mode)
+    if (isDebugMode()) {
+      debugLog('Search results:', results);
+    }
 
     const existingNodeIds = new Set((currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id));
     const ALREADY_IN_GRAPH_MSG = 'The node related to this class is already existing in the editor canvas.';
@@ -4085,18 +4690,22 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   
   // Search local object properties
   const allTypes = getAllEdgeTypes(rawData, objectProperties);
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
   const localMatches: Array<{ type: string; label: string; displayLabel: string; comment: string | null; isExternal: boolean; externalProp: ExternalObjectPropertyInfo | null }> = allTypes.filter((t) => {
     const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-    const displayLabel = formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences);
+    const op = objectProperties.find((p) => p.name === t || p.uri === t);
+    const displayLabel = formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences, op, mainBase);
     return label.toLowerCase().includes(q) || 
            displayLabel.toLowerCase().includes(q) ||
            t.toLowerCase().includes(q);
   }).map((t) => {
     const comment = getRelationshipComment(t, objectProperties);
+    const op = objectProperties.find((p) => p.name === t || p.uri === t);
+    const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
     return {
       type: t,
-      label: getRelationshipLabel(t, objectProperties, externalOntologyReferences),
-      displayLabel: formatRelationshipLabelWithPrefix(t, getRelationshipLabel(t, objectProperties, externalOntologyReferences), externalOntologyReferences),
+      label: label,
+      displayLabel: formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences, op, mainBase),
       comment: comment || null,
       isExternal: false,
       externalProp: null as ExternalObjectPropertyInfo | null,
@@ -4107,12 +4716,21 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   let externalMatches: Array<{ type: string; label: string; displayLabel: string; comment: string | null; isExternal: boolean; externalProp: ExternalObjectPropertyInfo | null }> = [];
   if (externalOntologyReferences.length > 0) {
     try {
-      console.log(`Searching external object properties for "${query}" across ${externalOntologyReferences.length} reference(s):`, externalOntologyReferences.map(r => r.url));
+      // Debug logging (only in debug mode)
+      if (isDebugMode()) {
+        debugLog(`Searching external object properties for "${query}" across ${externalOntologyReferences.length} reference(s):`, externalOntologyReferences.map(r => r.url));
+      }
       const externalProps = await searchExternalObjectProperties(query, externalOntologyReferences);
-      console.log(`Found ${externalProps.length} external object properties matching "${query}"`);
+      // Debug logging (only in debug mode)
+      if (isDebugMode()) {
+        debugLog(`Found ${externalProps.length} external object properties matching "${query}"`);
+      }
       externalMatches = externalProps.map((op) => {
         const displayLabel = op.prefix ? `${op.prefix}: ${op.label}` : op.label;
-        console.log(`External property: ${op.uri} -> ${displayLabel}`);
+        // Debug logging (only in debug mode)
+        if (isDebugMode()) {
+          debugLog(`External property: ${op.uri} -> ${displayLabel}`);
+        }
         return {
           type: op.uri, // Use full URI for external properties
           label: op.label,
@@ -4126,7 +4744,10 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
       console.error('Error searching external object properties:', err);
     }
   } else {
-    console.log('No external ontology references loaded, skipping external object property search');
+    // Debug logging (only in debug mode)
+    if (isDebugMode()) {
+      debugLog('No external ontology references loaded, skipping external object property search');
+    }
   }
   
   // Combine and sort matches (local first, then external)
@@ -4453,7 +5074,30 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
     if (typeInputEdit) {
       const label = getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences);
-      const displayLabel = formatRelationshipLabelWithPrefix(edgeType, label, externalOntologyReferences);
+      // Find property by name, URI, or full URI string (edgeType might be local name or full URI for imported properties)
+      // Try multiple matching strategies:
+      // 1. Exact match by name
+      // 2. Exact match by URI
+      // 3. If edgeType is a local name, check if any property's URI ends with it
+      // 4. If edgeType is a full URI, check if any property's URI matches it
+      let op = objectProperties.find((p) => p.name === edgeType || p.uri === edgeType);
+      if (!op && !edgeType.startsWith('http')) {
+        // edgeType is likely a local name, try to find by URI ending
+        op = objectProperties.find((p) => {
+          if (!p.uri) return false;
+          const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
+          return uriLocalName === edgeType || p.uri.endsWith('#' + edgeType) || p.uri.endsWith('/' + edgeType);
+        });
+      }
+      if (!op && edgeType.startsWith('http')) {
+        // edgeType is a full URI, try to find by URI matching
+        op = objectProperties.find((p) => {
+          if (!p.uri) return false;
+          return p.uri === edgeType || edgeType.includes(p.uri) || p.uri.includes(edgeType);
+        });
+      }
+      const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+      const displayLabel = formatRelationshipLabelWithPrefix(edgeType, label, externalOntologyReferences, op, mainBase);
       typeInputEdit.value = displayLabel;
       selectedEdgeType = edgeType;
       selectedExternalObjectProperty = null;
@@ -4532,7 +5176,9 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   if (typeInputAdd) {
     const defaultType = 'subClassOf';
     const label = getRelationshipLabel(defaultType, objectProperties, externalOntologyReferences);
-    const displayLabel = formatRelationshipLabelWithPrefix(defaultType, label, externalOntologyReferences);
+    const op = objectProperties.find((p) => p.name === defaultType || p.uri === defaultType);
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const displayLabel = formatRelationshipLabelWithPrefix(defaultType, label, externalOntologyReferences, op, mainBase);
     typeInputAdd.value = displayLabel;
     selectedEdgeType = defaultType;
     selectedExternalObjectProperty = null;
@@ -4587,9 +5233,11 @@ function confirmEditEdge(): void {
     newType = selectedEdgeType;
   } else if (typeInput?.value.trim()) {
     // Try to find in local types
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
     const found = getAllEdgeTypes(rawData, objectProperties).find(t => {
       const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-      const displayLabel = formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences);
+      const op = objectProperties.find((p) => p.name === t || p.uri === t);
+      const displayLabel = formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences, op, mainBase);
       return displayLabel === typeInput.value.trim() || label === typeInput.value.trim() || t === typeInput.value.trim();
     });
     if (found) {
@@ -5803,12 +6451,18 @@ async function loadTtlAndRender(
     if (manageExternalRefsBtn) manageExternalRefsBtn.style.display = 'inline-block';
 
     debugLog('[DEBUG] After parsing - describes edges in rawData.edges:', rawData.edges.filter((e) => e.type.includes('describes')).length);
-    console.log('Extracted external references from ontology:', extractedRefs);
-    console.log('Extracted prefixes:', prefixMap);
+    // Debug logging (only in debug mode)
+    if (isDebugMode()) {
+      debugLog('Extracted external references from ontology:', extractedRefs);
+      debugLog('Extracted prefixes:', prefixMap);
+    }
 
     // Load external references from IndexedDB and merge with extracted ones
     const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
-    console.log('Loaded external references from IndexedDB:', dbRefs);
+    // Debug logging (only in debug mode)
+    if (isDebugMode()) {
+      debugLog('Loaded external references from IndexedDB:', dbRefs);
+    }
     
     // Merge: use DB refs if they exist, otherwise use extracted ones
     // For each extracted ref, check if there's a DB ref with the same URL
@@ -5832,12 +6486,34 @@ async function loadTtlAndRender(
     }
     
     // Add refs from TTL @prefix so inlined externals (e.g. geo:) get a prefix even without owl:imports
+    // Also update existing refs if they match a prefix from the TTL file
     const mainBase = getMainOntologyBase(ttlStore);
     for (const [prefix, url] of Object.entries(prefixMap)) {
       const urlStr = String(url);
       const normalized = urlStr.endsWith('#') ? urlStr.slice(0, -1) : urlStr.replace(/\/$/, '');
       const mainNormalized = mainBase != null ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase).replace(/\/$/, '') : '';
-      if (normalized !== mainNormalized && !seenUrls.has(normalized)) {
+      
+      // Check if this prefix matches an existing ref
+      // Normalize both URLs by removing # and trailing slashes for comparison
+      let foundExisting = false;
+      for (const ref of mergedRefs) {
+        const refNormalized = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
+        const refNormalizedNoSlash = refNormalized.replace(/\/$/, '');
+        const normalizedNoSlash = normalized.replace(/\/$/, '');
+        // Match with or without trailing slash, and with or without #
+        if (normalized === refNormalized || 
+            normalizedNoSlash === refNormalizedNoSlash ||
+            normalized === refNormalizedNoSlash ||
+            normalizedNoSlash === refNormalized) {
+          // Update existing ref with prefix from TTL
+          ref.prefix = prefix;
+          ref.usePrefix = true;
+          foundExisting = true;
+          break;
+        }
+      }
+      
+      if (!foundExisting && normalized !== mainNormalized && !seenUrls.has(normalized)) {
         mergedRefs.push({ url: urlStr.replace(/\/$/, ''), usePrefix: true, prefix });
         seenUrls.add(normalized);
       }
@@ -5854,10 +6530,13 @@ async function loadTtlAndRender(
 
     sortExternalRefsByUrl(mergedRefs);
     externalOntologyReferences = mergedRefs;
-    console.log('Final merged external references:', externalOntologyReferences);
-    console.log(`Total external references: ${externalOntologyReferences.length}`);
-    for (const ref of externalOntologyReferences) {
-      console.log(`  - ${ref.url} (prefix: ${ref.prefix || 'none'}, usePrefix: ${ref.usePrefix})`);
+    // Debug logging removed - use debugLog if needed in future
+    // Debug logging (only in debug mode)
+    if (isDebugMode()) {
+      debugLog(`Total external references: ${externalOntologyReferences.length}`);
+      for (const ref of externalOntologyReferences) {
+        debugLog(`  - ${ref.url} (prefix: ${ref.prefix || 'none'}, usePrefix: ${ref.usePrefix})`);
+      }
     }
 
     const mainBaseForSeed = getMainOntologyBase(ttlStore);
@@ -5926,15 +6605,21 @@ async function loadTtlAndRender(
     lastLayoutMode = normalizedConfigLayoutMode;
     
     if (displayConfig) {
-      console.log('[DISPLAY CONFIG] Loading display config from IndexedDB for:', loadedFileName);
-      console.log('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.nodePositions || {}).length, 'node positions');
-      console.log('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.edgeStyleConfig || {}).length, 'edge style configs');
+      // Debug logging (only in debug mode)
+      if (isDebugMode()) {
+        debugLog('[DISPLAY CONFIG] Loading display config from IndexedDB for:', loadedFileName);
+        debugLog('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.nodePositions || {}).length, 'node positions');
+        debugLog('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.edgeStyleConfig || {}).length, 'edge style configs');
+      }
       // Store the edge style config so it can be merged when building the filter
       loadedEdgeStyleConfig = displayConfig.edgeStyleConfig || null;
       applyDisplayConfig(displayConfig);
       if (displayConfig.viewState) savedViewState = displayConfig.viewState;
     } else {
-      console.log('[DISPLAY CONFIG] No display config found in IndexedDB for:', loadedFileName);
+      // Debug logging (only in debug mode)
+      if (isDebugMode()) {
+        debugLog('[DISPLAY CONFIG] No display config found in IndexedDB for:', loadedFileName);
+      }
     }
 
     // Allow layout to settle after vizControls appears, then render
@@ -5979,7 +6664,10 @@ function applyFilter(preserveView = false): void {
     const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
     if (layoutAlgorithm || layoutMode === 'force') {
       // Switching to a layout that computes positions - clear stored positions
-      console.log(`[DISPLAY CONFIG] Layout mode changed from ${lastLayoutMode} to ${layoutMode}, clearing node positions`);
+      // Debug logging (only in debug mode)
+      if (isDebugMode()) {
+        debugLog(`[DISPLAY CONFIG] Layout mode changed from ${lastLayoutMode} to ${layoutMode}, clearing node positions`);
+      }
       rawData.nodes.forEach((node) => {
         delete node.x;
         delete node.y;
@@ -6269,7 +6957,10 @@ function applyFilter(preserveView = false): void {
         },
         (count) => {
           // On copy callback - just log or show notification
-          console.log(`Copied ${count} relationship(s)`);
+          // Debug logging (only in debug mode)
+        if (isDebugMode()) {
+          debugLog(`Copied ${count} relationship(s)`);
+        }
         },
         (nodeId) => openEditModalForNode(nodeId),
         (edgeId) => openEditModalForEdge(edgeId),
@@ -6279,7 +6970,23 @@ function applyFilter(preserveView = false): void {
       );
       
       // Update context menu data after initialization (use graphDataForBuild so external nodes are included)
-      updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, (url) => {
+      updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, async (url) => {
+        // Import the local file opener module
+        const { findMatchingLocalFile, openLocalFileInNewTab } = await import('./lib/localFileOpener');
+        
+        // For local development: try to find and open the local file directly if it exists
+        // This avoids CORS issues when the external ontology URL matches a local file
+        if (fileHandle && loadedFileName) {
+          const localFile = await findMatchingLocalFile(fileHandle, loadedFileName, url);
+          if (localFile) {
+            // Found matching local file! Store it in IndexedDB and open in new tab
+            const newTabUrl = await openLocalFileInNewTab(localFile);
+            window.open(newTabUrl, '_blank');
+            return;
+          }
+        }
+        
+        // Fallback: open via URL (works for production/published ontologies)
         const base = window.location.origin + window.location.pathname;
         window.open(`${base}?onto=${encodeURIComponent(url)}`, '_blank');
       });
@@ -6372,6 +7079,7 @@ async function loadFromFile(): Promise<void> {
       }
       
       hideLoadingModal();
+      hideOpenOntologyModal();
     } catch (err) {
       hideLoadingModal();
       if ((err as Error).name !== 'AbortError') {
@@ -6473,7 +7181,10 @@ async function loadDisplayConfigFromLocalFile(
         return null;
       }
       
-      console.log('[DISPLAY CONFIG] Loaded display config from local file:', displayFileName);
+      // Debug logging (only in debug mode)
+      if (isDebugMode()) {
+        debugLog('[DISPLAY CONFIG] Loaded display config from local file:', displayFileName);
+      }
       return config;
     } catch (fileErr) {
       // File doesn't exist or can't be read - this is fine, display config is optional
@@ -6546,6 +7257,7 @@ async function loadFromUrl(url: string): Promise<void> {
  * Load the last opened file.
  */
 async function loadLastOpenedFile(): Promise<void> {
+    hideOpenOntologyModal();
     const stored = await getLastFileFromIndexedDB();
     if (!stored) {
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
@@ -6604,6 +7316,7 @@ async function loadLastOpenedFile(): Promise<void> {
  * Load the last opened URL.
  */
 async function loadLastOpenedUrl(): Promise<void> {
+  hideOpenOntologyModal();
   const stored = await getLastUrlFromIndexedDB();
   if (!stored) {
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
@@ -6655,6 +7368,7 @@ function setupEventListeners(): void {
       const ttl = await file.text();
       await loadTtlAndRender(ttl, file.name, null);
       hideLoadingModal();
+      hideOpenOntologyModal();
     } catch (err) {
       hideLoadingModal();
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
@@ -7579,7 +8293,14 @@ renderApp();
 setupEventListeners();
 // Check for URL parameter and load ontology if present, otherwise show modal
 setTimeout(async () => {
-  const loadedFromParam = await handleUrlParameterLoad(loadFromUrl, showOpenOntologyModal);
+  const loadedFromParam = await handleUrlParameterLoad(
+    loadFromUrl,
+    async (content: string, fileName: string, pathHint: string) => {
+      await loadTtlAndRender(content, fileName, null, pathHint);
+    },
+    showOpenOntologyModal,
+    hideOpenOntologyModal
+  );
   if (!loadedFromParam) {
     // No URL parameter found, show modal as usual
     showOpenOntologyModal();

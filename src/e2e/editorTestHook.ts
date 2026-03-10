@@ -233,6 +233,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       };
     },
     openEditModalForNode,
+    openRenameModal: openEditModalForNode, // Alias for backward compatibility with tests
     openEditModalForEdge,
     getEditEdgeModalTitle: (): string | null => {
       const modal = document.getElementById('editEdgeModal');

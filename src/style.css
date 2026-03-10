@@ -262,12 +262,51 @@ body {
   outline: 2px solid #3498db;
   outline-offset: 2px;
 }
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.modal-header-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.imported-warning-icon {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  user-select: none;
+}
+.imported-warning-icon:hover {
+  background: #eee;
+}
+.imported-warning-icon:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
 @keyframes rename-tip-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
 .rename-tip-btn-pulse {
   animation: rename-tip-pulse 1.5s ease-in-out infinite;
+}
+@keyframes warning-icon-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+.warning-icon-pulse {
+  animation: warning-icon-pulse 1.5s ease-in-out infinite;
 }
 .rename-popover {
   display: none;

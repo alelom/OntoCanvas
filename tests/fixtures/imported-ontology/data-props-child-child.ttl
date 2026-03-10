@@ -1,0 +1,20 @@
+@prefix : <http://example.org/data-specialized#> .
+@prefix extended: <http://example.org/data-extended#> .
+@prefix dpbase: <http://example.org/data-base#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/data-specialized> rdf:type owl:Ontology ;
+    rdfs:label "Data Properties Specialized" ;
+    owl:imports <http://example.org/data-extended> .
+
+:SpecializedEntity rdf:type owl:Class ;
+    rdfs:label "Specialized Entity" ;
+    rdfs:subClassOf extended:ExtendedEntity ;
+    rdfs:subClassOf [
+        rdf:type owl:Restriction ;
+        owl:onProperty dpbase:identifier ;
+        owl:minCardinality 1
+    ] .
