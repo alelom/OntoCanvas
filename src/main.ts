@@ -7492,9 +7492,13 @@ function applyFilter(preserveView = false): void {
           }
         }
         
+        // Convert ontology URL to HTML documentation URL (replaces hyphens with underscores, adds .html)
+        const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
+        const htmlUrl = convertOntologyUrlToHtmlUrl(url) || url;
+        
         // Fallback: open via URL (works for production/published ontologies)
         const base = window.location.origin + window.location.pathname;
-        window.open(`${base}?onto=${encodeURIComponent(url)}`, '_blank');
+        window.open(`${base}?onto=${encodeURIComponent(htmlUrl)}`, '_blank');
       });
     }
     
