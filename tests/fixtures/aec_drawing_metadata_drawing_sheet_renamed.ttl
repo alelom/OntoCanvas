@@ -75,24 +75,20 @@
     rdfs:comment "Can be standalone label - drawing metadata";
     :labellableRoot "false"^^xsd:boolean.
 
-:DrawingSheet rdf:type owl:Class;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Drawing sheet";
-    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
-    :labellableRoot "false"^^xsd:boolean.
-
-:RevisionTable rdf:type owl:Class;
+<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingSheet> a <http://www.w3.org/2002/07/owl#Class>;
+    <http://www.w3.org/2000/01/rdf-schema#label> "Drawing Sheet renamed";
+    <http://www.w3.org/2000/01/rdf-schema#comment> "Top-level container for a drawing. Contains Layout(s).";
+    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> false;
+    <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:df_40_0, _:df_40_1, _:df_40_2, _:df_40_3.:RevisionTable rdf:type owl:Class;
     rdfs:subClassOf :Metadata;
     rdfs:label "Revision table";
     :labellableRoot "true"^^xsd:boolean.
 
-:Layout rdf:type owl:Class;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Layout";
-    rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
-    :labellableRoot "true"^^xsd:boolean.
-
-:DrawingOrientation rdf:type owl:Class;
+<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Layout> a <http://www.w3.org/2002/07/owl#Class>;
+    <http://www.w3.org/2000/01/rdf-schema#label> "Layout";
+    <http://www.w3.org/2000/01/rdf-schema#comment> "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
+    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> true;
+    <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:df_40_4, _:df_40_5.:DrawingOrientation rdf:type owl:Class;
     rdfs:subClassOf :Portrait, :Landscape;
     rdfs:label "DrawingOrientation".
 
@@ -140,13 +136,11 @@
     rdfs:label "Elevation";
     :labellableRoot "true"^^xsd:boolean.
 
-:Detail rdf:type owl:Class;
-    rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DetailLocation ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Detail";
-    rdfs:comment "Detail drawing";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Orientation rdf:type owl:Class;
+<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Detail> a <http://www.w3.org/2002/07/owl#Class>;
+    <http://www.w3.org/2000/01/rdf-schema#label> "Detail";
+    <http://www.w3.org/2000/01/rdf-schema#comment> "Detail drawing";
+    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> true;
+    <http://www.w3.org/2000/01/rdf-schema#subClassOf> <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType>, _:df_40_6, _:df_40_7.:Orientation rdf:type owl:Class;
     rdfs:label "Detail Orientation";
     rdfs:comment "Can be standalone label - drawing orientation";
     :labellableRoot "false"^^xsd:boolean.

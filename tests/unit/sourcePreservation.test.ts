@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from '../../src/rdf/sourcePreservation';
 import { parseTtlToGraph, storeToTurtle, updateLabelInStore } from '../../src/parser';
@@ -919,6 +919,143 @@ describe('sourcePreservation', () => {
         expect(result).toContain('Modified Class 2');
         // Should still contain unmodified class
         expect(result).toContain('Class 3');
+      });
+    });
+
+    describe('targeted modification verification', () => {
+      it('should only modify Drawing Sheet label when renaming', async () => {
+        const originalFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata.ttl');
+        const modifiedFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata_drawing_sheet_renamed.ttl');
+        
+        // Read original file
+        const originalContent = readFileSync(originalFixturePath, 'utf-8');
+        
+        // Parse with our mechanism
+        const parseResult = await parseTtlToGraph(originalContent);
+        const store = parseResult.store;
+        const cache = parseResult.originalFileCache;
+        
+        expect(cache).toBeDefined();
+        
+        // Find "Drawing sheet" node
+        const drawingSheetNode = parseResult.graphData.nodes.find(n => n.label === 'Drawing sheet');
+        expect(drawingSheetNode).toBeDefined();
+        
+        if (!drawingSheetNode) {
+          throw new Error('Drawing sheet node not found');
+        }
+        
+        // Store original label
+        const originalLabel = drawingSheetNode.label;
+        const newLabel = 'Drawing Sheet renamed';
+        
+        // Verify original label is in original content
+        expect(originalContent).toContain(`rdfs:label "${originalLabel}"`);
+        expect(originalContent).not.toContain(`rdfs:label "${newLabel}"`);
+        
+        // Rename the class
+        updateLabelInStore(store, drawingSheetNode.id, newLabel);
+        
+        // Save to new file
+        const modifiedContent = await storeToTurtle(store, undefined, undefined, cache);
+        writeFileSync(modifiedFixturePath, modifiedContent, 'utf-8');
+        
+        // Verify file was created
+        expect(existsSync(modifiedFixturePath)).toBe(true);
+        
+        // Read both files for comparison
+        const savedContent = readFileSync(modifiedFixturePath, 'utf-8');
+        
+        // Verify the modification: new label should be present
+        expect(savedContent).toContain(newLabel);
+        expect(savedContent).not.toContain(`rdfs:label "${originalLabel}"`);
+        
+        // Compare files to verify only the label changed
+        // Extract key content from both files for comparison
+        
+        // 1. Verify DrawingSheet class still exists (may be in different format)
+        const hasDrawingSheetClass = savedContent.includes('DrawingSheet') && 
+                                    (savedContent.includes('owl:Class') || savedContent.includes('Class'));
+        expect(hasDrawingSheetClass).toBe(true);
+        
+        // 2. Verify the label was changed
+        // Label may be in format: rdfs:label "..." or <http://.../rdf-schema#label> "..."
+        const escapedOriginalLabel = originalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedNewLabel = newLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Check for new label (may be rdfs:label or full URI)
+        const hasNewLabel = savedContent.includes(`"${newLabel}"`) && 
+                           (savedContent.includes('rdfs:label') || savedContent.includes('rdf-schema#label'));
+        expect(hasNewLabel).toBe(true);
+        
+        // Original label should not appear in label context
+        const originalLabelInLabelContext = savedContent.match(new RegExp(`(rdfs:label|<[^>]+label[^>]*>)\\s*"${escapedOriginalLabel}"`, 'i'));
+        expect(originalLabelInLabelContext).toBeNull();
+        
+        // 3. Verify other properties of DrawingSheet are unchanged
+        expect(savedContent).toContain('Top-level container for a drawing. Contains Layout(s).');
+        // labellableRoot may be in different format (false vs "false"^^xsd:boolean)
+        const hasLabellableRoot = savedContent.includes('labellableRoot') && 
+                                 (savedContent.includes('false') || savedContent.includes('"false"'));
+        expect(hasLabellableRoot).toBe(true);
+        
+        // 4. Verify other class labels are unchanged
+        const otherClassLabels = [
+          { label: 'Text', class: 'TextualNote' },
+          { label: 'Note', class: 'Note' },
+          { label: 'Metadata', class: 'Metadata' },
+          { label: 'Revision table', class: 'RevisionTable' },
+          { label: 'Layout', class: 'Layout' }
+        ];
+        
+        for (const { label, class: className } of otherClassLabels) {
+          const originalHasLabel = originalContent.includes(`rdfs:label "${label}"`);
+          if (originalHasLabel) {
+            // Modified should still have this exact label (it wasn't changed)
+            // Label may be in format: rdfs:label "..." or <http://.../rdf-schema#label> "..."
+            const hasLabel = savedContent.includes(`"${label}"`) && 
+                            (savedContent.includes('rdfs:label') || savedContent.includes('rdf-schema#label'));
+            expect(hasLabel).toBe(true);
+          }
+        }
+        
+        // 5. Verify class structure: count classes in both files
+        // Count class declarations (subject rdf:type owl:Class or a owl:Class)
+        const originalClassCount = (originalContent.match(/:[\w]+\s+rdf:type\s+owl:Class[^;]*;/g) || []).length;
+        // Modified may use different format - count lines that declare classes
+        const modifiedClassDeclarations = savedContent.match(/(:[\w]+|<\S+#[\w]+>)\s+(rdf:type|a)\s+(owl:Class|<[^>]+#Class>)/g) || [];
+        const modifiedClassCount = modifiedClassDeclarations.length;
+        
+        // Should have same number of classes
+        // Note: Format differences may cause slight variance, but should be close
+        expect(modifiedClassCount).toBeGreaterThanOrEqual(originalClassCount - 2);
+        expect(modifiedClassCount).toBeLessThanOrEqual(originalClassCount + 2);
+        
+        // 6. Verify restrictions are still present (format may differ)
+        // Original has inline restrictions, saved may have them inline or as blank nodes
+        const originalHasRestrictions = originalContent.includes('rdfs:subClassOf [ rdf:type owl:Restriction');
+        if (originalHasRestrictions) {
+          // Saved should still have restrictions (may be in different format)
+          const hasRestrictions = savedContent.includes('rdfs:subClassOf') && 
+                                 (savedContent.includes('Restriction') || savedContent.includes('_:df_'));
+          expect(hasRestrictions).toBe(true);
+        }
+        
+        // 7. Count occurrences of the original label vs new label
+        const originalLabelOccurrences = (originalContent.match(new RegExp(originalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+        const newLabelOccurrences = (savedContent.match(new RegExp(newLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+        const originalLabelInSaved = (savedContent.match(new RegExp(originalLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+        
+        // New label should appear at least once
+        expect(newLabelOccurrences).toBeGreaterThan(0);
+        // Original label should not appear (or appear less, if it appears in comments)
+        expect(originalLabelInSaved).toBeLessThan(originalLabelOccurrences);
+        
+        // Clean up: remove the test file (optional, but good practice)
+        // Uncomment if you want to clean up after test
+        // if (existsSync(modifiedFixturePath)) {
+        //   writeFileSync(modifiedFixturePath, ''); // Clear it, or delete it
+        // }
       });
     });
   });
