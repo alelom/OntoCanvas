@@ -471,6 +471,7 @@ let loadedFileName: string | null = null;
 let loadedFilePath: string | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
+let originalTtlString: string | null = null; // Store original TTL to preserve format
 let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
 let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: string; to: string; id?: string } | null) => void } | null = null;
 /** Initial data property restrictions when rename modal was opened (single-node mode). */
@@ -5844,15 +5845,27 @@ function confirmRename(): void {
 }
 
 async function saveTtl(): Promise<void> {
-  if (!ttlStore) return;
+  if (!ttlStore) {
+    debugError('[saveTtl] No ttlStore available');
+    return;
+  }
   const overwriteCb = document.getElementById('overwriteFile') as HTMLInputElement | null;
   const doOverwrite = overwriteCb?.checked === true && fileHandle;
   try {
-    const ttlString = await storeToTurtle(ttlStore, externalOntologyReferences);
+    debugLog('[saveTtl] Starting save, doOverwrite:', doOverwrite);
+    const ttlString = await storeToTurtle(ttlStore, externalOntologyReferences, originalTtlString ?? undefined);
+    debugLog('[saveTtl] Got ttlString, length:', ttlString.length);
     if (doOverwrite) {
-      const writable = await fileHandle!.createWritable();
+      if (!fileHandle) {
+        throw new Error('File handle not available for overwrite');
+      }
+      const writable = await fileHandle.createWritable();
       await writable.write(ttlString);
       await writable.close();
+      // Update originalTtlString to the newly saved content for idempotent round trips
+      // This ensures that subsequent saves use the saved format as the reference
+      originalTtlString = ttlString;
+      debugLog('[saveTtl] File overwritten successfully');
     } else {
       const blob = new Blob([ttlString], { type: 'text/turtle' });
       const url = URL.createObjectURL(blob);
@@ -5866,13 +5879,20 @@ async function saveTtl(): Promise<void> {
       a.download = downloadName;
       a.click();
       URL.revokeObjectURL(url);
+      debugLog('[saveTtl] File download triggered');
     }
     hasUnsavedChanges = false;
     updateSaveButtonVisibility();
+    debugLog('[saveTtl] Save completed successfully');
   } catch (err) {
+    debugError('[saveTtl] Error during save:', err);
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-    errorMsg.textContent = `Save error: ${err instanceof Error ? err.message : String(err)}`;
-    errorMsg.style.display = 'block';
+    if (errorMsg) {
+      errorMsg.textContent = `Save error: ${err instanceof Error ? err.message : String(err)}`;
+      errorMsg.style.display = 'block';
+    }
+    // Re-throw to ensure the error is visible
+    throw err;
   }
 }
 
@@ -6380,6 +6400,9 @@ async function loadTtlAndRender(
   warningMsg.style.display = 'none';
 
   try {
+    // Store original TTL string to preserve format when saving
+    originalTtlString = ttlString;
+    
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = parseResult;
@@ -8668,4 +8691,7 @@ attachEditorTestHook({
   addTestLog,
   getTestLogs: () => testLogs,
   isDebugMode,
+  saveTtl,
+  setHasUnsavedChanges: (value: boolean) => { hasUnsavedChanges = value; },
+  updateSaveButtonVisibility,
 });

@@ -7,7 +7,7 @@ description: Lessons learned from development - debug logging, code quality, and
 
 ## Debug Logging
 
-### Always Use `debugLog` Instead of `console.log` in Production Code
+### Always Use `debugLog` Instead of `console.log` for debugging purposes
 
 **Why?**
 - `console.log` statements pollute the browser console for all users, even in production

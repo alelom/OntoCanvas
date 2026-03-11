@@ -2482,10 +2482,32 @@ export function removeObjectPropertyFromStore(store: Store, propertyName: string
 
 /**
  * Serialize the store to Turtle string with section dividers and spacing.
+ * @param originalTtlString Optional original TTL string to preserve format (colon vs base notation)
  */
-export function storeToTurtle(store: Store, externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>): Promise<string> {
+export function storeToTurtle(
+  store: Store, 
+  externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
+  originalTtlString?: string
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const prefixes = { ...TURTLE_PREFIXES };
+    
+    // Extract base IRI from original file if provided
+    let mainOntologyBase: string | null = null;
+    if (originalTtlString) {
+      const prefixMatch = originalTtlString.match(/@prefix\s+:\s*<([^>]+)>/);
+      const baseMatch = originalTtlString.match(/@base\s+<([^>]+)>/);
+      if (prefixMatch) {
+        mainOntologyBase = prefixMatch[1];
+      } else if (baseMatch) {
+        mainOntologyBase = baseMatch[1];
+      }
+    }
+    
+    // If we found a base IRI from the original, update the empty prefix to use it
+    if (mainOntologyBase) {
+      prefixes[''] = mainOntologyBase;
+    }
     
     // Add prefixes for external ontologies that use prefix
     if (externalRefs) {
@@ -2496,15 +2518,34 @@ export function storeToTurtle(store: Store, externalRefs?: Array<{ url: string; 
       }
     }
     
-    const writer = new Writer({
+    // Determine if we should use baseIRI (for base notation) or not (for colon notation)
+    const useColonNotation = !originalTtlString || 
+      (!originalTtlString.includes('@base') && !/<#[^>]+>/.test(originalTtlString));
+    
+    const writerOptions: { prefixes: Record<string, string>; baseIRI?: string } = {
       prefixes,
-    });
+    };
+    
+    // Only set baseIRI if using base notation (not colon notation)
+    if (!useColonNotation && mainOntologyBase) {
+      writerOptions.baseIRI = mainOntologyBase;
+    }
+    
+    const writer = new Writer(writerOptions);
     for (const q of store) {
       writer.addQuad(q);
     }
     writer.end((err: Error | null, result: string) => {
-      if (err) reject(err);
-      else resolve(postProcessTurtle(result, externalRefs));
+      if (err) {
+        reject(err);
+        return;
+      }
+      try {
+        const processed = postProcessTurtle(result, externalRefs, originalTtlString);
+        resolve(processed);
+      } catch (postProcessError) {
+        reject(postProcessError);
+      }
     });
   });
 }
