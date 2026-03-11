@@ -1,0 +1,16 @@
+@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:ComplexClass rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :prop1 ; owl:minCardinality 1 ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop2 ; owl:maxCardinality 5 ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop3 ; owl:cardinality 3 ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop4 ; owl:minQualifiedCardinality 2 ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop5 ; owl:maxQualifiedCardinality 10 ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop6 ; owl:qualifiedCardinality 5 ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop7 ; owl:someValuesFrom :SomeClass ],
+    [ rdf:type owl:Restriction ; owl:onProperty :prop8 ; owl:allValuesFrom :AnotherClass ] ;
+    rdfs:label "Complex Class" .

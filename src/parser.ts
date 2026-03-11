@@ -6,6 +6,7 @@ import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
+import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -75,6 +76,8 @@ export interface ParseResult {
   annotationProperties: AnnotationPropertyInfo[];
   objectProperties: ObjectPropertyInfo[];
   dataProperties: DataPropertyInfo[];
+  /** Original file cache for source preservation (idempotent round-trips) */
+  originalFileCache?: OriginalFileCache;
 }
 
 /** Return the main ontology IRI with trailing # for prefix matching, or null if not found. */
@@ -221,7 +224,8 @@ export function getAnnotationProperties(
  */
 function buildParseResultFromStore(
   store: Store,
-  additionalAnnotationProps?: AnnotationPropertyInfo[]
+  additionalAnnotationProps?: AnnotationPropertyInfo[],
+  originalFileCache?: OriginalFileCache
 ): ParseResult {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
@@ -854,25 +858,50 @@ function buildParseResultFromStore(
     }
   }
 
-  return { graphData: { nodes, edges }, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps };
+  return { 
+    graphData: { nodes, edges }, 
+    store, 
+    annotationProperties: annotationProps, 
+    objectProperties: objectProps, 
+    dataProperties: dataProps,
+    originalFileCache: originalFileCache ?? undefined
+  };
 }
 
 /**
  * Build ParseResult from an array of quads (e.g. from N3 or rdf-parse).
  * RDF/JS quads from rdf-parse are compatible with N3 Store at runtime.
  */
-export function quadsToParseResult(quads: N3Quad[]): ParseResult {
-  return buildParseResultFromStore(new Store(quads as Iterable<N3Quad>));
+export function quadsToParseResult(quads: N3Quad[], originalFileCache?: OriginalFileCache): ParseResult {
+  return buildParseResultFromStore(new Store(quads as Iterable<N3Quad>), undefined, originalFileCache);
 }
 
 /**
  * Parse Turtle string and extract OWL classes with subClassOf, partOf, contains.
  * Returns both graph data and the N3 Store for editing/serialization.
- * Backward-compatible wrapper using rdf-parse for consistency with other formats.
+ * Uses position-aware parsing for source preservation when possible.
  */
 export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
-  const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
-  return quadsToParseResult(quads as N3Quad[]);
+  // Use position-aware parsing for Turtle to enable source preservation
+  try {
+    // First parse with rdf-parse to get quads (handles prefixes correctly)
+    const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
+    
+    // Then do position-aware parsing to build cache
+    try {
+      const { cache } = parseTurtleWithPositions(ttlString);
+      return quadsToParseResult(quads as N3Quad[], cache);
+    } catch (cacheError) {
+      // If position tracking fails, still return quads but without cache
+      debugWarn('[parseTtlToGraph] Position-aware parsing failed, continuing without cache:', cacheError);
+      return quadsToParseResult(quads as N3Quad[]);
+    }
+  } catch (error) {
+    // Fallback to standard parsing if everything fails
+    debugWarn('[parseTtlToGraph] Parsing failed, falling back to standard parsing:', error);
+    const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
+    return quadsToParseResult(quads as N3Quad[]);
+  }
 }
 
 export interface ParseRdfToGraphOptions {
@@ -884,11 +913,39 @@ export interface ParseRdfToGraphOptions {
 /**
  * Parse RDF content (Turtle, RDF/XML, JSON-LD, etc.) to graph + store.
  * Format is detected from path or contentType.
+ * Uses position-aware parsing for Turtle to enable source preservation.
  */
 export async function parseRdfToGraph(
   content: string,
   options?: ParseRdfToGraphOptions
 ): Promise<ParseResult> {
+  const contentType = options?.contentType;
+  const path = options?.path;
+  
+  // Use position-aware parsing for Turtle
+  if (contentType === 'text/turtle' || 
+      (path && (path.endsWith('.ttl') || path.endsWith('.turtle'))) ||
+      (!contentType && !path && (content.trim().startsWith('@prefix') || content.trim().startsWith('@base')))) {
+    // First parse with rdf-parse to get quads (handles prefixes correctly)
+    try {
+      const quads = await parseRdfToQuads(content, options ?? {});
+      
+      // Then do position-aware parsing to build cache
+      try {
+        const { cache } = parseTurtleWithPositions(content);
+        return quadsToParseResult(quads as N3Quad[], cache);
+      } catch (cacheError) {
+        // If position tracking fails, still return quads but without cache
+        debugWarn('[parseRdfToGraph] Position-aware parsing failed, continuing without cache:', cacheError);
+        return quadsToParseResult(quads as N3Quad[]);
+      }
+    } catch (error) {
+      // Fallback to standard parsing if everything fails
+      debugWarn('[parseRdfToGraph] Parsing failed, falling back to standard parsing:', error);
+    }
+  }
+  
+  // Standard parsing for other formats or fallback
   const quads = await parseRdfToQuads(content, options ?? {});
   return quadsToParseResult(quads as N3Quad[]);
 }
@@ -1163,7 +1220,7 @@ function getObjectPropertyUriFromStore(store: Store, name: string): string {
   return op.uri;
 }
 
-function findRestrictionBlank(
+export function findRestrictionBlank(
   store: Store,
   classLocalName: string,
   propertyLocalName: string,
@@ -2152,18 +2209,21 @@ export function addEdgeToStore(
   const fromUriNode = DataFactory.namedNode(fromUri);
   const toUriNode = DataFactory.namedNode(toUri);
   
-  // Check if domain/range already exists
+  // CRITICAL FIX: Check if domain/range already exists for THIS specific from/to combination
+  // to prevent duplicates during undo. Only add domain/range if they don't exist.
   const domainQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, null);
   const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, null);
   
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   
-  // Add domain if not present
+  // CRITICAL: Only add domain if it doesn't exist for this specific class
+  // This prevents expandWithExternalRefs from creating edges for all domain/range combinations
   if (domainQuads.length === 0) {
     store.addQuad(propNode, DataFactory.namedNode(RDFS + 'domain'), fromUriNode, graph);
   }
   
-  // Add range if not present
+  // CRITICAL: Only add range if it doesn't exist for this specific class
+  // This prevents expandWithExternalRefs from creating edges for all domain/range combinations
   if (rangeQuads.length === 0) {
     store.addQuad(propNode, DataFactory.namedNode(RDFS + 'range'), toUriNode, graph);
   }
@@ -2483,12 +2543,20 @@ export function removeObjectPropertyFromStore(store: Store, propertyName: string
 /**
  * Serialize the store to Turtle string with section dividers and spacing.
  * @param originalTtlString Optional original TTL string to preserve format (colon vs base notation)
+ * @param originalFileCache Optional original file cache for source preservation (idempotent round-trips)
  */
 export function storeToTurtle(
   store: Store, 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
-  originalTtlString?: string
+  originalTtlString?: string,
+  originalFileCache?: OriginalFileCache
 ): Promise<string> {
+  // If cache is available, use reconstruction approach
+  if (originalFileCache && originalFileCache.format === 'turtle') {
+    return reconstructFromCache(store, originalFileCache, externalRefs);
+  }
+  
+  // Fallback to current post-processing approach
   return new Promise((resolve, reject) => {
     const prefixes = { ...TURTLE_PREFIXES };
     
@@ -2548,4 +2616,120 @@ export function storeToTurtle(
       }
     });
   });
+}
+
+/**
+ * Reconstruct Turtle from cache with modifications detected from store
+ */
+async function reconstructFromCache(
+  store: Store,
+  cache: OriginalFileCache,
+  externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>
+): Promise<string> {
+  // Use the quadToBlockMap to find which block each quad belongs to
+  // Then compare current store quads with original block quads
+  
+  // Build a map of current quads by subject
+  const currentQuadsBySubject = new Map<string, N3Quad[]>();
+  for (const quad of store) {
+    if (quad.subject.termType === 'NamedNode') {
+      const subjectUri = (quad.subject as { value: string }).value;
+      const list = currentQuadsBySubject.get(subjectUri) || [];
+      list.push(quad);
+      currentQuadsBySubject.set(subjectUri, list);
+    }
+  }
+  
+  // Extract prefix map for resolving prefixed names
+  const prefixMap = new Map<string, string>();
+  if (cache.headerSection) {
+    for (const block of cache.headerSection.blocks) {
+      if (block.originalText) {
+        const prefixMatch = block.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
+        if (prefixMatch) {
+          prefixMap.set(prefixMatch[1], prefixMatch[2]);
+        }
+        const emptyPrefixMatch = block.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
+        if (emptyPrefixMatch) {
+          prefixMap.set('', emptyPrefixMatch[1]);
+        }
+      }
+    }
+  }
+  
+  const resolvePrefixedName = (prefixedName: string): string | null => {
+    if (prefixedName.startsWith('<') && prefixedName.endsWith('>')) {
+      return prefixedName.slice(1, -1);
+    }
+    if (prefixedName.startsWith(':')) {
+      const baseUri = prefixMap.get('');
+      if (baseUri) return baseUri + prefixedName.slice(1);
+    } else if (prefixedName.includes(':')) {
+      const [prefix, localName] = prefixedName.split(':', 2);
+      const baseUri = prefixMap.get(prefix);
+      if (baseUri) return baseUri + localName;
+    }
+    return null;
+  };
+  
+  // Detect modifications by comparing current store with cache
+  const modifiedBlocks: StatementBlock[] = [];
+  
+  // For each block, check if its quads have changed
+  for (const block of cache.statementBlocks) {
+    if (block.type === 'Header') continue; // Header blocks don't change
+    
+    // Get current quads for this block's subject
+    let currentQuads: N3Quad[] = [];
+    if (block.subject) {
+      const resolvedUri = resolvePrefixedName(block.subject);
+      if (resolvedUri) {
+        currentQuads = currentQuadsBySubject.get(resolvedUri) || [];
+      }
+    }
+    
+    // Compare quads - check if they're different
+    const originalQuads = block.quads;
+    const isModified = quadsAreDifferent(originalQuads, currentQuads);
+    
+    if (isModified) {
+      const modifiedBlock: StatementBlock = {
+        ...block,
+        quads: currentQuads,
+        isModified: true
+      };
+      modifiedBlocks.push(modifiedBlock);
+    }
+  }
+  
+  // Reconstruct from original with modifications
+  if (modifiedBlocks.length > 0) {
+    return await reconstructFromOriginalText(cache, modifiedBlocks);
+  }
+  
+  // No modifications - return original
+  return cache.content;
+}
+
+/**
+ * Compare two sets of quads to see if they're different
+ */
+function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolean {
+  if (original.length !== current.length) return true;
+  
+  // Create a signature for each quad (subject, predicate, object)
+  const originalSignatures = new Set(
+    original.map(q => `${q.subject.value || ''}|${q.predicate.value || ''}|${q.object.value || ''}`)
+  );
+  const currentSignatures = new Set(
+    current.map(q => `${q.subject.value || ''}|${q.predicate.value || ''}|${q.object.value || ''}`)
+  );
+  
+  if (originalSignatures.size !== currentSignatures.size) return true;
+  
+  for (const sig of originalSignatures) {
+    if (!currentSignatures.has(sig)) return true;
+  }
+  
+  return false;
 }

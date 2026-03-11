@@ -7,6 +7,7 @@ import {
   ensureExampleImageAnnotationProperty 
 } from '../../src/lib/exampleImageStore';
 import { applyNodeFormToStore } from '../../src/ui/nodeModalForm';
+import { resolveImageUrl } from '../../src/lib/exampleImageUrlValidation';
 import type { GraphNode } from '../../src/types';
 
 describe('Example Image Persistence', () => {
@@ -207,5 +208,57 @@ describe('Example Image Persistence', () => {
     const classLines = lines.filter((line) => line.includes('ClassWithImages'));
     const hasExampleImage = classLines.some((line) => line.includes('exampleImage'));
     expect(hasExampleImage).toBe(false);
+  });
+
+  it('should convert GitHub blob URLs to raw URLs when saving', async () => {
+    const ttl = `
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:Ontology rdf:type owl:Ontology .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label "Test Class" .
+`;
+
+    // Parse the ontology
+    const parseResult = await parseRdfToGraph(ttl, { path: 'test.ttl' });
+    const { store, graphData } = parseResult;
+
+    // Find the class node
+    const testClassNode = graphData.nodes.find((n) => n.label === 'Test Class');
+    expect(testClassNode).toBeDefined();
+    if (!testClassNode) return;
+
+    const nodeId = testClassNode.id;
+    const { getClassNamespace, getMainOntologyBase } = await import('../../src/parser');
+    const classNs = getClassNamespace(store);
+    const mainBase = getMainOntologyBase(store);
+    const baseIri = classNs ?? mainBase ?? 'http://example.org/test#';
+
+    // Add a GitHub blob URL - it should be converted to raw URL
+    const githubBlobUrl = 'https://github.com/BuroHappoldMachineLearning/ADIRO/blob/main/src/img/DGU_1.png';
+    const expectedRawUrl = 'https://raw.githubusercontent.com/BuroHappoldMachineLearning/ADIRO/refs/heads/main/src/img/DGU_1.png';
+    
+    // Convert the blob URL to raw (as the UI would do)
+    const convertedUrl = resolveImageUrl(githubBlobUrl, null);
+    expect(convertedUrl).toBe(expectedRawUrl);
+
+    // Save the converted URL
+    const success = setExampleImageUrisForClass(store, nodeId, [convertedUrl!], baseIri);
+    expect(success).toBe(true);
+
+    // Verify the raw URL is in the store
+    const uris = getExampleImageUrisForClass(store, nodeId, baseIri);
+    expect(uris).toEqual([expectedRawUrl]);
+
+    // Serialize to TTL and verify the raw URL is persisted (not the blob URL)
+    const serializedTtl = await storeToTurtle(store);
+    expect(serializedTtl).toContain('exampleImage');
+    expect(serializedTtl).toContain(expectedRawUrl);
+    expect(serializedTtl).not.toContain('github.com/blob');
+    expect(serializedTtl).toContain('raw.githubusercontent.com');
   });
 });

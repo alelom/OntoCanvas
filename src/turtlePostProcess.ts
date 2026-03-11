@@ -185,18 +185,25 @@ function buildInlineForms(
 ): Map<string, string> {
   const blankAsObject = new Set<string>();
   const quadsBySubject = new Map<string, Quad[]>();
+  const allBlankNodeIds = new Set<string>();
 
   for (const q of quads) {
     const subjId = q.subject.termType === 'BlankNode' ? blankNodeId(q.subject as BlankNode) : null;
     const objId = q.object.termType === 'BlankNode' ? blankNodeId(q.object as BlankNode) : null;
     if (subjId) {
+      allBlankNodeIds.add(subjId);
       const list = quadsBySubject.get(subjId) ?? [];
       list.push(q);
       quadsBySubject.set(subjId, list);
     }
-    if (objId) blankAsObject.add(objId);
+    if (objId) {
+      allBlankNodeIds.add(objId);
+      blankAsObject.add(objId);
+    }
   }
 
+  // CRITICAL: Include ALL blank nodes that are used as objects OR nested within other blank nodes
+  // This ensures nested blank nodes are also inlined
   const inlinedIds = new Set(blankAsObject);
   const result = new Map<string, string>();
 
@@ -210,7 +217,18 @@ function buildInlineForms(
     for (const q of list) {
       const pred = q.predicate as NamedNode;
       const predStr = pred.value === RDF_TYPE ? 'rdf:type' : shortenIri(pred.value, externalRefs, useColonNotation);
-      const objStr = serializeTerm(q.object, result, externalRefs, useColonNotation);
+      // CRITICAL: For nested blank nodes, we need to recursively build their inline forms
+      // If the object is a blank node, build its inline form first
+      let objStr: string;
+      if (q.object.termType === 'BlankNode') {
+        const objId = blankNodeId(q.object as BlankNode);
+        // Mark nested blank node as needing inlining
+        inlinedIds.add(objId);
+        // Recursively build the nested blank node's inline form
+        objStr = buildFor(objId);
+      } else {
+        objStr = serializeTerm(q.object, result, externalRefs, useColonNotation);
+      }
       parts.push(`${predStr} ${objStr}`);
     }
     const inline = `[ ${parts.join(' ; ')} ]`;
@@ -218,10 +236,20 @@ function buildInlineForms(
     return inline;
   }
 
+  // Build inline forms for all blank nodes that are used as objects
+  // This will recursively build nested blank nodes as well
   const sorted = topologicalSortBlanks(quadsBySubject, inlinedIds);
   for (const id of sorted) {
     buildFor(id);
   }
+  
+  // Also build any remaining blank nodes that might be nested but not in the sorted list
+  for (const id of allBlankNodeIds) {
+    if (!result.has(id) && inlinedIds.has(id)) {
+      buildFor(id);
+    }
+  }
+  
   return result;
 }
 
@@ -256,26 +284,184 @@ function topologicalSortBlanks(
 
 function removeBlankBlocks(raw: string, blankIds: Set<string>): string {
   if (blankIds.size === 0) return raw;
-  const escaped = [...blankIds].map((id) => {
-    const ref = id.startsWith('_:') ? id : `_:${id}`;
-    return ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }).join('|');
-  // Match blank node block: _:n3-X ... until period at end of triple (allow optional space before .)
-  const re = new RegExp(`(^|\\n)\\s*(${escaped})\\s+[\\s\\S]*?\\s*\\.\\s*(\\n|$)`, 'gm');
-  return raw.replace(re, (m) => (m.startsWith('\n') ? '\n' : ''));
+  
+  let output = raw;
+  let lastOutput = '';
+  let iterations = 0;
+  
+  // Remove blank node blocks iteratively until no more are found
+  while (output !== lastOutput && iterations < 10) {
+    lastOutput = output;
+    
+    // Find all blank node blocks - match any format: _:df_0_0, _:n3-0, etc.
+    const matches: Array<{ start: number; end: number; blankNodeId: string }> = [];
+    let match;
+    const pattern = /(^|\n)(\s*)_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/gm;
+    
+    while ((match = pattern.exec(output)) !== null) {
+      const start = match.index;
+      const blankNodeIdInString = match[3]; // e.g., "df_0_0" or "n3-0"
+      const fullRef = `_:${blankNodeIdInString}`;
+      
+      // Check if this blank node is in our set to remove
+      let shouldRemove = false;
+      for (const id of blankIds) {
+        const normalizedId = id.replace(/^_:/, '');
+        if (blankNodeIdInString === normalizedId || 
+            blankNodeIdInString.includes(normalizedId) || 
+            normalizedId.includes(blankNodeIdInString) ||
+            id === fullRef || id.includes(blankNodeIdInString) || fullRef.includes(id.replace(/^_:/, ''))) {
+          shouldRemove = true;
+          break;
+        }
+      }
+      
+      if (!shouldRemove) continue;
+      
+      const blankNodeRef = match[0]; // e.g., "\n    _:df_0_0 "
+      
+      // Find where this blank node block ends (period at end of line)
+      let end = start + blankNodeRef.length;
+      let foundPeriod = false;
+      let inString = false;
+      let stringChar = '';
+      
+      while (end < output.length) {
+        const char = output[end];
+        const prevChar = end > 0 ? output[end - 1] : '';
+        
+        // Track string literals
+        if ((char === '"' || char === "'") && prevChar !== '\\') {
+          if (!inString) {
+            inString = true;
+            stringChar = char;
+          } else if (char === stringChar) {
+            inString = false;
+            stringChar = '';
+          }
+        }
+        
+        if (!inString && char === '.' && /\.\s*(\n|$)/.test(output.substring(end))) {
+          // Found period at end of statement
+          const newlineIndex = output.indexOf('\n', end);
+          end = newlineIndex === -1 ? output.length : newlineIndex + 1; // Include the newline
+          foundPeriod = true;
+          break;
+        }
+        
+        end++;
+        if (end - start > 2000) break; // Safety limit
+      }
+      
+      if (foundPeriod || end > start + blankNodeRef.length) {
+        matches.push({
+          start,
+          end: foundPeriod ? end : start + blankNodeRef.length,
+          blankNodeId: blankNodeIdInString
+        });
+      }
+    }
+    
+    // Remove matches in reverse order to preserve indices
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const m = matches[i];
+      // Preserve the newline before the block if it exists
+      const before = output.substring(0, m.start);
+      const after = output.substring(m.end);
+      const replacement = m.start > 0 && output[m.start] === '\n' ? '\n' : '';
+      output = before + replacement + after;
+    }
+    
+    iterations++;
+  }
+  
+  return output;
 }
 
 function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): string {
   let output = raw;
+  
+  // If map is empty, return early
+  if (inlineBlanks.size === 0) return output;
+  
   // Process in reverse dependency order so nested blanks get replaced first
   const sorted = [...inlineBlanks.entries()].reverse();
+  
+  // Also try all possible ID formats for each inline form
   for (const [id, inline] of sorted) {
+    // Try the ID as-is
     const ref = id.startsWith('_:') ? id : `_:${id}`;
     const escapedRef = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Include comma in lookahead for comma-separated object lists (e.g. rdfs:subClassOf _:n3-0, _:n3-1)
-    const re = new RegExp(`(?<![\\w:-])${escapedRef}(?=[.,;\\s\\]\\n]|$)`, 'g');
+    let re = new RegExp(`(?<![\\w:-])${escapedRef}(?=[.,;\\s\\]\\n]|$)`, 'g');
+    output = output.replace(re, inline);
+    
+    // Also try without _: prefix
+    const idWithoutPrefix2 = id.replace(/^_:/, '');
+    const escapedIdWithoutPrefix2 = idWithoutPrefix2.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    re = new RegExp(`(?<![\\w:-])_:${escapedIdWithoutPrefix2}(?=[.,;\\s\\]\\n]|$)`, 'g');
     output = output.replace(re, inline);
   }
+  
+  // CRITICAL: Replace blank node references in object position contexts (regardless of ID matching)
+  // This is needed because N3 Writer generates different IDs than what we parse.
+  // Since we've already removed blank node blocks, any remaining blank node reference in object
+  // position should be replaced with an inline form. We replace them in order.
+  const inlineForms = Array.from(inlineBlanks.values());
+  if (inlineForms.length > 0) {
+    let formIndex = 0;
+    
+    // Replace ALL blank node references that appear in object position, in order
+    // Match blank nodes after predicates (rdfs:subClassOf, owl:onClass, etc.) or after commas
+    // Use a single pattern that matches both cases
+    const blankNodeRefPattern = /(_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))(?=[.,;\s]|$)/g;
+    
+    // First, find all blank node references in object position contexts
+    const matches: Array<{ index: number; match: string; isAfterPredicate: boolean; isAfterComma: boolean }> = [];
+    let match;
+    
+    // Check for blank nodes after predicates
+    const predicatePattern = /(rdfs:subClassOf|owl:someValuesFrom|owl:allValuesFrom|owl:onClass|owl:onProperty)\s+(_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))(?=[.,;\s]|$)/g;
+    while ((match = predicatePattern.exec(output)) !== null) {
+      if (!match[0].includes('[') && !match[0].includes(']')) {
+        matches.push({ index: match.index + match[1].length + 1, match: match[2], isAfterPredicate: true, isAfterComma: false });
+      }
+    }
+    
+    // Check for blank nodes after commas
+    const commaPattern = /,\s*(_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))(?=[.,;\s]|$)/g;
+    while ((match = commaPattern.exec(output)) !== null) {
+      if (!match[0].includes('[') && !match[0].includes(']')) {
+        matches.push({ index: match.index + 1, match: match[1], isAfterPredicate: false, isAfterComma: true });
+      }
+    }
+    
+    // Sort matches by index (order they appear in the string)
+    matches.sort((a, b) => a.index - b.index);
+    
+    // Replace matches in reverse order to preserve indices
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const m = matches[i];
+      if (formIndex < inlineForms.length) {
+        const inline = inlineForms[formIndex];
+        formIndex++;
+        const before = output.substring(0, m.index);
+        const after = output.substring(m.index + m.match.length);
+        if (m.isAfterComma) {
+          output = before + ', ' + inline + after;
+        } else {
+          // Find the predicate before this blank node
+          const predicateMatch = output.substring(0, m.index).match(/(rdfs:subClassOf|owl:someValuesFrom|owl:allValuesFrom|owl:onClass|owl:onProperty)\s+$/);
+          if (predicateMatch) {
+            output = before + inline + after;
+          } else {
+            output = before + inline + after;
+          }
+        }
+      }
+    }
+  }
+  
   return output;
 }
 
@@ -292,6 +478,7 @@ function convertBlanksToInline(
     return raw;
   }
 
+  // Find all blank nodes used as objects (these should be inlined)
   const blankAsObject = new Set<string>();
   for (const q of quads) {
     if (q.object.termType === 'BlankNode') {
@@ -299,11 +486,53 @@ function convertBlanksToInline(
       blankAsObject.add(id);
     }
   }
+  
   if (blankAsObject.size === 0) return raw;
 
+  // Build inline forms for blank nodes used as objects
   const inlineBlanks = buildInlineForms(quads, externalRefs, useColonNotation);
-  let output = removeBlankBlocks(raw, blankAsObject);
+  
+  if (inlineBlanks.size === 0) return raw;
+  
+  // SIMPLIFIED APPROACH:
+  // 1. Remove ALL blank node blocks (they appear as subjects)
+  // 2. Replace ALL blank node references with inline forms in order
+  
+  // Step 1: Remove all blank node blocks
+  let output = raw;
+  const lines = output.split('\n');
+  const result: string[] = [];
+  let i = 0;
+  
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Check if this line starts a blank node block
+    if (trimmed.match(/^_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/)) {
+      // Skip this blank node block until we find the period
+      while (i < lines.length) {
+        const currentLine = lines[i];
+        if (/\.\s*$/.test(currentLine.trim())) {
+          i++; // Skip the line with period
+          break;
+        }
+        i++;
+      }
+      continue; // Don't add this block
+    }
+    
+    // Not a blank node block, keep it
+    result.push(line);
+    i++;
+  }
+  
+  output = result.join('\n');
+  
+  // Step 2: Replace blank node references with inline forms
+  // Use replaceBlankRefs which handles the replacement more intelligently
   output = replaceBlankRefs(output, inlineBlanks);
+  
   return output;
 }
 
@@ -1013,7 +1242,40 @@ export function postProcessTurtle(
   output = ensureBase(output, useColonNotation, mainOntologyBase);
   
   // Use colon notation in blank node inlining if that was the original format
+  // CRITICAL: This must remove ALL blank node blocks that appear as subjects
+  // before section dividers are added
   output = convertBlanksToInline(output, externalRefs, useColonNotation);
+  
+  // Final safety check: Remove ANY remaining blank node blocks
+  // Use line-by-line approach to be absolutely sure we catch them
+  const outputLines = output.split('\n');
+  const cleanedOutputLines: string[] = [];
+  let lineIdx = 0;
+  
+  while (lineIdx < outputLines.length) {
+    const currentLine = outputLines[lineIdx];
+    const trimmed = currentLine.trim();
+    
+    // Check if this line starts a blank node block
+    if (trimmed.match(/^_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/)) {
+      // Skip this blank node block until we find the period
+      while (lineIdx < outputLines.length) {
+        const checkLine = outputLines[lineIdx];
+        if (/\.\s*$/.test(checkLine.trim())) {
+          lineIdx++; // Skip the period line
+          break;
+        }
+        lineIdx++;
+      }
+      continue; // Don't add this block
+    }
+    
+    // Not a blank node block, keep it
+    cleanedOutputLines.push(currentLine);
+    lineIdx++;
+  }
+  
+  output = cleanedOutputLines.join('\n');
   
   // Add owl:imports to ontology declaration
   if (externalRefs && externalRefs.length > 0) {

@@ -18,7 +18,7 @@ describe('Unused Annotation Property Detection', () => {
     const { store } = parseResult;
 
     // Detect ontology issues
-    const issues = detectOntologyIssues(store);
+    const issues = await detectOntologyIssues(store);
 
     // Find issues related to labellableRoot
     const labellableRootIssues = issues.filter(
@@ -60,7 +60,7 @@ describe('Unused Annotation Property Detection', () => {
     const parseResult = await parseRdfToGraph(ttl, { path: 'test.ttl' });
     const { store } = parseResult;
 
-    const issues = detectOntologyIssues(store);
+    const issues = await detectOntologyIssues(store);
     const unusedApIssues = issues.filter((issue) => issue.type === 'unused_annotation_property');
 
     // unusedProperty should be marked as unused
