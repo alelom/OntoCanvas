@@ -1,3 +1,14 @@
+# [1.9.0](https://github.com/alelom/OntoCanvas/compare/v1.8.2...v1.9.0) (2026-03-12)
+
+
+### Features
+
+* add E2E tests for external ontology URL conversion ([d41f612](https://github.com/alelom/OntoCanvas/commit/d41f612c4b17e40f961cf9e801eb39d5aeee2fdc))
+* add ontology URL conversion to HTML documentation URL ([6bba2a8](https://github.com/alelom/OntoCanvas/commit/6bba2a8cffb1efe023bd7b3c68652a3bed07eabe))
+* enhance source preservation tests for targeted modifications ([38e39da](https://github.com/alelom/OntoCanvas/commit/38e39da49b814c98b25cb3b197f5015f3c9d8153))
+* implement node property editing workflow and enhance rename functionality ([12e26bd](https://github.com/alelom/OntoCanvas/commit/12e26bd202f71156e69f6df9fd9271b5312125cc))
+* implement source preservation with position tracking for idempotent round-trip saves ([3e074b0](https://github.com/alelom/OntoCanvas/commit/3e074b00253c7b8a065a47e533aa5a5c85946c15))
+
 ## [1.8.2](https://github.com/alelom/OntoCanvas/compare/v1.8.1...v1.8.2) (2026-03-10)
 
 
