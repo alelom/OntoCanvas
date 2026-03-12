@@ -1066,18 +1066,22 @@ describe('sourcePreservation', () => {
         let savedLabel: string | null = null;
         if (usesPrefixedNamesCheck) {
           // Cache reconstruction was used - extract label from prefixed format
-          // Try multiple patterns to find the label
+          // Try multiple patterns to find the label, being more specific to avoid matching wrong class
           const patterns = [
-            // Match :DrawingElement as a class definition (a owl:Class or rdf:type owl:Class), then find its label
-            /:DrawingElement\s+(?:a|rdf:type)\s+owl:Class[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
-            // Fallback: match :DrawingElement at start of line, then find label
-            /(?:^|\n):DrawingElement\s+(?:a|rdf:type)\s+owl:Class[^.]*?rdfs:label\s+"([^"]+)"/m,
-            // Last resort: match any :DrawingElement followed by label (but this might match wrong one)
-            /:DrawingElement[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
+            // Match :DrawingElement at start of line, then find its label (most specific)
+            // Handle both "a owl:Class" and "rdf:type owl:Class" patterns
+            /(?:^|\n):DrawingElement\s+(?:rdfs:comment[^;]*;[\s\S]*?)?(?:a|rdf:type)\s+owl:Class[^.]*?rdfs:label\s+"([^"]+)"/m,
+            // Match :DrawingElement followed by class declaration, then label
+            /:DrawingElement\s+(?:rdfs:comment[^;]*;[\s\S]*?)?(?:a|rdf:type)\s+owl:Class[\s\S]{0,1000}?rdfs:label\s+"([^"]+)"/,
+            // Match :DrawingElement at end of file (where it actually is)
+            /:DrawingElement[\s\S]*?rdfs:label\s+"([^"]+)"\s*\.\s*$/m,
+            // Last resort: match any :DrawingElement followed by label, but ensure it's the DrawingElement class
+            // by checking it's not part of a restriction (not followed by :Layout or other class names in restrictions)
+            /:DrawingElement(?![\s\S]*?:Layout[\s\S]*?rdfs:label)[\s\S]{0,1000}?rdfs:label\s+"([^"]+)"/,
           ];
           for (const pattern of patterns) {
             const match = savedContent.match(pattern);
-            if (match) {
+            if (match && match[1]) {
               savedLabel = match[1];
               break;
             }
@@ -1085,12 +1089,12 @@ describe('sourcePreservation', () => {
         } else if (usesFullUris) {
           // Fallback was used - extract label from full URI format
           const patterns = [
-            /<https:\/\/[^>]+#DrawingElement>[\s\S]{0,500}?<[^>]+label[^>]*>\s+"([^"]+)"/,
-            /<https:\/\/[^>]+#DrawingElement>[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
+            /<https:\/\/[^>]+#DrawingElement>[\s\S]{0,1000}?<[^>]+label[^>]*>\s+"([^"]+)"/,
+            /<https:\/\/[^>]+#DrawingElement>[\s\S]{0,1000}?rdfs:label\s+"([^"]+)"/,
           ];
           for (const pattern of patterns) {
             const match = savedContent.match(pattern);
-            if (match) {
+            if (match && match[1]) {
               savedLabel = match[1];
               break;
             }
@@ -1154,10 +1158,10 @@ describe('sourcePreservation', () => {
         
         // Count edges for DrawingElement (should be the same)
         const originalDrawingElementEdges = originalEdges.filter(e => 
-          e.source === 'DrawingElement' || e.target === 'DrawingElement'
+          e.from === 'DrawingElement' || e.to === 'DrawingElement'
         );
         const savedDrawingElementEdges = savedEdges.filter(e => 
-          e.source === 'DrawingElement' || e.target === 'DrawingElement'
+          e.from === 'DrawingElement' || e.to === 'DrawingElement'
         );
         expect(savedDrawingElementEdges.length).toBe(originalDrawingElementEdges.length);
       });
@@ -1306,6 +1310,97 @@ describe('sourcePreservation', () => {
         // if (existsSync(modifiedFixturePath)) {
         //   writeFileSync(modifiedFixturePath, ''); // Clear it, or delete it
         // }
+      });
+
+      it('should preserve prefixed names in inline blank node restrictions', async () => {
+        // Load a file that uses prefixed names in inline restrictions
+        const fixturePath = join(__dirname, '../fixtures/aec_drawing_metadata.ttl');
+        const originalContent = readFileSync(fixturePath, 'utf-8');
+        
+        // Parse to get cache
+        const parseResult = await loadOntologyFromContent(originalContent, fixturePath);
+        const { store, originalFileCache: cache } = parseResult.parseResult;
+        
+        expect(cache).toBeDefined();
+        
+        // Find DrawingSheet class (which has inline restrictions with prefixed names)
+        const drawingSheetNode = parseResult.parseResult.graphData.nodes.find(
+          n => n.label === 'Drawing sheet'
+        );
+        expect(drawingSheetNode).toBeDefined();
+        
+        if (!drawingSheetNode) return;
+        
+        // Rename the class to trigger serialization
+        const localName = extractLocalName(drawingSheetNode.id);
+        const newLabel = 'Drawing Sheeta';
+        
+        const formData: NodeFormData = {
+          comment: drawingSheetNode.comment || '',
+          exampleImageUris: drawingSheetNode.exampleImages || [],
+          annotationValues: drawingSheetNode.annotations || {},
+          dataPropertyRestrictions: drawingSheetNode.dataPropertyRestrictions || []
+        };
+        
+        const result = editNodeProperties({
+          store,
+          nodeId: localName,
+          node: drawingSheetNode,
+          newLabel,
+          formData,
+          annotationProperties: parseResult.parseResult.annotationProperties,
+          existingNodeIds: new Set(parseResult.parseResult.graphData.nodes.map(n => extractLocalName(n.id)))
+        });
+        
+        expect(result.success).toBe(true);
+        
+        // Save using cache-based reconstruction
+        const saveResult = await saveOntology({
+          store,
+          originalTtlString: originalContent,
+          originalFileCache: cache ?? undefined,
+          externalRefs: undefined
+        });
+        
+        const savedContent = saveResult.ttlString;
+        
+        // Verify that prefixed names are preserved in inline restrictions
+        // The original file uses :contains, :Note, :RevisionTable, :Layout, :has, :DrawingOrientation
+        // The saved file should also use these prefixed names, not full URIs
+        
+        // Find the DrawingSheet class definition section
+        const drawingSheetStart = savedContent.indexOf(':DrawingSheet');
+        expect(drawingSheetStart).toBeGreaterThan(-1);
+        
+        if (drawingSheetStart >= 0) {
+          // Extract the DrawingSheet class block (from :DrawingSheet to the next class or end)
+          const nextClassMatch = savedContent.substring(drawingSheetStart).match(/\n:[\w]+\s+(rdf:type|a)\s+owl:Class/);
+          const drawingSheetEnd = nextClassMatch ? drawingSheetStart + nextClassMatch.index! : savedContent.length;
+          const drawingSheetBlock = savedContent.substring(drawingSheetStart, drawingSheetEnd);
+          
+          // Debug: log the block to see what we're matching against
+          debugLog('[TEST] DrawingSheet block:', drawingSheetBlock.substring(0, 500));
+          
+          // Should use prefixed names in restrictions, not full URIs
+          // Use more flexible regex that allows for whitespace/newlines
+          expect(drawingSheetBlock).toMatch(/owl:onProperty\s+:contains/);
+          expect(drawingSheetBlock).toMatch(/owl:onClass\s+:Note/);
+          expect(drawingSheetBlock).toMatch(/owl:onClass\s+:RevisionTable/);
+          expect(drawingSheetBlock).toMatch(/owl:onClass\s+:Layout/);
+          expect(drawingSheetBlock).toMatch(/owl:onProperty\s+:has/);
+          expect(drawingSheetBlock).toMatch(/owl:onClass\s+:DrawingOrientation/);
+          
+          // Should NOT use full URIs for these properties/classes
+          expect(drawingSheetBlock).not.toMatch(/<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-drawing-metadata#contains>/);
+          expect(drawingSheetBlock).not.toMatch(/<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-drawing-metadata#Note>/);
+          expect(drawingSheetBlock).not.toMatch(/<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-drawing-metadata#RevisionTable>/);
+          expect(drawingSheetBlock).not.toMatch(/<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-drawing-metadata#Layout>/);
+          expect(drawingSheetBlock).not.toMatch(/<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-drawing-metadata#has>/);
+          expect(drawingSheetBlock).not.toMatch(/<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-drawing-metadata#DrawingOrientation>/);
+        }
+        
+        // Also verify the label was updated
+        expect(savedContent).toContain(`rdfs:label "${newLabel}"`);
       });
     });
   });

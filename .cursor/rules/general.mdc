@@ -23,4 +23,4 @@ In tests, make timeouts reasonably short, generally not over 10 seconds, to avoi
 
 When running tests with timeout, e.g. npm run test:e2e -- tests/e2e/annotationPropertyWarning.e2e.test.ts --reporter=verbose --testTimeout=5000, make sure to not exceeed a timeout value over 5-10s to avoid wasting time as mentioned above. I.e. the max timeout should be set with --testTimeout=5000. If the test throws timeout again, the real issue won't be resolved by exceeding the value over 5 seconds, it's some deeper issue.
 
-Always Use `debugLog` Instead of `console.log` and similar for warning/errors for debugging purposes.
+Always Use `debugLog` Instead of `console.log` and similar for warning/errors for debugging purposes. See [src/utils/debug.ts](mdc:src/utils/debug.ts) for implementation details.

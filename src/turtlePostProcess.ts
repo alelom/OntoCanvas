@@ -102,8 +102,12 @@ function shortenIri(
   if (externalRefs) {
     for (const ref of externalRefs) {
       if (iri.startsWith(ref.url)) {
-        if (ref.usePrefix && ref.prefix) {
+        if (ref.usePrefix && ref.prefix !== undefined) {
           const local = iri.slice(ref.url.length);
+          // Empty prefix means use ':' notation for default namespace
+          if (ref.prefix === '') {
+            return useColonNotation ? `:${local}` : `<#${local}>`;
+          }
           return `${ref.prefix}:${local}`;
         }
         // If not using prefix, return full IRI

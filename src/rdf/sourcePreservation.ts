@@ -1187,8 +1187,27 @@ async function serializeBlockToTurtle(
               })));
             }
             
+            // Convert prefixMap to externalRefs format for buildInlineForms
+            // This allows shortenIri to use prefixed names instead of full URIs
+            const externalRefsForInlineForms: Array<{ url: string; usePrefix: boolean; prefix?: string }> = [];
+            if (cache && Object.keys(prefixMap).length > 0) {
+              for (const [prefix, namespace] of Object.entries(prefixMap)) {
+                externalRefsForInlineForms.push({
+                  url: namespace,
+                  usePrefix: true,
+                  prefix: prefix || '' // Empty prefix means use ':' notation for default namespace
+                });
+              }
+              debugLog('[serializeBlockToTurtle] Converted prefix map to externalRefs format:', externalRefsForInlineForms.length, 'prefixes');
+            }
+            
             // Build inline forms from block.quads (which includes blank node quads)
-            const inlineFormsFromQuads = buildInlineForms(block.quads, undefined, true);
+            // Pass externalRefs so shortenIri can use prefixed names
+            const inlineFormsFromQuads = buildInlineForms(
+              block.quads, 
+              externalRefsForInlineForms.length > 0 ? externalRefsForInlineForms : undefined, 
+              true
+            );
             debugLog('[serializeBlockToTurtle] Built', inlineFormsFromQuads.size, 'inline forms');
             
             // Log the inline forms for debugging
