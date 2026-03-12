@@ -29,9 +29,11 @@ describe('ontologyUrlLoader', () => {
       ]);
     });
 
-    it('adds ontology.ttl fallback when last path segment has no RDF extension', () => {
+    it('adds .ttl and .html extensions when last path segment has no RDF extension', () => {
       expect(getOntologyUrlCandidates('https://example.com/repo/latest')).toEqual([
         'https://example.com/repo/latest',
+        'https://example.com/repo/latest.ttl',
+        'https://example.com/repo/latest.html',
         'https://example.com/repo/latest/ontology.ttl',
       ]);
     });
@@ -44,9 +46,21 @@ describe('ontologyUrlLoader', () => {
       expect(candidates[1]).toBe('https://digitalconstruction.github.io/Processes/latest/ontology.ttl');
     });
 
+    it('adds .ttl and .html extensions for URLs without extensions (e.g. aec_drawing_metadata)', () => {
+      const url = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata';
+      const candidates = getOntologyUrlCandidates(url);
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.ttl');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/ontology.ttl');
+      expect(candidates.length).toBe(4);
+    });
+
     it('strips trailing hash from URL', () => {
       expect(getOntologyUrlCandidates('https://example.com/ont#')).toEqual([
         'https://example.com/ont',
+        'https://example.com/ont.ttl',
+        'https://example.com/ont.html',
         'https://example.com/ont/ontology.ttl',
       ]);
     });

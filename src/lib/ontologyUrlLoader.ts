@@ -3,8 +3,11 @@ const HTML_EXTENSION = /\.html$/i;
 
 /**
  * Returns candidate URLs to try when loading an ontology. When the URL looks like a
- * directory (ends with / or has no RDF file extension), adds a fallback with ontology.ttl
- * so that e.g. https://example.org/repo/latest/ is tried as .../latest/ontology.ttl.
+ * directory (ends with /), adds a fallback with ontology.ttl so that e.g. 
+ * https://example.org/repo/latest/ is tried as .../latest/ontology.ttl.
+ * 
+ * For URLs without extensions, tries adding .ttl and .html extensions directly,
+ * so that e.g. https://example.org/ontology is tried as .../ontology.ttl and .../ontology.html.
  * 
  * For .html URLs (from convertOntologyUrlToHtmlUrl), converts back to .ttl format
  * by replacing .html with .ttl and optionally converting underscores back to hyphens.
@@ -38,10 +41,16 @@ export function getOntologyUrlCandidates(url: string): string[] {
       if (withHyphens !== baseUrl) {
         candidates.push(withHyphens);
       }
-    } else if (endsWithSlash || !hasRdfExtension) {
-      // Original logic: directory or no RDF extension
+    } else if (endsWithSlash) {
+      // Directory-style URL: add /ontology.ttl fallback
       const base = normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
       candidates.push(`${base}/ontology.ttl`);
+    } else if (!hasRdfExtension) {
+      // URL without RDF extension: try adding .ttl and .html extensions directly
+      // Also keep the /ontology.ttl directory fallback for backwards compatibility
+      candidates.push(`${normalized}.ttl`);
+      candidates.push(`${normalized}.html`);
+      candidates.push(`${normalized}/ontology.ttl`);
     }
   } catch {
     // Invalid URL: only try the normalized string as-is
