@@ -3265,9 +3265,76 @@ function buildNetworkData(
     debugLog('[DEBUG] Edge style config keys:', Object.keys(edgeStyleConfig));
   }
   
+  // Debug: Log all edges before style filtering for edge-style-test
+  const edgeStyleTestEdges = filteredEdges.filter((e) => 
+    e.type.includes('edge-style-test') || e.type === 'subClassOf' || e.type === 'hasProperty' || e.type === 'contains'
+  );
+  if (edgeStyleTestEdges.length > 0) {
+    debugLog('[DEBUG] Edge-style-test edges before style filtering:', edgeStyleTestEdges.map((e) => ({ from: e.from, to: e.to, type: e.type })));
+  }
+  
   filteredEdges = filteredEdges.filter((e) => {
-    const style = edgeStyleConfig[e.type];
-    const shouldShow = !style || style.show !== false;
+    // Try direct lookup first
+    let style = edgeStyleConfig[e.type];
+    
+    // If not found, try to find a matching config entry by checking:
+    // 1. If type is a full URI, try local name
+    // 2. If type is a local name, try full URI
+    // 3. Try finding any config key that matches (by local name extraction)
+    if (!style) {
+      const typeLocalName = e.type.includes('#') ? e.type.split('#').pop() : 
+                           (e.type.includes('/') ? e.type.split('/').pop() : e.type);
+      
+      // Try local name if type is a full URI
+      if (e.type.startsWith('http://') || e.type.startsWith('https://')) {
+        if (typeLocalName && typeLocalName !== e.type) {
+          style = edgeStyleConfig[typeLocalName];
+        }
+      }
+      
+      // Try full URI if type is a local name
+      if (!style && !e.type.startsWith('http://') && !e.type.startsWith('https://')) {
+        const matchingKey = Object.keys(edgeStyleConfig).find(key => {
+          if (key.startsWith('http://') || key.startsWith('https://')) {
+            const keyLocalName = key.includes('#') ? key.split('#').pop() : 
+                               (key.includes('/') ? key.split('/').pop() : key);
+            return keyLocalName === e.type;
+          }
+          return false;
+        });
+        if (matchingKey) {
+          style = edgeStyleConfig[matchingKey];
+        }
+      }
+      
+      // As a last resort, try finding any key that has the same local name
+      if (!style && typeLocalName && typeLocalName !== e.type) {
+        const matchingKey = Object.keys(edgeStyleConfig).find(key => {
+          const keyLocalName = key.includes('#') ? key.split('#').pop() : 
+                             (key.includes('/') ? key.split('/').pop() : key);
+          return keyLocalName === typeLocalName;
+        });
+        if (matchingKey) {
+          style = edgeStyleConfig[matchingKey];
+        }
+      }
+    }
+    
+    // If no style config found after all matching attempts, default to showing
+    // This ensures edges are visible by default even if config entry is missing
+    // CRITICAL: If style is undefined (no config entry found), default to showing
+    // This handles cases where edge types exist in rawData but don't have config entries yet
+    const shouldShow = style === undefined ? true : (style.show !== false);
+    
+    // Debug: Log edge-style-test edges that are being filtered
+    if (e.type.includes('edge-style-test') || e.type === 'subClassOf' || e.type === 'hasProperty' || e.type === 'contains') {
+      debugLog(`[DEBUG] Edge-style-test edge filtering: ${e.from} -> ${e.to} (${e.type})`, {
+        hasStyle: !!style,
+        styleShow: style?.show,
+        shouldShow,
+        configKeys: Object.keys(edgeStyleConfig).filter(k => k.includes('hasProperty') || k.includes('contains') || k === 'subClassOf'),
+      });
+    }
     
     // Debug: Specifically log describes edge filtering
     if (e.type === 'https://w3id.org/dano#describes' || e.type.includes('describes')) {
@@ -3285,8 +3352,27 @@ function buildNetworkData(
     if (!shouldShow && (e.type.startsWith('http://') || e.type.startsWith('https://'))) {
       debugWarn(`[DEBUG] External edge filtered out: ${e.type}, style:`, style);
     }
+    
+    // Debug: Log edge-style-test edges that are being filtered
+    if (e.type.includes('edge-style-test') || e.type === 'subClassOf' || e.type === 'hasProperty' || e.type === 'contains') {
+      if (!shouldShow) {
+        debugWarn(`[DEBUG] Edge-style-test edge filtered out: ${e.from} -> ${e.to} (${e.type}), style:`, style);
+      } else {
+        debugLog(`[DEBUG] Edge-style-test edge kept: ${e.from} -> ${e.to} (${e.type}), style:`, style);
+      }
+    }
+    
     return shouldShow;
   });
+  
+  // Debug: Log all edges after style filtering for edge-style-test
+  const edgeStyleTestEdgesAfter = filteredEdges.filter((e) => 
+    e.type.includes('edge-style-test') || e.type === 'subClassOf' || e.type === 'hasProperty' || e.type === 'contains'
+  );
+  if (edgeStyleTestEdgesAfter.length !== edgeStyleTestEdges.length) {
+    debugWarn(`[DEBUG] Edge-style-test edges after style filtering: ${edgeStyleTestEdgesAfter.length} (was ${edgeStyleTestEdges.length})`, 
+      edgeStyleTestEdgesAfter.map((e) => ({ from: e.from, to: e.to, type: e.type })));
+  }
   
   // Debug: Check describes edges after style filtering (only if they exist)
   const describesEdgesAfterStyleFilter = filteredEdges.filter((e) => 
@@ -3866,7 +3952,15 @@ function buildNetworkData(
     const edgeId = edgeObj.id as string;
     const from = edgeObj.from as string;
     const to = edgeObj.to as string;
-    const type = (edgeObj as { type?: string }).type as string;
+    // Extract type from edge ID if not present in edge object
+    // Edge ID format: `${from}->${to}:${type}`
+    let type = (edgeObj as { type?: string }).type as string;
+    if (!type && edgeId.includes(':')) {
+      const parts = edgeId.split(':');
+      if (parts.length > 1) {
+        type = parts.slice(1).join(':'); // Handle types that contain colons
+      }
+    }
     
     // Build all possible keys for this edge (accounting for URI/local name variations)
     const keys = new Set<string>();
@@ -6148,8 +6242,28 @@ async function saveTtl(): Promise<void> {
         downloadName = `${downloadName}.ttl`;
       }
       a.download = downloadName;
+      // Add to DOM temporarily to ensure Playwright can detect the download
+      a.style.display = 'none';
+      a.style.position = 'absolute';
+      a.style.left = '-9999px';
+      document.body.appendChild(a);
+      
+      // Click synchronously to ensure Playwright can detect the download
+      // Playwright needs the click to happen synchronously for download detection
       a.click();
-      URL.revokeObjectURL(url);
+      
+      // Remove from DOM and revoke URL after a delay to ensure download is initiated
+      // Use a longer delay to give Playwright time to detect the download
+      setTimeout(() => {
+        try {
+          if (a.parentNode) {
+            document.body.removeChild(a);
+          }
+        } catch (e) {
+          // Ignore errors if element was already removed
+        }
+        URL.revokeObjectURL(url);
+      }, 1000);
       debugLog('[saveTtl] File download triggered');
     }
     hasUnsavedChanges = false;
@@ -9014,4 +9128,6 @@ attachEditorTestHook({
   saveTtl,
   setHasUnsavedChanges: (value: boolean) => { hasUnsavedChanges = value; },
   updateSaveButtonVisibility,
+  getHasUnsavedChanges: () => hasUnsavedChanges,
+  loadTtlAndRender,
 });

@@ -229,75 +229,7 @@ describe('Idempotent Round Trip E2E', () => {
       // Wait a bit more to ensure the change is registered
       await page.waitForTimeout(500);
       
-      // Step 4: Get the TTL string after first rename (simulating save)
-      const ttlAfterFirstRename = await page.evaluate(async () => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (!testHook?.getTtlStore) return null;
-        const ttlStore = testHook.getTtlStore();
-        const externalRefs = testHook.getExternalOntologyReferences?.() || [];
-        const originalTtl = testHook.getOriginalTtlString?.() || null;
-        
-        if (!ttlStore) return null;
-        
-        // Import storeToTurtle - we'll use the test hook if available, otherwise simulate
-        // For now, we'll get the TTL via the test hook's saveTtl function
-        try {
-          // Use the test hook to get the TTL string
-          const { storeToTurtle } = await import('/src/parser.ts');
-          return await storeToTurtle(ttlStore, externalRefs, originalTtl);
-        } catch (e) {
-          // Fallback: try to call saveTtl and capture the result
-          // This won't work directly, so we'll need a different approach
-          return null;
-        }
-      });
-      
-      // Alternative approach: Load the TTL string by simulating a save and reload
-      // Instead, we'll reload the page and load the file content we would have saved
-      // For this test, we'll use a simpler approach: get the TTL, parse it, and compare
-      
-      // Get the TTL string using the test hook's direct access
-      const firstSavedTtl = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        // We need to expose a way to get the TTL string directly
-        // For now, let's use a workaround: trigger save and capture, or use storeToTurtle directly
-        return testHook?.getTtlString?.() || null;
-      });
-      
-      // If we can't get TTL directly, we'll need to reload with the modified content
-      // For now, let's use a different approach: reload the page and load a modified version
-      
-      // Step 5: Reload the page and load the file again (simulating reload after save)
-      // We'll need to modify the file content to reflect the rename, then reload it
-      // But actually, for a true round trip test, we should save and reload
-      // Since we can't easily save with overwrite in the test, let's test the idempotency
-      // by getting the TTL string, parsing it, making the reverse change, and comparing
-      
-      // Get current TTL string via test hook (we'll need to add this to the test hook)
-      const getCurrentTtl = await page.evaluate(async () => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        const ttlStore = testHook?.getTtlStore?.();
-        const externalRefs = testHook?.getExternalOntologyReferences?.() || [];
-        const originalTtl = testHook?.getOriginalTtlString?.();
-        
-        if (!ttlStore) return null;
-        
-        // We need to call storeToTurtle, but it's not directly accessible
-        // Let's use the saveTtl function indirectly or expose it via test hook
-        // For now, return a marker that we need to implement this
-        return 'NEED_IMPLEMENTATION';
-      });
-      
-      // Since we can't easily get TTL string in the test, let's use a different approach:
-      // We'll test that after making a change and undoing it, the store state matches
-      // But for true file round trip, we need file system access
-      
-      // For now, let's test the round trip by:
-      // 1. Making the change
-      // 2. Undoing it immediately  
-      // 3. Comparing the final state with the original
-      
-      // Step 5: Rename back to original (undo the change)
+      // Step 4: Rename back to original (undo the change)
       await renameClass(page, nodeId!, 'Text');
       await page.waitForTimeout(1000);
       

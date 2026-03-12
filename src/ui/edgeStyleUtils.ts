@@ -151,6 +151,33 @@ export function getEdgeStyleConfig(
       config[uri] = { ...config[op.name] };
     }
   });
+  
+  // Also ensure that any edge type in rawData.edges has a config entry
+  // This handles cases where edges have full URIs but the menu/objectProperties only have local names
+  // CRITICAL: This must run after the objectProperties loop above to catch any missed edge types
+  rawData.edges.forEach((edge) => {
+    if (!config[edge.type]) {
+      // Try to find a matching config entry by local name
+      const localName = edge.type.includes('#') ? edge.type.split('#').pop() : 
+                       (edge.type.includes('/') ? edge.type.split('/').pop() : edge.type);
+      if (localName && localName !== edge.type && config[localName]) {
+        // Copy config from local name to full URI
+        config[edge.type] = { ...config[localName] };
+      } else {
+        // No matching config found - create default entry (show by default)
+        // Use default color from the colors we already computed
+        const defaultColor = defaultColors[edge.type] ?? 
+                            (localName && localName !== edge.type ? defaultColors[localName] : null) ?? 
+                            getDefaultColor();
+        config[edge.type] = {
+          show: true, // Always show by default if no config exists
+          showLabel: edge.type === 'subClassOf' ? false : true,
+          color: defaultColor,
+          lineType: 'solid',
+        };
+      }
+    }
+  });
 
   return config;
 }
