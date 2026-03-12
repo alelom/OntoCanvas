@@ -7284,9 +7284,17 @@ function applyFilter(preserveView = false): void {
   currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
   if (network && ttlStore) {
-    updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, (url) => {
+    updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, async (url) => {
+      // Convert ontology URL to HTML documentation URL (replaces hyphens with underscores, adds .html)
+      const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
+      const htmlUrl = convertOntologyUrlToHtmlUrl(url);
+      
+      // Always use the converted HTML URL if conversion succeeded, otherwise use original
+      // This ensures we open the HTML documentation URL, not the raw ontology URL
+      const urlToOpen = htmlUrl || url;
+      
       const base = window.location.origin + window.location.pathname;
-      window.open(`${base}?onto=${encodeURIComponent(url)}`, '_blank');
+      window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
     });
   }
   const options = getNetworkOptions(layoutMode);
@@ -7516,11 +7524,15 @@ function applyFilter(preserveView = false): void {
         
         // Convert ontology URL to HTML documentation URL (replaces hyphens with underscores, adds .html)
         const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
-        const htmlUrl = convertOntologyUrlToHtmlUrl(url) || url;
+        const htmlUrl = convertOntologyUrlToHtmlUrl(url);
+        
+        // Always use the converted HTML URL if conversion succeeded, otherwise use original
+        // This ensures we open the HTML documentation URL, not the raw ontology URL
+        const urlToOpen = htmlUrl || url;
         
         // Fallback: open via URL (works for production/published ontologies)
         const base = window.location.origin + window.location.pathname;
-        window.open(`${base}?onto=${encodeURIComponent(htmlUrl)}`, '_blank');
+        window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
       });
     }
     

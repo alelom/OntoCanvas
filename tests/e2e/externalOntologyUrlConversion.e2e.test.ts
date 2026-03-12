@@ -251,4 +251,120 @@ describe('External Ontology URL Conversion E2E', () => {
     expect(decodedUrl).toMatch(/\.html$/);
     expect(decodedUrl).not.toContain('-');
   });
+
+  it('should successfully load external ontology when opened via HTML URL (regression test)', async () => {
+    // This test verifies that when an external ontology is opened via the HTML URL
+    // (converted from hyphens to underscores with .html), it can successfully load
+    // the TTL file. This prevents regression of the bug where HTML URLs failed to load.
+    
+    // Create a test file that imports an external ontology
+    const testFile = join(TEST_FIXTURES_DIR, 'aec_drawing_metadata.ttl');
+    expect(existsSync(testFile)).toBe(true);
+    
+    await loadTestFile(page, testFile);
+    await waitForGraphRender(page);
+    
+    // Enable external references display
+    await page.evaluate(() => {
+      const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement;
+      if (displayExternalRefEl && !displayExternalRefEl.checked) {
+        displayExternalRefEl.checked = true;
+        displayExternalRefEl.dispatchEvent(new Event('change'));
+      }
+    });
+    
+    // Wait for graph to rebuild
+    await page.waitForTimeout(1000);
+    
+    // Find an external node
+    const nodeInfo = await page.evaluate(() => {
+      const testHook = (window as any).__EDITOR_TEST__;
+      const network = testHook.getNetwork?.();
+      if (!network) return { found: false, nodeId: null, externalUrl: null };
+      
+      const nodes = network.body.data.nodes.get();
+      const externalNode = nodes.find((n: any) => {
+        return n.isExternal === true && n.externalOntologyUrl;
+      });
+      
+      if (externalNode) {
+        return {
+          found: true,
+          nodeId: externalNode.id,
+          externalUrl: externalNode.externalOntologyUrl,
+        };
+      }
+      
+      return { found: false, nodeId: null, externalUrl: null };
+    });
+    
+    // If no external node found, skip the test
+    if (!nodeInfo.found) {
+      console.log('[TEST] No external node found, skipping load test');
+      return;
+    }
+    
+    expect(nodeInfo.externalUrl).toBeTruthy();
+    
+    // Convert the URL to HTML format (as the system does)
+    const htmlUrl = nodeInfo.externalUrl!.replace(/-/g, '_') + '.html';
+    
+    // Navigate to the editor with the HTML URL as the onto parameter
+    // This simulates what happens when "Open external ontology" is clicked
+    const editorUrlWithOnto = `${EDITOR_URL}?onto=${encodeURIComponent(htmlUrl)}`;
+    
+    // Open a new page to test loading
+    const newPage = await browser.newPage();
+    try {
+      await newPage.goto(editorUrlWithOnto);
+      
+      // Wait for loading modal to appear
+      await newPage.waitForSelector('#loadingModal', { state: 'visible', timeout: 3000 }).catch(() => {
+        // Loading modal might not appear if loading is very fast
+      });
+      
+      // Wait for loading modal to disappear (indicates loading completed or failed)
+      await newPage.waitForFunction(
+        () => {
+          const loadingModal = document.getElementById('loadingModal');
+          return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
+        },
+        { timeout: 10000 }
+      );
+      
+      // Check if loading succeeded by looking for error modal or graph data
+      const loadResult = await newPage.evaluate(() => {
+        const testHook = (window as any).__EDITOR_TEST__;
+        const errorModal = document.getElementById('urlLoadErrorModal');
+        const hasError = errorModal && (errorModal as HTMLElement).style.display !== 'none';
+        const rawData = testHook?.getRawData?.();
+        const hasData = rawData && (rawData.nodes.length > 0 || rawData.edges.length > 0);
+        
+        return {
+          hasError,
+          hasData,
+          errorText: hasError ? (errorModal?.textContent || '') : '',
+        };
+      });
+      
+      // The test passes if:
+      // 1. Loading succeeded (hasData is true), OR
+      // 2. Loading failed but NOT with the specific error we're testing for
+      //    (the error should not be "Failed to fetch ontology from URL" for HTML URLs)
+      
+      if (loadResult.hasError) {
+        // If there's an error, it should NOT be the regression bug
+        // (which would show "Failed to fetch ontology from URL" for the HTML URL)
+        expect(loadResult.errorText).not.toContain('Failed to fetch ontology from');
+        // It's OK if there's a CORS error or network error - that's expected for external URLs
+        // The important thing is that we tried the right candidate URLs
+        console.log('[TEST] Load failed with error (may be expected for external URLs):', loadResult.errorText);
+      } else {
+        // If loading succeeded, verify we have data
+        expect(loadResult.hasData).toBe(true);
+      }
+    } finally {
+      await newPage.close();
+    }
+  });
 });

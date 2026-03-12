@@ -230,5 +230,22 @@ describe('ontologyUrlLoader', () => {
       // But we should have tried valid candidates
       expect(calls.length).toBeGreaterThan(0);
     });
+
+    it('error message always shows the original URL, not candidate URLs', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      vi.mocked(fetchExternalOntologyTtl).mockResolvedValue(null);
+
+      const htmlUrl = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html';
+      
+      try {
+        await fetchOntologyFromUrl(htmlUrl);
+        expect.fail('Should have thrown');
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        // Error message should contain the original HTML URL, not a candidate URL
+        expect(errorMessage).toContain(htmlUrl);
+        expect(errorMessage).not.toContain('aec-drawing-metadata'); // Should not show candidate URL
+      }
+    });
   });
 });

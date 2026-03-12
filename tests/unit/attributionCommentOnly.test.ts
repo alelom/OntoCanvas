@@ -3,6 +3,7 @@ import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getAppVersion } from '../../src/utils/version';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -65,8 +66,10 @@ describe('Attribution Comment Only', () => {
     expect(attributionMatches).toBeDefined();
     expect(attributionMatches?.length).toBe(1);
     
-    // Should have current version (1.8.2), not old version (1.8.1)
-    expect(saved).toMatch(/version 1\.8\.2/);
+    // Should have current version (from package.json), not old version (1.8.1)
+    const { getAppVersion } = await import('../../src/utils/version');
+    const currentVersion = getAppVersion();
+    expect(saved).toMatch(new RegExp(`version ${currentVersion.replace(/\./g, '\\.')}`));
     expect(saved).not.toMatch(/version 1\.8\.1/);
     
     // Should NOT have attribution in rdfs:comment

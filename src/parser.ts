@@ -2618,7 +2618,11 @@ export function storeToTurtle(
         return;
       }
       try {
-        const processed = postProcessTurtle(result, externalRefs, originalTtlString);
+        // ARCHITECTURAL FIX: Pass store quads to postProcessTurtle for blank node inlining
+        // N3 Writer doesn't serialize blank node blocks when they're only used as objects,
+        // so we need the original quads to build inline forms
+        const storeQuads = Array.from(store);
+        const processed = postProcessTurtle(result, externalRefs, originalTtlString, storeQuads);
         resolve(processed);
       } catch (postProcessError) {
         reject(postProcessError);
@@ -2720,6 +2724,8 @@ async function reconstructFromCache(
         
         // For class blocks, include blank node restriction quads
         // These are connected via rdfs:subClassOf where the class is subject and blank node is object
+        // CRITICAL: We need to collect blank node quads from the CURRENT store, not just from block.quads
+        // This ensures that even if blank node IDs changed after re-parsing, we still get all the quads
         if (block.type === 'Class') {
           const classSubject = DataFactory.namedNode(resolvedUri);
           const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
@@ -2733,6 +2739,27 @@ async function reconstructFromCache(
               const blankId = (subClassQuad.object as { id: string }).id;
               restrictionBlankNodes.add(blankId);
               debugLog('[reconstructFromCache] Found blank node in subClassOf:', blankId, 'type:', typeof blankId);
+            }
+          }
+          
+          // Also check original block.quads for blank nodes that might not be in current store
+          // (this handles cases where blank node IDs changed but structure is the same)
+          if (block.quads && block.quads.length > 0) {
+            for (const origQuad of block.quads) {
+              if (origQuad.object && (origQuad.object as { termType?: string }).termType === 'BlankNode') {
+                const origBlankId = ((origQuad.object as { id: string }).id);
+                // Try to find a matching blank node in current store by checking all subClassOf quads
+                // This is a fallback to ensure we don't lose blank nodes when IDs change
+                for (const subClassQuad of subClassOfQuads) {
+                  if (subClassQuad.object.termType === 'BlankNode') {
+                    const currentBlankId = (subClassQuad.object as { id: string }).id;
+                    // If we haven't already added this blank node, add it
+                    if (!restrictionBlankNodes.has(currentBlankId)) {
+                      restrictionBlankNodes.add(currentBlankId);
+                    }
+                  }
+                }
+              }
             }
           }
           
@@ -2757,6 +2784,9 @@ async function reconstructFromCache(
             const blankQuads = store.getQuads(blankNode, null, null, null);
             debugLog('[reconstructFromCache] Blank node', blankId, '(clean:', cleanBlankId, ') has', blankQuads.length, 'quads (where blank is SUBJECT)');
             
+            // Only add quads that aren't already in currentQuads (avoid duplicates)
+            let addedCount = 0;
+            
             // If no quads found, try with _: prefix
             if (blankQuads.length === 0 && !blankId.startsWith('_:')) {
               const blankNodeWithPrefix = DataFactory.blankNode(`_:${blankId}`);
@@ -2779,8 +2809,6 @@ async function reconstructFromCache(
                 continue;
               }
             }
-            // Only add quads that aren't already in currentQuads (avoid duplicates)
-            let addedCount = 0;
             for (const blankQuad of blankQuads) {
               const subjSig = (blankQuad.subject as { id: string }).id;
               const objSig = blankQuad.object.termType === 'NamedNode' ? blankQuad.object.value : blankQuad.object.termType === 'Literal' ? `"${(blankQuad.object as { value: string }).value}"` : blankQuad.object.termType === 'BlankNode' ? (blankQuad.object as { id: string }).id : '';
@@ -2846,8 +2874,14 @@ async function reconstructFromCache(
       debugLog('[reconstructFromCache] Block has no subject, type:', block.type);
     }
     
+    // CRITICAL: For class blocks, we MUST always include blank node quads in currentQuads
+    // even if the block wasn't modified, because blank node IDs may have changed after re-parsing
+    // This ensures that when we serialize, we have all the quads, including blank node quads
+    // The blank node quads are already collected above for class blocks, so currentQuads should have them
+    
     // Compare quads - check if they're different
-    const originalQuads = block.quads;
+    // IMPORTANT: Compare BEFORE updating block.quads, otherwise isModified will always be false
+    const originalQuads = [...block.quads]; // Create a copy to avoid mutation issues
     const isModified = quadsAreDifferent(originalQuads, currentQuads);
     
     if (block.subject && (block.subject.includes('DrawingElement') || block.subject.includes('Drawing'))) {
@@ -2863,14 +2897,27 @@ async function reconstructFromCache(
       debugLog('[reconstructFromCache] Label quads - original:', originalLabelQuads.map(q => q.object.value), 'current:', currentLabelQuads.map(q => q.object.value));
     }
     
-    if (isModified) {
+    // Check if block has blank node quads (where blank node is subject)
+    // If it does, we need to serialize it even if not modified, to ensure blank node IDs match current store
+    const hasBlankNodeQuads = currentQuads.some(q => q.subject.termType === 'BlankNode');
+    
+    if (isModified || hasBlankNodeQuads) {
       const modifiedBlock: StatementBlock = {
         ...block,
-        quads: currentQuads,
-        isModified: true
+        quads: currentQuads, // Use currentQuads which includes updated label and all blank node quads
+        isModified: isModified || hasBlankNodeQuads // Mark as modified if quads changed OR if has blank node quads
       };
       modifiedBlocks.push(modifiedBlock);
-      debugLog('[reconstructFromCache] Block marked as modified:', block.subject, 'type:', block.type);
+      if (hasBlankNodeQuads && !isModified) {
+        debugLog('[reconstructFromCache] Block marked as modified due to blank node quads (to ensure IDs match):', block.subject, 'type:', block.type);
+      } else {
+        debugLog('[reconstructFromCache] Block marked as modified:', block.subject, 'type:', block.type);
+      }
+    } else if (block.type === 'Class' && currentQuads.length > 0) {
+      // ARCHITECTURAL FIX: For class blocks that aren't modified and don't have blank node quads,
+      // still update block.quads with currentQuads for consistency
+      // But we don't mark as modified since the quads are semantically the same
+      block.quads = currentQuads;
     }
   }
   
@@ -2888,20 +2935,39 @@ async function reconstructFromCache(
 
 /**
  * Compare two sets of quads to see if they're different
+ * Handles blank nodes, literals, and named nodes correctly
  */
-function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolean {
+export function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolean {
   if (original.length !== current.length) {
     debugLog('[quadsAreDifferent] Different lengths:', original.length, 'vs', current.length);
     return true;
   }
   
   // Create a signature for each quad (subject, predicate, object)
-  const originalSignatures = new Set(
-    original.map(q => `${q.subject.value || ''}|${q.predicate.value || ''}|${q.object.value || ''}`)
-  );
-  const currentSignatures = new Set(
-    current.map(q => `${q.subject.value || ''}|${q.predicate.value || ''}|${q.object.value || ''}`)
-  );
+  // Handle different term types correctly
+  const createSignature = (q: N3Quad): string => {
+    const subj = q.subject.termType === 'NamedNode' 
+      ? (q.subject as { value: string }).value
+      : q.subject.termType === 'BlankNode'
+        ? `_:${(q.subject as { id: string }).id}`
+        : '';
+    const pred = (q.predicate as { value: string }).value;
+    let obj: string;
+    if (q.object.termType === 'NamedNode') {
+      obj = (q.object as { value: string }).value;
+    } else if (q.object.termType === 'BlankNode') {
+      obj = `_:${(q.object as { id: string }).id}`;
+    } else if (q.object.termType === 'Literal') {
+      const lit = q.object as { value: string; datatype?: { value: string }; language?: string };
+      obj = `"${lit.value}"${lit.language ? `@${lit.language}` : lit.datatype ? `^^${lit.datatype.value}` : ''}`;
+    } else {
+      obj = '';
+    }
+    return `${subj}|${pred}|${obj}`;
+  };
+  
+  const originalSignatures = new Set(original.map(createSignature));
+  const currentSignatures = new Set(current.map(createSignature));
   
   if (originalSignatures.size !== currentSignatures.size) {
     debugLog('[quadsAreDifferent] Different signature sizes:', originalSignatures.size, 'vs', currentSignatures.size);

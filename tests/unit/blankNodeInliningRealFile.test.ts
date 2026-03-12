@@ -22,14 +22,17 @@ describe('Blank Node Inlining - Real File Test', () => {
     
     // Parse the file
     const parseResult = await parseRdfToGraph(originalContent, { path: testFile });
-    const { store } = parseResult;
+    const { store, originalFileCache: cache } = parseResult;
+    
+    expect(cache).toBeDefined(); // Cache should be available for cache-based reconstruction
     
     // Make a simple change - rename a class
     const renamed = updateLabelInStore(store, 'TextualNote', 'TextualNoteRenamed');
     expect(renamed).toBe(true);
     
-    // Save it
-    const output = await storeToTurtle(store, undefined, originalContent);
+    // Save it using cache for cache-based reconstruction (preserves blank node inlining)
+    // If cache is not available, post-processing will use store to build inline forms
+    const output = await storeToTurtle(store, undefined, originalContent, cache ?? undefined);
     
     // Debug: Check for blank node references
     const blankNodeRefs = output.match(/_:df_\d+_\d+/g);

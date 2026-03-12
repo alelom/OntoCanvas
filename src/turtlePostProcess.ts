@@ -468,14 +468,24 @@ export function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>)
 export function convertBlanksToInline(
   raw: string, 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
-  useColonNotation: boolean = true
+  useColonNotation: boolean = true,
+  storeQuads?: Quad[]
 ): string {
-  const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
   let quads: Quad[];
-  try {
-    quads = [...parser.parse(raw)];
-  } catch (e) {
-    return raw;
+  
+  // ARCHITECTURAL FIX: If store quads are provided, use them directly
+  // This is critical because N3 Writer doesn't serialize blank node blocks
+  // when they're only used as objects, so parsing the output fails
+  if (storeQuads && storeQuads.length > 0) {
+    quads = storeQuads;
+  } else {
+    // Fallback: try to parse the raw string
+    const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
+    try {
+      quads = [...parser.parse(raw)];
+    } catch (e) {
+      return raw;
+    }
   }
 
   // Find all blank nodes used as objects (these should be inlined)
@@ -1162,7 +1172,8 @@ function convertFullUrisToColonNotation(
 export function postProcessTurtle(
   raw: string, 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
-  originalTtlString?: string
+  originalTtlString?: string,
+  store?: import('n3').Store
 ): string {
   let output = raw;
   output = applyStyleFixes(output);
@@ -1244,7 +1255,11 @@ export function postProcessTurtle(
   // Use colon notation in blank node inlining if that was the original format
   // CRITICAL: This must remove ALL blank node blocks that appear as subjects
   // before section dividers are added
-  output = convertBlanksToInline(output, externalRefs, useColonNotation);
+  // ARCHITECTURAL FIX: Pass store quads for blank node inlining
+  // N3 Writer doesn't serialize blank node blocks when they're only used as objects,
+  // so we need the original quads to build inline forms
+  const storeQuads = store ? [...store] : undefined;
+  output = convertBlanksToInline(output, externalRefs, useColonNotation, storeQuads);
   
   // Final safety check: Remove ANY remaining blank node blocks
   // Use line-by-line approach to be absolutely sure we catch them

@@ -4,10 +4,12 @@
  * while preserving formatting, section structure, and import ordering.
  */
 
-import { Parser, Writer, DataFactory } from 'n3';
-import type { Quad as N3Quad, Store, BlankNode } from 'n3';
+import { Parser, Writer, DataFactory, BlankNode } from 'n3';
+import type { Store } from 'n3';
+import type { Quad as N3Quad } from '@rdfjs/types';
 import { buildInlineForms, replaceBlankRefs, convertBlanksToInline } from '../turtlePostProcess';
 import { debugLog } from '../utils/debug';
+import { quadsAreDifferent } from '../parser';
 
 // ============================================================================
 // Phase 1: Core Data Structures
@@ -259,7 +261,7 @@ export function parseTurtleWithPositions(content: string): {
         },
         originalText: '', // Will be set when block ends
         quads: [], // Will be populated
-        subject,
+        subject: subject ?? undefined,
         isModified: false,
         isNew: false,
         isDeleted: false
@@ -509,6 +511,17 @@ function matchQuadsToBlocks(
     }
   }
   
+  // Also group blank node quads by subject ID for matching
+  const blankNodeQuadsBySubject = new Map<string, N3Quad[]>();
+  for (const quad of quads) {
+    if (quad.subject.termType === 'BlankNode') {
+      const blankId = (quad.subject as { id: string }).id;
+      const list = blankNodeQuadsBySubject.get(blankId) || [];
+      list.push(quad);
+      blankNodeQuadsBySubject.set(blankId, list);
+    }
+  }
+  
   // Match quads to blocks by resolving block subjects to URIs
   for (const block of blocks) {
     if (block.type === 'Header') continue; // Header blocks don't have quads
@@ -522,6 +535,22 @@ function matchQuadsToBlocks(
           for (const quad of subjectQuads) {
             block.quads.push(quad);
             quadToBlockMap.set(quad, block);
+            
+            // If this quad has a blank node as object (e.g., rdfs:subClassOf _:blank1),
+            // also match all quads where that blank node is the subject
+            if (quad.object.termType === 'BlankNode') {
+              const blankId = (quad.object as { id: string }).id;
+              const blankQuads = blankNodeQuadsBySubject.get(blankId);
+              if (blankQuads) {
+                for (const blankQuad of blankQuads) {
+                  // Only add if not already matched
+                  if (!quadToBlockMap.has(blankQuad)) {
+                    block.quads.push(blankQuad);
+                    quadToBlockMap.set(blankQuad, block);
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -546,6 +575,56 @@ function matchQuadsToBlocks(
               block.originalText.includes(subjectUri.split('/').pop() || '')) {
             block.quads.push(quad);
             quadToBlockMap.set(quad, block);
+            
+            // If this quad has a blank node as object (e.g., rdfs:subClassOf _:blank1),
+            // also match all quads where that blank node is the subject
+            if (quad.object.termType === 'BlankNode') {
+              const blankId = (quad.object as { id: string }).id;
+              const blankQuads = blankNodeQuadsBySubject.get(blankId);
+              if (blankQuads) {
+                for (const blankQuad of blankQuads) {
+                  // Only add if not already matched
+                  if (!quadToBlockMap.has(blankQuad)) {
+                    block.quads.push(blankQuad);
+                    quadToBlockMap.set(blankQuad, block);
+                  }
+                }
+              }
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  // Finally, match any remaining blank node quads that are referenced in rdfs:subClassOf statements
+  // This handles cases where blank node IDs changed after re-parsing
+  for (const quad of quads) {
+    if (quadToBlockMap.has(quad)) continue; // Already matched
+    
+    // If this is a rdfs:subClassOf quad with a blank node object, find the block for the subject
+    if (quad.predicate.termType === 'NamedNode' && 
+        (quad.predicate as { value: string }).value.includes('subClassOf') &&
+        quad.object.termType === 'BlankNode') {
+      const subjectUri = quad.subject.termType === 'NamedNode' ? (quad.subject as { value: string }).value : null;
+      if (subjectUri) {
+        // Find the block for this subject
+        for (const block of blocks) {
+          if (block.type === 'Header') continue;
+          const resolvedUri = resolvePrefixedName(block.subject);
+          if (resolvedUri === subjectUri) {
+            // This blank node quad belongs to this block
+            const blankId = (quad.object as { id: string }).id;
+            const blankQuads = blankNodeQuadsBySubject.get(blankId);
+            if (blankQuads) {
+              for (const blankQuad of blankQuads) {
+                if (!quadToBlockMap.has(blankQuad)) {
+                  block.quads.push(blankQuad);
+                  quadToBlockMap.set(blankQuad, block);
+                }
+              }
+            }
             break;
           }
         }
@@ -650,6 +729,8 @@ export async function reconstructFromOriginalText(
   debugLog('[PERF] Processing', sortedBlocks.length, 'modified/deleted blocks');
   const serializeStart = Date.now();
   
+  // quadsAreDifferent is now imported at the top of the file
+  
   for (let i = 0; i < sortedBlocks.length; i++) {
     const block = sortedBlocks[i];
     if (i % 5 === 0) {
@@ -661,6 +742,37 @@ export async function reconstructFromOriginalText(
       result = result.slice(0, block.position.start) + 
                result.slice(endPos);
     } else if (block.isModified) {
+      // ARCHITECTURAL FIX: Before serializing, check if current quads match original quads
+      // If they do, use original text to preserve property ordering
+      // This handles the case where a change was undone (e.g., rename then rename back)
+      // N3 Writer reorders properties, so we can only preserve order by using original text
+      // EXCEPTION: If the block has blank node quads, we MUST serialize to ensure blank node IDs match the current store
+      
+      // Check if block has blank node quads (where blank node is subject)
+      const hasBlankNodeQuads = block.quads.some(q => q.subject.termType === 'BlankNode');
+      
+      // Find the original block in cache to get original quads
+      const originalBlock = cache.statementBlocks.find(b => 
+        b.position.start === block.position.start && 
+        b.position.end === block.position.end &&
+        b.subject === block.subject
+      );
+      
+      // If we found the original block and current quads match original quads, use original text
+      // BUT: If block has blank node quads, we must serialize to ensure blank node IDs match current store
+      if (originalBlock && originalBlock.quads.length > 0 && block.quads.length > 0 && !hasBlankNodeQuads) {
+        const quadsMatch = !quadsAreDifferent(originalBlock.quads, block.quads);
+        if (quadsMatch && originalBlock.originalText) {
+          debugLog('[reconstructFromOriginalText] Quads match original, using original text to preserve property order for:', block.subject);
+          // Use original text - no need to serialize
+          continue; // Skip serialization, original text is already in result
+        }
+      }
+      
+      if (hasBlankNodeQuads) {
+        debugLog('[reconstructFromOriginalText] Block has blank node quads, must serialize to ensure blank node IDs match current store:', block.subject);
+      }
+      
       // Replace with new serialized text (preserving formatting style)
       const blockSerializeStart = Date.now();
       const newText = await serializeBlockToTurtle(block, block.formattingStyle || cache.formattingStyle, cache);
@@ -798,9 +910,44 @@ async function serializeBlockToTurtle(
   }
   
   // Try to preserve original text if block wasn't modified
+  // CRITICAL: Even if block.isModified is true, if only the label changed,
+  // we can do a targeted text replacement to preserve property ordering
+  // N3 Writer reorders properties, so we can only preserve order by using original text
   if (block.originalText && !block.isModified) {
     return block.originalText;
   }
+  
+  // ARCHITECTURAL FIX: For simple label changes, do targeted text replacement
+  // instead of full serialization to preserve property ordering
+  if (block.originalText && block.isModified) {
+    // Check if only label changed (compare quads - if only rdfs:label is different, do targeted replacement)
+    const labelQuads = block.quads.filter(q => (q.predicate as { value: string }).value.includes('label'));
+    if (labelQuads.length === 1) {
+      // Only one label quad - try targeted replacement
+      const labelQuad = labelQuads[0];
+      const newLabel = labelQuad.object.termType === 'Literal' 
+        ? (labelQuad.object as { value: string }).value 
+        : null;
+      
+      if (newLabel) {
+        // Find old label in original text and replace it
+        const labelPattern = /rdfs:label\s+"([^"]+)"/;
+        const match = block.originalText.match(labelPattern);
+        if (match && match[1] !== newLabel) {
+          // Replace the label value in original text
+          const updatedText = block.originalText.replace(
+            labelPattern,
+            `rdfs:label "${newLabel.replace(/"/g, '\\"')}"`
+          );
+          debugLog('[serializeBlockToTurtle] Using targeted label replacement to preserve property order');
+          return updatedText;
+        }
+      }
+    }
+  }
+  
+  // If targeted replacement didn't work, fall back to full serialization
+  // The property ordering issue is a known limitation when blocks are fully serialized
   
   // Extract prefix map from cache headerSection to preserve prefixed names
   const prefixMap: Record<string, string> = {};
@@ -828,6 +975,28 @@ async function serializeBlockToTurtle(
       prefixes: prefixMap, // Use prefix map from cache to preserve prefixed names
     });
     
+    // ARCHITECTURAL FIX: Preserve property order from original text
+    // N3 Writer reorders properties, so we need to sort quads according to original order
+    // Extract property order from original text
+    const propertyOrder: string[] = [];
+    if (block.originalText) {
+      // Parse original text to extract predicate order
+      // Match predicates in the order they appear: "predicate value ;" or "predicate value ."
+      const predicatePattern = /(\S+)\s+[^;.]+[;.]/g;
+      let match;
+      while ((match = predicatePattern.exec(block.originalText)) !== null) {
+        const predicate = match[1].trim();
+        // Skip subject (first line), only track predicates
+        if (predicate && !predicate.startsWith('@') && !predicate.startsWith('#')) {
+          // Normalize predicate (remove prefixes for comparison)
+          const normalized = predicate.replace(/^[a-z]+:/, '').replace(/^:/, '');
+          if (!propertyOrder.includes(normalized)) {
+            propertyOrder.push(normalized);
+          }
+        }
+      }
+    }
+    
     // Group quads by subject for proper serialization
     // IMPORTANT: We need to add ALL quads, including blank node quads, so N3 Writer can serialize them
     // N3 Writer will automatically serialize blank nodes that are used as objects inline if possible
@@ -848,10 +1017,43 @@ async function serializeBlockToTurtle(
       }
     }
     
+    // Sort quads by property order from original text
+    // This preserves the original property ordering when serializing
+    const sortQuadsByPropertyOrder = (quads: N3Quad[]): N3Quad[] => {
+      if (propertyOrder.length === 0) return quads; // No order info, use as-is
+      
+      return quads.sort((a, b) => {
+        const predA = (a.predicate as { value: string }).value;
+        const predB = (b.predicate as { value: string }).value;
+        
+        // Extract local name for comparison
+        const localA = predA.split('#').pop()?.split('/').pop() || predA;
+        const localB = predB.split('#').pop()?.split('/').pop() || predB;
+        
+        // Remove prefix for comparison
+        const normA = localA.replace(/^[a-z]+:/, '').replace(/^:/, '');
+        const normB = localB.replace(/^[a-z]+:/, '').replace(/^:/, '');
+        
+        const indexA = propertyOrder.indexOf(normA);
+        const indexB = propertyOrder.indexOf(normB);
+        
+        // If both are in order, sort by index
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        // If only one is in order, prioritize it
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        // If neither is in order, maintain original order
+        return 0;
+      });
+    };
+    
     // Serialize all quads - this includes blank node quads which N3 Writer will serialize
     // The blank nodes used as objects will appear as references, and we'll inline them later
     for (const quads of quadsBySubject.values()) {
-      for (const quad of quads) {
+      const sortedQuads = sortQuadsByPropertyOrder(quads);
+      for (const quad of sortedQuads) {
         writer.addQuad(quad);
       }
     }
@@ -994,39 +1196,34 @@ async function serializeBlockToTurtle(
               debugLog('[serializeBlockToTurtle] Inline forms keys:', Array.from(inlineFormsFromQuads.keys()));
               const firstForm = Array.from(inlineFormsFromQuads.values())[0];
               debugLog('[serializeBlockToTurtle] First inline form:', firstForm);
-              if (firstForm === '[  ]' || firstForm.trim() === '[]') {
+              // Only log error if we have blank node references in output AND the form is empty
+              // This avoids false positives for blocks that don't have blank nodes
+              if ((firstForm === '[  ]' || firstForm.trim() === '[]') && hasBlankRefs) {
                 debugLog('[serializeBlockToTurtle] ERROR: First inline form is EMPTY! This means blank node quads are missing.');
               }
             } else {
-              debugLog('[serializeBlockToTurtle] WARNING: No inline forms built from', block.quads.length, 'quads!');
+              // Only warn if we expected inline forms (have blank refs in output)
+              if (hasBlankRefs) {
+                debugLog('[serializeBlockToTurtle] WARNING: No inline forms built from', block.quads.length, 'quads, but blank node refs found in output!');
+              }
             }
             
             if (inlineFormsFromQuads.size > 0) {
-              // Parse N3 Writer output to find blank node references
-              const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
-              let outputQuads: N3Quad[];
-              try {
-                const parsed = parser.parse(result);
-                outputQuads = Array.isArray(parsed) ? parsed : [...parsed];
-                
-                // Find blank nodes used as objects in output
-                const outputBlankIds = new Set<string>();
-                for (const quad of outputQuads) {
-                  if (quad.object.termType === 'BlankNode') {
-                    const blankId = getBlankNodeId(quad.object as BlankNode);
-                    outputBlankIds.add(blankId);
-                  }
-                }
-                
-                debugLog('[serializeBlockToTurtle] Found', outputBlankIds.size, 'blank nodes used as objects in output');
-                
-                // Remove blank node blocks and replace references
-                // replaceBlankRefs has logic to replace blank node references in object position
-                // in order, regardless of ID matching, so we can just pass the inline forms map
-                
-                // First, try using replaceBlankRefs with the inline forms we built
-                // But we need to remove blank node blocks first
-                let output = result;
+              // Find blank node references in output using regex (don't parse - prefixes are removed)
+              // Find all blank node references like _:df_0_0 or _:n3-0
+              const blankNodeRefPattern = /_:df_\d+_\d+|_:n3-\d+/g;
+              const blankNodeRefs = result.match(blankNodeRefPattern);
+              debugLog('[serializeBlockToTurtle] Found blank node refs in output:', blankNodeRefs);
+              
+              if (blankNodeRefs && blankNodeRefs.length > 0) {
+                try {
+                  // Remove blank node blocks and replace references
+                  // replaceBlankRefs has logic to replace blank node references in object position
+                  // in order, regardless of ID matching, so we can just pass the inline forms map
+                  
+                  // First, try using replaceBlankRefs with the inline forms we built
+                  // But we need to remove blank node blocks first
+                  let output = result;
                 const lines = output.split(/\r?\n/);
                 const filteredLines: string[] = [];
                 let i = 0;
@@ -1104,9 +1301,12 @@ async function serializeBlockToTurtle(
                   debugLog('[serializeBlockToTurtle] FINAL WARNING: All replacement attempts failed! Blank nodes not inlined.');
                   debugLog('[serializeBlockToTurtle] Final output (first 300 chars):', processedResult.substring(0, 300));
                 }
-              } catch (e) {
-                debugLog('[serializeBlockToTurtle] Parsing failed, falling back to convertBlanksToInline:', e);
-                processedResult = convertBlanksToInline(result, undefined, true);
+                } catch (e) {
+                  debugLog('[serializeBlockToTurtle] Error inlining blank nodes, falling back to convertBlanksToInline:', e);
+                  processedResult = convertBlanksToInline(result, undefined, true);
+                }
+              } else {
+                debugLog('[serializeBlockToTurtle] No blank node refs found in output after removing prefixes');
               }
             } else {
               debugLog('[serializeBlockToTurtle] No inline forms built, using original result');
@@ -1122,7 +1322,18 @@ async function serializeBlockToTurtle(
       }
       
       // Apply formatting style
-      const formatted = applyFormattingStyle(processedResult, formatting, block.originalText);
+      let formatted = applyFormattingStyle(processedResult, formatting, block.originalText);
+      
+      // CRITICAL: Apply style fixes to match original format (e.g., convert "a" to "rdf:type")
+      // This ensures that when we serialize, we match the original style
+      // Check if original uses "rdf:type" instead of "a"
+      if (block.originalText && block.originalText.includes('rdf:type') && !block.originalText.match(/\s+a\s+/)) {
+        // Original uses rdf:type, so convert "a" to "rdf:type" in serialized output
+        formatted = formatted.replace(/\s+a\s+(owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
+        formatted = formatted.replace(/\s+a\s+:/g, ' rdf:type :');
+        formatted = formatted.replace(/\s+a\s+</g, ' rdf:type <');
+      }
+      
       resolve(formatted);
     });
   });

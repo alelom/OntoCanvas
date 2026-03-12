@@ -73,5 +73,7 @@ export async function fetchOntologyFromUrl(url: string): Promise<string> {
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw lastError ?? new Error(`Failed to fetch ontology from ${url}`);
+  // Always throw an error with the original URL in the message, not the candidate URL
+  // This ensures the error message shows the URL the user provided, not an internal candidate
+  throw new Error(`Failed to fetch ontology from ${url}`);
 }
