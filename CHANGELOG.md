@@ -1,3 +1,11 @@
+# [1.11.0](https://github.com/alelom/OntoCanvas/compare/v1.10.0...v1.11.0) (2026-03-12)
+
+
+### Features
+
+* enhance ontology URL candidate generation for URLs without extensions ([ee318e0](https://github.com/alelom/OntoCanvas/commit/ee318e0d30346f56430e8126365d1bc5e3423d71))
+* enhance ontology URL handling and blank node processing ([dcc235c](https://github.com/alelom/OntoCanvas/commit/dcc235c03395ed270ef1fd7523c5c7d272a0a6db))
+
 # [1.10.0](https://github.com/alelom/OntoCanvas/compare/v1.9.0...v1.10.0) (2026-03-12)
 
 
