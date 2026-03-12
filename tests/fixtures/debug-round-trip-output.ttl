@@ -60,11 +60,10 @@
 #    Classes
 #################################################################
 
-:TextualNote rdf:type owl:Class;
-    rdfs:subClassOf :Note;
-    rdfs:label "Text";
-    :labellableRoot "true"^^xsd:boolean.
-
+:TextualNote a owl:Class;
+    rdfs:label "TextModified0";
+    :labellableRoot true;
+    rdfs:subClassOf :Note.
 :Note rdf:type owl:Class;
     rdfs:subClassOf :Metadata;
     rdfs:label "Note";
@@ -76,25 +75,25 @@
     :labellableRoot "false"^^xsd:boolean.
 
 :DrawingSheet a owl:Class;
-    rdfs:label "Drawing Sheet renamed";
+    rdfs:label "Drawing sheet";
     rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
     :labellableRoot false;
-    rdfs:subClassOf _:df_41_0, _:df_41_1, _:df_41_2, _:df_41_3.
-    _:df_41_0 a owl:Restriction;
+    rdfs:subClassOf _:df_32_0, _:df_32_1, _:df_32_2, _:df_32_3.
+    _:df_32_0 a owl:Restriction;
     owl:onProperty :contains;
     owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
     owl:onClass :Note.
-    _:df_41_1 a owl:Restriction;
+    _:df_32_1 a owl:Restriction;
     owl:onProperty :contains;
     owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
     owl:onClass :RevisionTable;
     owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger;
     owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger.
-    _:df_41_2 a owl:Restriction;
+    _:df_32_2 a owl:Restriction;
     owl:onProperty :contains;
     owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger;
     owl:onClass :Layout.
-    _:df_41_3 a owl:Restriction;
+    _:df_32_3 a owl:Restriction;
     owl:onProperty :has;
     owl:onClass :DrawingOrientation;
     owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
@@ -107,12 +106,12 @@
     rdfs:label "Layout";
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
     :labellableRoot true;
-    rdfs:subClassOf _:df_41_4, _:df_41_5.
-    _:df_41_4 a owl:Restriction;
+    rdfs:subClassOf _:df_32_4, _:df_32_5.
+    _:df_32_4 a owl:Restriction;
     owl:onProperty :contains;
     owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
-    owl:onClass :DrawingElement.
-    _:df_41_5 a owl:Restriction;
+    owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#DrawingElement>.
+    _:df_32_5 a owl:Restriction;
     owl:onProperty :has;
     owl:onClass :DrawingType;
     owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
@@ -168,16 +167,11 @@
     rdfs:label "Detail";
     rdfs:comment "Detail drawing";
     :labellableRoot true;
-    rdfs:subClassOf :DrawingType, _:df_41_6, _:df_41_7.
-    _:df_41_6 a owl:Restriction;
+    rdfs:subClassOf :DrawingType, _:df_32_6.
+    _:df_32_6 a owl:Restriction;
     owl:onProperty :has;
     owl:onClass :Orientation;
     owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
-    _:df_41_7 a owl:Restriction;
-    owl:onProperty :has;
-    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
-    owl:onClass :DetailLocation;
-    owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger.
 :Orientation rdf:type owl:Class;
     rdfs:label "Detail Orientation";
     rdfs:comment "Can be standalone label - drawing orientation";
@@ -226,8 +220,3 @@
     rdfs:subClassOf :Orientation;
     rdfs:label "Vertical";
     :labellableRoot "true"^^xsd:boolean.
-
-:DrawingElement rdf:type owl:Class;
-    rdfs:comment "Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.";
-    rdfs:label "Drawing element";
-    :labellableRoot "false"^^xsd:boolean.

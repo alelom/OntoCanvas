@@ -178,7 +178,7 @@ function deduplicateRestrictionQuads(quads: Quad[]): Quad[] {
   return result;
 }
 
-function buildInlineForms(
+export function buildInlineForms(
   quads: Quad[], 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
   useColonNotation: boolean = true
@@ -378,7 +378,7 @@ function removeBlankBlocks(raw: string, blankIds: Set<string>): string {
   return output;
 }
 
-function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): string {
+export function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): string {
   let output = raw;
   
   // If map is empty, return early
@@ -465,7 +465,7 @@ function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): strin
   return output;
 }
 
-function convertBlanksToInline(
+export function convertBlanksToInline(
   raw: string, 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
   useColonNotation: boolean = true

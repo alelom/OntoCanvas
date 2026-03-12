@@ -54,6 +54,7 @@ import {
   applyNodeFormToStore,
   type NodeFormData,
 } from './ui/nodeModalForm';
+import { editNodeProperties } from './workflows/editNodeProperties';
 import * as nodeModalFormUi from './ui/nodeModalFormUi';
 import { Store, DataFactory } from 'n3';
 import {
@@ -6016,7 +6017,6 @@ function confirmRename(): void {
   const oldLabel = node.label;
   const oldAnnotationValuesCopy = { ...oldAnnotationValues };
   const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
-  const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
   const newFormData: NodeFormData = {
     comment: newComment,
@@ -6034,14 +6034,36 @@ function confirmRename(): void {
     dataPropertyRestrictions: oldDataProps,
   };
 
-  if (labelChanged) {
-    node.label = newLabel;
-    if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
-  }
+  // Calculate baseIri for undo/redo callbacks
+  const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
+  // Use workflow function if store is available, otherwise use fallback
   if (ttlStore) {
-    applyNodeFormToStore(nodeId, newFormData, ttlStore, node, baseIri, annotationProperties);
+    const result = editNodeProperties({
+      store: ttlStore,
+      nodeId,
+      node,
+      newLabel,
+      formData: newFormData,
+      annotationProperties,
+      existingNodeIds: new Set(rawData.nodes.map(n => n.id))
+    });
+
+    if (!result.success) {
+      const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
+      if (dupErr) {
+        dupErr.textContent = result.error || 'Failed to update node';
+        dupErr.style.display = 'block';
+      }
+      const okBtn = document.getElementById('renameConfirm') as HTMLButtonElement;
+      if (okBtn) okBtn.disabled = true;
+      return;
+    }
   } else {
+    // Fallback for when store is not available (shouldn't happen in normal flow)
+    if (labelChanged) {
+      node.label = newLabel;
+    }
     node.comment = newFormData.comment.trim() || undefined;
     node.exampleImages = newFormData.exampleImageUris.length > 0 ? newFormData.exampleImageUris : undefined;
     node.dataPropertyRestrictions = [...currentDataProps];

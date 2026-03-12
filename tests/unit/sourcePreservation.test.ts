@@ -6,8 +6,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from '../../src/rdf/sourcePreservation';
-import { parseTtlToGraph, storeToTurtle, updateLabelInStore } from '../../src/parser';
-import { Store } from 'n3';
+import { parseTtlToGraph, storeToTurtle, updateLabelInStore, extractLocalName } from '../../src/parser';
+import { Store, DataFactory } from 'n3';
+import { debugLog } from '../../src/utils/debug';
+import { editNodeProperties } from '../../src/workflows/editNodeProperties';
+import { saveOntology } from '../../src/workflows/saveOntology';
+import type { NodeFormData } from '../../src/ui/nodeModalForm';
+import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 
 describe('sourcePreservation', () => {
   describe('parseTurtleWithPositions', () => {
@@ -789,6 +794,15 @@ describe('sourcePreservation', () => {
             // Save
             const modifiedContent = await storeToTurtle(store, undefined, undefined, cache);
             
+            // DEBUG: Write out the generated content to inspect syntax errors
+            if (i === 0) {
+              const debugPath = join(__dirname, '../fixtures/debug-round-trip-output.ttl');
+              writeFileSync(debugPath, modifiedContent, 'utf-8');
+              console.log('[DEBUG] Wrote generated TTL to:', debugPath);
+              console.log('[DEBUG] First 500 chars:', modifiedContent.substring(0, 500));
+              console.log('[DEBUG] Line 70-75:', modifiedContent.split('\n').slice(69, 75).join('\n'));
+            }
+            
             // Parse again
             parseResult = await parseTtlToGraph(modifiedContent);
             store = parseResult.store;
@@ -923,6 +937,223 @@ describe('sourcePreservation', () => {
     });
 
     describe('targeted modification verification', () => {
+      it('should rename Drawing Element label when using full URI nodeId (GUI workflow)', async () => {
+        const originalFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata.ttl');
+        const modifiedFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata_drawing_element_renamed_test.ttl');
+        
+        // Read original file
+        const originalContent = readFileSync(originalFixturePath, 'utf-8');
+        
+        // Parse using loadOntologyFromContent (exactly like GUI does in loadTtlAndRender)
+        // This ensures we get the same cache structure as the GUI
+        const pathForParse = originalFixturePath; // Use file path like GUI does
+        const { parseResult } = await loadOntologyFromContent(originalContent, pathForParse);
+        const store = parseResult.store;
+        const cache = parseResult.originalFileCache;
+        
+        // Verify cache was created and has correct format
+        expect(cache).toBeDefined();
+        expect(cache?.format).toBe('turtle');
+        expect(cache?.statementBlocks.length).toBeGreaterThan(0);
+        
+        // Debug: Verify DrawingElement block exists in cache
+        const drawingElementBlockInCache = cache?.statementBlocks.find(block => {
+          if (!block.subject) return false;
+          const localName = block.subject.startsWith(':') 
+            ? block.subject.slice(1) 
+            : block.subject.includes(':') 
+              ? block.subject.split(':').pop() 
+              : block.subject.replace(/^:/, '');
+          return localName === 'DrawingElement';
+        });
+        expect(drawingElementBlockInCache).toBeDefined();
+        expect(drawingElementBlockInCache?.subject).toBe(':DrawingElement');
+        
+        // Find "Drawing element" node (simulating GUI node selection)
+        const drawingElementNode = parseResult.graphData.nodes.find(n => n.label === 'Drawing element');
+        expect(drawingElementNode).toBeDefined();
+        
+        if (!drawingElementNode) {
+          throw new Error('Drawing element node not found');
+        }
+        
+        // Verify node.id is the local name (as it is in the GUI)
+        expect(drawingElementNode.id).toBe('DrawingElement');
+        
+        // Store original label
+        const originalLabel = drawingElementNode.label;
+        const newLabel = 'Drawing Element renamed';
+        
+        // Verify original label is in original content
+        expect(originalContent).toContain(`rdfs:label "${originalLabel}"`);
+        expect(originalContent).not.toContain(`rdfs:label "${newLabel}"`);
+        
+        // Build form data from node's current state (simulating GUI form)
+        const formData: NodeFormData = {
+          comment: drawingElementNode.comment || '',
+          exampleImageUris: drawingElementNode.exampleImages || [],
+          annotationValues: drawingElementNode.annotations || {},
+          dataPropertyRestrictions: drawingElementNode.dataPropertyRestrictions || []
+        };
+        
+        // Edit node using workflow function (simulating GUI confirmRename workflow)
+        const editResult = editNodeProperties({
+          store,
+          nodeId: drawingElementNode.id,
+          node: drawingElementNode,
+          newLabel,
+          formData,
+          annotationProperties: parseResult.annotationProperties,
+          existingNodeIds: new Set(parseResult.graphData.nodes.map(n => n.id))
+        });
+        
+        expect(editResult.success).toBe(true);
+        expect(editResult.error).toBeUndefined();
+        
+        // Verify label was updated in node object
+        expect(drawingElementNode.label).toBe(newLabel);
+        
+        // Verify cache is valid for cache reconstruction
+        expect(cache).toBeDefined();
+        expect(cache?.format).toBe('turtle');
+        expect(cache?.statementBlocks.length).toBeGreaterThan(0);
+        
+        // Save using workflow function (simulating GUI save)
+        // Pass parameters exactly like GUI does: storeToTurtle(ttlStore, externalOntologyReferences, originalTtlString ?? undefined, originalFileCache ?? undefined)
+        
+        // Save using workflow function (simulating GUI save)
+        const saveResult = await saveOntology({
+          store,
+          originalTtlString: originalContent,
+          originalFileCache: cache,
+          externalRefs: undefined // GUI passes externalOntologyReferences, but for this test we don't need it
+        });
+        
+        const modifiedContent = saveResult.ttlString;
+        writeFileSync(modifiedFixturePath, modifiedContent, 'utf-8');
+        
+        // Verify file was created
+        expect(existsSync(modifiedFixturePath)).toBe(true);
+        
+        // Read both files for comparison
+        const savedContent = readFileSync(modifiedFixturePath, 'utf-8');
+        
+        // Check what format was used in saved content
+        const usesPrefixedNames = savedContent.includes(':DrawingElement rdf:type') || 
+                                 savedContent.includes(':DrawingElement a ') ||
+                                 savedContent.includes(':DrawingElement\n') ||
+                                 savedContent.match(/^:DrawingElement\s/m);
+        const usesFullUris = savedContent.includes('<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingElement>');
+        
+        // BUG REPRODUCTION: The GUI file shows prefixed names are used (cache reconstruction)
+        // but the label wasn't updated. So we need to verify:
+        // 1. Cache reconstruction was used (prefixed names like :DrawingElement)
+        // 2. The label WAS updated (this is where the bug manifests - it's NOT updated)
+        
+        // Check what format was used (reuse variables from earlier check)
+        const usesPrefixedNamesCheck = savedContent.includes(':DrawingElement rdf:type') || 
+                                      savedContent.includes(':DrawingElement a ') ||
+                                      savedContent.includes(':DrawingElement\n') ||
+                                      savedContent.match(/^:DrawingElement\s/m);
+        const usesFullUrisCheck = savedContent.includes('<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingElement>');
+        
+        // Extract the actual label from the saved file
+        let savedLabel: string | null = null;
+        if (usesPrefixedNamesCheck) {
+          // Cache reconstruction was used - extract label from prefixed format
+          // Try multiple patterns to find the label
+          const patterns = [
+            /:DrawingElement[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
+            /:DrawingElement[\s\S]{0,500}?<[^>]*label[^>]*>\s+"([^"]+)"/,
+            /rdfs:label\s+"([^"]+)"[\s\S]{0,200}?:DrawingElement/,
+          ];
+          for (const pattern of patterns) {
+            const match = savedContent.match(pattern);
+            if (match) {
+              savedLabel = match[1];
+              break;
+            }
+          }
+        } else if (usesFullUris) {
+          // Fallback was used - extract label from full URI format
+          const patterns = [
+            /<https:\/\/[^>]+#DrawingElement>[\s\S]{0,500}?<[^>]+label[^>]*>\s+"([^"]+)"/,
+            /<https:\/\/[^>]+#DrawingElement>[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
+          ];
+          for (const pattern of patterns) {
+            const match = savedContent.match(pattern);
+            if (match) {
+              savedLabel = match[1];
+              break;
+            }
+          }
+        }
+        
+        // BUG REPRODUCTION: 
+        // Cache reconstruction IS being used (we see the log "[storeToTurtle] USING CACHE RECONSTRUCTION")
+        // Modifications ARE being detected (we see "[reconstructFromCache] Found 4 modified blocks" including ':DrawingElement')
+        // But the label is NOT updated in the saved content
+        // 
+        // Expected behavior: When cache reconstruction detects modifications, label should be updated
+        // Actual behavior (bug): Label is NOT updated even though modifications are detected
+        //
+        // This test should FAIL when the bug exists:
+        // - Cache reconstruction is used AND modifications are detected BUT label is NOT updated = BUG (test fails)
+        // - Cache reconstruction is used AND modifications are detected AND label IS updated = FIXED (test passes)
+        
+        // Verify that the label was updated (this is the actual bug - label should be updated but it's not)
+        expect(savedLabel).toBeDefined();
+        if (savedLabel !== newLabel) {
+          console.log('[TEST] BUG REPRODUCED: Label was not updated. Expected:', newLabel, 'Got:', savedLabel);
+        }
+        expect(savedLabel).toBe(newLabel);
+        expect(savedLabel).not.toBe(originalLabel);
+        
+        // Verify TTL integrity: total edges, object properties, data properties remain the same
+        // Parse both files to compare structure
+        const originalParseResult = await parseTtlToGraph(originalContent);
+        const savedParseResult = await parseTtlToGraph(savedContent);
+        
+        // Compare graph data
+        const originalNodes = originalParseResult.graphData.nodes;
+        const savedNodes = savedParseResult.graphData.nodes;
+        const originalEdges = originalParseResult.graphData.edges;
+        const savedEdges = savedParseResult.graphData.edges;
+        
+        // Number of nodes should be the same (only labels changed, not structure)
+        expect(savedNodes.length).toBe(originalNodes.length);
+        
+        // Number of edges should be the same (relationships preserved)
+        expect(savedEdges.length).toBe(originalEdges.length);
+        
+        // Verify DrawingElement node still has the same relationships
+        const originalDrawingElement = originalNodes.find(n => n.id === 'DrawingElement');
+        const savedDrawingElement = savedNodes.find(n => n.id === 'DrawingElement');
+        expect(originalDrawingElement).toBeDefined();
+        expect(savedDrawingElement).toBeDefined();
+        
+        if (originalDrawingElement && savedDrawingElement) {
+          // Label should be different (that's the change)
+          expect(savedDrawingElement.label).toBe(newLabel);
+          expect(savedDrawingElement.label).not.toBe(originalDrawingElement.label);
+          
+          // All other properties should be the same
+          expect(savedDrawingElement.comment).toBe(originalDrawingElement.comment);
+          expect(savedDrawingElement.exampleImages).toEqual(originalDrawingElement.exampleImages);
+          expect(savedDrawingElement.annotations).toEqual(originalDrawingElement.annotations);
+          expect(savedDrawingElement.dataPropertyRestrictions).toEqual(originalDrawingElement.dataPropertyRestrictions);
+        }
+        
+        // Count edges for DrawingElement (should be the same)
+        const originalDrawingElementEdges = originalEdges.filter(e => 
+          e.source === 'DrawingElement' || e.target === 'DrawingElement'
+        );
+        const savedDrawingElementEdges = savedEdges.filter(e => 
+          e.source === 'DrawingElement' || e.target === 'DrawingElement'
+        );
+        expect(savedDrawingElementEdges.length).toBe(originalDrawingElementEdges.length);
+      });
+
       it('should only modify Drawing Sheet label when renaming', async () => {
         const originalFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata.ttl');
         const modifiedFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata_drawing_sheet_renamed.ttl');

@@ -2552,9 +2552,18 @@ export function storeToTurtle(
   originalFileCache?: OriginalFileCache
 ): Promise<string> {
   // If cache is available, use reconstruction approach
+  debugLog('[storeToTurtle] Cache check:', {
+    hasCache: !!originalFileCache,
+    format: originalFileCache?.format,
+    blocksCount: originalFileCache?.statementBlocks.length,
+    willUseCache: originalFileCache && originalFileCache.format === 'turtle'
+  });
+  
   if (originalFileCache && originalFileCache.format === 'turtle') {
+    debugLog('[storeToTurtle] Using cache-based reconstruction, cache has', originalFileCache.statementBlocks.length, 'blocks');
     return reconstructFromCache(store, originalFileCache, externalRefs);
   }
+  debugLog('[storeToTurtle] Using fallback post-processing (no cache or wrong format)');
   
   // Fallback to current post-processing approach
   return new Promise((resolve, reject) => {
@@ -2626,6 +2635,10 @@ async function reconstructFromCache(
   cache: OriginalFileCache,
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>
 ): Promise<string> {
+  const startTime = Date.now();
+  debugLog('[reconstructFromCache] Starting reconstruction, cache has', cache.statementBlocks.length, 'blocks');
+  debugLog('[PERF] reconstructFromCache START');
+  
   // Use the quadToBlockMap to find which block each quad belongs to
   // Then compare current store quads with original block quads
   
@@ -2663,20 +2676,38 @@ async function reconstructFromCache(
     }
     if (prefixedName.startsWith(':')) {
       const baseUri = prefixMap.get('');
-      if (baseUri) return baseUri + prefixedName.slice(1);
+      if (baseUri) {
+        const resolved = baseUri + prefixedName.slice(1);
+        debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
+        return resolved;
+      }
+      debugWarn('[reconstructFromCache] Failed to resolve prefixed name (no base URI):', prefixedName);
     } else if (prefixedName.includes(':')) {
       const [prefix, localName] = prefixedName.split(':', 2);
       const baseUri = prefixMap.get(prefix);
-      if (baseUri) return baseUri + localName;
+      if (baseUri) {
+        const resolved = baseUri + localName;
+        debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
+        return resolved;
+      }
+      debugWarn('[reconstructFromCache] Failed to resolve prefixed name (prefix not found):', prefixedName, 'prefix:', prefix);
     }
+    debugWarn('[reconstructFromCache] Failed to resolve prefixed name (no match):', prefixedName);
     return null;
   };
   
   // Detect modifications by comparing current store with cache
   const modifiedBlocks: StatementBlock[] = [];
   
+  const blockCheckStart = Date.now();
+  debugLog('[PERF] Starting block check loop, blocks:', cache.statementBlocks.length);
+  
   // For each block, check if its quads have changed
-  for (const block of cache.statementBlocks) {
+  for (let i = 0; i < cache.statementBlocks.length; i++) {
+    const block = cache.statementBlocks[i];
+    if (i % 10 === 0) {
+      debugLog('[PERF] Processing block', i, 'of', cache.statementBlocks.length, 'elapsed:', Date.now() - blockCheckStart, 'ms');
+    }
     if (block.type === 'Header') continue; // Header blocks don't change
     
     // Get current quads for this block's subject
@@ -2685,12 +2716,152 @@ async function reconstructFromCache(
       const resolvedUri = resolvePrefixedName(block.subject);
       if (resolvedUri) {
         currentQuads = currentQuadsBySubject.get(resolvedUri) || [];
+        debugLog('[reconstructFromCache] Block subject:', block.subject, 'resolved to:', resolvedUri, 'found', currentQuads.length, 'quads');
+        
+        // For class blocks, include blank node restriction quads
+        // These are connected via rdfs:subClassOf where the class is subject and blank node is object
+        if (block.type === 'Class') {
+          const classSubject = DataFactory.namedNode(resolvedUri);
+          const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+          const restrictionBlankNodes = new Set<string>();
+          
+          // Find all blank nodes referenced in subClassOf quads
+          // Note: subClassOf quads are already in currentQuads (from currentQuadsBySubject)
+          // So we only need to add the blank node quads themselves
+          for (const subClassQuad of subClassOfQuads) {
+            if (subClassQuad.object.termType === 'BlankNode') {
+              const blankId = (subClassQuad.object as { id: string }).id;
+              restrictionBlankNodes.add(blankId);
+              debugLog('[reconstructFromCache] Found blank node in subClassOf:', blankId, 'type:', typeof blankId);
+            }
+          }
+          
+          // Get all quads for each restriction blank node
+          // CRITICAL: These quads are where the blank node is the SUBJECT (e.g., _:blank1 rdf:type owl:Restriction)
+          // We need these to build inline forms, so we MUST add them even if they seem like duplicates
+          // Use a Set to track quad signatures and avoid duplicates, but be careful with blank node IDs
+          const quadSignatures = new Set<string>();
+          for (const q of currentQuads) {
+            const subjSig = q.subject.termType === 'NamedNode' ? q.subject.value : q.subject.termType === 'BlankNode' ? (q.subject as { id: string }).id : '';
+            const objSig = q.object.termType === 'NamedNode' ? q.object.value : q.object.termType === 'Literal' ? `"${(q.object as { value: string }).value}"` : q.object.termType === 'BlankNode' ? (q.object as { id: string }).id : '';
+            const sig = `${subjSig}|${q.predicate.value}|${objSig}`;
+            quadSignatures.add(sig);
+          }
+          
+          debugLog('[reconstructFromCache] Collecting blank node quads for', restrictionBlankNodes.size, 'blank nodes, currentQuads:', currentQuads.length);
+          for (const blankId of restrictionBlankNodes) {
+            // CRITICAL: blankId might be in format "df_0_0" or "_:df_0_0" - need to handle both
+            // DataFactory.blankNode expects just the ID part (without _: prefix)
+            const cleanBlankId = blankId.startsWith('_:') ? blankId.slice(2) : blankId;
+            const blankNode = DataFactory.blankNode(cleanBlankId);
+            const blankQuads = store.getQuads(blankNode, null, null, null);
+            debugLog('[reconstructFromCache] Blank node', blankId, '(clean:', cleanBlankId, ') has', blankQuads.length, 'quads (where blank is SUBJECT)');
+            
+            // If no quads found, try with _: prefix
+            if (blankQuads.length === 0 && !blankId.startsWith('_:')) {
+              const blankNodeWithPrefix = DataFactory.blankNode(`_:${blankId}`);
+              const blankQuadsWithPrefix = store.getQuads(blankNodeWithPrefix, null, null, null);
+              debugLog('[reconstructFromCache] Tried with _: prefix, found', blankQuadsWithPrefix.length, 'quads');
+              if (blankQuadsWithPrefix.length > 0) {
+                // Use the quads found with prefix
+                for (const blankQuad of blankQuadsWithPrefix) {
+                  const subjSig = (blankQuad.subject as { id: string }).id;
+                  const objSig = blankQuad.object.termType === 'NamedNode' ? blankQuad.object.value : blankQuad.object.termType === 'Literal' ? `"${(blankQuad.object as { value: string }).value}"` : blankQuad.object.termType === 'BlankNode' ? (blankQuad.object as { id: string }).id : '';
+                  const sig = `${subjSig}|${blankQuad.predicate.value}|${objSig}`;
+                  if (!quadSignatures.has(sig)) {
+                    currentQuads.push(blankQuad);
+                    quadSignatures.add(sig);
+                    addedCount++;
+                    debugLog('[reconstructFromCache] Added quad:', blankQuad.predicate.value, '->', objSig.substring(0, 50));
+                  }
+                }
+                debugLog('[reconstructFromCache] Added', addedCount, 'quads for restriction blank node:', blankId, '(total currentQuads now:', currentQuads.length, ')');
+                continue;
+              }
+            }
+            // Only add quads that aren't already in currentQuads (avoid duplicates)
+            let addedCount = 0;
+            for (const blankQuad of blankQuads) {
+              const subjSig = (blankQuad.subject as { id: string }).id;
+              const objSig = blankQuad.object.termType === 'NamedNode' ? blankQuad.object.value : blankQuad.object.termType === 'Literal' ? `"${(blankQuad.object as { value: string }).value}"` : blankQuad.object.termType === 'BlankNode' ? (blankQuad.object as { id: string }).id : '';
+              const sig = `${subjSig}|${blankQuad.predicate.value}|${objSig}`;
+              if (!quadSignatures.has(sig)) {
+                currentQuads.push(blankQuad);
+                quadSignatures.add(sig);
+                addedCount++;
+                debugLog('[reconstructFromCache] Added quad:', blankQuad.predicate.value, '->', objSig.substring(0, 50));
+              } else {
+                debugLog('[reconstructFromCache] Skipped duplicate quad:', sig.substring(0, 100));
+              }
+            }
+            debugLog('[reconstructFromCache] Added', addedCount, 'quads for restriction blank node:', blankId, '(total currentQuads now:', currentQuads.length, ')');
+          }
+        }
+      } else {
+        debugWarn('[reconstructFromCache] Failed to resolve block subject:', block.subject, 'block type:', block.type);
+        // Fallback: try to find by local name if prefix resolution fails
+        const localName = block.subject.startsWith(':') 
+          ? block.subject.slice(1) 
+          : block.subject.includes(':') 
+            ? block.subject.split(':').pop() 
+            : block.subject.replace(/^:/, '');
+        
+        debugLog('[reconstructFromCache] Trying fallback match by local name:', localName);
+        // Search all subjects for matching local name
+        for (const [subjectUri, quads] of currentQuadsBySubject.entries()) {
+          if (extractLocalName(subjectUri) === localName) {
+            currentQuads = quads;
+            debugLog('[reconstructFromCache] Found match by local name:', subjectUri, 'with', quads.length, 'quads');
+            
+            // Also include restriction blank node quads for class blocks
+            if (block.type === 'Class') {
+              const classSubject = DataFactory.namedNode(subjectUri);
+              const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+              const restrictionBlankNodes = new Set<string>();
+              
+              for (const subClassQuad of subClassOfQuads) {
+                if (subClassQuad.object.termType === 'BlankNode') {
+                  const blankId = (subClassQuad.object as { id: string }).id;
+                  restrictionBlankNodes.add(blankId);
+                  // Include the subClassOf quad itself (connects class to blank node)
+                  currentQuads.push(subClassQuad);
+                }
+              }
+              
+              for (const blankId of restrictionBlankNodes) {
+                const blankNode = DataFactory.blankNode(blankId);
+                const blankQuads = store.getQuads(blankNode, null, null, null);
+                currentQuads.push(...blankQuads);
+                debugLog('[reconstructFromCache] Added', blankQuads.length, 'quads for restriction blank node:', blankId);
+              }
+            }
+            break;
+          }
+        }
+        if (currentQuads.length === 0) {
+          debugWarn('[reconstructFromCache] No quads found even with fallback for:', block.subject);
+        }
       }
+    } else {
+      debugLog('[reconstructFromCache] Block has no subject, type:', block.type);
     }
     
     // Compare quads - check if they're different
     const originalQuads = block.quads;
     const isModified = quadsAreDifferent(originalQuads, currentQuads);
+    
+    if (block.subject && (block.subject.includes('DrawingElement') || block.subject.includes('Drawing'))) {
+      debugLog('[reconstructFromCache] DrawingElement block check:', {
+        subject: block.subject,
+        originalQuadsCount: originalQuads.length,
+        currentQuadsCount: currentQuads.length,
+        isModified
+      });
+      // Log label quads specifically
+      const originalLabelQuads = originalQuads.filter(q => q.predicate.value.includes('label'));
+      const currentLabelQuads = currentQuads.filter(q => q.predicate.value.includes('label'));
+      debugLog('[reconstructFromCache] Label quads - original:', originalLabelQuads.map(q => q.object.value), 'current:', currentLabelQuads.map(q => q.object.value));
+    }
     
     if (isModified) {
       const modifiedBlock: StatementBlock = {
@@ -2699,15 +2870,19 @@ async function reconstructFromCache(
         isModified: true
       };
       modifiedBlocks.push(modifiedBlock);
+      debugLog('[reconstructFromCache] Block marked as modified:', block.subject, 'type:', block.type);
     }
   }
   
   // Reconstruct from original with modifications
+  debugLog('[reconstructFromCache] Found', modifiedBlocks.length, 'modified blocks out of', cache.statementBlocks.length, 'total blocks');
   if (modifiedBlocks.length > 0) {
+    debugLog('[reconstructFromCache] Modified block subjects:', modifiedBlocks.map(b => b.subject).filter(Boolean));
     return await reconstructFromOriginalText(cache, modifiedBlocks);
   }
   
   // No modifications - return original
+  debugLog('[reconstructFromCache] No modifications detected, returning original content');
   return cache.content;
 }
 
@@ -2715,7 +2890,10 @@ async function reconstructFromCache(
  * Compare two sets of quads to see if they're different
  */
 function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolean {
-  if (original.length !== current.length) return true;
+  if (original.length !== current.length) {
+    debugLog('[quadsAreDifferent] Different lengths:', original.length, 'vs', current.length);
+    return true;
+  }
   
   // Create a signature for each quad (subject, predicate, object)
   const originalSignatures = new Set(
@@ -2725,10 +2903,21 @@ function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolean {
     current.map(q => `${q.subject.value || ''}|${q.predicate.value || ''}|${q.object.value || ''}`)
   );
   
-  if (originalSignatures.size !== currentSignatures.size) return true;
+  if (originalSignatures.size !== currentSignatures.size) {
+    debugLog('[quadsAreDifferent] Different signature sizes:', originalSignatures.size, 'vs', currentSignatures.size);
+    return true;
+  }
   
   for (const sig of originalSignatures) {
-    if (!currentSignatures.has(sig)) return true;
+    if (!currentSignatures.has(sig)) {
+      debugLog('[quadsAreDifferent] Missing signature in current:', sig);
+      // Log what's different
+      const [subj, pred, obj] = sig.split('|');
+      if (pred.includes('label')) {
+        debugLog('[quadsAreDifferent] Label quad difference detected - original:', obj, 'current labels:', Array.from(currentSignatures).filter(s => s.split('|')[1].includes('label')).map(s => s.split('|')[2]));
+      }
+      return true;
+    }
   }
   
   return false;

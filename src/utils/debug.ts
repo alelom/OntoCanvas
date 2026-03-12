@@ -15,9 +15,10 @@ const DEBUG_LOCALSTORAGE_KEY = 'ontologyEditorDebug';
  * Returns false in Node.js environment (for unit tests).
  */
 export function isDebugMode(): boolean {
-  // In Node.js environment (unit tests), window is not available
+  // In Node.js environment (unit tests), check environment variable
   if (typeof window === 'undefined') {
-    return false;
+    // Allow enabling debug mode via environment variable for tests
+    return process.env.ONTOLOGY_EDITOR_DEBUG === 'true' || process.env.DEBUG === 'true';
   }
   
   // Check URL parameter
