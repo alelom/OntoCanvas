@@ -75,23 +75,47 @@
     rdfs:comment "Can be standalone label - drawing metadata";
     :labellableRoot "false"^^xsd:boolean.
 
-:DrawingSheet rdf:type owl:Class;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Drawing sheet";
+:DrawingSheet a owl:Class;
+    rdfs:label "Drawing Sheet renamed";
     rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
-    :labellableRoot "false"^^xsd:boolean.
-
+    :labellableRoot false;
+    rdfs:subClassOf _:df_41_0, _:df_41_1, _:df_41_2, _:df_41_3.
+    _:df_41_0 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass :Note.
+    _:df_41_1 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass :RevisionTable;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger;
+    owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger.
+    _:df_41_2 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger;
+    owl:onClass :Layout.
+    _:df_41_3 a owl:Restriction;
+    owl:onProperty :has;
+    owl:onClass :DrawingOrientation;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
 :RevisionTable rdf:type owl:Class;
     rdfs:subClassOf :Metadata;
     rdfs:label "Revision table";
     :labellableRoot "true"^^xsd:boolean.
 
-:Layout rdf:type owl:Class;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+:Layout a owl:Class;
     rdfs:label "Layout";
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
-    :labellableRoot "true"^^xsd:boolean.
-
+    :labellableRoot true;
+    rdfs:subClassOf _:df_41_4, _:df_41_5.
+    _:df_41_4 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass :DrawingElement.
+    _:df_41_5 a owl:Restriction;
+    owl:onProperty :has;
+    owl:onClass :DrawingType;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
 :DrawingOrientation rdf:type owl:Class;
     rdfs:subClassOf :Portrait, :Landscape;
     rdfs:label "DrawingOrientation".
@@ -140,12 +164,20 @@
     rdfs:label "Elevation";
     :labellableRoot "true"^^xsd:boolean.
 
-:Detail rdf:type owl:Class;
-    rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DetailLocation ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+:Detail a owl:Class;
     rdfs:label "Detail";
     rdfs:comment "Detail drawing";
-    :labellableRoot "true"^^xsd:boolean.
-
+    :labellableRoot true;
+    rdfs:subClassOf :DrawingType, _:df_41_6, _:df_41_7.
+    _:df_41_6 a owl:Restriction;
+    owl:onProperty :has;
+    owl:onClass :Orientation;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
+    _:df_41_7 a owl:Restriction;
+    owl:onProperty :has;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass :DetailLocation;
+    owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger.
 :Orientation rdf:type owl:Class;
     rdfs:label "Detail Orientation";
     rdfs:comment "Can be standalone label - drawing orientation";

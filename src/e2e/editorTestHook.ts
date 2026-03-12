@@ -31,13 +31,16 @@ export interface EditorTestDeps {
   getDataProperties: () => DataPropertyInfo[];
   getAnnotationProperties: () => Array<{ name: string; isBoolean: boolean; range: string | null | undefined; uri?: string; isDefinedBy?: string }>;
   getTtlStore: () => Store | null;
-  storeToTurtle: (store: Store, externalOntologyReferences: ExternalOntologyReference[]) => Promise<string>;
+  storeToTurtle: (store: Store, externalOntologyReferences?: ExternalOntologyReference[], originalTtlString?: string) => Promise<string>;
   applyFilter: (preservePositions: boolean) => void;
   showEditRelationshipTypeModal: (type: string, edgeStylesContent: HTMLElement, onApply: () => void) => void;
   debugLog: (...args: unknown[]) => void;
   addTestLog: (message: string) => void;
   getTestLogs: () => string[];
   isDebugMode: () => boolean;
+  saveTtl: () => Promise<void>;
+  setHasUnsavedChanges: (value: boolean) => void;
+  updateSaveButtonVisibility: () => void;
 }
 
 /**
@@ -72,6 +75,9 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     addTestLog,
     getTestLogs,
     isDebugMode,
+    saveTtl,
+    setHasUnsavedChanges,
+    updateSaveButtonVisibility,
   } = deps;
 
   (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
@@ -197,6 +203,9 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       if (filter) return logs.filter((log) => log.includes(filter));
       return [...logs];
     },
+    saveTtl: (): Promise<void> => saveTtl(),
+    setHasUnsavedChanges: (value: boolean): void => setHasUnsavedChanges(value),
+    updateSaveButtonVisibility: (): void => updateSaveButtonVisibility(),
     clearTestLogs: (): void => {
       const logs = getTestLogs();
       logs.length = 0;

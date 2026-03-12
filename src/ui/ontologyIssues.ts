@@ -1,13 +1,15 @@
-import { Store } from 'n3';
-import { getAnnotationProperties, extractLocalName } from '../parser';
+import { Store, DataFactory } from 'n3';
+import { getAnnotationProperties, extractLocalName, getMainOntologyBase, getClassNamespace } from '../parser';
 import type { AnnotationPropertyInfo } from '../types';
+import { getExampleImageUrisForClass } from '../lib/exampleImageStore';
+import { resolveImageUrl, isImageUrlReachable } from '../lib/exampleImageUrlValidation';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 
 export interface OntologyIssue {
-  type: 'unused_annotation_property';
+  type: 'unused_annotation_property' | 'unreachable_example_image';
   severity: 'warning' | 'error';
   message: string;
   elementName: string;
@@ -38,17 +40,30 @@ function detectUnusedAnnotationProperties(store: Store): OntologyIssue[] {
     }
   }
   
-  // Also add base IRI versions for annotation properties that weren't found above
+  // Get the actual ontology base IRI from the store
+  const mainBase = getMainOntologyBase(store);
+  const classNs = getClassNamespace(store);
+  const actualBase = mainBase || classNs || BASE_IRI;
+  
+  // Add annotation property URIs from the annotationProperties list
+  // This ensures we catch all variations of the URI (from store, from base IRI, etc.)
   for (const ap of annotationProperties) {
-    const baseUri = BASE_IRI + ap.name;
-    if (!apUriToName.has(baseUri)) {
-      apUriToName.set(baseUri, ap.name);
+    // Use the annotation property's actual URI if available (this is the most reliable)
+    if (ap.uri) {
+      apUriToName.set(ap.uri, ap.name);
+    }
+    // Also add constructed URI from actual base IRI (in case URI format differs)
+    const baseUri = actualBase + ap.name;
+    apUriToName.set(baseUri, ap.name);
+    // Also add with the name as-is (in case it's already a full URI)
+    if (ap.name.startsWith('http://') || ap.name.startsWith('https://')) {
+      apUriToName.set(ap.name, ap.name);
     }
   }
   
   // Build a set of all annotation property URIs for quick lookup
   const allApUris = new Set(apUriToName.keys());
-  
+
   // Iterate through all quads ONCE to find which annotation properties are used
   const usedApUris = new Set<string>();
   for (const q of store) {
@@ -56,6 +71,16 @@ function detectUnusedAnnotationProperties(store: Store): OntologyIssue[] {
     const predVal = pred?.value ?? pred?.id;
     if (predVal && allApUris.has(predVal)) {
       usedApUris.add(predVal);
+      // Also mark all URI variations for this annotation property as used
+      const apName = apUriToName.get(predVal);
+      if (apName) {
+        // Mark all URIs for this annotation property name as used
+        for (const [uri, name] of apUriToName) {
+          if (name === apName) {
+            usedApUris.add(uri);
+          }
+        }
+      }
     }
   }
   
@@ -82,18 +107,82 @@ function detectUnusedAnnotationProperties(store: Store): OntologyIssue[] {
 }
 
 /**
- * Detect all ontology issues.
+ * Detect unreachable example image URLs.
+ * Checks all classes with example images and validates each URL.
  */
-export function detectOntologyIssues(store: Store | null): OntologyIssue[] {
-  if (!store) return [];
-  
+async function detectUnreachableExampleImages(
+  store: Store,
+  ontologyLocation: string | null
+): Promise<OntologyIssue[]> {
   const issues: OntologyIssue[] = [];
   
-  // Detect unused annotation properties
+  const mainBase = getMainOntologyBase(store);
+  const classNs = getClassNamespace(store);
+  const baseIri = classNs ?? mainBase ?? BASE_IRI;
+
+  // Get all classes
+  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
+  
+  for (const classQuad of classQuads) {
+    if (classQuad.subject.termType !== 'NamedNode') continue;
+    
+    const classUri = (classQuad.subject as { value: string }).value;
+    const classLocalName = extractLocalName(classUri);
+    
+    // Get example images for this class
+    const imageUris = getExampleImageUrisForClass(store, classLocalName, baseIri);
+    
+    // Check each image URL
+    for (const imageUri of imageUris) {
+      const resolvedUrl = resolveImageUrl(imageUri, ontologyLocation);
+      if (!resolvedUrl) {
+        // Can't resolve relative URL
+        issues.push({
+          type: 'unreachable_example_image',
+          severity: 'warning',
+          message: `Example image URL "${imageUri}" cannot be resolved (relative URLs require ontology to be loaded from a URL)`,
+          elementName: classLocalName,
+          elementType: 'Class',
+        });
+        continue;
+      }
+
+      // Check reachability
+      const isReachable = await isImageUrlReachable(resolvedUrl);
+      if (!isReachable) {
+        issues.push({
+          type: 'unreachable_example_image',
+          severity: 'warning',
+          message: `Example image URL "${imageUri}" is not reachable`,
+          elementName: classLocalName,
+          elementType: 'Class',
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * Detect all ontology issues.
+ * Now includes async checks for unreachable example images.
+ */
+export async function detectOntologyIssues(
+  store: Store | null,
+  ontologyLocation: string | null = null
+): Promise<OntologyIssue[]> {
+  if (!store) return [];
+
+  const issues: OntologyIssue[] = [];
+
+  // Detect unused annotation properties (synchronous)
   issues.push(...detectUnusedAnnotationProperties(store));
-  
-  // Future: Add more issue detection functions here
-  
+
+  // Detect unreachable example images (async)
+  const imageIssues = await detectUnreachableExampleImages(store, ontologyLocation);
+  issues.push(...imageIssues);
+
   return issues;
 }
 
@@ -118,6 +207,8 @@ export function getIssueTypeLabel(type: string): string {
   switch (type) {
     case 'unused_annotation_property':
       return 'Unused Elements';
+    case 'unreachable_example_image':
+      return 'Unreachable Example Images';
     default:
       return 'Other Issues';
   }

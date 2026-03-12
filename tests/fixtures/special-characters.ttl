@@ -1,0 +1,17 @@
+@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:ClassWithSpecialChars rdf:type owl:Class ;
+    rdfs:label "Café & Restaurant"@en ;
+    rdfs:comment "He said \"hello\" and <goodbye>" .
+
+:ClassWithBoolean rdf:type owl:Class ;
+    :isActive "true"^^xsd:boolean ;
+    rdfs:label "Active Class" .
+
+:ClassWithLanguageTag rdf:type owl:Class ;
+    rdfs:label "Étiquette"@fr ;
+    rdfs:label "Label"@en .

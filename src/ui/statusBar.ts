@@ -5,6 +5,7 @@ let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
 let issuesPopup: HTMLElement | null = null;
 let currentStore: Store | null = null;
+let currentOntologyLocation: string | null = null;
 
 /**
  * Initialize the status bar component.
@@ -77,18 +78,19 @@ function createIssuesUI(): void {
 /**
  * Update the status bar with current store and refresh issues.
  */
-export function updateStatusBar(store: Store | null): void {
+export function updateStatusBar(store: Store | null, ontologyLocation: string | null = null): void {
   currentStore = store;
+  currentOntologyLocation = ontologyLocation;
   refreshIssues();
 }
 
 /**
  * Refresh the issues display.
  */
-function refreshIssues(): void {
+async function refreshIssues(): Promise<void> {
   if (!currentStore || !issuesButton || !issuesPopup) return;
   
-  const issues = detectOntologyIssues(currentStore);
+  const issues = await detectOntologyIssues(currentStore, currentOntologyLocation);
   
   if (issues.length === 0) {
     issuesButton.style.display = 'none';
@@ -157,7 +159,7 @@ function showIssuesPopup(): void {
   
   // Refresh issues when showing
   if (currentStore) {
-    refreshIssues();
+    void refreshIssues();
   }
 }
 

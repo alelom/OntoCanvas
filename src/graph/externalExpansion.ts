@@ -8,10 +8,11 @@ import { DataFactory, type Store } from 'n3';
 import type { GraphData, GraphEdge, GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import type { ExternalNodeLayout } from '../storage';
-import { getMainOntologyBase, getObjectProperties, extractLocalName } from '../parser';
+import { getMainOntologyBase, getObjectProperties, extractLocalName, findRestrictionBlank, toClassUri } from '../parser';
 import { getCachedExternalClasses } from '../externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+const OWL = 'http://www.w3.org/2002/07/owl#';
 
 export interface ExternalExpansionOptions {
   displayExternalReferences: boolean;
@@ -103,14 +104,56 @@ export function expandWithExternalRefs(
 
   const mainBase = getMainOntologyBase(store);
   const localNodeIds = new Set(rawData.nodes.map((n) => n.id));
-  const existingEdgeKeys = new Set(
-    rawData.edges.map((e) => `${e.from}->${e.to}:${e.type}`)
-  );
+  const objectProps = getObjectProperties(store);
+  
+  // Build a comprehensive set of edge keys that handles both URI and local name formats
+  // This prevents expandWithExternalRefs from creating duplicate edges when edges are restored during undo
+  const existingEdgeKeys = new Set<string>();
+  const existingEdgesByKey = new Map<string, { from: string; to: string; type: string }>();
+  rawData.edges.forEach((e) => {
+    // Add the exact key
+    const exactKey = `${e.from}->${e.to}:${e.type}`;
+    existingEdgeKeys.add(exactKey);
+    existingEdgesByKey.set(exactKey, { from: e.from, to: e.to, type: e.type });
+    
+    // Also add variations for URI/local name matching to catch duplicates with different type formats
+    const op = objectProps.find((p) => p.name === e.type || p.uri === e.type);
+    if (op) {
+      if (op.uri && op.uri !== e.type) {
+        const uriKey = `${e.from}->${e.to}:${op.uri}`;
+        existingEdgeKeys.add(uriKey);
+        existingEdgesByKey.set(uriKey, { from: e.from, to: e.to, type: e.type });
+      }
+      if (op.name && op.name !== e.type) {
+        const nameKey = `${e.from}->${e.to}:${op.name}`;
+        existingEdgeKeys.add(nameKey);
+        existingEdgesByKey.set(nameKey, { from: e.from, to: e.to, type: e.type });
+      }
+    }
+    // Also add variations for from/to using both local names and URIs
+    // Extract local names in case we need to match against URI format
+    const fromLocal = e.from.includes('#') ? e.from.split('#').pop() : e.from.includes('/') ? e.from.split('/').pop() : e.from;
+    const toLocal = e.to.includes('#') ? e.to.split('#').pop() : e.to.includes('/') ? e.to.split('/').pop() : e.to;
+    if (fromLocal !== e.from) {
+      const fromLocalKey = `${fromLocal}->${e.to}:${e.type}`;
+      existingEdgeKeys.add(fromLocalKey);
+      existingEdgesByKey.set(fromLocalKey, { from: e.from, to: e.to, type: e.type });
+    }
+    if (toLocal !== e.to) {
+      const toLocalKey = `${e.from}->${toLocal}:${e.type}`;
+      existingEdgeKeys.add(toLocalKey);
+      existingEdgesByKey.set(toLocalKey, { from: e.from, to: e.to, type: e.type });
+    }
+    if (fromLocal !== e.from && toLocal !== e.to) {
+      const bothLocalKey = `${fromLocal}->${toLocal}:${e.type}`;
+      existingEdgeKeys.add(bothLocalKey);
+      existingEdgesByKey.set(bothLocalKey, { from: e.from, to: e.to, type: e.type });
+    }
+  });
 
   const externalClassNodes = new Map<string, GraphNode>();
   const newEdges: GraphEdge[] = [];
 
-  const objectProps = getObjectProperties(store);
   const RDFS_DOMAIN = RDFS + 'domain';
   const RDFS_RANGE = RDFS + 'range';
 
@@ -135,13 +178,80 @@ export function expandWithExternalRefs(
 
         const fromId = domainIsLocal ? domainLocal : domainUri;
         const toId = rangeIsLocal ? rangeLocal : rangeUri;
+        
+        // CRITICAL: Skip creating edges if they already exist in rawData.edges
+        // Use semantic comparison (same classes and property) regardless of format
+        // This is the most important check to prevent duplicates during undo
+        const edgeExists = rawData.edges.some((e) => {
+          // Normalize both edges to local names for semantic comparison
+          const eFromLocal = extractLocalName(e.from);
+          const eToLocal = extractLocalName(e.to);
+          const targetFromLocal = extractLocalName(fromId);
+          const targetToLocal = extractLocalName(toId);
+          
+          // Check if classes match (by local name)
+          const fromMatches = eFromLocal === targetFromLocal || 
+                             eFromLocal === extractLocalName(domainUri) ||
+                             extractLocalName(domainUri) === targetFromLocal ||
+                             e.from === fromId ||
+                             e.from === domainUri ||
+                             e.from === domainLocal ||
+                             (domainIsLocal && e.from === domainLocal);
+          
+          const toMatches = eToLocal === targetToLocal ||
+                           eToLocal === extractLocalName(rangeUri) ||
+                           extractLocalName(rangeUri) === targetToLocal ||
+                           e.to === toId ||
+                           e.to === rangeUri ||
+                           e.to === rangeLocal ||
+                           (rangeIsLocal && e.to === rangeLocal);
+          
+          if (!fromMatches || !toMatches) return false;
+          
+          // Check if property matches (by local name or exact match)
+          const eTypeLocal = extractLocalName(e.type);
+          const targetTypeLocal = extractLocalName(propUri);
+          const typeMatches = e.type === propUri ||
+                             e.type === op.name ||
+                             (op.uri && e.type === op.uri) ||
+                             eTypeLocal === targetTypeLocal ||
+                             eTypeLocal === op.name ||
+                             (op.uri && eTypeLocal === extractLocalName(op.uri));
+          
+          return typeMatches;
+        });
+        
+        if (edgeExists) {
+          continue;
+        }
+        
+        // Also check if a restriction exists (for local-to-local edges)
+        // Restrictions are the source of truth - if a restriction exists, the edge is already in rawData.edges
+        if (domainIsLocal && rangeIsLocal) {
+          const restrictionExists = findRestrictionBlank(store, domainLocal, op.name, rangeLocal);
+          if (restrictionExists) {
+            // Restriction exists, so the edge is already in rawData.edges from the restriction
+            // Don't create it again from domain/range
+            continue;
+          }
+        }
+        
+        // Check existingEdgeKeys for fast lookup (redundant but safe)
         const edgeKey = `${fromId}->${toId}:${propUri}`;
-        if (existingEdgeKeys.has(edgeKey)) continue;
-        // Parser uses op.name (local) for local ontologies; we use propUri here. Skip if rawData already has this edge.
-        const alreadyInRaw = rawData.edges.some(
-          (e) => e.from === fromId && e.to === toId && (e.type === propUri || e.type === op.name)
-        );
-        if (alreadyInRaw) continue;
+        const edgeKeyWithLocalType = `${fromId}->${toId}:${op.name}`;
+        const edgeKeyWithLocalFrom = domainIsLocal ? `${domainUri}->${toId}:${propUri}` : edgeKey;
+        const edgeKeyWithLocalTo = rangeIsLocal ? `${fromId}->${rangeUri}:${propUri}` : edgeKey;
+        const edgeKeyWithLocalBoth = domainIsLocal && rangeIsLocal ? `${domainUri}->${rangeUri}:${propUri}` : edgeKey;
+        
+        const keyExists = existingEdgeKeys.has(edgeKey) || 
+                         existingEdgeKeys.has(edgeKeyWithLocalType) ||
+                         existingEdgeKeys.has(edgeKeyWithLocalFrom) ||
+                         existingEdgeKeys.has(edgeKeyWithLocalTo) ||
+                         existingEdgeKeys.has(edgeKeyWithLocalBoth);
+        if (keyExists) {
+          continue;
+        }
+        
         existingEdgeKeys.add(edgeKey);
 
         newEdges.push({ from: fromId, to: toId, type: propUri, isRestriction: false });
@@ -260,9 +370,63 @@ export function expandWithExternalRefs(
     }
   }
 
+  // CRITICAL FIX: Deduplicate edges before returning to prevent duplicates during undo
+  // Even though we check before adding to newEdges, format mismatches can still occur
+  // So we do a final comprehensive deduplication here that compares by semantic meaning
+  const allEdges = [...rawData.edges, ...newEdges];
+  const deduplicatedEdges: GraphEdge[] = [];
+  const seenEdgeSignatures = new Set<string>();
+  
+  for (const edge of allEdges) {
+    // Build semantic signature: normalize to local names for comparison
+    // This catches duplicates regardless of URI vs local name format
+    const fromLocal = extractLocalName(edge.from);
+    const toLocal = extractLocalName(edge.to);
+    const typeLocal = extractLocalName(edge.type);
+    
+    // Also get the property info to normalize the type
+    const op = objectProps.find((p) => p.name === edge.type || p.uri === edge.type);
+    const normalizedType = op ? (op.name || extractLocalName(op.uri || edge.type)) : typeLocal;
+    
+    // Create semantic signature using normalized local names
+    const semanticSignature = `${fromLocal}||${toLocal}||${normalizedType}`;
+    
+    // Also create signatures with all possible format variations
+    const signatures = new Set<string>();
+    signatures.add(semanticSignature);
+    signatures.add(`${edge.from}||${edge.to}||${edge.type}`);
+    if (op) {
+      if (op.name) {
+        signatures.add(`${fromLocal}||${toLocal}||${op.name}`);
+        signatures.add(`${edge.from}||${edge.to}||${op.name}`);
+      }
+      if (op.uri) {
+        signatures.add(`${fromLocal}||${toLocal}||${extractLocalName(op.uri)}`);
+        signatures.add(`${edge.from}||${edge.to}||${op.uri}`);
+      }
+    }
+    
+    // Check if any signature has been seen
+    let isDuplicate = false;
+    for (const sig of signatures) {
+      if (seenEdgeSignatures.has(sig)) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    
+    if (!isDuplicate) {
+      // Mark all signatures as seen and add the edge
+      for (const sig of signatures) {
+        seenEdgeSignatures.add(sig);
+      }
+      deduplicatedEdges.push(edge);
+    }
+  }
+
   return {
     nodes: [...rawData.nodes, ...externalNodesList],
-    edges: [...rawData.edges, ...newEdges],
+    edges: deduplicatedEdges,
   };
 }
 
