@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/alelom/OntoCanvas/compare/v1.9.0...v1.10.0) (2026-03-12)
+
+
+### Features
+
+* enhance ontology URL handling for .html extensions ([6959d76](https://github.com/alelom/OntoCanvas/commit/6959d76e0244e6017374af73b435d336a854886b))
+
 # [1.9.0](https://github.com/alelom/OntoCanvas/compare/v1.8.2...v1.9.0) (2026-03-12)
 
 
