@@ -920,11 +920,10 @@ async function serializeBlockToTurtle(
         result = block.originalText || '';
       }
       
-      // Post-process to inline blank nodes
-      // CRITICAL: Always inline blank nodes used as objects, regardless of original format
-      // User requirement: "I DONT WANT TO SEE NODES REPRESENTED LIKE _:df_0_6"
-      // Check if N3 Writer output has blank node references that need inlining
-      const hasBlankRefsInOutput = /_:df_\d+_\d+/.test(result) || /_:n3-\d+/.test(result);
+      // Post-process to inline blank nodes if the original had inline blank nodes
+      // Check if original text has inline blank nodes (not explicit _: references)
+      const hasInlineBlanks = block.originalText && /\[[\s\S]*?\]/.test(block.originalText);
+      const hasExplicitBlanks = block.originalText && /_\:[a-zA-Z0-9_-]+\s+[a-z]/.test(block.originalText);
       
       /**
        * BLANK NODE INLINING ATTEMPTS - DOCUMENTED FOR FUTURE REFERENCE
@@ -937,22 +936,24 @@ async function serializeBlockToTurtle(
        *   - Issue: N3 Writer doesn't serialize blank node blocks when they're only used as objects
        *   - Result: convertBlanksToInline can't find blank node definitions to build inline forms from
        * 
-       * Attempt 2: buildInlineForms from block.quads + replaceBlankRefs (CURRENT - WORKING)
+       * Attempt 2: buildInlineForms from block.quads + replaceBlankRefs (FAILED)
        *   - Tried: Building inline forms directly from block.quads (which includes blank node quads)
        *   - Tried: Using replaceBlankRefs which has order-based replacement logic
-       *   - Status: Working - we build inline forms from block.quads and replace references in N3 Writer output
-       *   - Key fix: Collect blank node quads where blank is SUBJECT in reconstructFromCache
-       *   - Key fix: Strip _: prefix from blank node IDs when creating DataFactory.blankNode
+       *   - Issue: replaceBlankRefs expects blank node blocks in output to parse, but N3 Writer doesn't serialize them
+       *   - Issue: ID matching fails because N3 Writer generates new IDs (df_X_Y) different from original
+       *   - Result: Blank node references remain as _:df_X_Y instead of being inlined
        * 
-       * Approach: Build inline forms from block.quads (using original blank node IDs) and manually replace references
-       *   - Build inline forms directly from block.quads (which includes blank node quads)
-       *   - Parse N3 Writer output to find blank node references
-       *   - Remove blank node blocks from output
-       *   - Replace blank node references with inline forms using replaceBlankRefs
+       * Attempt 3: Manual replacement with inline forms array (CURRENT)
+       *   - Tried: Building inline forms from block.quads, then manually replacing blank node references in order
+       *   - Status: In progress - adding debugging to understand why replacement isn't working
+       * 
+       * Next approach if this fails: Structure-based matching
+       *   - Match blank nodes by comparing their quads (structure) rather than IDs
+       *   - This is more robust but requires parsing N3 Writer output and matching by structure
        */
       
       let processedResult = result;
-      if (hasBlankRefsInOutput) {
+      if (hasInlineBlanks && !hasExplicitBlanks) {
         // Approach 1: Build inline forms directly from block.quads (using original blank node IDs)
         // This is more robust because N3 Writer might not serialize blank node quads as separate blocks
         // when they're only used as objects
@@ -1001,104 +1002,111 @@ async function serializeBlockToTurtle(
             }
             
             if (inlineFormsFromQuads.size > 0) {
-              // Find blank node references in output using regex (don't parse - prefixes are removed)
-              // Find all blank node references like _:df_0_0 or _:n3-0
-              const blankNodeRefPattern = /_:df_\d+_\d+|_:n3-\d+/g;
-              const blankNodeRefs = result.match(blankNodeRefPattern);
-              debugLog('[serializeBlockToTurtle] Found blank node refs in output:', blankNodeRefs);
-              
-              if (blankNodeRefs && blankNodeRefs.length > 0) {
-                try {
-                  // Remove blank node blocks and replace references
-                  // replaceBlankRefs has logic to replace blank node references in object position
-                  // in order, regardless of ID matching, so we can just pass the inline forms map
-                  
-                  // First, try using replaceBlankRefs with the inline forms we built
-                  // But we need to remove blank node blocks first
-                  let output = result;
-                  const lines = output.split(/\r?\n/);
-                  const filteredLines: string[] = [];
-                  let i = 0;
-                  while (i < lines.length) {
-                    const line = lines[i];
-                    const trimmed = line.trim();
-                    if (trimmed.match(/^_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/)) {
-                      // Skip blank node block
-                      while (i < lines.length) {
-                        if (/\.\s*$/.test(lines[i].trim())) {
-                          i++;
-                          break;
-                        }
-                        i++;
-                      }
-                      continue;
-                    }
-                    filteredLines.push(line);
-                    i++;
+              // Parse N3 Writer output to find blank node references
+              const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
+              let outputQuads: N3Quad[];
+              try {
+                const parsed = parser.parse(result);
+                outputQuads = Array.isArray(parsed) ? parsed : [...parsed];
+                
+                // Find blank nodes used as objects in output
+                const outputBlankIds = new Set<string>();
+                for (const quad of outputQuads) {
+                  if (quad.object.termType === 'BlankNode') {
+                    const blankId = getBlankNodeId(quad.object as BlankNode);
+                    outputBlankIds.add(blankId);
                   }
-                  output = filteredLines.join('\n');
-                  
-                  // Log what we're trying to replace
-                  const blankRefsInOutput = output.match(/_:df_\d+_\d+|_:n3-\d+/g);
-                  debugLog('[serializeBlockToTurtle] Found blank node refs in output:', blankRefsInOutput);
-                  debugLog('[serializeBlockToTurtle] Output before replacement (first 200 chars):', output.substring(0, 200));
-                  
-                  // replaceBlankRefs will replace blank node references in object position in order
-                  // It has fallback logic that doesn't require ID matching
-                  processedResult = replaceBlankRefs(output, inlineFormsFromQuads);
-                  
-                  // Check if replacement worked
-                  const hasInlineAfterReplace = /\[[\s\S]*?\]/.test(processedResult);
-                  debugLog('[serializeBlockToTurtle] After replaceBlankRefs - has inline blanks:', hasInlineAfterReplace);
-                  debugLog('[serializeBlockToTurtle] Output after replaceBlankRefs (first 200 chars):', processedResult.substring(0, 200));
-                  
-                  // If that didn't work, try manual replacement
-                  if (!hasInlineAfterReplace && hasBlankRefs && inlineFormsFromQuads.size > 0) {
-                    debugLog('[serializeBlockToTurtle] replaceBlankRefs did not inline, trying manual replacement');
-                    
-                    // Get inline forms in order
-                    const inlineFormsArray = Array.from(inlineFormsFromQuads.values());
-                    debugLog('[serializeBlockToTurtle] Manual replacement: have', inlineFormsArray.length, 'inline forms');
-                    
-                    // Find all blank node references after rdfs:subClassOf
-                    const subClassOfMatch = output.match(/rdfs:subClassOf\s+(_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)(?:\s*,\s*_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))*)/);
-                    if (subClassOfMatch) {
-                      debugLog('[serializeBlockToTurtle] Found subClassOf with blank refs:', subClassOfMatch[1]);
-                      const blankRefs = subClassOfMatch[1].split(',').map((r: string) => r.trim());
-                      debugLog('[serializeBlockToTurtle] Split into', blankRefs.length, 'refs:', blankRefs);
-                      
-                      if (blankRefs.length <= inlineFormsArray.length) {
-                        const replacedRefs = blankRefs.map((ref: string, idx: number) => {
-                          if (idx < inlineFormsArray.length) {
-                            return inlineFormsArray[idx];
-                          }
-                          return ref;
-                        });
-                        const replacement = 'rdfs:subClassOf ' + replacedRefs.join(', ');
-                        debugLog('[serializeBlockToTurtle] Replacement (first 200 chars):', replacement.substring(0, 200));
-                        processedResult = output.replace(/rdfs:subClassOf\s+_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+(?:\s*,\s*_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))*)/, replacement);
-                        const hasInlineAfterManual = /\[[\s\S]*?\]/.test(processedResult);
-                        debugLog('[serializeBlockToTurtle] After manual replacement - has inline blanks:', hasInlineAfterManual);
-                        debugLog('[serializeBlockToTurtle] Output after manual (first 200 chars):', processedResult.substring(0, 200));
-                      } else {
-                        debugLog('[serializeBlockToTurtle] WARNING: More blank refs than inline forms!', blankRefs.length, 'vs', inlineFormsArray.length);
-                      }
-                    } else {
-                      debugLog('[serializeBlockToTurtle] WARNING: Could not find rdfs:subClassOf pattern in output');
-                    }
-                  }
-                  
-                  // Final check
-                  if (!/\[[\s\S]*?\]/.test(processedResult) && hasBlankRefs) {
-                    debugLog('[serializeBlockToTurtle] FINAL WARNING: All replacement attempts failed! Blank nodes not inlined.');
-                    debugLog('[serializeBlockToTurtle] Final output (first 300 chars):', processedResult.substring(0, 300));
-                  }
-                } catch (e) {
-                  debugLog('[serializeBlockToTurtle] Error inlining blank nodes, falling back to convertBlanksToInline:', e);
-                  processedResult = convertBlanksToInline(result, undefined, true);
                 }
-              } else {
-                debugLog('[serializeBlockToTurtle] No blank node refs found in output after removing prefixes');
+                
+                debugLog('[serializeBlockToTurtle] Found', outputBlankIds.size, 'blank nodes used as objects in output');
+                
+                // Remove blank node blocks and replace references
+                // replaceBlankRefs has logic to replace blank node references in object position
+                // in order, regardless of ID matching, so we can just pass the inline forms map
+                
+                // First, try using replaceBlankRefs with the inline forms we built
+                // But we need to remove blank node blocks first
+                let output = result;
+                const lines = output.split(/\r?\n/);
+                const filteredLines: string[] = [];
+                let i = 0;
+                while (i < lines.length) {
+                  const line = lines[i];
+                  const trimmed = line.trim();
+                  if (trimmed.match(/^_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/)) {
+                    // Skip blank node block
+                    while (i < lines.length) {
+                      if (/\.\s*$/.test(lines[i].trim())) {
+                        i++;
+                        break;
+                      }
+                      i++;
+                    }
+                    continue;
+                  }
+                  filteredLines.push(line);
+                  i++;
+                }
+                output = filteredLines.join('\n');
+                
+                // Log what we're trying to replace
+                const blankRefsInOutput = output.match(/_:df_\d+_\d+|_:n3-\d+/g);
+                debugLog('[serializeBlockToTurtle] Found blank node refs in output:', blankRefsInOutput);
+                debugLog('[serializeBlockToTurtle] Output before replacement (first 200 chars):', output.substring(0, 200));
+                
+                // replaceBlankRefs will replace blank node references in object position in order
+                // It has fallback logic that doesn't require ID matching
+                processedResult = replaceBlankRefs(output, inlineFormsFromQuads);
+                
+                // Check if replacement worked
+                const hasInlineAfterReplace = /\[[\s\S]*?\]/.test(processedResult);
+                debugLog('[serializeBlockToTurtle] After replaceBlankRefs - has inline blanks:', hasInlineAfterReplace);
+                debugLog('[serializeBlockToTurtle] Output after replaceBlankRefs (first 200 chars):', processedResult.substring(0, 200));
+                
+                // If that didn't work, try manual replacement
+                if (!hasInlineAfterReplace && hasBlankRefs && inlineFormsFromQuads.size > 0) {
+                  debugLog('[serializeBlockToTurtle] replaceBlankRefs did not inline, trying manual replacement');
+                  
+                  // Get inline forms in order
+                  const inlineFormsArray = Array.from(inlineFormsFromQuads.values());
+                  debugLog('[serializeBlockToTurtle] Manual replacement: have', inlineFormsArray.length, 'inline forms');
+                  
+                  // Find all blank node references after rdfs:subClassOf
+                  const subClassOfMatch = output.match(/rdfs:subClassOf\s+(_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)(?:\s*,\s*_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))*)/);
+                  if (subClassOfMatch) {
+                    debugLog('[serializeBlockToTurtle] Found subClassOf with blank refs:', subClassOfMatch[1]);
+                    const blankRefs = subClassOfMatch[1].split(',').map((r: string) => r.trim());
+                    debugLog('[serializeBlockToTurtle] Split into', blankRefs.length, 'refs:', blankRefs);
+                    
+                    if (blankRefs.length <= inlineFormsArray.length) {
+                      const replacedRefs = blankRefs.map((ref: string, idx: number) => {
+                        if (idx < inlineFormsArray.length) {
+                          return inlineFormsArray[idx];
+                        }
+                        return ref;
+                      });
+                      const replacement = 'rdfs:subClassOf ' + replacedRefs.join(', ');
+                      debugLog('[serializeBlockToTurtle] Replacement (first 200 chars):', replacement.substring(0, 200));
+                      processedResult = output.replace(/rdfs:subClassOf\s+_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+(?:\s*,\s*_:(?:df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))*)/, replacement);
+                      const hasInlineAfterManual = /\[[\s\S]*?\]/.test(processedResult);
+                      debugLog('[serializeBlockToTurtle] After manual replacement - has inline blanks:', hasInlineAfterManual);
+                      debugLog('[serializeBlockToTurtle] Output after manual (first 200 chars):', processedResult.substring(0, 200));
+                    } else {
+                      debugLog('[serializeBlockToTurtle] WARNING: More blank refs than inline forms!', blankRefs.length, 'vs', inlineFormsArray.length);
+                    }
+                  } else {
+                    debugLog('[serializeBlockToTurtle] WARNING: Could not find rdfs:subClassOf pattern in output');
+                  }
+                }
+                
+                // Final check
+                if (!/\[[\s\S]*?\]/.test(processedResult) && hasBlankRefs) {
+                  debugLog('[serializeBlockToTurtle] FINAL WARNING: All replacement attempts failed! Blank nodes not inlined.');
+                  debugLog('[serializeBlockToTurtle] Final output (first 300 chars):', processedResult.substring(0, 300));
+                }
+              } catch (e) {
+                debugLog('[serializeBlockToTurtle] Parsing failed, falling back to convertBlanksToInline:', e);
+                processedResult = convertBlanksToInline(result, undefined, true);
               }
             } else {
               debugLog('[serializeBlockToTurtle] No inline forms built, using original result');

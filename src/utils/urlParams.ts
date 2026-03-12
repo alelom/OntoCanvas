@@ -160,3 +160,53 @@ export function getAllDisplayFileUrls(ontologyUrl: string): string[] {
   
   return urls;
 }
+
+/**
+ * Convert an ontology URL to its HTML documentation URL.
+ * Converts the last path segment by replacing hyphens with underscores and adding .html extension.
+ * 
+ * Examples:
+ * - https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata
+ *   → https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html
+ * - https://example.org/ontology-name
+ *   → https://example.org/ontology_name.html
+ * 
+ * @param ontologyUrl - The ontology URL (may have hyphens, no extension)
+ * @returns The HTML documentation URL (with underscores and .html extension), or null if invalid
+ */
+export function convertOntologyUrlToHtmlUrl(ontologyUrl: string): string | null {
+  try {
+    const url = new URL(ontologyUrl);
+    const pathname = url.pathname;
+    
+    // Remove trailing slash if present
+    const cleanPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+    
+    // Extract the last path segment (filename)
+    const lastSlashIndex = cleanPath.lastIndexOf('/');
+    const fileName = lastSlashIndex >= 0 ? cleanPath.slice(lastSlashIndex + 1) : cleanPath;
+    
+    // Skip if filename is empty
+    if (!fileName) {
+      return null;
+    }
+    
+    // Remove any existing extension (e.g., .ttl, .html)
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const baseName = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
+    
+    // Replace hyphens with underscores
+    const htmlFileName = baseName.replace(/-/g, '_') + '.html';
+    
+    // Reconstruct the path
+    const htmlPath = lastSlashIndex >= 0 
+      ? cleanPath.slice(0, lastSlashIndex + 1) + htmlFileName
+      : '/' + htmlFileName;
+    
+    // Construct the full URL
+    url.pathname = htmlPath;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}

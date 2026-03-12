@@ -46,14 +46,7 @@ import {
   storeToTurtle,
   extractLocalName,
 } from './parser';
-import {
-  getOrRequestImageDirectory,
-  writeExampleImageFile,
-  getSafeExampleImageFileName,
-  openExampleImageUri,
-  getCachedImageDirectory,
-  clearCachedImageDirectory,
-} from './lib/exampleImageFiles';
+import type { OriginalFileCache } from './rdf/sourcePreservation';
 import { initExampleImagesSection } from './ui/exampleImagesSection';
 import {
   isDuplicateIdentifierForRename,
@@ -61,6 +54,7 @@ import {
   applyNodeFormToStore,
   type NodeFormData,
 } from './ui/nodeModalForm';
+import { editNodeProperties } from './workflows/editNodeProperties';
 import * as nodeModalFormUi from './ui/nodeModalFormUi';
 import { Store, DataFactory } from 'n3';
 import {
@@ -472,6 +466,7 @@ let loadedFilePath: string | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
 let originalTtlString: string | null = null; // Store original TTL to preserve format
+let originalFileCache: OriginalFileCache | null = null; // Store original file cache for source preservation
 let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
 let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: string; to: string; id?: string } | null) => void } | null = null;
 /** Initial data property restrictions when rename modal was opened (single-node mode). */
@@ -503,6 +498,69 @@ function performUndo(): void {
   updateUndoRedoButtons();
   hasUnsavedChanges = true;
   updateSaveButtonVisibility();
+  
+  // CRITICAL FIX: Deduplicate rawData.edges after undo to prevent duplicates
+  // This ensures that when expandWithExternalRefs runs, it doesn't create edges that already exist
+  const deduplicatedEdges: typeof rawData.edges = [];
+  const seenEdgeKeys = new Set<string>();
+  
+  for (const edge of rawData.edges) {
+    // Build all possible keys for this edge (accounting for URI/local name variations)
+    const keys = new Set<string>();
+    keys.add(`${edge.from}||${edge.to}||${edge.type}`);
+    
+    // Add variations with op.uri and op.name
+    const op = objectProperties.find((p) => p.name === edge.type || p.uri === edge.type);
+    if (op) {
+      if (op.name) keys.add(`${edge.from}||${edge.to}||${op.name}`);
+      if (op.uri) keys.add(`${edge.from}||${edge.to}||${op.uri}`);
+    }
+    
+    // Also add variations for from/to using local names
+    const fromLocal = edge.from.includes('#') ? edge.from.split('#').pop() : edge.from.includes('/') ? edge.from.split('/').pop() : edge.from;
+    const toLocal = edge.to.includes('#') ? edge.to.split('#').pop() : edge.to.includes('/') ? edge.to.split('/').pop() : edge.to;
+    if (fromLocal !== edge.from) {
+      keys.add(`${fromLocal}||${edge.to}||${edge.type}`);
+      if (op) {
+        if (op.name) keys.add(`${fromLocal}||${edge.to}||${op.name}`);
+        if (op.uri) keys.add(`${fromLocal}||${edge.to}||${op.uri}`);
+      }
+    }
+    if (toLocal !== edge.to) {
+      keys.add(`${edge.from}||${toLocal}||${edge.type}`);
+      if (op) {
+        if (op.name) keys.add(`${edge.from}||${toLocal}||${op.name}`);
+        if (op.uri) keys.add(`${edge.from}||${toLocal}||${op.uri}`);
+      }
+    }
+    if (fromLocal !== edge.from && toLocal !== edge.to) {
+      keys.add(`${fromLocal}||${toLocal}||${edge.type}`);
+      if (op) {
+        if (op.name) keys.add(`${fromLocal}||${toLocal}||${op.name}`);
+        if (op.uri) keys.add(`${fromLocal}||${toLocal}||${op.uri}`);
+      }
+    }
+    
+    // Check if any of these keys have been seen
+    let isDuplicate = false;
+    for (const key of keys) {
+      if (seenEdgeKeys.has(key)) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    
+    if (!isDuplicate) {
+      // Mark all keys as seen and add the edge
+      for (const key of keys) {
+        seenEdgeKeys.add(key);
+      }
+      deduplicatedEdges.push(edge);
+    }
+  }
+  
+  rawData.edges = deduplicatedEdges;
+  
   applyFilter(true);
 }
 
@@ -560,6 +618,24 @@ function updateUndoRedoButtons(): void {
   const redoBtn = document.getElementById('redoBtn') as HTMLButtonElement | null;
   if (undoBtn) undoBtn.disabled = undoStack.length === 0;
   if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
+// Helper to check if an edge already exists in rawData, handling both URI and local name formats
+function edgeExistsInRawData(from: string, to: string, type: string): boolean {
+  // Check exact match first
+  if (rawData.edges.some((e) => e.from === from && e.to === to && e.type === type)) {
+    return true;
+  }
+  // Check for URI/local name variations
+  const op = objectProperties.find((p) => p.name === type || p.uri === type);
+  if (op) {
+    return rawData.edges.some((e) => 
+      e.from === from && 
+      e.to === to && 
+      (e.type === op.name || e.type === op.uri)
+    );
+  }
+  return false;
 }
 
 function performDeleteSelection(): boolean {
@@ -649,7 +725,10 @@ function performDeleteSelection(): boolean {
       }
       edgeUndoActions.push(() => {
         addEdgeToStore(ttlStore!, from, to, type, card);
-        rawData.edges.push(edge ?? { from, to, type });
+        // Check if edge already exists before pushing to avoid duplicates
+        if (!edgeExistsInRawData(from, to, type)) {
+          rawData.edges.push(edge ?? { from, to, type });
+        }
       });
       edgeRedoActions.push(() => {
         // Del key deletion should remove both restriction and domain/range
@@ -673,7 +752,10 @@ function performDeleteSelection(): boolean {
         debugLog(`[DELETE] Removed edge from rawData after exception. Remaining edges: ${rawData.edges.length}`);
         edgeUndoActions.push(() => {
           addEdgeToStore(ttlStore!, from, to, type, card);
-          rawData.edges.push(edge);
+          // Check if edge already exists before pushing to avoid duplicates
+          if (!edgeExistsInRawData(from, to, type)) {
+            rawData.edges.push(edge);
+          }
         });
         edgeRedoActions.push(() => {
           // Del key deletion should remove both restriction and domain/range
@@ -703,7 +785,10 @@ function performDeleteSelection(): boolean {
       if (idx >= 0) rawData.edges.splice(idx, 1);
       edgeUndoActions.push(() => {
         addEdgeToStore(ttlStore!, from, to, type, card);
-        rawData.edges.push(edge ?? { from, to, type });
+        // Check if edge already exists before pushing to avoid duplicates
+        if (!edgeExistsInRawData(from, to, type)) {
+          rawData.edges.push(edge ?? { from, to, type });
+        }
       });
       edgeRedoActions.push(() => {
         // Del key deletion should remove both restriction and domain/range
@@ -722,7 +807,10 @@ function performDeleteSelection(): boolean {
         rawData.edges.splice(idx, 1);
         edgeUndoActions.push(() => {
           addEdgeToStore(ttlStore!, from, to, type, card);
-          rawData.edges.push(edge);
+          // Check if edge already exists before pushing to avoid duplicates
+          if (!edgeExistsInRawData(from, to, type)) {
+            rawData.edges.push(edge);
+          }
         });
         edgeRedoActions.push(() => {
           // Del key deletion should remove both restriction and domain/range
@@ -808,7 +896,13 @@ function performDeleteSelection(): boolean {
 
     externalUndoActions.push(() => {
       restoreQuadsToStore(ttlStore!, quadsToRestoreOnUndo);
-      edgesSnapshot.forEach((e) => rawData.edges.push(e));
+      edgesSnapshot.forEach((e) => {
+        // Check if edge already exists before pushing to avoid duplicates
+        const existingEdge = rawData.edges.find((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
+        if (!existingEdge) {
+          rawData.edges.push(e);
+        }
+      });
       if (userAddedNode) userAddedExternalNodes.push(userAddedNode);
     });
     externalRedoActions.push(() => {
@@ -3764,14 +3858,83 @@ function buildNetworkData(
   }
 
   // Deduplicate edges by id (same from, to, and type)
+  // CRITICAL: Also check for format variations (URI vs local name) to catch duplicates
   const edgeMap = new Map<string, Record<string, unknown>>();
+  const seenEdgeKeys = new Set<string>();
+  
   edges.forEach((edgeObj) => {
     const edgeId = edgeObj.id as string;
-    if (!edgeMap.has(edgeId)) {
+    const from = edgeObj.from as string;
+    const to = edgeObj.to as string;
+    const type = (edgeObj as { type?: string }).type as string;
+    
+    // Build all possible keys for this edge (accounting for URI/local name variations)
+    const keys = new Set<string>();
+    keys.add(edgeId); // Exact match
+    keys.add(`${from}->${to}:${type}`); // Also add without the exact ID format
+    
+    // Extract local names for from/to
+    const fromLocal = from.includes('#') ? from.split('#').pop() : from.includes('/') ? from.split('/').pop() : from;
+    const toLocal = to.includes('#') ? to.split('#').pop() : to.includes('/') ? to.split('/').pop() : to;
+    
+    // Add variations with op.uri and op.name
+    const op = objectProperties.find((p) => p.name === type || p.uri === type);
+    if (op) {
+      if (op.name && op.name !== type) {
+        keys.add(`${from}->${to}:${op.name}`);
+        if (fromLocal !== from) keys.add(`${fromLocal}->${to}:${op.name}`);
+        if (toLocal !== to) keys.add(`${from}->${toLocal}:${op.name}`);
+        if (fromLocal !== from && toLocal !== to) keys.add(`${fromLocal}->${toLocal}:${op.name}`);
+      }
+      if (op.uri && op.uri !== type) {
+        keys.add(`${from}->${to}:${op.uri}`);
+        if (fromLocal !== from) keys.add(`${fromLocal}->${to}:${op.uri}`);
+        if (toLocal !== to) keys.add(`${from}->${toLocal}:${op.uri}`);
+        if (fromLocal !== from && toLocal !== to) keys.add(`${fromLocal}->${toLocal}:${op.uri}`);
+      }
+    }
+    
+    // Add variations for from/to using local names
+    if (fromLocal !== from) {
+      keys.add(`${fromLocal}->${to}:${type}`);
+      if (op) {
+        if (op.name) keys.add(`${fromLocal}->${to}:${op.name}`);
+        if (op.uri) keys.add(`${fromLocal}->${to}:${op.uri}`);
+      }
+    }
+    if (toLocal !== to) {
+      keys.add(`${from}->${toLocal}:${type}`);
+      if (op) {
+        if (op.name) keys.add(`${from}->${toLocal}:${op.name}`);
+        if (op.uri) keys.add(`${from}->${toLocal}:${op.uri}`);
+      }
+    }
+    if (fromLocal !== from && toLocal !== to) {
+      keys.add(`${fromLocal}->${toLocal}:${type}`);
+      if (op) {
+        if (op.name) keys.add(`${fromLocal}->${toLocal}:${op.name}`);
+        if (op.uri) keys.add(`${fromLocal}->${toLocal}:${op.uri}`);
+      }
+    }
+    
+    // Check if any of these keys have been seen
+    let isDuplicate = false;
+    for (const key of keys) {
+      if (seenEdgeKeys.has(key)) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    
+    if (!isDuplicate) {
+      // Mark all keys as seen and add the edge
+      for (const key of keys) {
+        seenEdgeKeys.add(key);
+      }
       edgeMap.set(edgeId, edgeObj as Record<string, unknown>);
     } else {
       // Duplicate edge found - log it
-      console.warn('Duplicate edge detected:', edgeId, edgeObj);
+      debugWarn('Duplicate edge detected (format variation):', edgeId, edgeObj);
     }
   });
   const uniqueEdges = Array.from(edgeMap.values());
@@ -4229,21 +4392,58 @@ function showRenameModal(
   const exampleImagesContainer = document.getElementById('renameExampleImagesSection');
   if (exampleImagesContainer && ttlStore) {
     exampleImagesContainer.style.display = 'block';
+    // Get ontology base IRI for resolving relative URLs
+    // Always try to use the ontology base IRI first, as it's more reliable
+    const mainBase = getMainOntologyBase(ttlStore);
+    const classNs = getClassNamespace(ttlStore);
+    const ontologyBase = classNs ?? mainBase;
+    
+    // Extract base URL from ontology IRI (remove # and filename if present)
+    let ontologyLocationForImages: string | null = null;
+    
+    // First, try to use ontology base IRI
+    if (ontologyBase) {
+      const baseWithoutHash = ontologyBase.endsWith('#') ? ontologyBase.slice(0, -1) : ontologyBase;
+      try {
+        const baseUrl = new URL(baseWithoutHash);
+        // Remove filename from pathname to get directory
+        const pathname = baseUrl.pathname;
+        const lastSlashIndex = pathname.lastIndexOf('/');
+        if (lastSlashIndex >= 0) {
+          baseUrl.pathname = pathname.substring(0, lastSlashIndex + 1);
+        } else {
+          baseUrl.pathname = '/';
+        }
+        ontologyLocationForImages = baseUrl.toString();
+      } catch {
+        // Not a valid URL, try loadedFilePath as fallback
+      }
+    }
+    
+    // Fallback to loadedFilePath if it's a valid URL
+    if (!ontologyLocationForImages && loadedFilePath) {
+      try {
+        // Check if loadedFilePath is a valid URL
+        new URL(loadedFilePath);
+        ontologyLocationForImages = loadedFilePath;
+      } catch {
+        // Not a valid URL, keep as null
+      }
+    }
     initExampleImagesSection(exampleImagesContainer, {
       nodeId,
       isLocal: !!fileHandle,
       initialUris: renameModalExampleImageUris,
-      onAddImage: async (file: File) => {
-        const dir = await getOrRequestImageDirectory(fileHandle);
-        if (!dir || !ttlStore) return null;
-        const relativePath = getSafeExampleImageFileName(nodeId, renameModalExampleImageUris, file.name);
-        await writeExampleImageFile(dir, relativePath, file);
-        // Do not mutate the store here; confirmRename will apply the final list on Save.
-        // Otherwise cancelling the modal would leave phantom image refs in the store.
-        return relativePath;
+      ontologyLocation: ontologyLocationForImages,
+      onAddImage: async (_url: string) => {
+        // Just add the URL directly, no file operations
+        // The URL is already validated by the component and added to the list
       },
       onDelete: () => {},
-      onOpen: (uri: string) => openExampleImageUri(uri, getCachedImageDirectory()),
+      onOpen: (uri: string) => {
+        // Open URL in new tab
+        window.open(uri, '_blank', 'noopener,noreferrer');
+      },
       onUrisChange: (uris: string[]) => { renameModalExampleImageUris = uris; },
     });
   } else if (exampleImagesContainer) {
@@ -4412,19 +4612,58 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   const addNodeExampleImagesContainer = document.getElementById('addNodeExampleImagesSection');
   if (addNodeExampleImagesContainer && ttlStore) {
     addNodeExampleImagesContainer.style.display = 'block';
+    // Get ontology base IRI for resolving relative URLs
+    // Always try to use the ontology base IRI first, as it's more reliable
+    const mainBase = getMainOntologyBase(ttlStore);
+    const classNs = getClassNamespace(ttlStore);
+    const ontologyBase = classNs ?? mainBase;
+    
+    // Extract base URL from ontology IRI (remove # and filename if present)
+    let ontologyLocationForImages: string | null = null;
+    
+    // First, try to use ontology base IRI
+    if (ontologyBase) {
+      const baseWithoutHash = ontologyBase.endsWith('#') ? ontologyBase.slice(0, -1) : ontologyBase;
+      try {
+        const baseUrl = new URL(baseWithoutHash);
+        // Remove filename from pathname to get directory
+        const pathname = baseUrl.pathname;
+        const lastSlashIndex = pathname.lastIndexOf('/');
+        if (lastSlashIndex >= 0) {
+          baseUrl.pathname = pathname.substring(0, lastSlashIndex + 1);
+        } else {
+          baseUrl.pathname = '/';
+        }
+        ontologyLocationForImages = baseUrl.toString();
+      } catch {
+        // Not a valid URL, try loadedFilePath as fallback
+      }
+    }
+    
+    // Fallback to loadedFilePath if it's a valid URL
+    if (!ontologyLocationForImages && loadedFilePath) {
+      try {
+        // Check if loadedFilePath is a valid URL
+        new URL(loadedFilePath);
+        ontologyLocationForImages = loadedFilePath;
+      } catch {
+        // Not a valid URL, keep as null
+      }
+    }
     initExampleImagesSection(addNodeExampleImagesContainer, {
       nodeId: '__new',
       isLocal: !!fileHandle,
       initialUris: [],
-      onAddImage: async (file: File) => {
-        const dir = await getOrRequestImageDirectory(fileHandle);
-        if (!dir || !ttlStore) return null;
-        const relativePath = getSafeExampleImageFileName('__new', addNodeExampleImageUris, file.name);
-        await writeExampleImageFile(dir, relativePath, file);
-        return relativePath;
+      ontologyLocation: ontologyLocationForImages,
+      onAddImage: async (_url: string) => {
+        // Just add the URL directly, no file operations
+        // The URL is already validated by the component and added to the list
       },
       onDelete: () => {},
-      onOpen: (uri: string) => openExampleImageUri(uri, getCachedImageDirectory()),
+      onOpen: (uri: string) => {
+        // Open URL in new tab
+        window.open(uri, '_blank', 'noopener,noreferrer');
+      },
       onUrisChange: (uris: string[]) => { addNodeExampleImageUris = uris; },
     });
   }
@@ -5778,7 +6017,6 @@ function confirmRename(): void {
   const oldLabel = node.label;
   const oldAnnotationValuesCopy = { ...oldAnnotationValues };
   const oldDataProps = [...(node.dataPropertyRestrictions ?? [])];
-  const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
   const newFormData: NodeFormData = {
     comment: newComment,
@@ -5796,14 +6034,36 @@ function confirmRename(): void {
     dataPropertyRestrictions: oldDataProps,
   };
 
-  if (labelChanged) {
-    node.label = newLabel;
-    if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
-  }
+  // Calculate baseIri for undo/redo callbacks
+  const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
 
+  // Use workflow function if store is available, otherwise use fallback
   if (ttlStore) {
-    applyNodeFormToStore(nodeId, newFormData, ttlStore, node, baseIri, annotationProperties);
+    const result = editNodeProperties({
+      store: ttlStore,
+      nodeId,
+      node,
+      newLabel,
+      formData: newFormData,
+      annotationProperties,
+      existingNodeIds: new Set(rawData.nodes.map(n => n.id))
+    });
+
+    if (!result.success) {
+      const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
+      if (dupErr) {
+        dupErr.textContent = result.error || 'Failed to update node';
+        dupErr.style.display = 'block';
+      }
+      const okBtn = document.getElementById('renameConfirm') as HTMLButtonElement;
+      if (okBtn) okBtn.disabled = true;
+      return;
+    }
   } else {
+    // Fallback for when store is not available (shouldn't happen in normal flow)
+    if (labelChanged) {
+      node.label = newLabel;
+    }
     node.comment = newFormData.comment.trim() || undefined;
     node.exampleImages = newFormData.exampleImageUris.length > 0 ? newFormData.exampleImageUris : undefined;
     node.dataPropertyRestrictions = [...currentDataProps];
@@ -5853,7 +6113,7 @@ async function saveTtl(): Promise<void> {
   const doOverwrite = overwriteCb?.checked === true && fileHandle;
   try {
     debugLog('[saveTtl] Starting save, doOverwrite:', doOverwrite);
-    const ttlString = await storeToTurtle(ttlStore, externalOntologyReferences, originalTtlString ?? undefined);
+    const ttlString = await storeToTurtle(ttlStore, externalOntologyReferences, originalTtlString ?? undefined, originalFileCache ?? undefined);
     debugLog('[saveTtl] Got ttlString, length:', ttlString.length);
     if (doOverwrite) {
       if (!fileHandle) {
@@ -5865,6 +6125,17 @@ async function saveTtl(): Promise<void> {
       // Update originalTtlString to the newly saved content for idempotent round trips
       // This ensures that subsequent saves use the saved format as the reference
       originalTtlString = ttlString;
+      // Update cache if we used reconstruction (cache will be updated with new content)
+      if (originalFileCache) {
+        // Re-parse to update cache with new content
+        try {
+          const pathForParse = loadedFilePath ?? loadedFileName ?? '';
+          const { parseResult: newParseResult } = await loadOntologyFromContent(ttlString, pathForParse);
+          originalFileCache = newParseResult.originalFileCache ?? null;
+        } catch (e) {
+          debugWarn('[saveTtl] Failed to update cache after save:', e);
+        }
+      }
       debugLog('[saveTtl] File overwritten successfully');
     } else {
       const blob = new Blob([ttlString], { type: 'text/turtle' });
@@ -6405,7 +6676,10 @@ async function loadTtlAndRender(
     
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
-    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps } = parseResult;
+    const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps, originalFileCache: cache } = parseResult;
+    
+    // Store original file cache for source preservation
+    originalFileCache = cache ?? null;
     
     // Merge external refs early so we can detect used annotation properties before processing nodes
     const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
@@ -6656,7 +6930,6 @@ async function loadTtlAndRender(
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
-    if (!fileHandle) clearCachedImageDirectory();
     hasUnsavedChanges = false;
     clearUndoRedo();
     updateFilePathDisplay();
@@ -6708,7 +6981,7 @@ async function loadTtlAndRender(
     }
 
     setTimeout(() => {
-      updateStatusBar(ttlStore);
+      updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
     }, 0);
 
     if (handle && fileName) {
@@ -6971,6 +7244,37 @@ function applyFilter(preserveView = false): void {
       externalNodeLayout,
       nodePositions: loadedNodePositions ?? undefined,
     });
+    
+    // CRITICAL FIX: Deduplicate edges after expansion to prevent duplicates during undo
+    // This catches any edges that expandWithExternalRefs might have created that already exist
+    // Build a comprehensive deduplication map that handles all format variations
+    const seenEdges = new Map<string, boolean>();
+    graphDataForBuild.edges = graphDataForBuild.edges.filter((edge) => {
+      // Build all possible keys for this edge (accounting for URI/local name variations)
+      const keys = new Set<string>();
+      keys.add(`${edge.from}||${edge.to}||${edge.type}`);
+      
+      // Add variations with op.uri and op.name
+      const op = objectProperties.find((p) => p.name === edge.type || p.uri === edge.type);
+      if (op) {
+        if (op.name) keys.add(`${edge.from}||${edge.to}||${op.name}`);
+        if (op.uri) keys.add(`${edge.from}||${edge.to}||${op.uri}`);
+      }
+      
+      // Check if any of these keys have been seen
+      for (const key of keys) {
+        if (seenEdges.has(key)) {
+          return false; // Skip duplicate
+        }
+      }
+      
+      // Mark all keys as seen
+      for (const key of keys) {
+        seenEdges.set(key, true);
+      }
+      
+      return true;
+    });
   }
   for (const n of userAddedExternalNodes) {
     if (!graphDataForBuild.nodes.some((nn) => nn.id === n.id)) {
@@ -7210,9 +7514,13 @@ function applyFilter(preserveView = false): void {
           }
         }
         
+        // Convert ontology URL to HTML documentation URL (replaces hyphens with underscores, adds .html)
+        const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
+        const htmlUrl = convertOntologyUrlToHtmlUrl(url) || url;
+        
         // Fallback: open via URL (works for production/published ontologies)
         const base = window.location.origin + window.location.pathname;
-        window.open(`${base}?onto=${encodeURIComponent(url)}`, '_blank');
+        window.open(`${base}?onto=${encodeURIComponent(htmlUrl)}`, '_blank');
       });
     }
     

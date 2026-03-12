@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDisplayFileUrl, getAllDisplayFileUrls } from '../../src/utils/urlParams';
+import { getDisplayFileUrl, getAllDisplayFileUrls, convertOntologyUrlToHtmlUrl } from '../../src/utils/urlParams';
 
 describe('urlParams', () => {
   describe('getDisplayFileUrl', () => {
@@ -61,6 +61,68 @@ describe('urlParams', () => {
       const ontologyUrl = 'not-a-url';
       const displayUrls = getAllDisplayFileUrls(ontologyUrl);
       expect(displayUrls).toEqual([]);
+    });
+  });
+
+  describe('convertOntologyUrlToHtmlUrl', () => {
+    it('should convert ontology URL with hyphens to HTML URL with underscores', () => {
+      const ontologyUrl = 'https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html');
+    });
+
+    it('should convert ontology URL with hyphens and add .html extension', () => {
+      const ontologyUrl = 'https://example.org/ontology-name';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://example.org/ontology_name.html');
+    });
+
+    it('should handle URLs with multiple hyphens', () => {
+      const ontologyUrl = 'https://example.org/my-ontology-name-here';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://example.org/my_ontology_name_here.html');
+    });
+
+    it('should remove existing extension before converting', () => {
+      const ontologyUrl = 'https://example.org/ontology-name.ttl';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://example.org/ontology_name.html');
+    });
+
+    it('should handle URLs with path segments', () => {
+      const ontologyUrl = 'https://example.org/path/to/ontology-name';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://example.org/path/to/ontology_name.html');
+    });
+
+    it('should handle URLs with trailing slash', () => {
+      const ontologyUrl = 'https://example.org/ontology-name/';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://example.org/ontology_name.html');
+    });
+
+    it('should handle URLs without hyphens (just add .html)', () => {
+      const ontologyUrl = 'https://example.org/ontology';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://example.org/ontology.html');
+    });
+
+    it('should return null for invalid URLs', () => {
+      const ontologyUrl = 'not-a-url';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBeNull();
+    });
+
+    it('should return null for URLs with empty filename', () => {
+      const ontologyUrl = 'https://example.org/';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBeNull();
+    });
+
+    it('should handle the specific case from the issue', () => {
+      const ontologyUrl = 'https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata';
+      const htmlUrl = convertOntologyUrlToHtmlUrl(ontologyUrl);
+      expect(htmlUrl).toBe('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html');
     });
   });
 });

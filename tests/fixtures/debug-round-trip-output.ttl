@@ -78,7 +78,29 @@
     rdfs:label "Drawing sheet";
     rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
     :labellableRoot false;
+<<<<<<< HEAD
     rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Note> ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#RevisionTable> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Layout> ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingOrientation> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
+=======
+    rdfs:subClassOf _:df_32_0, _:df_32_1, _:df_32_2, _:df_32_3.
+    _:df_32_0 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass :Note.
+    _:df_32_1 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass :RevisionTable;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger;
+    owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger.
+    _:df_32_2 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger;
+    owl:onClass :Layout.
+    _:df_32_3 a owl:Restriction;
+    owl:onProperty :has;
+    owl:onClass :DrawingOrientation;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
+>>>>>>> 66ad222aacbaad29e2ebba3e21078ed9c874d22b
 :RevisionTable rdf:type owl:Class;
     rdfs:subClassOf :Metadata;
     rdfs:label "Revision table";
@@ -88,7 +110,19 @@
     rdfs:label "Layout";
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
     :labellableRoot true;
+<<<<<<< HEAD
     rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#DrawingElement> ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
+=======
+    rdfs:subClassOf _:df_32_4, _:df_32_5.
+    _:df_32_4 a owl:Restriction;
+    owl:onProperty :contains;
+    owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+    owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#DrawingElement>.
+    _:df_32_5 a owl:Restriction;
+    owl:onProperty :has;
+    owl:onClass :DrawingType;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
+>>>>>>> 66ad222aacbaad29e2ebba3e21078ed9c874d22b
 :DrawingOrientation rdf:type owl:Class;
     rdfs:subClassOf :Portrait, :Landscape;
     rdfs:label "DrawingOrientation".
@@ -141,7 +175,15 @@
     rdfs:label "Detail";
     rdfs:comment "Detail drawing";
     :labellableRoot true;
+<<<<<<< HEAD
     rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Orientation> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ].
+=======
+    rdfs:subClassOf :DrawingType, _:df_32_6.
+    _:df_32_6 a owl:Restriction;
+    owl:onProperty :has;
+    owl:onClass :Orientation;
+    owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger.
+>>>>>>> 66ad222aacbaad29e2ebba3e21078ed9c874d22b
 :Orientation rdf:type owl:Class;
     rdfs:label "Detail Orientation";
     rdfs:comment "Can be standalone label - drawing orientation";

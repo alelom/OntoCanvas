@@ -1,43 +1,31 @@
-@prefix : <http://example.org/aec-drawing-ontology#>.
-@prefix owl: <http://www.w3.org/2002/07/owl#>.
-@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
-@prefix xml: <http://www.w3.org/XML/1998/namespace#>.
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
-@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
-# Created/edited with https://alelom.github.io/OntoCanvas/ version 1.8.2
-
-:Detail rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:someValuesFrom :DetailLocation ].
+@prefix : <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 #################################################################
 #    Ontology
 #################################################################
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata> rdf:type owl:Ontology;
-    rdfs:label "AEC Drawing Metadata Ontology";
-    rdfs:comment "Sheet/layout/document structure for AEC drawings.", "Created/edited with https://alelom.github.io/OntoCanvas/ version 1.8.1";
-    owl:versionIRI <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata/1.0.0>;
-    owl:versionInfo "1.0.0";
-    owl:imports <http://www.w3.org/2002/07/owl#>, <http://www.w3.org/1999/02/22-rdf-syntax-ns#>, <http://www.w3.org/XML/1998/namespace#>, <http://www.w3.org/2001/XMLSchema#>, <http://www.w3.org/2000/01/rdf-schema#>, <https://burohappoldmachinelearning.github.io/ADIRO>, <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#> ;
-    owl:imports <http://example.org/aec-drawing-ontology#> ;
-    owl:imports <http://www.w3.org/1999/02/22-rdf-syntax-ns#> ;
-    owl:imports <http://www.w3.org/2000/01/rdf-schema#> ;
-    owl:imports <http://www.w3.org/2001/XMLSchema#> ;
-    owl:imports <http://www.w3.org/XML/1998/namespace#> ;
-    owl:imports <https://burohappoldmachinelearning.github.io> ;
-    owl:imports <https://burohappoldmachinelearning.github.io/ADIRO> ;
-    owl:imports <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#> ;
-    rdfs:comment "Created/edited with https://alelom.github.io/OntoCanvas/ version 1.8.2" .
+<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata> rdf:type owl:Ontology ;
+    rdfs:label "AEC Drawing Metadata Ontology" ;
+    rdfs:comment "Sheet/layout/document structure for AEC drawings." ;
+    owl:versionIRI <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata/1.0.0> ;
+    owl:versionInfo "1.0.0" ;
+    owl:imports <http://www.w3.org/2002/07/owl#> .
 
 
 #################################################################
 #    Annotation properties
 #################################################################
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#exampleImage> rdf:type owl:AnnotationProperty;
-    rdfs:label "example image"@en;
-    rdfs:comment "Links a class or concept to an example image illustrating it."@en.
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label "example image"@en ;
+    rdfs:comment "Links a class or concept to an example image illustrating it."@en .
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> rdf:type owl:AnnotationProperty;
+:labellableRoot rdf:type owl:AnnotationProperty;
     rdfs:label "Labellable root";
     rdfs:comment "When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).";
     rdfs:range xsd:boolean.
@@ -46,13 +34,13 @@
 #    Object Properties
 #################################################################
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> rdf:type owl:ObjectProperty;
+:contains rdf:type owl:ObjectProperty;
     rdfs:label "contains";
     rdfs:comment "Direct containment or has-part relationship. Min cardinality 0 by default (can contain).";
     rdfs:range owl:Thing;
     rdfs:domain owl:Thing.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> rdf:type owl:ObjectProperty;
+:has rdf:type owl:ObjectProperty;
     rdfs:label "hasProperty";
     rdfs:comment "Subject is characterised by a property.";
     rdfs:range owl:Thing;
@@ -62,147 +50,152 @@
 #    Data Properties
 #################################################################
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#refersToDrawingId> rdf:type owl:DatatypeProperty;
+:refersToDrawingId rdf:type owl:DatatypeProperty;
     rdfs:label "refersToDrawingId";
     rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
     rdfs:range xsd:string;
-    rdfs:domain <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#TextualNote>.
+    rdfs:domain :TextualNote.
 
 #################################################################
 #    Classes
 #################################################################
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#TextualNote> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Note>;
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
     rdfs:label "Text";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Note> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Metadata>;
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
     rdfs:label "Note";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Metadata> rdf:type owl:Class;
+:Metadata rdf:type owl:Class;
     rdfs:label "Metadata";
     rdfs:comment "Can be standalone label - drawing metadata";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingSheet> rdf:type owl:Class;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Note> ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#RevisionTable> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Layout> ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingOrientation> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+:DrawingSheet rdf:type owl:Class;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
     rdfs:label "Drawing sheet";
     rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#RevisionTable> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Metadata>;
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
     rdfs:label "Revision table";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Layout> rdf:type owl:Class;
-    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains> ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#DrawingElement> ], [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+:Layout rdf:type owl:Class;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
     rdfs:label "Layout";
     rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingOrientation> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Portrait>, <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Landscape>;
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
     rdfs:label "DrawingOrientation".
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType> rdf:type owl:Class;
+:DrawingType rdf:type owl:Class;
     rdfs:label "Drawing type";
     rdfs:comment "Type of drawing view";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Portrait> rdf:type owl:Class;
+:Portrait rdf:type owl:Class;
     rdfs:label "Portrait";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Landscape> rdf:type owl:Class;
+:Landscape rdf:type owl:Class;
     rdfs:label "Landscape";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Titleblock> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Metadata>;
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
     rdfs:label "Titleblock";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Legend> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Metadata>;
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
     rdfs:label "Legend";
     rdfs:comment "A legend containing mapping information between symbols and a text signifier.";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Image> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Note>;
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
     rdfs:label "Image";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Plan> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType>;
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
     rdfs:label "Plan";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Section> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType>;
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
     rdfs:label "Vertical Section";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Elevation> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType>;
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
     rdfs:label "Elevation";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Detail> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType>, [ rdf:type owl:Restriction ; owl:onProperty <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#has> ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Orientation> ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+:Detail rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DetailLocation ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ];
     rdfs:label "Detail";
     rdfs:comment "Detail drawing";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Orientation> rdf:type owl:Class;
+:Orientation rdf:type owl:Class;
     rdfs:label "Detail Orientation";
     rdfs:comment "Can be standalone label - drawing orientation";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Perspective> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DrawingType>;
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
     rdfs:label "Perspective";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DetailLocation> rdf:type owl:Class;
+:DetailLocation rdf:type owl:Class;
     rdfs:label "Detail location";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Base> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DetailLocation>;
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
     rdfs:label "Base";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Corner> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DetailLocation>;
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
     rdfs:label "Corner";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Head> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DetailLocation>;
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
     rdfs:label "Head";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#SlabEdge> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DetailLocation>;
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
     rdfs:label "Slab edge";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Typical> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#DetailLocation>;
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
     rdfs:label "Typical";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "false"^^xsd:boolean.
+    :labellableRoot "false"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Horizontal> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Orientation>;
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
     rdfs:label "Horizontal";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Vertical> rdf:type owl:Class;
-    rdfs:subClassOf <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#Orientation>;
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
     rdfs:label "Vertical";
-    <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#labellableRoot> "true"^^xsd:boolean.
+    :labellableRoot "true"^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment "Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.";
+    rdfs:label "Drawing element";
+    :labellableRoot "false"^^xsd:boolean.

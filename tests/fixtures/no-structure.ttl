@@ -1,0 +1,16 @@
+@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:Class1 rdf:type owl:Class ;
+    rdfs:label "Class 1" .
+
+:Property1 rdf:type owl:ObjectProperty ;
+    rdfs:label "Property 1" .
+
+:Class2 rdf:type owl:Class ;
+    rdfs:label "Class 2" .
+
+:Property2 rdf:type owl:ObjectProperty ;
+    rdfs:label "Property 2" .

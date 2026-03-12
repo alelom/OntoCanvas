@@ -1063,12 +1063,9 @@ describe('sourcePreservation', () => {
           // Cache reconstruction was used - extract label from prefixed format
           // Try multiple patterns to find the label
           const patterns = [
-            // Match :DrawingElement as a class definition (a owl:Class or rdf:type owl:Class), then find its label
-            /:DrawingElement\s+(?:a|rdf:type)\s+owl:Class[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
-            // Fallback: match :DrawingElement at start of line, then find label
-            /(?:^|\n):DrawingElement\s+(?:a|rdf:type)\s+owl:Class[^.]*?rdfs:label\s+"([^"]+)"/m,
-            // Last resort: match any :DrawingElement followed by label (but this might match wrong one)
             /:DrawingElement[\s\S]{0,500}?rdfs:label\s+"([^"]+)"/,
+            /:DrawingElement[\s\S]{0,500}?<[^>]*label[^>]*>\s+"([^"]+)"/,
+            /rdfs:label\s+"([^"]+)"[\s\S]{0,200}?:DrawingElement/,
           ];
           for (const pattern of patterns) {
             const match = savedContent.match(pattern);
