@@ -51,6 +51,71 @@ describe('ontologyUrlLoader', () => {
       ]);
     });
 
+    it('converts .html URLs to .ttl equivalents (from convertOntologyUrlToHtmlUrl)', () => {
+      const url = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html';
+      const candidates = getOntologyUrlCandidates(url);
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.ttl');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata.ttl');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata');
+      expect(candidates).toContain('https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata');
+      expect(candidates.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it('does not append /ontology.ttl to .html URLs', () => {
+      const url = 'https://example.com/ontology.html';
+      const candidates = getOntologyUrlCandidates(url);
+      // Should not contain .../ontology.html/ontology.ttl
+      expect(candidates.some(c => c.includes('.html/ontology.ttl'))).toBe(false);
+      // Should contain .ttl variants
+      expect(candidates.some(c => c.endsWith('.ttl'))).toBe(true);
+    });
+
+    it('handles .html URLs without underscores (just adds .ttl)', () => {
+      const url = 'https://example.com/ontology.html';
+      const candidates = getOntologyUrlCandidates(url);
+      expect(candidates).toContain('https://example.com/ontology.html');
+      expect(candidates).toContain('https://example.com/ontology.ttl');
+      expect(candidates).toContain('https://example.com/ontology');
+      // Should not have hyphen variant since there are no underscores
+      expect(candidates.filter(c => c.includes('ontolog-'))).toHaveLength(0);
+    });
+
+    it('handles .html URLs with multiple underscores', () => {
+      const url = 'https://example.com/my_ontology_name_here.html';
+      const candidates = getOntologyUrlCandidates(url);
+      expect(candidates).toContain('https://example.com/my_ontology_name_here.html');
+      expect(candidates).toContain('https://example.com/my_ontology_name_here.ttl');
+      expect(candidates).toContain('https://example.com/my-ontology-name-here.ttl');
+      expect(candidates).toContain('https://example.com/my_ontology_name_here');
+      expect(candidates).toContain('https://example.com/my-ontology-name-here');
+    });
+
+    it('handles .html URLs with trailing hash', () => {
+      const url = 'https://example.com/ontology.html#';
+      const candidates = getOntologyUrlCandidates(url);
+      // Hash should be stripped
+      expect(candidates.every(c => !c.endsWith('#'))).toBe(true);
+      expect(candidates).toContain('https://example.com/ontology.html');
+      expect(candidates).toContain('https://example.com/ontology.ttl');
+    });
+
+    it('handles .html URLs in subdirectories', () => {
+      const url = 'https://example.com/path/to/ontology_name.html';
+      const candidates = getOntologyUrlCandidates(url);
+      expect(candidates).toContain('https://example.com/path/to/ontology_name.html');
+      expect(candidates).toContain('https://example.com/path/to/ontology_name.ttl');
+      expect(candidates).toContain('https://example.com/path/to/ontology-name.ttl');
+    });
+
+    it('handles mixed case .HTML extension', () => {
+      const url = 'https://example.com/ontology.HTML';
+      const candidates = getOntologyUrlCandidates(url);
+      expect(candidates).toContain('https://example.com/ontology.HTML');
+      expect(candidates).toContain('https://example.com/ontology.ttl');
+      expect(candidates).toContain('https://example.com/ontology');
+    });
+
     it('invalid URL returns only normalized string', () => {
       const candidates = getOntologyUrlCandidates('not-a-url');
       expect(candidates).toEqual(['not-a-url']);
@@ -106,6 +171,64 @@ describe('ontologyUrlLoader', () => {
         fetchOntologyFromUrl('https://example.com/repo/latest/')
       ).rejects.toThrow(/Failed to fetch ontology/);
       expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(2);
+    });
+
+    it('tries multiple candidates for .html URLs (regression test)', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      // Simulate that the .html URL fails, but the .ttl variant succeeds
+      vi.mocked(fetchExternalOntologyTtl)
+        .mockResolvedValueOnce(null) // .html URL fails
+        .mockResolvedValueOnce('@prefix : <#> .'); // .ttl with underscores succeeds
+
+      const htmlUrl = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html';
+      const result = await fetchOntologyFromUrl(htmlUrl);
+      
+      expect(result).toBe('@prefix : <#> .');
+      // Should have tried multiple candidates
+      expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(2);
+      // Should have tried the .ttl variant
+      expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
+        'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.ttl',
+        { throwOnCors: true }
+      );
+    });
+
+    it('tries hyphen variant when underscore variant fails for .html URLs', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      // Simulate that underscore variant fails, but hyphen variant succeeds
+      vi.mocked(fetchExternalOntologyTtl)
+        .mockResolvedValueOnce(null) // .html URL fails
+        .mockResolvedValueOnce(null) // .ttl with underscores fails
+        .mockResolvedValueOnce('@prefix : <#> .'); // .ttl with hyphens succeeds
+
+      const htmlUrl = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.html';
+      const result = await fetchOntologyFromUrl(htmlUrl);
+      
+      expect(result).toBe('@prefix : <#> .');
+      // Should have tried multiple candidates including hyphen variant
+      expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(3);
+      expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
+        'https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata.ttl',
+        { throwOnCors: true }
+      );
+    });
+
+    it('does not try invalid .html/ontology.ttl path (regression test)', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      vi.mocked(fetchExternalOntologyTtl).mockResolvedValue(null);
+
+      const htmlUrl = 'https://example.com/ontology.html';
+      
+      // Should throw after trying all valid candidates
+      await expect(fetchOntologyFromUrl(htmlUrl)).rejects.toThrow(/Failed to fetch ontology/);
+      
+      // Verify that we never tried the invalid path
+      const calls = vi.mocked(fetchExternalOntologyTtl).mock.calls;
+      const invalidPaths = calls.filter(call => call[0].includes('.html/ontology.ttl'));
+      expect(invalidPaths.length).toBe(0);
+      
+      // But we should have tried valid candidates
+      expect(calls.length).toBeGreaterThan(0);
     });
   });
 });

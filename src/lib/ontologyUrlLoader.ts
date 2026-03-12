@@ -1,9 +1,14 @@
 const RDF_EXTENSIONS = /\.(ttl|owl|rdf|rdfxml|n3|jsonld)$/i;
+const HTML_EXTENSION = /\.html$/i;
 
 /**
  * Returns candidate URLs to try when loading an ontology. When the URL looks like a
  * directory (ends with / or has no RDF file extension), adds a fallback with ontology.ttl
  * so that e.g. https://example.org/repo/latest/ is tried as .../latest/ontology.ttl.
+ * 
+ * For .html URLs (from convertOntologyUrlToHtmlUrl), converts back to .ttl format
+ * by replacing .html with .ttl and optionally converting underscores back to hyphens.
+ * 
  * Used by fetchOntologyFromUrl and by tests.
  */
 export function getOntologyUrlCandidates(url: string): string[] {
@@ -15,7 +20,26 @@ export function getOntologyUrlCandidates(url: string): string[] {
     const endsWithSlash = pathname.endsWith('/');
     const lastSegment = pathname.split('/').filter(Boolean).pop() ?? '';
     const hasRdfExtension = RDF_EXTENSIONS.test(lastSegment);
-    if (endsWithSlash || !hasRdfExtension) {
+    const hasHtmlExtension = HTML_EXTENSION.test(lastSegment);
+    
+    if (hasHtmlExtension) {
+      // Handle .html URLs (from convertOntologyUrlToHtmlUrl)
+      // Convert back to .ttl: replace .html with .ttl, and optionally convert underscores to hyphens
+      const baseUrl = normalized.replace(/\.html$/i, '');
+      // Try with .ttl extension (keeping underscores as-is)
+      candidates.push(`${baseUrl}.ttl`);
+      // Also try converting underscores back to hyphens (reverse of convertOntologyUrlToHtmlUrl)
+      const withHyphens = baseUrl.replace(/_/g, '-');
+      if (withHyphens !== baseUrl) {
+        candidates.push(`${withHyphens}.ttl`);
+      }
+      // Also try the base URL without extension (for content negotiation)
+      candidates.push(baseUrl);
+      if (withHyphens !== baseUrl) {
+        candidates.push(withHyphens);
+      }
+    } else if (endsWithSlash || !hasRdfExtension) {
+      // Original logic: directory or no RDF extension
       const base = normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
       candidates.push(`${base}/ontology.ttl`);
     }
