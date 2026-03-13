@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/alelom/OntoCanvas/compare/v1.11.0...v1.12.0) (2026-03-13)
+
+
+### Features
+
+* enhance edge style filtering and debugging in network data processing ([3952177](https://github.com/alelom/OntoCanvas/commit/39521771490de58e3570f78ebd6236b37a1c04e3))
+
 # [1.11.0](https://github.com/alelom/OntoCanvas/compare/v1.10.0...v1.11.0) (2026-03-12)
 
 
