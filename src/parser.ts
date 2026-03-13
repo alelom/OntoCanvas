@@ -2823,6 +2823,37 @@ async function reconstructFromCache(
               }
             }
             debugLog('[reconstructFromCache] Added', addedCount, 'quads for restriction blank node:', blankId, '(total currentQuads now:', currentQuads.length, ')');
+            
+            // Validation: ensure blank node has required properties
+            const blankQuadsForValidation = blankQuads.length > 0 ? blankQuads : (blankId.startsWith('_:') ? store.getQuads(DataFactory.blankNode(blankId.slice(2)), null, null, null) : store.getQuads(DataFactory.blankNode(`_:${blankId}`), null, null, null));
+            const hasOnProperty = blankQuadsForValidation.some(q => (q.predicate as { value: string }).value.includes('onProperty'));
+            const hasOnClass = blankQuadsForValidation.some(q => (q.predicate as { value: string }).value.includes('onClass'));
+            const hasRestrictionType = blankQuadsForValidation.some(q => (q.predicate as { value: string }).value.includes('type') && q.object.termType === 'NamedNode' && (q.object as { value: string }).value.includes('Restriction'));
+            if (!hasOnProperty || !hasOnClass || !hasRestrictionType) {
+              debugLog('[reconstructFromCache] WARNING: Blank node', blankId, 'missing required properties - onProperty:', hasOnProperty, 'onClass:', hasOnClass, 'type:', hasRestrictionType);
+            }
+          }
+          
+          // Validation: ensure we collected blank node quads
+          const blankNodeQuadsAsSubjects = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
+          if (restrictionBlankNodes.size > 0 && blankNodeQuadsAsSubjects === 0) {
+            debugLog('[reconstructFromCache] ERROR: Found', restrictionBlankNodes.size, 'restriction blank nodes but NO quads where blank nodes are subjects!');
+            debugLog('[reconstructFromCache] This will cause buildInlineForms to create empty forms [ ]');
+          } else if (restrictionBlankNodes.size > 0) {
+            debugLog('[reconstructFromCache] SUCCESS: Collected', blankNodeQuadsAsSubjects, 'quads where blank nodes are subjects for', restrictionBlankNodes.size, 'restriction blank nodes');
+          }
+          
+          // Specific diagnostic for DrawingSheet class
+          if (block.subject && (block.subject.includes('DrawingSheet') || block.subject.includes('Drawing'))) {
+            debugLog('[reconstructFromCache] DIAGNOSTIC - DrawingSheet block (main path):', {
+              subject: block.subject,
+              resolvedUri: resolvedUri,
+              quadsBefore: currentQuadsBySubject.get(resolvedUri)?.length || 0,
+              quadsAfter: currentQuads.length,
+              blankNodeCount: restrictionBlankNodes.size,
+              blankNodeIds: Array.from(restrictionBlankNodes),
+              blankNodeQuadsAsSubjects: blankNodeQuadsAsSubjects
+            });
           }
         }
       } else {
@@ -2843,9 +2874,12 @@ async function reconstructFromCache(
             
             // Also include restriction blank node quads for class blocks
             if (block.type === 'Class') {
+              const quadsBeforeBlankNodes = currentQuads.length;
               const classSubject = DataFactory.namedNode(subjectUri);
               const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
               const restrictionBlankNodes = new Set<string>();
+              
+              debugLog('[reconstructFromCache] Class block:', block.subject, 'found', subClassOfQuads.length, 'rdfs:subClassOf quads');
               
               for (const subClassQuad of subClassOfQuads) {
                 if (subClassQuad.object.termType === 'BlankNode') {
@@ -2853,14 +2887,112 @@ async function reconstructFromCache(
                   restrictionBlankNodes.add(blankId);
                   // Include the subClassOf quad itself (connects class to blank node)
                   currentQuads.push(subClassQuad);
+                  debugLog('[reconstructFromCache] Found restriction blank node:', blankId, 'for class:', block.subject);
                 }
               }
               
+              debugLog('[reconstructFromCache] Total restriction blank nodes found:', restrictionBlankNodes.size, 'for class:', block.subject);
+              
+              // Log blank node IDs found vs expected (from original block.quads)
+              const originalBlankNodeIds = new Set<string>();
+              for (const q of block.quads) {
+                if (q.object.termType === 'BlankNode') {
+                  const origBlankId = (q.object as { id: string }).id;
+                  originalBlankNodeIds.add(origBlankId);
+                }
+                if (q.subject.termType === 'BlankNode') {
+                  const origBlankId = (q.subject as { id: string }).id;
+                  originalBlankNodeIds.add(origBlankId);
+                }
+              }
+              debugLog('[reconstructFromCache] Original block had', originalBlankNodeIds.size, 'blank node IDs:', Array.from(originalBlankNodeIds));
+              debugLog('[reconstructFromCache] Current store has', restrictionBlankNodes.size, 'blank node IDs:', Array.from(restrictionBlankNodes));
+              
+              // Use deduplication logic similar to main path
+              const quadSignatures = new Set<string>();
+              for (const q of currentQuads) {
+                const subjSig = q.subject.termType === 'NamedNode' ? q.subject.value : q.subject.termType === 'BlankNode' ? (q.subject as { id: string }).id : '';
+                const objSig = q.object.termType === 'NamedNode' ? q.object.value : q.object.termType === 'Literal' ? `"${(q.object as { value: string }).value}"` : q.object.termType === 'BlankNode' ? (q.object as { id: string }).id : '';
+                const sig = `${subjSig}|${q.predicate.value}|${objSig}`;
+                quadSignatures.add(sig);
+              }
+              
+              debugLog('[reconstructFromCache] Collecting blank node quads for', restrictionBlankNodes.size, 'blank nodes, currentQuads:', currentQuads.length);
               for (const blankId of restrictionBlankNodes) {
-                const blankNode = DataFactory.blankNode(blankId);
-                const blankQuads = store.getQuads(blankNode, null, null, null);
-                currentQuads.push(...blankQuads);
-                debugLog('[reconstructFromCache] Added', blankQuads.length, 'quads for restriction blank node:', blankId);
+                // CRITICAL: blankId might be in format "df_0_0" or "_:df_0_0" - need to handle both
+                // DataFactory.blankNode expects just the ID part (without _: prefix)
+                const cleanBlankId = blankId.startsWith('_:') ? blankId.slice(2) : blankId;
+                const blankNode = DataFactory.blankNode(cleanBlankId);
+                let blankQuads = store.getQuads(blankNode, null, null, null);
+                debugLog('[reconstructFromCache] Blank node', blankId, '(clean:', cleanBlankId, ') has', blankQuads.length, 'quads (where blank is SUBJECT)');
+                
+                // If no quads found, try with _: prefix
+                if (blankQuads.length === 0 && !blankId.startsWith('_:')) {
+                  const blankNodeWithPrefix = DataFactory.blankNode(`_:${blankId}`);
+                  const blankQuadsWithPrefix = store.getQuads(blankNodeWithPrefix, null, null, null);
+                  debugLog('[reconstructFromCache] Tried with _: prefix, found', blankQuadsWithPrefix.length, 'quads');
+                  if (blankQuadsWithPrefix.length > 0) {
+                    blankQuads = blankQuadsWithPrefix;
+                  }
+                }
+                
+                // Only add quads that aren't already in currentQuads (avoid duplicates)
+                let addedCount = 0;
+                for (const blankQuad of blankQuads) {
+                  const subjSig = (blankQuad.subject as { id: string }).id;
+                  const objSig = blankQuad.object.termType === 'NamedNode' ? blankQuad.object.value : blankQuad.object.termType === 'Literal' ? `"${(blankQuad.object as { value: string }).value}"` : blankQuad.object.termType === 'BlankNode' ? (blankQuad.object as { id: string }).id : '';
+                  const sig = `${subjSig}|${blankQuad.predicate.value}|${objSig}`;
+                  if (!quadSignatures.has(sig)) {
+                    currentQuads.push(blankQuad);
+                    quadSignatures.add(sig);
+                    addedCount++;
+                    debugLog('[reconstructFromCache] Added quad:', blankQuad.predicate.value, '->', objSig.substring(0, 50));
+                  } else {
+                    debugLog('[reconstructFromCache] Skipped duplicate quad:', sig.substring(0, 100));
+                  }
+                }
+                debugLog('[reconstructFromCache] Added', addedCount, 'quads for restriction blank node:', blankId, '(total currentQuads now:', currentQuads.length, ')');
+                
+                // Log what properties this blank node has
+                const blankNodeProps = blankQuads.map(q => {
+                  const pred = (q.predicate as { value: string }).value;
+                  const predLocal = pred.split('#').pop()?.split('/').pop() || pred;
+                  return predLocal;
+                });
+                debugLog('[reconstructFromCache] Blank node', blankId, 'has properties:', blankNodeProps);
+                
+                // Validation: ensure blank node has required properties
+                const hasOnProperty = blankQuads.some(q => (q.predicate as { value: string }).value.includes('onProperty'));
+                const hasOnClass = blankQuads.some(q => (q.predicate as { value: string }).value.includes('onClass'));
+                const hasRestrictionType = blankQuads.some(q => (q.predicate as { value: string }).value.includes('type') && q.object.termType === 'NamedNode' && (q.object as { value: string }).value.includes('Restriction'));
+                if (!hasOnProperty || !hasOnClass || !hasRestrictionType) {
+                  debugLog('[reconstructFromCache] WARNING: Blank node', blankId, 'missing required properties - onProperty:', hasOnProperty, 'onClass:', hasOnClass, 'type:', hasRestrictionType);
+                }
+              }
+              
+              const quadsAfterBlankNodes = currentQuads.length;
+              debugLog('[reconstructFromCache] Quads count - before blank nodes:', quadsBeforeBlankNodes, 'after:', quadsAfterBlankNodes, 'added:', quadsAfterBlankNodes - quadsBeforeBlankNodes);
+              
+              // Validation: ensure we collected blank node quads
+              const blankNodeQuadsAsSubjects = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
+              if (restrictionBlankNodes.size > 0 && blankNodeQuadsAsSubjects === 0) {
+                debugLog('[reconstructFromCache] ERROR: Found', restrictionBlankNodes.size, 'restriction blank nodes but NO quads where blank nodes are subjects!');
+                debugLog('[reconstructFromCache] This will cause buildInlineForms to create empty forms [ ]');
+              } else if (restrictionBlankNodes.size > 0) {
+                debugLog('[reconstructFromCache] SUCCESS: Collected', blankNodeQuadsAsSubjects, 'quads where blank nodes are subjects for', restrictionBlankNodes.size, 'restriction blank nodes');
+              }
+              
+              // Specific diagnostic for DrawingSheet class
+              if (block.subject && (block.subject.includes('DrawingSheet') || block.subject.includes('Drawing'))) {
+                debugLog('[reconstructFromCache] DIAGNOSTIC - DrawingSheet block:', {
+                  subject: block.subject,
+                  quadsBefore: quadsBeforeBlankNodes,
+                  quadsAfter: quadsAfterBlankNodes,
+                  blankNodeCount: restrictionBlankNodes.size,
+                  blankNodeIds: Array.from(restrictionBlankNodes),
+                  expectedBlankNodes: originalBlankNodeIds.size,
+                  blankNodeQuadsAsSubjects: blankNodeQuadsAsSubjects
+                });
               }
             }
             break;

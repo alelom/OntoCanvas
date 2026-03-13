@@ -919,6 +919,7 @@ async function serializeBlockToTurtle(
   
   // ARCHITECTURAL FIX: For simple label changes, do targeted text replacement
   // instead of full serialization to preserve property ordering
+  // ENHANCEMENT: Also handle blocks with restrictions if restrictions haven't changed
   if (block.originalText && block.isModified) {
     // Check if only label changed (compare quads - if only rdfs:label is different, do targeted replacement)
     const labelQuads = block.quads.filter(q => (q.predicate as { value: string }).value.includes('label'));
@@ -934,13 +935,105 @@ async function serializeBlockToTurtle(
         const labelPattern = /rdfs:label\s+"([^"]+)"/;
         const match = block.originalText.match(labelPattern);
         if (match && match[1] !== newLabel) {
-          // Replace the label value in original text
-          const updatedText = block.originalText.replace(
-            labelPattern,
-            `rdfs:label "${newLabel.replace(/"/g, '\\"')}"`
+          // ENHANCEMENT: Check if block has restrictions (blank nodes)
+          // If it does, verify restrictions haven't changed by comparing structures
+          const blankNodeQuads = block.quads.filter(q => 
+            q.subject.termType === 'BlankNode' || q.object.termType === 'BlankNode'
           );
-          debugLog('[serializeBlockToTurtle] Using targeted label replacement to preserve property order');
-          return updatedText;
+          
+          if (blankNodeQuads.length > 0) {
+            // Block has restrictions - need to verify they haven't changed
+            // Get original block from cache to compare restriction structures
+            let restrictionsUnchanged = true;
+            if (cache) {
+              const originalBlock = cache.statementBlocks.find(b => 
+                b.position.start === block.position.start && 
+                b.position.end === block.position.end &&
+                b.subject === block.subject
+              );
+              
+              if (originalBlock && originalBlock.quads) {
+                // Group blank node quads by blank node ID (from current block)
+                const currentBlankQuadsBySubject = new Map<string, N3Quad[]>();
+                for (const quad of block.quads) {
+                  if (quad.subject.termType === 'BlankNode') {
+                    const blankId = getBlankNodeId(quad.subject as BlankNode);
+                    const list = currentBlankQuadsBySubject.get(blankId) || [];
+                    list.push(quad);
+                    currentBlankQuadsBySubject.set(blankId, list);
+                  }
+                }
+                
+                // Group blank node quads by blank node ID (from original block)
+                const originalBlankQuadsBySubject = new Map<string, N3Quad[]>();
+                for (const quad of originalBlock.quads) {
+                  if (quad.subject.termType === 'BlankNode') {
+                    const blankId = getBlankNodeId(quad.subject as BlankNode);
+                    const list = originalBlankQuadsBySubject.get(blankId) || [];
+                    list.push(quad);
+                    originalBlankQuadsBySubject.set(blankId, list);
+                  }
+                }
+                
+                // Compare structures: each current blank node should match an original blank node
+                if (currentBlankQuadsBySubject.size !== originalBlankQuadsBySubject.size) {
+                  restrictionsUnchanged = false;
+                  debugLog('[serializeBlockToTurtle] Restriction count changed:', currentBlankQuadsBySubject.size, 'vs', originalBlankQuadsBySubject.size);
+                } else {
+                  // Match each current blank node to an original by structure
+                  const matchedOriginalBlanks = new Set<string>();
+                  for (const [currentBlankId, currentQuads] of currentBlankQuadsBySubject.entries()) {
+                    let foundMatch = false;
+                    for (const [originalBlankId, originalQuads] of originalBlankQuadsBySubject.entries()) {
+                      if (matchedOriginalBlanks.has(originalBlankId)) continue;
+                      
+                      if (currentQuads.length === originalQuads.length &&
+                          blankNodesMatchByStructure(currentQuads, originalQuads)) {
+                        matchedOriginalBlanks.add(originalBlankId);
+                        foundMatch = true;
+                        break;
+                      }
+                    }
+                    if (!foundMatch) {
+                      restrictionsUnchanged = false;
+                      debugLog('[serializeBlockToTurtle] Restriction structure changed for blank node:', currentBlankId);
+                      break;
+                    }
+                  }
+                }
+              } else {
+                // No original block found - can't verify, so don't use targeted replacement
+                restrictionsUnchanged = false;
+                debugLog('[serializeBlockToTurtle] No original block found to compare restrictions');
+              }
+            } else {
+              // No cache - can't verify, so don't use targeted replacement
+              restrictionsUnchanged = false;
+              debugLog('[serializeBlockToTurtle] No cache available to compare restrictions');
+            }
+            
+            if (!restrictionsUnchanged) {
+              debugLog('[serializeBlockToTurtle] Restrictions changed, cannot use targeted replacement');
+              // Fall through to full serialization
+            } else {
+              debugLog('[serializeBlockToTurtle] Restrictions unchanged, using targeted label replacement');
+              // Restrictions are unchanged, safe to use targeted replacement
+              const updatedText = block.originalText.replace(
+                labelPattern,
+                `rdfs:label "${newLabel.replace(/"/g, '\\"')}"`
+              );
+              debugLog('[serializeBlockToTurtle] Using targeted label replacement to preserve property order (with restrictions)');
+              return updatedText;
+            }
+          } else {
+            // No restrictions - safe to use targeted replacement
+            const updatedText = block.originalText.replace(
+              labelPattern,
+              `rdfs:label "${newLabel.replace(/"/g, '\\"')}"`
+            );
+            debugLog('[serializeBlockToTurtle] Using targeted label replacement to preserve property order');
+            return updatedText;
+          }
         }
       }
     }
@@ -1213,17 +1306,34 @@ async function serializeBlockToTurtle(
             // Log the inline forms for debugging
             if (inlineFormsFromQuads.size > 0) {
               debugLog('[serializeBlockToTurtle] Inline forms keys:', Array.from(inlineFormsFromQuads.keys()));
-              const firstForm = Array.from(inlineFormsFromQuads.values())[0];
-              debugLog('[serializeBlockToTurtle] First inline form:', firstForm);
+              const inlineFormsArray = Array.from(inlineFormsFromQuads.values());
+              debugLog('[serializeBlockToTurtle] Inline forms count:', inlineFormsArray.length);
+              
+              // Log all inline forms, not just the first
+              inlineFormsArray.forEach((form, idx) => {
+                debugLog('[serializeBlockToTurtle] Inline form', idx + 1, ':', form.substring(0, 200));
+                if (form === '[  ]' || form.trim() === '[]') {
+                  debugLog('[serializeBlockToTurtle] ERROR: Inline form', idx + 1, 'is EMPTY!');
+                }
+              });
+              
+              const firstForm = inlineFormsArray[0];
               // Only log error if we have blank node references in output AND the form is empty
               // This avoids false positives for blocks that don't have blank nodes
               if ((firstForm === '[  ]' || firstForm.trim() === '[]') && hasBlankRefs) {
                 debugLog('[serializeBlockToTurtle] ERROR: First inline form is EMPTY! This means blank node quads are missing.');
+                debugLog('[serializeBlockToTurtle] Block subject:', block.subject);
+                debugLog('[serializeBlockToTurtle] Total quads in block:', block.quads.length);
+                debugLog('[serializeBlockToTurtle] Blank nodes as subjects:', blankNodeAsSubject.length);
+                debugLog('[serializeBlockToTurtle] Blank nodes as objects:', blankNodeAsObject.length);
               }
             } else {
               // Only warn if we expected inline forms (have blank refs in output)
               if (hasBlankRefs) {
                 debugLog('[serializeBlockToTurtle] WARNING: No inline forms built from', block.quads.length, 'quads, but blank node refs found in output!');
+                debugLog('[serializeBlockToTurtle] Block subject:', block.subject);
+                debugLog('[serializeBlockToTurtle] Blank nodes as subjects:', blankNodeAsSubject.length);
+                debugLog('[serializeBlockToTurtle] Blank nodes as objects:', blankNodeAsObject.length);
               }
             }
             
@@ -1236,43 +1346,149 @@ async function serializeBlockToTurtle(
               
               if (blankNodeRefs && blankNodeRefs.length > 0) {
                 try {
-                  // Remove blank node blocks and replace references
-                  // replaceBlankRefs has logic to replace blank node references in object position
-                  // in order, regardless of ID matching, so we can just pass the inline forms map
+                  // IMPROVEMENT: Use structure-based matching to map N3 Writer output blank node IDs
+                  // to block.quads blank node IDs, then use inline forms
                   
-                  // First, try using replaceBlankRefs with the inline forms we built
-                  // But we need to remove blank node blocks first
-                  let output = result;
-                const lines = output.split(/\r?\n/);
-                const filteredLines: string[] = [];
-                let i = 0;
-                while (i < lines.length) {
-                  const line = lines[i];
-                  const trimmed = line.trim();
-                  if (trimmed.match(/^_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/)) {
-                    // Skip blank node block
-                    while (i < lines.length) {
-                      if (/\.\s*$/.test(lines[i].trim())) {
-                        i++;
-                        break;
+                  // Step 1: Parse N3 Writer output to get blank node structures
+                  const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
+                  let outputQuads: N3Quad[] = [];
+                  let structureBasedMatchingWorked = false;
+                  const outputIdToInlineForm = new Map<string, string>();
+                  
+                  try {
+                    const parsed = parser.parse(result);
+                    outputQuads = Array.isArray(parsed) ? parsed : [...parsed];
+                    debugLog('[serializeBlockToTurtle] Parsed N3 Writer output, got', outputQuads.length, 'quads');
+                    
+                    // Step 2: Group quads by blank node subject (from output and block.quads)
+                    const outputQuadsByBlankSubject = new Map<string, N3Quad[]>();
+                    const blockQuadsByBlankSubject = new Map<string, N3Quad[]>();
+                    
+                    for (const quad of outputQuads) {
+                      if (quad.subject.termType === 'BlankNode') {
+                        const blankId = getBlankNodeId(quad.subject as BlankNode);
+                        const list = outputQuadsByBlankSubject.get(blankId) || [];
+                        list.push(quad);
+                        outputQuadsByBlankSubject.set(blankId, list);
                       }
-                      i++;
                     }
-                    continue;
+                    
+                    for (const quad of block.quads) {
+                      if (quad.subject.termType === 'BlankNode') {
+                        const blankId = getBlankNodeId(quad.subject as BlankNode);
+                        const list = blockQuadsByBlankSubject.get(blankId) || [];
+                        list.push(quad);
+                        blockQuadsByBlankSubject.set(blankId, list);
+                      }
+                    }
+                    
+                    debugLog('[serializeBlockToTurtle] Output has', outputQuadsByBlankSubject.size, 'blank nodes as subjects');
+                    debugLog('[serializeBlockToTurtle] Block.quads has', blockQuadsByBlankSubject.size, 'blank nodes as subjects');
+                    
+                    // Step 3: Match blank nodes by structure and create mapping: outputBlankId -> inlineForm
+                    const matchedBlockBlanks = new Set<string>();
+                    
+                    // Find blank nodes used as objects in output (these need to be inlined)
+                    const blankNodesUsedAsObjects = new Set<string>();
+                    for (const quad of outputQuads) {
+                      if (quad.object.termType === 'BlankNode') {
+                        const blankId = getBlankNodeId(quad.object as BlankNode);
+                        blankNodesUsedAsObjects.add(blankId);
+                      }
+                    }
+                    
+                    debugLog('[serializeBlockToTurtle] Found', blankNodesUsedAsObjects.size, 'blank nodes used as objects in output');
+                    
+                    // Match each output blank node to a block blank node by structure
+                    for (const outputBlankId of blankNodesUsedAsObjects) {
+                      const outputQuadsForBlank = outputQuadsByBlankSubject.get(outputBlankId);
+                      if (!outputQuadsForBlank || outputQuadsForBlank.length === 0) {
+                        debugLog('[serializeBlockToTurtle] No quads found for output blank node:', outputBlankId);
+                        continue;
+                      }
+                      
+                      // Find matching blank node in block.quads by comparing structure
+                      let matchedBlockBlankId: string | null = null;
+                      for (const [blockBlankId, blockQuadsForBlank] of blockQuadsByBlankSubject.entries()) {
+                        if (matchedBlockBlanks.has(blockBlankId)) continue; // Already matched
+                        
+                        if (outputQuadsForBlank.length === blockQuadsForBlank.length &&
+                            blankNodesMatchByStructure(outputQuadsForBlank, blockQuadsForBlank)) {
+                          matchedBlockBlankId = blockBlankId;
+                          matchedBlockBlanks.add(blockBlankId);
+                          debugLog('[serializeBlockToTurtle] Matched output blank', outputBlankId, 'to block blank', blockBlankId, 'by structure');
+                          break;
+                        }
+                      }
+                      
+                      if (matchedBlockBlankId) {
+                        const inlineForm = inlineFormsFromQuads.get(matchedBlockBlankId);
+                        if (inlineForm) {
+                          outputIdToInlineForm.set(outputBlankId, inlineForm);
+                          debugLog('[serializeBlockToTurtle] Mapped output blank', outputBlankId, 'to inline form (length:', inlineForm.length, ')');
+                        } else {
+                          debugLog('[serializeBlockToTurtle] WARNING: Found match but no inline form for block blank', matchedBlockBlankId);
+                        }
+                      } else {
+                        debugLog('[serializeBlockToTurtle] WARNING: Could not match output blank', outputBlankId, 'to any block blank by structure');
+                      }
+                    }
+                    
+                    debugLog('[serializeBlockToTurtle] Structure-based matching created', outputIdToInlineForm.size, 'mappings out of', blankNodesUsedAsObjects.size, 'blank nodes');
+                    structureBasedMatchingWorked = outputIdToInlineForm.size > 0;
+                  } catch (parseError) {
+                    debugLog('[serializeBlockToTurtle] Failed to parse N3 Writer output for structure matching:', parseError);
+                    // Will fall back to order-based replacement below
                   }
-                  filteredLines.push(line);
-                  i++;
-                }
-                output = filteredLines.join('\n');
-                
-                // Log what we're trying to replace
-                const blankRefsInOutput = output.match(/_:df_\d+_\d+|_:n3-\d+/g);
-                debugLog('[serializeBlockToTurtle] Found blank node refs in output:', blankRefsInOutput);
-                debugLog('[serializeBlockToTurtle] Output before replacement (first 200 chars):', output.substring(0, 200));
-                
-                // replaceBlankRefs will replace blank node references in object position in order
-                // It has fallback logic that doesn't require ID matching
-                processedResult = replaceBlankRefs(output, inlineFormsFromQuads);
+                  
+                  // Step 4: Remove blank node blocks and replace references using structure-based mapping
+                  let output = result;
+                  const lines = output.split(/\r?\n/);
+                  const filteredLines: string[] = [];
+                  let i = 0;
+                  while (i < lines.length) {
+                    const line = lines[i];
+                    const trimmed = line.trim();
+                    if (trimmed.match(/^_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/)) {
+                      // Skip blank node block
+                      while (i < lines.length) {
+                        if (/\.\s*$/.test(lines[i].trim())) {
+                          i++;
+                          break;
+                        }
+                        i++;
+                      }
+                      continue;
+                    }
+                    filteredLines.push(line);
+                    i++;
+                  }
+                  output = filteredLines.join('\n');
+                  
+                  // Log what we're trying to replace
+                  const blankRefsInOutput = output.match(/_:df_\d+_\d+|_:n3-\d+/g);
+                  debugLog('[serializeBlockToTurtle] Found blank node refs in output:', blankRefsInOutput);
+                  debugLog('[serializeBlockToTurtle] Output before replacement (first 200 chars):', output.substring(0, 200));
+                  
+                  // Step 5: Replace blank node references using structure-based mapping
+                  // If structure-based matching worked, use that mapping; otherwise fall back to order-based
+                  if (structureBasedMatchingWorked && outputIdToInlineForm.size > 0) {
+                    debugLog('[serializeBlockToTurtle] Using structure-based mapping for', outputIdToInlineForm.size, 'blank nodes');
+                    // Replace using structure-based mapping
+                    for (const [outputBlankId, inlineForm] of outputIdToInlineForm.entries()) {
+                      const ref = outputBlankId.startsWith('_:') ? outputBlankId : `_:${outputBlankId}`;
+                      const escapedRef = ref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                      // Match blank node references in object position (after predicates or commas)
+                      const pattern = new RegExp(`(?<![\\w:-])${escapedRef}(?=[.,;\\s\\]\\n]|$)`, 'g');
+                      output = output.replace(pattern, inlineForm);
+                      debugLog('[serializeBlockToTurtle] Replaced', ref, 'with inline form');
+                    }
+                    processedResult = output;
+                  } else {
+                    debugLog('[serializeBlockToTurtle] Structure-based matching failed or incomplete, falling back to replaceBlankRefs');
+                    // Fall back to replaceBlankRefs which has order-based replacement logic
+                    processedResult = replaceBlankRefs(output, inlineFormsFromQuads);
+                  }
                 
                 // Check if replacement worked
                 const hasInlineAfterReplace = /\[[\s\S]*?\]/.test(processedResult);
@@ -1316,9 +1532,15 @@ async function serializeBlockToTurtle(
                 }
                 
                 // Final check
-                if (!/\[[\s\S]*?\]/.test(processedResult) && hasBlankRefs) {
+                const finalHasInline = /\[[\s\S]*?\]/.test(processedResult);
+                if (!finalHasInline && hasBlankRefs) {
                   debugLog('[serializeBlockToTurtle] FINAL WARNING: All replacement attempts failed! Blank nodes not inlined.');
+                  debugLog('[serializeBlockToTurtle] Block subject:', block.subject);
                   debugLog('[serializeBlockToTurtle] Final output (first 300 chars):', processedResult.substring(0, 300));
+                  debugLog('[serializeBlockToTurtle] Inline forms available:', inlineFormsFromQuads.size);
+                  debugLog('[serializeBlockToTurtle] Blank refs in output:', blankRefsInOutput);
+                } else if (finalHasInline) {
+                  debugLog('[serializeBlockToTurtle] SUCCESS: Blank nodes successfully inlined for block:', block.subject);
                 }
                 } catch (e) {
                   debugLog('[serializeBlockToTurtle] Error inlining blank nodes, falling back to convertBlanksToInline:', e);
