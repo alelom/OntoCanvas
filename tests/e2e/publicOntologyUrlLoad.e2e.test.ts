@@ -33,7 +33,7 @@ describe('Public ontology URL load E2E', () => {
         const res = await fetch(url, {
           method: 'GET',
           redirect: 'follow',
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(5000), // Reduced from 10000ms to 5000ms
           headers: {
             Accept: 'text/turtle, application/rdf+xml, application/ld+json, */*',
           },
@@ -61,7 +61,8 @@ describe('Public ontology URL load E2E', () => {
         await urlInput.fill(ontologyUrl);
         await urlInput.press('Enter');
 
-        await page.locator('#vizControls').waitFor({ state: 'visible', timeout: 15000 });
+        // Reduced from 15000ms to 10000ms (max allowed per project rule)
+        await page.locator('#vizControls').waitFor({ state: 'visible', timeout: 10000 });
         await page.waitForFunction(
           () => {
             const nodeCountEl = document.getElementById('nodeCount');
@@ -73,7 +74,7 @@ describe('Public ontology URL load E2E', () => {
               Number(nodeCount) >= 1
             );
           },
-          { timeout: 10000 }
+          { timeout: 5000 } // Reduced from 10000ms to 5000ms
         );
         const nodeCount = await page.locator('#nodeCount').textContent();
         expect(Number(nodeCount?.trim())).toBeGreaterThanOrEqual(1);

@@ -463,6 +463,8 @@ let addNodeModalShowing = false;
 let ttlStore: import('n3').Store | null = null;
 let loadedFileName: string | null = null;
 let loadedFilePath: string | null = null;
+// Flag to skip slow operations (IndexedDB, rendering delays) when loading via test hook
+let skipSlowOperationsForTests = false;
 let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
 let originalTtlString: string | null = null; // Store original TTL to preserve format
@@ -6262,7 +6264,7 @@ async function saveTtl(): Promise<void> {
         } catch (e) {
           // Ignore errors if element was already removed
         }
-        URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
       }, 1000);
       debugLog('[saveTtl] File download triggered');
     }
@@ -6792,11 +6794,15 @@ async function loadTtlAndRender(
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps, originalFileCache: cache } = parseResult;
     
+    // Store the store early so tests can detect when parsing is complete
+    ttlStore = store;
+    
     // Store original file cache for source preservation
     originalFileCache = cache ?? null;
     
     // Merge external refs early so we can detect used annotation properties before processing nodes
-    const dbRefs = await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
+    // Skip IndexedDB operations in test mode for faster execution
+    const dbRefs = skipSlowOperationsForTests ? [] : await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
     const mergedRefs: ExternalOntologyReference[] = [];
     const seenUrls = new Set<string>();
     
@@ -7037,7 +7043,7 @@ async function loadTtlAndRender(
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
-    ttlStore = store;
+    // ttlStore already set earlier after parsing (for faster test detection)
     knownExternalClassUris = new Set();
     userAddedExternalNodes = [];
 
@@ -7207,7 +7213,8 @@ async function loadTtlAndRender(
     initAddAnnotationPropertyHandlers(annotationPropsContent ?? undefined);
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
-    const displayConfig = await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
+    // Skip IndexedDB operations in test mode for faster execution
+    const displayConfig = skipSlowOperationsForTests ? null : await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
     
     // Set lastLayoutMode BEFORE applying config to prevent clearing positions
     // Get layout mode from config or default
@@ -7234,18 +7241,30 @@ async function loadTtlAndRender(
     }
 
     // Allow layout to settle after vizControls appears, then render
-    requestAnimationFrame(() => {
+    // Skip double requestAnimationFrame in test mode for faster execution
+    if (skipSlowOperationsForTests) {
+      applyFilter();
+      if (network && savedViewState) {
+        network.moveTo({
+          scale: savedViewState.scale,
+          position: savedViewState.position,
+          animation: false,
+        });
+      }
+    } else {
       requestAnimationFrame(() => {
-        applyFilter();
-        if (network && savedViewState) {
-          network.moveTo({
-            scale: savedViewState.scale,
-            position: savedViewState.position,
-            animation: false,
-          });
-        }
+        requestAnimationFrame(() => {
+          applyFilter();
+          if (network && savedViewState) {
+            network.moveTo({
+              scale: savedViewState.scale,
+              position: savedViewState.position,
+              animation: false,
+            });
+          }
+        });
       });
-    });
+    }
   } catch (err) {
     errorMsg.textContent = `Parse error: ${err instanceof Error ? err.message : String(err)}`;
     errorMsg.style.display = 'block';
@@ -9129,5 +9148,17 @@ attachEditorTestHook({
   setHasUnsavedChanges: (value: boolean) => { hasUnsavedChanges = value; },
   updateSaveButtonVisibility,
   getHasUnsavedChanges: () => hasUnsavedChanges,
-  loadTtlAndRender,
+  loadTtlDirectly: async (ttlString: string, fileName?: string, pathHint?: string) => {
+    // For tests: call loadTtlAndRender directly, bypassing file input UI
+    // Set loadedFilePath/loadedFileName so IndexedDB operations use the right keys
+    // Enable test mode to skip slow operations (IndexedDB, rendering delays)
+    loadedFilePath = pathHint ?? fileName ?? null;
+    loadedFileName = fileName ?? null;
+    skipSlowOperationsForTests = true;
+    try {
+      await loadTtlAndRender(ttlString, fileName, null, pathHint);
+    } finally {
+      skipSlowOperationsForTests = false;
+    }
+  },
 });

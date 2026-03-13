@@ -42,7 +42,7 @@ export interface EditorTestDeps {
   setHasUnsavedChanges: (value: boolean) => void;
   updateSaveButtonVisibility: () => void;
   getHasUnsavedChanges: () => boolean;
-  loadTtlAndRender: (ttlString: string, fileName?: string, pathHint?: string) => Promise<void>;
+  loadTtlDirectly: (ttlString: string, fileName?: string, pathHint?: string) => Promise<void>;
 }
 
 /**
@@ -81,7 +81,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     setHasUnsavedChanges,
     updateSaveButtonVisibility,
     getHasUnsavedChanges,
-    loadTtlAndRender,
+    loadTtlDirectly,
   } = deps;
 
   (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
@@ -210,6 +210,9 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     saveTtl: (): Promise<void> => saveTtl(),
     setHasUnsavedChanges: (value: boolean): void => setHasUnsavedChanges(value),
     updateSaveButtonVisibility: (): void => updateSaveButtonVisibility(),
+    loadTtlDirectly: async (ttlString: string, fileName?: string, pathHint?: string): Promise<void> => {
+      await loadTtlDirectly(ttlString, fileName, pathHint);
+    },
     getSaveButtonState: (): { visible: boolean; hasUnsavedChanges: boolean; ttlStoreExists: boolean } => {
       const saveGroup = document.getElementById('saveGroup');
       const isVisible = saveGroup ? window.getComputedStyle(saveGroup).display !== 'none' : false;
@@ -402,10 +405,6 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         console.error('[getRenderedEdgeOptions] Error accessing network data:', e);
         return null;
       }
-    },
-    loadTtlDirectly: async (ttlString: string, fileName?: string, pathHint?: string): Promise<void> => {
-      // Load TTL directly without file input UI - faster for tests
-      await loadTtlAndRender(ttlString, fileName, null, pathHint);
     },
   };
 }

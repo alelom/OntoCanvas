@@ -6,7 +6,7 @@ export default defineConfig({
     include: ['tests/e2e/**/*.e2e.test.ts'],
     globals: true,
     environment: 'node',
-    testTimeout: 20000, // Increased to 20s to account for file loading in saveChanges tests
+    testTimeout: 10000, // Max 10s per project rule - tests use loadTtlDirectly for faster loading
     dangerouslyIgnoreUnhandledErrors: true,
     hookTimeout: 10000, // dev server startup; max 10s per project rule
     globalSetup: ['tests/e2e/globalSetup.ts'],

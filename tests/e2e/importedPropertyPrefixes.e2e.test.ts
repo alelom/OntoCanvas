@@ -38,27 +38,38 @@ async function loadTestFile(page: Page, filePath: string): Promise<void> {
   });
   
   // Wait for loading modal to disappear (indicates file loading completed)
+  // Reduced from 10000ms to 5000ms since we've optimized loading
   await page.waitForFunction(
     () => {
       const loadingModal = document.getElementById('loadingModal');
       return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
     },
-    { timeout: 10000 }
+    { timeout: 5000 }
   );
   
-  // Wait for rawData to be populated (ensures loadTtlAndRender completed)
-  // Also wait for network to be initialized (ensures requestAnimationFrame callbacks completed)
+  // Wait for ttlStore to be populated (set early in loadTtlAndRender, so this should be fast)
+  // Reduced from 10000ms to 5000ms since ttlStore is set immediately after parsing
+  await page.waitForFunction(
+    () => {
+      const testHook = (window as any).__EDITOR_TEST__;
+      if (!testHook?.getTtlStore) return false;
+      const ttlStore = testHook.getTtlStore();
+      return ttlStore !== null;
+    },
+    { timeout: 5000 }
+  );
+  
+  // Wait for rawData and network to be populated (after ttlStore is set)
   await page.waitForFunction(
     () => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (!testHook?.getRawData) return false;
       const rawData = testHook.getRawData();
-      const ttlStore = testHook.getTtlStore?.();
       const network = testHook.getNetwork?.();
-      // Wait for either nodes or edges to be present AND ttlStore to be set AND network to be initialized
-      return (rawData.nodes.length > 0 || rawData.edges.length > 0) && ttlStore !== null && network !== null;
+      // Wait for either nodes or edges to be present AND network to be initialized
+      return (rawData.nodes.length > 0 || rawData.edges.length > 0) && network !== null;
     },
-    { timeout: 10000 }
+    { timeout: 5000 }
   );
   
   // Additional wait to ensure requestAnimationFrame callbacks have completed

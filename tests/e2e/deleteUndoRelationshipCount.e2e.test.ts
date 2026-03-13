@@ -29,11 +29,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  page.setDefaultTimeout(15000);
-  page.setDefaultNavigationTimeout(15000);
+  // Reduced from 15000ms to 10000ms (max allowed per project rule)
+  page.setDefaultTimeout(10000);
+  page.setDefaultNavigationTimeout(10000);
   
   try {
-    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    // Reduced from 15000ms to 10000ms (max allowed per project rule)
+    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 10000 });
   } catch (err) {
     throw new Error(`Failed to load ${EDITOR_URL}. Is the dev server running? Error: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -97,12 +99,13 @@ async function loadTestFile(page: Page, filePath: string): Promise<void> {
   });
   
   // Wait for loading modal to disappear (indicates file loading completed)
+  // Reduced from 10000ms to 5000ms since we've optimized loading
   await page.waitForFunction(
     () => {
       const loadingModal = document.getElementById('loadingModal');
       return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
     },
-    { timeout: 10000 }
+    { timeout: 5000 }
   );
   
   // Wait for rawData to be populated (ensures loadTtlAndRender completed)

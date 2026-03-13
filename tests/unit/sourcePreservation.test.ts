@@ -37,6 +37,8 @@ describe('sourcePreservation', () => {
 
     it('should detect formatting style', async () => {
       const content = `@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 
 :TestClass rdf:type owl:Class .`;
 
@@ -320,8 +322,8 @@ describe('sourcePreservation', () => {
       });
 
       it('should preserve line endings', async () => {
-        const contentLF = '@prefix : <http://example.org#> .\n:Test rdf:type owl:Class .';
-        const contentCRLF = '@prefix : <http://example.org#> .\r\n:Test rdf:type owl:Class .';
+        const contentLF = '@prefix : <http://example.org#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n:Test rdf:type owl:Class .';
+        const contentCRLF = '@prefix : <http://example.org#> .\r\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\r\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\r\n:Test rdf:type owl:Class .';
         
         const { cache: cacheLF } = parseTurtleWithPositions(contentLF);
         const { cache: cacheCRLF } = parseTurtleWithPositions(contentCRLF);
@@ -331,8 +333,8 @@ describe('sourcePreservation', () => {
       });
 
       it('should preserve trailing newlines', async () => {
-        const contentWithNewline = '@prefix : <http://example.org#> .\n:Test rdf:type owl:Class .\n';
-        const contentWithoutNewline = '@prefix : <http://example.org#> .\n:Test rdf:type owl:Class .';
+        const contentWithNewline = '@prefix : <http://example.org#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n:Test rdf:type owl:Class .\n';
+        const contentWithoutNewline = '@prefix : <http://example.org#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n:Test rdf:type owl:Class .';
         
         const { cache: cacheWith } = parseTurtleWithPositions(contentWithNewline);
         const { cache: cacheWithout } = parseTurtleWithPositions(contentWithoutNewline);

@@ -203,12 +203,13 @@ describe('No classes ontology E2E', () => {
     await loadTestFile(page, testFile);
     
     // Wait for graph to render (should not show warning)
+    // Reduced from 10000ms to 5000ms since we've optimized loading
     await page.waitForFunction(
       () => {
         const vizControls = document.getElementById('vizControls');
         return vizControls && vizControls.style.display !== 'none';
       },
-      { timeout: 10000 }
+      { timeout: 5000 }
     );
     await page.waitForTimeout(500);
     
