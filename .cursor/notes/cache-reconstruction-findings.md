@@ -1,5 +1,7 @@
 # Cache-Based Reconstruction Findings
 
+**Note**: Cache-based reconstruction is now **disabled by default** in `storeToTurtle()`. It can be enabled via the `useCacheBasedReconstruction` parameter, but is kept as an optional feature for future work due to the issues documented below.
+
 This document tracks diagnostic findings, quick fix attempts, architectural shortcomings, and potential improvements for fixing OWL restriction preservation in cache-based reconstruction.
 
 ## Diagnostic Findings

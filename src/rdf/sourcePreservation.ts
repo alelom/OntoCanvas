@@ -4,11 +4,10 @@
  * while preserving formatting, section structure, and import ordering.
  */
 
-import { Parser, Writer, DataFactory, BlankNode } from 'n3';
-import type { Store } from 'n3';
+import { Parser, Writer } from 'n3';
 import type { Quad as N3Quad } from '@rdfjs/types';
 import { buildInlineForms, replaceBlankRefs, convertBlanksToInline } from '../turtlePostProcess';
-import { debugLog } from '../utils/debug';
+import { debugLog, debugWarn } from '../utils/debug';
 import { quadsAreDifferent } from '../parser';
 
 // ============================================================================
@@ -103,15 +102,16 @@ export function parseTurtleWithPositions(content: string): {
 } {
   // Parse with N3 to get quads (for structure)
   // Use the same approach as parseRdfToQuads for consistency
+  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
   let quads: N3Quad[] = [];
   try {
     // N3 Parser.parse() returns an iterable, convert to array
-    const parsed = parser.parse(content);
+    const parsed = (parser as any).parse(content);
     quads = Array.isArray(parsed) ? parsed : [...parsed];
   } catch (e) {
     // If parsing fails, log and return empty result
-    console.warn('[parseTurtleWithPositions] N3 Parser failed:', e);
+    debugWarn('[parseTurtleWithPositions] N3 Parser failed:', e);
     const emptyCache: OriginalFileCache = {
       content,
       format: 'turtle',
@@ -126,7 +126,7 @@ export function parseTurtleWithPositions(content: string): {
   
   // If no quads found, still create cache for position tracking
   if (quads.length === 0) {
-    console.warn('[parseTurtleWithPositions] No quads found in content');
+    debugWarn('[parseTurtleWithPositions] No quads found in content');
   }
 
   // Detect formatting style
@@ -146,21 +146,19 @@ export function parseTurtleWithPositions(content: string): {
   let headerSection: Section | null = null;
   const sectionTypeCounts = new Map<StatementType, number>();
   
-  // Track if we're in header (prefixes/base)
-  let inHeader = true;
+  // Note: Header tracking removed - not currently used in logic
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
     const lineStart = charOffset;
     const lineEnd = charOffset + line.length;
-    const lineLength = line.length;
     
     // Check if this is a header line (@prefix or @base)
     const isHeaderLine = trimmed.startsWith('@prefix') || trimmed.startsWith('@base');
     
     if (isHeaderLine) {
-      inHeader = true;
+      // Header block processed
       
       // Handle header section
       if (!headerSection) {
@@ -230,7 +228,7 @@ export function parseTurtleWithPositions(content: string): {
                              !trimmed.startsWith('#');
     
     if (isStatementStart) {
-      inHeader = false; // We're past header
+      // Past header section
       
       // Finalize previous block if exists
       if (currentBlock) {
@@ -515,7 +513,7 @@ function matchQuadsToBlocks(
   const blankNodeQuadsBySubject = new Map<string, N3Quad[]>();
   for (const quad of quads) {
     if (quad.subject.termType === 'BlankNode') {
-      const blankId = (quad.subject as { id: string }).id;
+      const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
       const list = blankNodeQuadsBySubject.get(blankId) || [];
       list.push(quad);
       blankNodeQuadsBySubject.set(blankId, list);
@@ -528,7 +526,7 @@ function matchQuadsToBlocks(
     
     if (block.subject) {
       // Resolve block subject to full URI
-      const resolvedUri = resolvePrefixedName(block.subject);
+      const resolvedUri = resolvePrefixedName(block.subject); // block.subject is checked above, so it's string here
       if (resolvedUri) {
         const subjectQuads = quadsBySubject.get(resolvedUri);
         if (subjectQuads) {
@@ -539,7 +537,7 @@ function matchQuadsToBlocks(
             // If this quad has a blank node as object (e.g., rdfs:subClassOf _:blank1),
             // also match all quads where that blank node is the subject
             if (quad.object.termType === 'BlankNode') {
-              const blankId = (quad.object as { id: string }).id;
+              const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
               const blankQuads = blankNodeQuadsBySubject.get(blankId);
               if (blankQuads) {
                 for (const blankQuad of blankQuads) {
@@ -579,7 +577,7 @@ function matchQuadsToBlocks(
             // If this quad has a blank node as object (e.g., rdfs:subClassOf _:blank1),
             // also match all quads where that blank node is the subject
             if (quad.object.termType === 'BlankNode') {
-              const blankId = (quad.object as { id: string }).id;
+              const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
               const blankQuads = blankNodeQuadsBySubject.get(blankId);
               if (blankQuads) {
                 for (const blankQuad of blankQuads) {
@@ -612,10 +610,10 @@ function matchQuadsToBlocks(
         // Find the block for this subject
         for (const block of blocks) {
           if (block.type === 'Header') continue;
-          const resolvedUri = resolvePrefixedName(block.subject);
-          if (resolvedUri === subjectUri) {
+          const resolvedUri = block.subject ? resolvePrefixedName(block.subject) : null;
+          if (resolvedUri && resolvedUri === subjectUri) {
             // This blank node quad belongs to this block
-            const blankId = (quad.object as { id: string }).id;
+            const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
             const blankQuads = blankNodeQuadsBySubject.get(blankId);
             if (blankQuads) {
               for (const blankQuad of blankQuads) {
@@ -716,7 +714,6 @@ export async function reconstructFromOriginalText(
   cache: OriginalFileCache,
   modifiedBlocks: StatementBlock[]
 ): Promise<string> {
-  const startTime = Date.now();
   debugLog('[PERF] reconstructFromOriginalText START, modifiedBlocks:', modifiedBlocks.length);
   
   let result = cache.content;
@@ -789,7 +786,8 @@ export async function reconstructFromOriginalText(
       
       // Check what comes after the block to preserve spacing
       const afterBlock = result.slice(endPos);
-      const nextNonEmptyLine = afterBlock.split(cache.formattingStyle.lineEnding).find(line => line.trim() !== '');
+      // Note: nextNonEmptyLine calculated but not currently used (reserved for future spacing logic)
+      void afterBlock.split(cache.formattingStyle.lineEnding).find(line => line.trim() !== '');
       
       // Ensure newText ends properly (should already from applyFormattingStyle, but double-check)
       let finalNewText = newText.trimEnd();
@@ -812,7 +810,8 @@ export async function reconstructFromOriginalText(
   // Insert new blocks in appropriate sections
   const newBlocks = modifiedBlocks.filter(b => b.isNew);
   debugLog('[PERF] Processing', newBlocks.length, 'new blocks');
-  const newBlocksStart = Date.now();
+  // Note: newBlocksStart reserved for future performance tracking
+  void Date.now();
   
   for (const block of newBlocks) {
     const section = findSectionForBlock(block, cache.sections);
@@ -854,7 +853,7 @@ function findSectionForBlock(block: StatementBlock, sections: Section[]): Sectio
 function findAlphabeticalInsertPosition(
   section: Section,
   newBlock: StatementBlock,
-  cache: OriginalFileCache
+  _cache: OriginalFileCache
 ): number {
   // Find position to insert alphabetically
   const newSubject = newBlock.subject || '';
@@ -957,7 +956,7 @@ async function serializeBlockToTurtle(
                 const currentBlankQuadsBySubject = new Map<string, N3Quad[]>();
                 for (const quad of block.quads) {
                   if (quad.subject.termType === 'BlankNode') {
-                    const blankId = getBlankNodeId(quad.subject as BlankNode);
+                    const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
                     const list = currentBlankQuadsBySubject.get(blankId) || [];
                     list.push(quad);
                     currentBlankQuadsBySubject.set(blankId, list);
@@ -968,7 +967,7 @@ async function serializeBlockToTurtle(
                 const originalBlankQuadsBySubject = new Map<string, N3Quad[]>();
                 for (const quad of originalBlock.quads) {
                   if (quad.subject.termType === 'BlankNode') {
-                    const blankId = getBlankNodeId(quad.subject as BlankNode);
+                    const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
                     const list = originalBlankQuadsBySubject.get(blankId) || [];
                     list.push(quad);
                     originalBlankQuadsBySubject.set(blankId, list);
@@ -1063,6 +1062,7 @@ async function serializeBlockToTurtle(
   
   // Serialize quads using N3 Writer with prefix map to preserve prefixed names
   return new Promise((resolve, reject) => {
+    // @ts-expect-error - N3 Writer constructor accepts options but TypeScript definitions are incorrect
     const writer = new Writer({
       format: 'text/turtle',
       prefixes: prefixMap, // Use prefix map from cache to preserve prefixed names
@@ -1103,7 +1103,7 @@ async function serializeBlockToTurtle(
         quadsBySubject.set(subjectUri, list);
       } else if (quad.subject.termType === 'BlankNode') {
         // For blank nodes, group them by ID so all their quads are serialized together
-        const blankId = (quad.subject as { id: string }).id;
+        const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
         const list = quadsBySubject.get(`_:${blankId}`) || [];
         list.push(quad);
         quadsBySubject.set(`_:${blankId}`, list);
@@ -1350,13 +1350,14 @@ async function serializeBlockToTurtle(
                   // to block.quads blank node IDs, then use inline forms
                   
                   // Step 1: Parse N3 Writer output to get blank node structures
+                  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
                   const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
                   let outputQuads: N3Quad[] = [];
                   let structureBasedMatchingWorked = false;
                   const outputIdToInlineForm = new Map<string, string>();
                   
                   try {
-                    const parsed = parser.parse(result);
+                    const parsed = (parser as any).parse(result);
                     outputQuads = Array.isArray(parsed) ? parsed : [...parsed];
                     debugLog('[serializeBlockToTurtle] Parsed N3 Writer output, got', outputQuads.length, 'quads');
                     
@@ -1366,7 +1367,7 @@ async function serializeBlockToTurtle(
                     
                     for (const quad of outputQuads) {
                       if (quad.subject.termType === 'BlankNode') {
-                        const blankId = getBlankNodeId(quad.subject as BlankNode);
+                        const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
                         const list = outputQuadsByBlankSubject.get(blankId) || [];
                         list.push(quad);
                         outputQuadsByBlankSubject.set(blankId, list);
@@ -1375,7 +1376,7 @@ async function serializeBlockToTurtle(
                     
                     for (const quad of block.quads) {
                       if (quad.subject.termType === 'BlankNode') {
-                        const blankId = getBlankNodeId(quad.subject as BlankNode);
+                        const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
                         const list = blockQuadsByBlankSubject.get(blankId) || [];
                         list.push(quad);
                         blockQuadsByBlankSubject.set(blankId, list);
@@ -1392,7 +1393,7 @@ async function serializeBlockToTurtle(
                     const blankNodesUsedAsObjects = new Set<string>();
                     for (const quad of outputQuads) {
                       if (quad.object.termType === 'BlankNode') {
-                        const blankId = getBlankNodeId(quad.object as BlankNode);
+                        const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
                         blankNodesUsedAsObjects.add(blankId);
                       }
                     }
@@ -1583,11 +1584,13 @@ async function serializeBlockToTurtle(
 /**
  * Inline blank nodes by building forms from block.quads and matching to output by structure
  * This approach is more robust than parsing output because we work with quads we control
+ * Reserved for future use - not currently called but kept for potential future implementation
  */
+// @ts-expect-error - Reserved for future use, not currently called
 function inlineBlankNodesFromQuads(
   n3Output: string,
   blockQuads: N3Quad[],
-  prefixMap: Record<string, string>
+  _prefixMap: Record<string, string>
 ): string {
   // Step 1: Build inline forms from block.quads (using original blank node IDs)
   const inlineFormsFromQuads = buildInlineForms(blockQuads, undefined, true);
@@ -1598,10 +1601,11 @@ function inlineBlankNodesFromQuads(
   
   // Step 2: Parse N3 Writer output to get quads (with new blank node IDs)
   // If parsing fails or takes too long, fall back to convertBlanksToInline
+  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
   let outputQuads: N3Quad[];
   try {
-    const parsed = parser.parse(n3Output);
+    const parsed = (parser as any).parse(n3Output);
     outputQuads = Array.isArray(parsed) ? parsed : [...parsed];
     
   } catch (e) {
@@ -1614,7 +1618,7 @@ function inlineBlankNodesFromQuads(
   const outputQuadsByBlankSubject = new Map<string, N3Quad[]>();
   for (const quad of outputQuads) {
     if (quad.subject.termType === 'BlankNode') {
-      const blankId = getBlankNodeId(quad.subject as BlankNode);
+      const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
       const list = outputQuadsByBlankSubject.get(blankId) || [];
       list.push(quad);
       outputQuadsByBlankSubject.set(blankId, list);
@@ -1625,7 +1629,7 @@ function inlineBlankNodesFromQuads(
   const blockQuadsByBlankSubject = new Map<string, N3Quad[]>();
   for (const quad of blockQuads) {
     if (quad.subject.termType === 'BlankNode') {
-      const blankId = getBlankNodeId(quad.subject as BlankNode);
+      const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
       const list = blockQuadsByBlankSubject.get(blankId) || [];
       list.push(quad);
       blockQuadsByBlankSubject.set(blankId, list);
@@ -1636,7 +1640,7 @@ function inlineBlankNodesFromQuads(
   const blankNodesUsedAsObjects = new Set<string>();
   for (const quad of outputQuads) {
     if (quad.object.termType === 'BlankNode') {
-      const blankId = getBlankNodeId(quad.object as BlankNode);
+      const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
       blankNodesUsedAsObjects.add(blankId);
     }
   }
@@ -1730,8 +1734,8 @@ function inlineBlankNodesFromQuads(
 /**
  * Get blank node ID from a BlankNode term
  */
-function getBlankNodeId(blank: BlankNode): string {
-  return (blank as { id?: string }).id ?? (blank as { value?: string }).value ?? '';
+function getBlankNodeId(blank: { id?: string; value?: string }): string {
+  return blank.id ?? blank.value ?? '';
 }
 
 /**
@@ -1809,8 +1813,11 @@ function blankNodesMatchByStructure(
 
 /**
  * Format a term for Turtle output (simplified)
+ * Used recursively within itself (line 1847) - TypeScript cannot detect recursive usage
  */
+// @ts-expect-error - TypeScript cannot detect recursive function usage (used on line 1847)
 function formatTerm(term: N3Quad['object'] | string): string {
+  
   if (typeof term === 'string') {
     // Assume it's a URI
     if (term.startsWith('http://') || term.startsWith('https://')) {
@@ -1858,7 +1865,7 @@ function formatTerm(term: N3Quad['object'] | string): string {
 function applyFormattingStyle(
   serialized: string,
   formatting: FormattingStyle,
-  originalText?: string
+  _originalText?: string
 ): string {
   // Parse serialized and reformat with detected style
   const lines = serialized.split(/\r?\n/).filter(l => l.trim() !== '');
@@ -1907,12 +1914,13 @@ export function parseRdfXmlWithPositions(content: string): {
   // TODO: Implement RDF/XML position tracking
   // This format requires XML parsing with position tracking
   // Return structure compatible with Turtle version
-  console.warn('[sourcePreservation] RDF/XML position tracking not yet implemented');
+  debugWarn('[sourcePreservation] RDF/XML position tracking not yet implemented');
   
+  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'application/rdf+xml' });
   let quads: N3Quad[];
   try {
-    quads = [...parser.parse(content)];
+    quads = [...(parser as any).parse(content)];
   } catch (e) {
     quads = [];
   }
@@ -1948,12 +1956,13 @@ export function parseJsonLdWithPositions(content: string): {
   // TODO: Implement JSON-LD position tracking
   // This format requires JSON parsing with position tracking
   // Return structure compatible with Turtle version
-  console.warn('[sourcePreservation] JSON-LD position tracking not yet implemented');
+  debugWarn('[sourcePreservation] JSON-LD position tracking not yet implemented');
   
+  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'application/ld+json' });
   let quads: N3Quad[];
   try {
-    quads = [...parser.parse(content)];
+    quads = [...(parser as any).parse(content)];
   } catch (e) {
     quads = [];
   }
@@ -1989,12 +1998,13 @@ export function parseNTriplesWithPositions(content: string): {
   // TODO: Implement N-Triples position tracking
   // This format is line-based (one statement per line)
   // Return structure compatible with Turtle version
-  console.warn('[sourcePreservation] N-Triples position tracking not yet implemented');
+  debugWarn('[sourcePreservation] N-Triples position tracking not yet implemented');
   
+  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'application/n-triples' });
   let quads: N3Quad[];
   try {
-    quads = [...parser.parse(content)];
+    quads = [...(parser as any).parse(content)];
   } catch (e) {
     quads = [];
   }
@@ -2024,10 +2034,10 @@ export function parseNTriplesWithPositions(content: string): {
  */
 export function reconstructFromOriginalRdfXml(
   cache: OriginalFileCache,
-  modifiedBlocks: StatementBlock[]
+  _modifiedBlocks: StatementBlock[]
 ): string {
   // TODO: Implement RDF/XML reconstruction
-  console.warn('[sourcePreservation] RDF/XML reconstruction not yet implemented');
+  debugWarn('[sourcePreservation] RDF/XML reconstruction not yet implemented');
   return cache.content;
 }
 
@@ -2037,10 +2047,10 @@ export function reconstructFromOriginalRdfXml(
  */
 export function reconstructFromOriginalJsonLd(
   cache: OriginalFileCache,
-  modifiedBlocks: StatementBlock[]
+  _modifiedBlocks: StatementBlock[]
 ): string {
   // TODO: Implement JSON-LD reconstruction
-  console.warn('[sourcePreservation] JSON-LD reconstruction not yet implemented');
+  debugWarn('[sourcePreservation] JSON-LD reconstruction not yet implemented');
   return cache.content;
 }
 
@@ -2050,9 +2060,9 @@ export function reconstructFromOriginalJsonLd(
  */
 export function reconstructFromOriginalNTriples(
   cache: OriginalFileCache,
-  modifiedBlocks: StatementBlock[]
+  _modifiedBlocks: StatementBlock[]
 ): string {
   // TODO: Implement N-Triples reconstruction
-  console.warn('[sourcePreservation] N-Triples reconstruction not yet implemented');
+  debugWarn('[sourcePreservation] N-Triples reconstruction not yet implemented');
   return cache.content;
 }

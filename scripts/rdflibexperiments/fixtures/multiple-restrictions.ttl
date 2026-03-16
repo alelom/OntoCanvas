@@ -1,0 +1,36 @@
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:DrawingSheet rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; 
+      owl:onClass :Note ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; 
+      owl:onClass :RevisionTable ; 
+      owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; 
+      owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; 
+      owl:onClass :Layout ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :has ; 
+      owl:onClass :DrawingOrientation ; 
+      owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ;
+    rdfs:label "Drawing Sheet" ;
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s)." ;
+    a owl:Class ;
+    :labellableRoot false .
+
+:Note a owl:Class .
+:RevisionTable a owl:Class .
+:Layout a owl:Class .
+:DrawingOrientation a owl:Class .
+:contains a owl:ObjectProperty .
+:has a owl:ObjectProperty .

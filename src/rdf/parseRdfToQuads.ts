@@ -1,5 +1,10 @@
 /**
- * Parse RDF content (Turtle, RDF/XML, JSON-LD, etc.) to RDF/JS quads using rdf-parse.
+ * Parse RDF content (Turtle, RDF/XML, JSON-LD, etc.) to RDF/JS quads.
+ * 
+ * NOTE: Currently uses rdf-parse (which uses N3 internally) for parsing.
+ * rdflib.js parsing API has compatibility issues with our use case, so we keep rdf-parse
+ * for parsing and use rdflib only for serialization (Phase 2).
+ * 
  * Format is detected from path (URL or filename) or contentType.
  */
 import { rdfParser } from 'rdf-parse';
@@ -17,7 +22,7 @@ export interface ParseRdfOptions {
 
 /**
  * Parse RDF string to an array of RDF/JS quads.
- * Uses path and/or contentType so rdf-parse can select the correct parser.
+ * Uses rdf-parse with path and/or contentType for format detection.
  *
  * @throws Error with a clear message if parsing fails
  */

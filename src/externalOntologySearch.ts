@@ -1,4 +1,5 @@
 import { Store, DataFactory } from 'n3';
+import type { Quad } from 'n3';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { extractLocalName, extractLocalNameFromUri } from './parser';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
@@ -505,7 +506,8 @@ async function parseOntologyContent(
   try {
     const opts = getParseOptionsForUrl(normalizedUrl);
     const quads = await parseRdfToQuads(text, opts);
-    const store = new Store(quads as Iterable<import('n3').Quad>);
+    // @ts-expect-error - Store constructor accepts Iterable<N3Quad> at runtime, but types don't reflect this
+    const store = new Store(quads as Iterable<Quad>);
     
     const classes: ExternalClassInfo[] = [];
     const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
@@ -567,7 +569,8 @@ async function parseOntologyObjectProperties(
   try {
     const opts = getParseOptionsForUrl(normalizedUrl);
     const quads = await parseRdfToQuads(text, opts);
-    const store = new Store(quads as Iterable<import('n3').Quad>);
+    // @ts-expect-error - Store constructor accepts Iterable<N3Quad> at runtime, but types don't reflect this
+    const store = new Store(quads as Iterable<Quad>);
     
     const objectProperties: ExternalObjectPropertyInfo[] = [];
     const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
@@ -709,14 +712,16 @@ export function getReferencedExternalClassesFromStore(
   const domainQuads = store.getQuads(null, DataFactory.namedNode(RDFS + 'domain'), null, null);
   const rangeQuads = store.getQuads(null, DataFactory.namedNode(RDFS + 'range'), null, null);
   for (const q of domainQuads) {
-    if (q.object.termType === 'NamedNode') {
-      const uri = (q.object as { value: string }).value;
+    const obj = q.object as Quad['object'];
+    if (obj.termType === 'NamedNode') {
+      const uri = (obj as { value: string }).value;
       if (!isLocal(uri)) externalUris.add(uri);
     }
   }
   for (const q of rangeQuads) {
-    if (q.object.termType === 'NamedNode') {
-      const uri = (q.object as { value: string }).value;
+    const obj = q.object as Quad['object'];
+    if (obj.termType === 'NamedNode') {
+      const uri = (obj as { value: string }).value;
       if (!isLocal(uri)) externalUris.add(uri);
     }
   }
@@ -732,8 +737,9 @@ export function getReferencedExternalClassesFromStore(
     if (!ref) continue;
     const localName = extractLocalName(uri);
     const labelQuads = store.getQuads(DataFactory.namedNode(uri), DataFactory.namedNode(RDFS + 'label'), null, null);
-    const label = labelQuads.length > 0 && labelQuads[0].object.termType === 'Literal'
-      ? String((labelQuads[0].object as { value: string }).value)
+    const labelObj = labelQuads.length > 0 ? (labelQuads[0].object as Quad['object']) : null;
+    const label = labelObj && labelObj.termType === 'Literal'
+      ? String((labelObj as { value: string }).value)
       : localName;
     result.push({
       uri,

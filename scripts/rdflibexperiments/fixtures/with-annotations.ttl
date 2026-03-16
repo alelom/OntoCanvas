@@ -1,0 +1,24 @@
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label "Labellable root" ;
+    rdfs:comment "When true, this class can be used as a label by annotators." ;
+    rdfs:range xsd:boolean .
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label "example image"@en ;
+    rdfs:comment "Links a class to an example image."@en .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label "Test Class" ;
+    rdfs:comment "A test class with annotations" ;
+    :labellableRoot false ;
+    :exampleImage <http://example.org/image.jpg> .
+
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label "Another Class" ;
+    :labellableRoot "true"^^xsd:boolean .

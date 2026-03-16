@@ -1,12 +1,12 @@
-import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
+import { DataFactory, Parser, Store, BlankNode } from 'n3';
 import type { Quad as N3Quad } from 'n3';
-import { postProcessTurtle } from './turtlePostProcess';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
+import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -1869,7 +1869,7 @@ export function updateDataPropertyDomainsInStore(
   }
   
   if (!propUri) {
-    console.warn(`Data property URI for "${propertyName}" not found in store.`);
+    debugWarn(`Data property URI for "${propertyName}" not found in store.`);
     return false;
   }
   
@@ -2544,90 +2544,26 @@ export function removeObjectPropertyFromStore(store: Store, propertyName: string
  * Serialize the store to Turtle string with section dividers and spacing.
  * @param originalTtlString Optional original TTL string to preserve format (colon vs base notation)
  * @param originalFileCache Optional original file cache for source preservation (idempotent round-trips)
+ * @param useCacheBasedReconstruction If true and cache is available, use cache-based reconstruction (default: false)
  */
 export function storeToTurtle(
   store: Store, 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
   originalTtlString?: string,
-  originalFileCache?: OriginalFileCache
+  originalFileCache?: OriginalFileCache,
+  useCacheBasedReconstruction: boolean = false
 ): Promise<string> {
-  // If cache is available, use reconstruction approach
-  debugLog('[storeToTurtle] Cache check:', {
-    hasCache: !!originalFileCache,
-    format: originalFileCache?.format,
-    blocksCount: originalFileCache?.statementBlocks.length,
-    willUseCache: originalFileCache && originalFileCache.format === 'turtle'
-  });
-  
-  if (originalFileCache && originalFileCache.format === 'turtle') {
-    debugLog('[storeToTurtle] Using cache-based reconstruction, cache has', originalFileCache.statementBlocks.length, 'blocks');
+  // If cache-based reconstruction is enabled and cache is available, use it
+  if (useCacheBasedReconstruction && originalFileCache && originalFileCache.format === 'turtle') {
+    debugLog('[storeToTurtle] Using cache-based reconstruction (enabled via toggle), cache has', originalFileCache.statementBlocks.length, 'blocks');
     return reconstructFromCache(store, originalFileCache, externalRefs);
   }
-  debugLog('[storeToTurtle] Using fallback post-processing (no cache or wrong format)');
   
-  // Fallback to current post-processing approach
-  return new Promise((resolve, reject) => {
-    const prefixes = { ...TURTLE_PREFIXES };
-    
-    // Extract base IRI from original file if provided
-    let mainOntologyBase: string | null = null;
-    if (originalTtlString) {
-      const prefixMatch = originalTtlString.match(/@prefix\s+:\s*<([^>]+)>/);
-      const baseMatch = originalTtlString.match(/@base\s+<([^>]+)>/);
-      if (prefixMatch) {
-        mainOntologyBase = prefixMatch[1];
-      } else if (baseMatch) {
-        mainOntologyBase = baseMatch[1];
-      }
-    }
-    
-    // If we found a base IRI from the original, update the empty prefix to use it
-    if (mainOntologyBase) {
-      prefixes[''] = mainOntologyBase;
-    }
-    
-    // Add prefixes for external ontologies that use prefix
-    if (externalRefs) {
-      for (const ref of externalRefs) {
-        if (ref.usePrefix && ref.prefix) {
-          prefixes[ref.prefix] = ref.url;
-        }
-      }
-    }
-    
-    // Determine if we should use baseIRI (for base notation) or not (for colon notation)
-    const useColonNotation = !originalTtlString || 
-      (!originalTtlString.includes('@base') && !/<#[^>]+>/.test(originalTtlString));
-    
-    const writerOptions: { prefixes: Record<string, string>; baseIRI?: string } = {
-      prefixes,
-    };
-    
-    // Only set baseIRI if using base notation (not colon notation)
-    if (!useColonNotation && mainOntologyBase) {
-      writerOptions.baseIRI = mainOntologyBase;
-    }
-    
-    const writer = new Writer(writerOptions);
-    for (const q of store) {
-      writer.addQuad(q);
-    }
-    writer.end((err: Error | null, result: string) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      try {
-        // ARCHITECTURAL FIX: Pass store quads to postProcessTurtle for blank node inlining
-        // N3 Writer doesn't serialize blank node blocks when they're only used as objects,
-        // so we need the original quads to build inline forms
-        const storeQuads = Array.from(store);
-        const processed = postProcessTurtle(result, externalRefs, originalTtlString, storeQuads);
-        resolve(processed);
-      } catch (postProcessError) {
-        reject(postProcessError);
-      }
-    });
+  // Default: Use rdflib serialization
+  debugLog('[storeToTurtle] Using rdflib serialization (cache-based reconstruction disabled or unavailable)');
+  return serializeStoreWithRdflib(store, {
+    externalRefs,
+    originalTtlString,
   });
 }
 

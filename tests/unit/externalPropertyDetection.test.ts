@@ -28,8 +28,9 @@ describe('External Property Detection', () => {
     const mainBase = getMainOntologyBase(store);
 
     // The main ontology base should be the ontology subject URI
-    // From the file: <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata> rdf:type owl:Ontology
-    expect(mainBase).toBe('https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#');
+    // From the file: <https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata> rdf:type owl:Ontology
+    // Note: The fixture file uses underscore, not hyphen
+    expect(mainBase).toBe('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#');
 
     // Create external ontology references that might match (simulating the bug)
     const externalRefs: ExternalOntologyReference[] = [
@@ -39,9 +40,9 @@ describe('External Property Detection', () => {
       },
     ];
 
-    // The contains property URI should be: https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains
+    // The contains property URI should be: https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#contains
     const containsUri = containsProperty!.uri!;
-    expect(containsUri).toBe('https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#contains');
+    expect(containsUri).toBe('https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#contains');
 
     // Check if it's incorrectly identified as external
     // This should return false because the property is local (defined in the main ontology)

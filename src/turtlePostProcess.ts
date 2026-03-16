@@ -699,7 +699,7 @@ function parseBlocks(lines: string[]): Block[] {
   return blocks;
 }
 
-function addSectionDividers(raw: string): string {
+export function addSectionDividers(raw: string): string {
   const lines = raw.split('\n');
   const blocks = parseBlocks(lines);
   
@@ -784,7 +784,7 @@ function addSectionDividers(raw: string): string {
  * Replaces any existing attribution comment with the current version.
  * Also removes any attribution from rdfs:comment.
  */
-function addAttribution(raw: string): string {
+export function addAttribution(raw: string): string {
   try {
     const version = getAppVersion();
     const attributionText = `Created/edited with https://alelom.github.io/OntoCanvas/ version ${version}`;
@@ -1363,7 +1363,7 @@ const STANDARD_NAMESPACES = new Set([
   'http://www.w3.org/XML/1998/namespace',
 ]);
 
-function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
+export function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix: boolean; prefix?: string }>): string {
   // Normalize external ref URLs for comparison (remove trailing # or /)
   const normalizeUrl = (url: string): string => {
     return url.replace(/[#\/]$/, '');
@@ -1538,16 +1538,29 @@ function addOwlImports(raw: string, externalRefs: Array<{ url: string; usePrefix
   
   // Extract existing owl:imports from the ENTIRE output (not just ontology block)
   // This prevents duplicates when the file is saved multiple times
+  // rdflib may serialize imports in different formats (full URI or prefix notation)
   const existingImports = new Set<string>();
+  
+  // Check for full URI format: owl:imports <http://...>
   const importPattern = /owl:imports\s+<([^>]+)>/g;
   let importMatch;
-  // Check entire output for existing imports
   while ((importMatch = importPattern.exec(output)) !== null) {
     const url = importMatch[1];
     // Normalize URL (remove trailing # or / for comparison)
     const normalized = url.replace(/[#\/]$/, '');
     existingImports.add(url); // Keep original for exact match
     existingImports.add(normalized); // Also add normalized version
+  }
+  
+  // Check for prefix notation: owl:imports prefix:name (rdflib may use this)
+  // We can't easily extract the full URL from prefix notation, so we'll rely on
+  // the externalRefs normalization to prevent duplicates
+  const prefixImportPattern = /owl:imports\s+([^.\s,;<>]+)/g;
+  let prefixMatch;
+  while ((prefixMatch = prefixImportPattern.exec(output)) !== null) {
+    // For prefix notation, we can't determine the exact URL without the prefix map
+    // But we'll mark that imports exist, and the normalization logic will handle it
+    existingImports.add('PREFIX_NOTATION'); // Marker that imports exist
   }
   
   // Filter out external refs that already have imports (check both exact and normalized)
