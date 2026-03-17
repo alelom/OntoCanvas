@@ -1,0 +1,2972 @@
+﻿
+ RUN  v2.1.9 C:/Users/alombardi/Documents/GitHub/KG-processing
+
+node.exe : (node:23852) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland 
+alternative instead.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:23852) [D...native instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-deprecation ...` to show where the warning was created)
+stdout | tests/unit/customSerializerTests/targetedLabelReplacement.test.ts > Targeted label replacement (Option A) > should preserve exact formatting of DrawingSheet block when only label changes
+[PARSER] Starting buildParseResultFromStore
+[PARSER] Parsed 175 classes: [
+  'Orientation',
+  'Detail',
+  'TextualNote',
+  'AddOn',
+  'FrameType',
+  'Aesthetic',
+  'Function',
+  'Airtightness',
+  'Aluminium',
+  'Material',
+  'Asymmetrical',
+  'Symmetry',
+  'BackingWall',
+  'PanelComponent',
+  'Base',
+  'DetailLocation',
+  'Beam',
+  'StructuralMember',
+  'Blockwork',
+  'RoofCladding',
+  'Board',
+  'Bracket',
+  'PointComponent',
+  'BreatherMembrane',
+  'Membrane',
+  'Brick',
+  'FacingMaterial',
+  'Cable',
+  'LinearStructuralComponent',
+  'Capped',
+  'GlazingRetention',
+  'Capping',
+  'LinearComponent',
+  'CastInChannel',
+  'Fixing',
+  'CavityBarrier',
+  'Gasket',
+  'CavityWallSystem',
+  'FacadeSystem',
+  'Cementboard',
+  'Channel',
+  'ChordBracing',
+  'CHS',
+  'SectionShape',
+  'Circular',
+  'GenericShapeProperty',
+  'Clay',
+  'ClosedState',
+  'Column',
+  'Concrete',
+  'Corner',
+  'CurtainWallSystem',
+  'Curved',
+  'FacadeShape',
+  'CWFrameMember',
+  'CWFrameMemberProperties',
+  'CWSystem',
+  'DeadLoad',
+  'StructuralProperties',
+  'DeadLoadBracket',
+  'DrawingType',
+  'DGU',
+  'FacadeCladding',
+  'DoubleLaminated',
+  'GlazingProperties',
+  'DrawingElement',
+  'DrawingOrientation',
+  'Portrait',
+  'Landscape',
+  'DrawingSheet',
+  'Note',
+  'RevisionTable',
+  'Layout',
+  'FacadeComponent',
+  'Elevation',
+  'EPDM',
+  'Extruded',
+  'Fabricated',
+  'FacadeSecondaryStructure',
+  'GeometricProperties',
+  'Faceted',
+  'Fin',
+  'FireCompartmentation',
+  'Firestop',
+  'Flipper',
+  'FunctionalProperties',
+  'SectionProperties',
+  'Glass',
+  'GRC',
+  'PrecastSystem',
+  'Head',
+  'HelpingHandBracket',
+  'HollowGasketShape',
+  'Horizontal',
+  'Image',
+  'Insulation',
+  'ISection',
+  'Laminated',
+  'Legend',
+  'Metadata',
+  ... 75 more items
+]
+[PARSER] Found 9 blank node restrictions (potential edges). Total subClassOf quads: 171
+[PARSER] Seen classes: [
+  'Orientation',
+  'Detail',
+  'TextualNote',
+  'AddOn',
+  'FrameType',
+  'Aesthetic',
+  'Function',
+  'Airtightness',
+  'Aluminium',
+  'Material',
+  'Asymmetrical',
+  'Symmetry',
+  'BackingWall',
+  'PanelComponent',
+  'Base',
+  'DetailLocation',
+  'Beam',
+  'StructuralMember',
+  'Blockwork',
+  'RoofCladding',
+  'Board',
+  'Bracket',
+  'PointComponent',
+  'BreatherMembrane',
+  'Membrane',
+  'Brick',
+  'FacingMaterial',
+  'Cable',
+  'LinearStructuralComponent',
+  'Capped',
+  'GlazingRetention',
+  'Capping',
+  'LinearComponent',
+  'CastInChannel',
+  'Fixing',
+  'CavityBarrier',
+  'Gasket',
+  'CavityWallSystem',
+  'FacadeSystem',
+  'Cementboard',
+  'Channel',
+  'ChordBracing',
+  'CHS',
+  'SectionShape',
+  'Circular',
+  'GenericShapeProperty',
+  'Clay',
+  'ClosedState',
+  'Column',
+  'Concrete',
+  'Corner',
+  'CurtainWallSystem',
+  'Curved',
+  'FacadeShape',
+  'CWFrameMember',
+  'CWFrameMemberProperties',
+  'CWSystem',
+  'DeadLoad',
+  'StructuralProperties',
+  'DeadLoadBracket',
+  'DrawingType',
+  'DGU',
+  'FacadeCladding',
+  'DoubleLaminated',
+  'GlazingProperties',
+  'DrawingElement',
+  'DrawingOrientation',
+  'Portrait',
+  'Landscape',
+  'DrawingSheet',
+  'Note',
+  'RevisionTable',
+  'Layout',
+  'FacadeComponent',
+  'Elevation',
+  'EPDM',
+  'Extruded',
+  'Fabricated',
+  'FacadeSecondaryStructure',
+  'GeometricProperties',
+  'Faceted',
+  'Fin',
+  'FireCompartmentation',
+  'Firestop',
+  'Flipper',
+  'FunctionalProperties',
+  'SectionProperties',
+  'Glass',
+  'GRC',
+  'PrecastSystem',
+  'Head',
+  'HelpingHandBracket',
+  'HollowGasketShape',
+  'Horizontal',
+  'Image',
+  'Insulation',
+  'ISection',
+  'Laminated',
+  'Legend',
+  'Metadata',
+  ... 75 more items
+]
+[PARSER] Nodes: [
+  { id: 'Orientation', label: 'Detail Orientation' },
+  { id: 'Detail', label: 'Detail' },
+  { id: 'TextualNote', label: 'Text' },
+  { id: 'AddOn', label: 'Add-on' },
+  { id: 'FrameType', label: 'Frame type' },
+  { id: 'Aesthetic', label: 'Aesthetic' },
+  { id: 'Function', label: 'Function' },
+  { id: 'Airtightness', label: 'Airtightness' },
+  { id: 'Aluminium', label: 'Aluminium' },
+  { id: 'Material', label: 'Material' },
+  { id: 'Asymmetrical', label: 'Asymmetrical' },
+  { id: 'Symmetry', label: 'Symmetry' },
+  { id: 'BackingWall', label: 'Backing wall' },
+  { id: 'PanelComponent', label: 'Panel component' },
+  { id: 'Base', label: 'Base' },
+  { id: 'DetailLocation', label: 'Detail location' },
+  { id: 'Beam', label: 'Beam' },
+  { id: 'StructuralMember', label: 'Structural member' },
+  { id: 'Blockwork', label: 'Blockwork' },
+  { id: 'RoofCladding', label: 'Roof cladding' },
+  { id: 'Board', label: 'Board' },
+  { id: 'Bracket', label: 'Bracket' },
+  { id: 'PointComponent', label: 'Point component' },
+  { id: 'BreatherMembrane', label: 'Breather' },
+  { id: 'Membrane', label: 'Membrane' },
+  { id: 'Brick', label: 'Brick' },
+  { id: 'FacingMaterial', label: 'Facing material' },
+  { id: 'Cable', label: 'Cable' },
+  {
+    id: 'LinearStructuralComponent',
+    label: 'Linear structural component'
+  },
+  { id: 'Capped', label: 'Capped' },
+  { id: 'GlazingRetention', label: 'Glazing retention' },
+  { id: 'Capping', label: 'Capping' },
+  { id: 'LinearComponent', label: 'Linear component' },
+  { id: 'CastInChannel', label: 'Cast-in channel' },
+  { id: 'Fixing', label: 'Fixing' },
+  { id: 'CavityBarrier', label: 'Cavity barrier' },
+  { id: 'Gasket', label: 'Gasket' },
+  { id: 'CavityWallSystem', label: 'Cavity wall system' },
+  { id: 'FacadeSystem', label: 'Facade system' },
+  { id: 'Cementboard', label: 'Cementboard' },
+  { id: 'Channel', label: 'Channel' },
+  { id: 'ChordBracing', label: 'Chord/bracing' },
+  { id: 'CHS', label: 'CHS' },
+  { id: 'SectionShape', label: 'Section shape' },
+  { id: 'Circular', label: 'Circular' },
+  { id: 'GenericShapeProperty', label: 'Generic shape property' },
+  { id: 'Clay', label: 'Clay' },
+  { id: 'ClosedState', label: 'Closed state' },
+  { id: 'Column', label: 'Column' },
+  { id: 'Concrete', label: 'Concrete' },
+  { id: 'Corner', label: 'Corner' },
+  { id: 'CurtainWallSystem', label: 'Curtain wall system' },
+  { id: 'Curved', label: 'Curved' },
+  { id: 'FacadeShape', label: 'Facade shape' },
+  { id: 'CWFrameMember', label: 'CW frame member' },
+  {
+    id: 'CWFrameMemberProperties',
+    label: 'CW frame member properties'
+  },
+  { id: 'CWSystem', label: 'CW system' },
+  { id: 'DeadLoad', label: 'Dead load' },
+  { id: 'StructuralProperties', label: 'Structural properties' },
+  { id: 'DeadLoadBracket', label: 'Dead load' },
+  { id: 'DrawingType', label: 'Drawing type' },
+  { id: 'DGU', label: 'DGU' },
+  { id: 'FacadeCladding', label: 'Facade cladding' },
+  { id: 'DoubleLaminated', label: 'Double laminated' },
+  { id: 'GlazingProperties', label: 'Glazing properties' },
+  { id: 'DrawingElement', label: 'Drawing element' },
+  { id: 'DrawingOrientation', label: 'DrawingOrientation' },
+  { id: 'Portrait', label: 'Portrait' },
+  { id: 'Landscape', label: 'Landscape' },
+  { id: 'DrawingSheet', label: 'Drawing sheet' },
+  { id: 'Note', label: 'Note' },
+  { id: 'RevisionTable', label: 'Revision table' },
+  { id: 'Layout', label: 'Layout' },
+  { id: 'FacadeComponent', label: 'Facade component' },
+  { id: 'Elevation', label: 'Elevation' },
+  { id: 'EPDM', label: 'EPDM' },
+  { id: 'Extruded', label: 'Extruded' },
+  { id: 'Fabricated', label: 'Fabricated' },
+  {
+    id: 'FacadeSecondaryStructure',
+    label: 'Facade secondary structure'
+  },
+  { id: 'GeometricProperties', label: 'Geometric properties' },
+  { id: 'Faceted', label: 'Faceted' },
+  { id: 'Fin', label: 'Fin' },
+  { id: 'FireCompartmentation', label: 'Fire compartmentation' },
+  { id: 'Firestop', label: 'Firestop' },
+  { id: 'Flipper', label: 'Flipper' },
+  { id: 'FunctionalProperties', label: 'Functional properties' },
+  { id: 'SectionProperties', label: 'Section properties' },
+  { id: 'Glass', label: 'Glass' },
+  { id: 'GRC', label: 'GRC' },
+  { id: 'PrecastSystem', label: 'Precast system' },
+  { id: 'Head', label: 'Head' },
+  { id: 'HelpingHandBracket', label: 'Helping hand' },
+  { id: 'HollowGasketShape', label: 'Hollow gasket shape' },
+  { id: 'Horizontal', label: 'Horizontal' },
+  { id: 'Image', label: 'Image' },
+  { id: 'Insulation', label: 'Insulation' },
+  { id: 'ISection', label: 'I-section' },
+  { id: 'Laminated', label: 'Laminated' },
+  { id: 'Legend', label: 'Legend' },
+  { id: 'Metadata', label: 'Metadata' },
+  ... 75 more items
+]
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: -1,
+  alreadySeen: false
+}
+[DEBUG] Added contains restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 },
+  hasMinQual: true,
+  hasMaxQual: true,
+  minQualValue: '0',
+  maxQualValue: '1',
+  existingEdgeIndex: -1,
+  alreadySeen: false
+}
+[DEBUG] Added contains restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '1',
+  maxQualValue: null,
+  existingEdgeIndex: -1,
+  alreadySeen: false
+}
+[DEBUG] Added contains restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: false,
+  hasMaxQual: false,
+  minQualValue: null,
+  maxQualValue: null,
+  existingEdgeIndex: -1,
+  alreadySeen: false
+}
+[DEBUG] Added contains restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: 125,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 },
+  hasMinQual: true,
+  hasMaxQual: true,
+  minQualValue: '0',
+  maxQualValue: '1',
+  existingEdgeIndex: 126,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '1',
+  maxQualValue: null,
+  existingEdgeIndex: 127,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: false,
+  hasMaxQual: false,
+  minQualValue: null,
+  maxQualValue: null,
+  existingEdgeIndex: 128,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: 125,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 },
+  hasMinQual: true,
+  hasMaxQual: true,
+  minQualValue: '0',
+  maxQualValue: '1',
+  existingEdgeIndex: 126,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '1',
+  maxQualValue: null,
+  existingEdgeIndex: 127,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: false,
+  hasMaxQual: false,
+  minQualValue: null,
+  maxQualValue: null,
+  existingEdgeIndex: 128,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: 125,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 },
+  hasMinQual: true,
+  hasMaxQual: true,
+  minQualValue: '0',
+  maxQualValue: '1',
+  existingEdgeIndex: 126,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '1',
+  maxQualValue: null,
+  existingEdgeIndex: 127,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: false,
+  hasMaxQual: false,
+  minQualValue: null,
+  maxQualValue: null,
+  existingEdgeIndex: 128,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: 125,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Note:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Note',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 },
+  hasMinQual: true,
+  hasMaxQual: true,
+  minQualValue: '0',
+  maxQualValue: '1',
+  existingEdgeIndex: 126,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->RevisionTable:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'RevisionTable',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: 1,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: 1 }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '1',
+  maxQualValue: null,
+  existingEdgeIndex: 127,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->Layout:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'Layout',
+    type: 'contains',
+    minCardinality: 1,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 1, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: false,
+  hasMaxQual: false,
+  minQualValue: null,
+  maxQualValue: null,
+  existingEdgeIndex: 128,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'DrawingSheet->FacadeComponent:contains',
+  edge: {
+    from: 'DrawingSheet',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'FacadeSystem->FacadeComponent:contains',
+  edge: {
+    from: 'FacadeSystem',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: false,
+  hasMaxQual: false,
+  minQualValue: null,
+  maxQualValue: null,
+  existingEdgeIndex: -1,
+  alreadySeen: false
+}
+[DEBUG] Added contains restriction edge: {
+  key: 'FacadeSystem->FacadeComponent:contains',
+  edge: {
+    from: 'FacadeSystem',
+    to: 'FacadeComponent',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'Layout->DrawingElement:contains',
+  edge: {
+    from: 'Layout',
+    to: 'DrawingElement',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: -1,
+  alreadySeen: false
+}
+[DEBUG] Added contains restriction edge: {
+  key: 'Layout->DrawingElement:contains',
+  edge: {
+    from: 'Layout',
+    to: 'DrawingElement',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] Creating restriction edge: {
+  key: 'Layout->DrawingElement:contains',
+  edge: {
+    from: 'Layout',
+    to: 'DrawingElement',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null },
+  hasMinQual: true,
+  hasMaxQual: false,
+  minQualValue: '0',
+  maxQualValue: null,
+  existingEdgeIndex: 151,
+  alreadySeen: true
+}
+[DEBUG] Replaced domain/range edge with restriction edge: {
+  key: 'Layout->DrawingElement:contains',
+  edge: {
+    from: 'Layout',
+    to: 'DrawingElement',
+    type: 'contains',
+    minCardinality: 0,
+    maxCardinality: null,
+    isRestriction: true
+  },
+  cardinality: { minCardinality: 0, maxCardinality: null }
+}
+[DEBUG] ÔÜá No describes restriction found in TTL store
+[DEBUG] Total edges parsed: 167
+[DEBUG] Describes edges in parsed edges: 0 []
+[PARSER] Skipping domain/range edges for property contains (has owl:Thing domain/range)
+[PARSER] Skipping domain/range edges for property hasProperty (has owl:Thing domain/range)
+[storeToTurtle] Using custom TTL serializer with cache-based reconstruction, cache has 188 blocks
+[reconstructFromCache] Starting reconstruction, cache has 188 blocks
+[PERF] reconstructFromCache START
+[PERF] Starting block check loop, blocks: 188
+[PERF] Processing block 0 of 188 elapsed: 0 ms
+[reconstructFromCache] Resolved prefixed name: :Ontology -> http://example.org/aec-drawing-ontology#Ontology
+[reconstructFromCache] Block subject: :Ontology resolved to: http://example.org/aec-drawing-ontology#Ontology found 9 quads
+[reconstructFromCache] Resolved prefixed name: :exampleImage -> http://example.org/aec-drawing-ontology#exampleImage
+[reconstructFromCache] Block subject: :exampleImage resolved to: http://example.org/aec-drawing-ontology#exampleImage found 3 quads
+[reconstructFromCache] Resolved prefixed name: :labellableRoot -> http://example.org/aec-drawing-ontology#labellableRoot
+[reconstructFromCache] Block subject: :labellableRoot resolved to: http://example.org/aec-drawing-ontology#labellableRoot found 4 quads
+[PERF] Processing block 10 of 188 elapsed: 1 ms
+[reconstructFromCache] Resolved prefixed name: :contains -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] Block subject: :contains resolved to: http://example.org/aec-drawing-ontology#contains found 5 quads
+[reconstructFromCache] Resolved prefixed name: :hasProperty -> http://example.org/aec-drawing-ontology#hasProperty
+[reconstructFromCache] Block subject: :hasProperty resolved to: http://example.org/aec-drawing-ontology#hasProperty found 7 quads
+[reconstructFromCache] Resolved prefixed name: :refersToDrawingId -> http://example.org/aec-drawing-ontology#refersToDrawingId
+[reconstructFromCache] Block subject: :refersToDrawingId resolved to: http://example.org/aec-drawing-ontology#refersToDrawingId found 5 quads
+[reconstructFromCache] DrawingElement block check: {
+  subject: ':refersToDrawingId',
+  originalQuadsCount: 5,
+  currentQuadsCount: 5,
+  isModified: false
+}
+[reconstructFromCache] Label quads - original: [ 'refersToDrawingId' ] current: [ 'refersToDrawingId' ]
+[reconstructFromCache] Resolved prefixed name: :AddOn -> http://example.org/aec-drawing-ontology#AddOn
+[reconstructFromCache] Block subject: :AddOn resolved to: http://example.org/aec-drawing-ontology#AddOn found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Aesthetic -> http://example.org/aec-drawing-ontology#Aesthetic
+[reconstructFromCache] Block subject: :Aesthetic resolved to: http://example.org/aec-drawing-ontology#Aesthetic found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Airtightness -> http://example.org/aec-drawing-ontology#Airtightness
+[reconstructFromCache] Block subject: :Airtightness resolved to: http://example.org/aec-drawing-ontology#Airtightness found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Aluminium -> http://example.org/aec-drawing-ontology#Aluminium
+[reconstructFromCache] Block subject: :Aluminium resolved to: http://example.org/aec-drawing-ontology#Aluminium found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Asymmetrical -> http://example.org/aec-drawing-ontology#Asymmetrical
+[reconstructFromCache] Block subject: :Asymmetrical resolved to: http://example.org/aec-drawing-ontology#Asymmetrical found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :BackingWall -> http://example.org/aec-drawing-ontology#BackingWall
+[reconstructFromCache] Block subject: :BackingWall resolved to: http://example.org/aec-drawing-ontology#BackingWall found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Base -> http://example.org/aec-drawing-ontology#Base
+[reconstructFromCache] Block subject: :Base resolved to: http://example.org/aec-drawing-ontology#Base found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 20 of 188 elapsed: 1 ms
+[reconstructFromCache] Resolved prefixed name: :Beam -> http://example.org/aec-drawing-ontology#Beam
+[reconstructFromCache] Block subject: :Beam resolved to: http://example.org/aec-drawing-ontology#Beam found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Blockwork -> http://example.org/aec-drawing-ontology#Blockwork
+[reconstructFromCache] Block subject: :Blockwork resolved to: http://example.org/aec-drawing-ontology#Blockwork found 3 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 3
+[reconstructFromCache] Resolved prefixed name: :Board -> http://example.org/aec-drawing-ontology#Board
+[reconstructFromCache] Block subject: :Board resolved to: http://example.org/aec-drawing-ontology#Board found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Bracket -> http://example.org/aec-drawing-ontology#Bracket
+[reconstructFromCache] Block subject: :Bracket resolved to: http://example.org/aec-drawing-ontology#Bracket found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :BreatherMembrane -> http://example.org/aec-drawing-ontology#BreatherMembrane
+[reconstructFromCache] Block subject: :BreatherMembrane resolved to: http://example.org/aec-drawing-ontology#BreatherMembrane found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Brick -> http://example.org/aec-drawing-ontology#Brick
+[reconstructFromCache] Block subject: :Brick resolved to: http://example.org/aec-drawing-ontology#Brick found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Cable -> http://example.org/aec-drawing-ontology#Cable
+[reconstructFromCache] Block subject: :Cable resolved to: http://example.org/aec-drawing-ontology#Cable found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Capped -> http://example.org/aec-drawing-ontology#Capped
+[reconstructFromCache] Block subject: :Capped resolved to: http://example.org/aec-drawing-ontology#Capped found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Capping -> http://example.org/aec-drawing-ontology#Capping
+[reconstructFromCache] Block subject: :Capping resolved to: http://example.org/aec-drawing-ontology#Capping found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CastInChannel -> http://example.org/aec-drawing-ontology#CastInChannel
+[reconstructFromCache] Block subject: :CastInChannel resolved to: http://example.org/aec-drawing-ontology#CastInChannel found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 30 of 188 elapsed: 1 ms
+[reconstructFromCache] Resolved prefixed name: :CavityBarrier -> http://example.org/aec-drawing-ontology#CavityBarrier
+[reconstructFromCache] Block subject: :CavityBarrier resolved to: http://example.org/aec-drawing-ontology#CavityBarrier found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CavityWallSystem -> http://example.org/aec-drawing-ontology#CavityWallSystem
+[reconstructFromCache] Block subject: :CavityWallSystem resolved to: http://example.org/aec-drawing-ontology#CavityWallSystem found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Cementboard -> http://example.org/aec-drawing-ontology#Cementboard
+[reconstructFromCache] Block subject: :Cementboard resolved to: http://example.org/aec-drawing-ontology#Cementboard found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Channel -> http://example.org/aec-drawing-ontology#Channel
+[reconstructFromCache] Block subject: :Channel resolved to: http://example.org/aec-drawing-ontology#Channel found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :ChordBracing -> http://example.org/aec-drawing-ontology#ChordBracing
+[reconstructFromCache] Block subject: :ChordBracing resolved to: http://example.org/aec-drawing-ontology#ChordBracing found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CHS -> http://example.org/aec-drawing-ontology#CHS
+[reconstructFromCache] Block subject: :CHS resolved to: http://example.org/aec-drawing-ontology#CHS found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Circular -> http://example.org/aec-drawing-ontology#Circular
+[reconstructFromCache] Block subject: :Circular resolved to: http://example.org/aec-drawing-ontology#Circular found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Clay -> http://example.org/aec-drawing-ontology#Clay
+[reconstructFromCache] Block subject: :Clay resolved to: http://example.org/aec-drawing-ontology#Clay found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :ClosedState -> http://example.org/aec-drawing-ontology#ClosedState
+[reconstructFromCache] Block subject: :ClosedState resolved to: http://example.org/aec-drawing-ontology#ClosedState found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Column -> http://example.org/aec-drawing-ontology#Column
+[reconstructFromCache] Block subject: :Column resolved to: http://example.org/aec-drawing-ontology#Column found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 40 of 188 elapsed: 2 ms
+[reconstructFromCache] Resolved prefixed name: :Concrete -> http://example.org/aec-drawing-ontology#Concrete
+[reconstructFromCache] Block subject: :Concrete resolved to: http://example.org/aec-drawing-ontology#Concrete found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Corner -> http://example.org/aec-drawing-ontology#Corner
+[reconstructFromCache] Block subject: :Corner resolved to: http://example.org/aec-drawing-ontology#Corner found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CurtainWallSystem -> http://example.org/aec-drawing-ontology#CurtainWallSystem
+[reconstructFromCache] Block subject: :CurtainWallSystem resolved to: http://example.org/aec-drawing-ontology#CurtainWallSystem found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Curved -> http://example.org/aec-drawing-ontology#Curved
+[reconstructFromCache] Block subject: :Curved resolved to: http://example.org/aec-drawing-ontology#Curved found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CWFrameMember -> http://example.org/aec-drawing-ontology#CWFrameMember
+[reconstructFromCache] Block subject: :CWFrameMember resolved to: http://example.org/aec-drawing-ontology#CWFrameMember found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CWFrameMemberProperties -> http://example.org/aec-drawing-ontology#CWFrameMemberProperties
+[reconstructFromCache] Block subject: :CWFrameMemberProperties resolved to: http://example.org/aec-drawing-ontology#CWFrameMemberProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :CWSystem -> http://example.org/aec-drawing-ontology#CWSystem
+[reconstructFromCache] Block subject: :CWSystem resolved to: http://example.org/aec-drawing-ontology#CWSystem found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :DeadLoad -> http://example.org/aec-drawing-ontology#DeadLoad
+[reconstructFromCache] Block subject: :DeadLoad resolved to: http://example.org/aec-drawing-ontology#DeadLoad found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :DeadLoadBracket -> http://example.org/aec-drawing-ontology#DeadLoadBracket
+[reconstructFromCache] Block subject: :DeadLoadBracket resolved to: http://example.org/aec-drawing-ontology#DeadLoadBracket found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :Detail -> http://example.org/aec-drawing-ontology#Detail
+[reconstructFromCache] Block subject: :Detail resolved to: http://example.org/aec-drawing-ontology#Detail found 6 quads
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_0 normalized: df_0_0
+[reconstructFromCache] Collecting blank node quads for 2 blank nodes, currentQuads: 6
+[reconstructFromCache] Blank node df_0_0 has 4 quads (where blank is SUBJECT)
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#hasPropert
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#Orientatio
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#qualifiedCardinality -> "1"
+[reconstructFromCache] Added 4 quads for restriction blank node: df_0_0 (total currentQuads now: 10 )
+[reconstructFromCache] Blank node _:df_0_0 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_0 (total currentQuads now: 10 )
+[reconstructFromCache] SUCCESS: Collected 4 quads where blank nodes are subjects for 2 restriction blank nodes
+[quadsAreDifferent] Missing signature in current: http://example.org/aec-drawing-ontology#Detail|http://www.w3.org/2000/01/rdf-schema#subClassOf|_:undefined
+[reconstructFromCache] Block marked as modified: :Detail type: Class
+[PERF] Processing block 50 of 188 elapsed: 2 ms
+[reconstructFromCache] Resolved prefixed name: :DetailLocation -> http://example.org/aec-drawing-ontology#DetailLocation
+[reconstructFromCache] Block subject: :DetailLocation resolved to: http://example.org/aec-drawing-ontology#DetailLocation found 3 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 3
+[reconstructFromCache] Resolved prefixed name: :DGU -> http://example.org/aec-drawing-ontology#DGU
+[reconstructFromCache] Block subject: :DGU resolved to: http://example.org/aec-drawing-ontology#DGU found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :DoubleLaminated -> http://example.org/aec-drawing-ontology#DoubleLaminated
+[reconstructFromCache] Block subject: :DoubleLaminated resolved to: http://example.org/aec-drawing-ontology#DoubleLaminated found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :DrawingElement -> http://example.org/aec-drawing-ontology#DrawingElement
+[reconstructFromCache] Block subject: :DrawingElement resolved to: http://example.org/aec-drawing-ontology#DrawingElement found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] DIAGNOSTIC - DrawingSheet block (main path): {
+  subject: ':DrawingElement',
+  resolvedUri: 'http://example.org/aec-drawing-ontology#DrawingElement',
+  quadsBefore: 5,
+  quadsAfter: 5,
+  blankNodeCount: 0,
+  blankNodeIds: [],
+  blankNodeQuadsAsSubjects: 0
+}
+[reconstructFromCache] DrawingElement block check: {
+  subject: ':DrawingElement',
+  originalQuadsCount: 5,
+  currentQuadsCount: 5,
+  isModified: false
+}
+[reconstructFromCache] Label quads - original: [ 'Drawing element', 'false' ] current: [ 'Drawing element', 'false' ]
+[reconstructFromCache] Resolved prefixed name: :DrawingOrientation -> http://example.org/aec-drawing-ontology#DrawingOrientation
+[reconstructFromCache] Block subject: :DrawingOrientation resolved to: http://example.org/aec-drawing-ontology#DrawingOrientation found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] DIAGNOSTIC - DrawingSheet block (main path): {
+  subject: ':DrawingOrientation',
+  resolvedUri: 'http://example.org/aec-drawing-ontology#DrawingOrientation',
+  quadsBefore: 4,
+  quadsAfter: 4,
+  blankNodeCount: 0,
+  blankNodeIds: [],
+  blankNodeQuadsAsSubjects: 0
+}
+[reconstructFromCache] DrawingElement block check: {
+  subject: ':DrawingOrientation',
+  originalQuadsCount: 4,
+  currentQuadsCount: 4,
+  isModified: false
+}
+[reconstructFromCache] Label quads - original: [ 'DrawingOrientation' ] current: [ 'DrawingOrientation' ]
+[reconstructFromCache] Processing DrawingSheet block, subject: :DrawingSheet type: Class
+[reconstructFromCache] Resolved prefixed name: :DrawingSheet -> http://example.org/aec-drawing-ontology#DrawingSheet
+[reconstructFromCache] Block subject: :DrawingSheet resolved to: http://example.org/aec-drawing-ontology#DrawingSheet found 9 quads
+[reconstructFromCache] DrawingSheet - subClassOfQuads.length: 5
+[reconstructFromCache] DrawingSheet - hasSubClassOfWithBlanks: true
+[reconstructFromCache] DrawingSheet - block.type: Class
+[reconstructFromCache] DrawingSheet - Entering blank node collection block
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_1 normalized: df_0_1
+[reconstructFromCache] DrawingSheet - Found blank node in subClassOf quad: _:df_0_1 normalized: df_0_1
+[reconstructFromCache] DrawingSheet - Store has 4 quads for blank node df_0_1
+[reconstructFromCache] DrawingSheet - First quad predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_2 normalized: df_0_2
+[reconstructFromCache] DrawingSheet - Found blank node in subClassOf quad: _:df_0_2 normalized: df_0_2
+[reconstructFromCache] DrawingSheet - Store has 6 quads for blank node df_0_2
+[reconstructFromCache] DrawingSheet - First quad predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_3 normalized: df_0_3
+[reconstructFromCache] DrawingSheet - Found blank node in subClassOf quad: _:df_0_3 normalized: df_0_3
+[reconstructFromCache] DrawingSheet - Store has 4 quads for blank node df_0_3
+[reconstructFromCache] DrawingSheet - First quad predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_4 normalized: df_0_4
+[reconstructFromCache] DrawingSheet - Found blank node in subClassOf quad: _:df_0_4 normalized: df_0_4
+[reconstructFromCache] DrawingSheet - Store has 3 quads for blank node df_0_4
+[reconstructFromCache] DrawingSheet - First quad predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_5 normalized: df_0_5
+[reconstructFromCache] DrawingSheet - Found blank node in subClassOf quad: _:df_0_5 normalized: df_0_5
+[reconstructFromCache] DrawingSheet - Store has 4 quads for blank node df_0_5
+[reconstructFromCache] DrawingSheet - First quad predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Collecting blank node quads for 10 blank nodes, currentQuads: 9
+[reconstructFromCache] DrawingSheet - restrictionBlankNodes: [
+  'df_0_1',   'df_0_2',
+  'df_0_3',   'df_0_4',
+  'df_0_5',   '_:df_0_1',
+  '_:df_0_2', '_:df_0_3',
+  '_:df_0_4', '_:df_0_5'
+]
+[reconstructFromCache] Blank node df_0_1 has 4 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node df_0_1 - found 4 quads from store
+[reconstructFromCache] DrawingSheet - Successfully found 4 quads for blank node df_0_1
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onProperty
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#Note
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onClass
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "0"
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality
+[reconstructFromCache] Added 4 quads for restriction blank node: df_0_1 (total currentQuads now: 13 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 13
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 4
+[reconstructFromCache] Blank node df_0_2 has 6 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node df_0_2 - found 6 quads from store
+[reconstructFromCache] DrawingSheet - Successfully found 6 quads for blank node df_0_2
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onProperty
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#RevisionTa
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onClass
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#qualifiedCardinality -> "1"
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#qualifiedCardinality
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "0"
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#maxQualifiedCardinality -> "1"
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#maxQualifiedCardinality
+[reconstructFromCache] Added 6 quads for restriction blank node: df_0_2 (total currentQuads now: 19 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 19
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 10
+[reconstructFromCache] Blank node df_0_3 has 4 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node df_0_3 - found 4 quads from store
+[reconstructFromCache] DrawingSheet - Successfully found 4 quads for blank node df_0_3
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onProperty
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#Layout
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onClass
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "1"
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality
+[reconstructFromCache] Added 4 quads for restriction blank node: df_0_3 (total currentQuads now: 23 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 23
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 14
+[reconstructFromCache] Blank node df_0_4 has 3 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node df_0_4 - found 3 quads from store
+[reconstructFromCache] DrawingSheet - Successfully found 3 quads for blank node df_0_4
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onProperty
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#someValuesFrom -> http://example.org/aec-drawing-ontology#FacadeComp
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#someValuesFrom
+[reconstructFromCache] Added 3 quads for restriction blank node: df_0_4 (total currentQuads now: 26 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 26
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 17
+[reconstructFromCache] WARNING: Blank node df_0_4 missing required properties - onProperty: true onClass: false type: true
+[reconstructFromCache] Blank node df_0_5 has 4 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node df_0_5 - found 4 quads from store
+[reconstructFromCache] DrawingSheet - Successfully found 4 quads for blank node df_0_5
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#hasPropert
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onProperty
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#DrawingOri
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#onClass
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#qualifiedCardinality -> "1"
+[reconstructFromCache] DrawingSheet - Added blank node quad: http://www.w3.org/2002/07/owl#qualifiedCardinality
+[reconstructFromCache] Added 4 quads for restriction blank node: df_0_5 (total currentQuads now: 30 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 21
+[reconstructFromCache] Blank node _:df_0_1 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node _:df_0_1 - found 0 quads from store
+[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node _:df_0_1
+[reconstructFromCache] DrawingSheet - Trying alternative ID: _:_:df_0_1
+[reconstructFromCache] DrawingSheet - alt1 quads: 0
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_1 (total currentQuads now: 30 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 21
+[reconstructFromCache] Blank node _:df_0_2 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node _:df_0_2 - found 0 quads from store
+[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node _:df_0_2
+[reconstructFromCache] DrawingSheet - Trying alternative ID: _:_:df_0_2
+[reconstructFromCache] DrawingSheet - alt1 quads: 0
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_2 (total currentQuads now: 30 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 21
+[reconstructFromCache] Blank node _:df_0_3 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node _:df_0_3 - found 0 quads from store
+[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node _:df_0_3
+[reconstructFromCache] DrawingSheet - Trying alternative ID: _:_:df_0_3
+[reconstructFromCache] DrawingSheet - alt1 quads: 0
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_3 (total currentQuads now: 30 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 21
+[reconstructFromCache] Blank node _:df_0_4 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node _:df_0_4 - found 0 quads from store
+[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node _:df_0_4
+[reconstructFromCache] DrawingSheet - Trying alternative ID: _:_:df_0_4
+[reconstructFromCache] DrawingSheet - alt1 quads: 0
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_4 (total currentQuads now: 30 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 21
+[reconstructFromCache] WARNING: Blank node _:df_0_4 missing required properties - onProperty: true onClass: false type: true
+[reconstructFromCache] Blank node _:df_0_5 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] DrawingSheet - blank node _:df_0_5 - found 0 quads from store
+[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node _:df_0_5
+[reconstructFromCache] DrawingSheet - Trying alternative ID: _:_:df_0_5
+[reconstructFromCache] DrawingSheet - alt1 quads: 0
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_5 (total currentQuads now: 30 )
+[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads: 21
+[reconstructFromCache] SUCCESS: Collected 21 quads where blank nodes are subjects for 10 restriction blank nodes
+[reconstructFromCache] DIAGNOSTIC - DrawingSheet block (main path): {
+  subject: ':DrawingSheet',
+  resolvedUri: 'http://example.org/aec-drawing-ontology#DrawingSheet',
+  quadsBefore: 30,
+  quadsAfter: 30,
+  blankNodeCount: 10,
+  blankNodeIds: [
+    'df_0_1',   'df_0_2',
+    'df_0_3',   'df_0_4',
+    'df_0_5',   '_:df_0_1',
+    '_:df_0_2', '_:df_0_3',
+    '_:df_0_4', '_:df_0_5'
+  ],
+  blankNodeQuadsAsSubjects: 21
+}
+[quadsAreDifferent] Different signature sizes: 17 vs 30
+[reconstructFromCache] DrawingElement block check: {
+  subject: ':DrawingSheet',
+  originalQuadsCount: 30,
+  currentQuadsCount: 30,
+  isModified: true
+}
+[reconstructFromCache] Label quads - original: [ 'Drawing sheet', 'false' ] current: [ 'Drawing sheet renamed', 'false' ]
+[reconstructFromCache] DrawingSheet - Reached point before creating modifiedBlock
+[reconstructFromCache] DrawingSheet - Before creating modifiedBlock:
+[reconstructFromCache] DrawingSheet - currentQuads.length: 30
+[reconstructFromCache] DrawingSheet - blank nodes as subjects: 21
+[reconstructFromCache] DrawingSheet - isModified: true
+[reconstructFromCache] DrawingSheet - hasBlankNodeQuads: true
+[reconstructFromCache] DrawingSheet - After creating modifiedBlock:
+[reconstructFromCache] DrawingSheet - modifiedBlock.quads.length: 30
+[reconstructFromCache] DrawingSheet - blank nodes as subjects in modifiedBlock.quads: 21
+[reconstructFromCache] Block marked as modified: :DrawingSheet type: Class
+[reconstructFromCache] Resolved prefixed name: :DrawingType -> http://example.org/aec-drawing-ontology#DrawingType
+[reconstructFromCache] Block subject: :DrawingType resolved to: http://example.org/aec-drawing-ontology#DrawingType found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] DIAGNOSTIC - DrawingSheet block (main path): {
+  subject: ':DrawingType',
+  resolvedUri: 'http://example.org/aec-drawing-ontology#DrawingType',
+  quadsBefore: 5,
+  quadsAfter: 5,
+  blankNodeCount: 0,
+  blankNodeIds: [],
+  blankNodeQuadsAsSubjects: 0
+}
+[reconstructFromCache] DrawingElement block check: {
+  subject: ':DrawingType',
+  originalQuadsCount: 5,
+  currentQuadsCount: 5,
+  isModified: false
+}
+[reconstructFromCache] Label quads - original: [ 'Drawing type', 'false' ] current: [ 'Drawing type', 'false' ]
+[reconstructFromCache] Resolved prefixed name: :Elevation -> http://example.org/aec-drawing-ontology#Elevation
+[reconstructFromCache] Block subject: :Elevation resolved to: http://example.org/aec-drawing-ontology#Elevation found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :EPDM -> http://example.org/aec-drawing-ontology#EPDM
+[reconstructFromCache] Block subject: :EPDM resolved to: http://example.org/aec-drawing-ontology#EPDM found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Extruded -> http://example.org/aec-drawing-ontology#Extruded
+[reconstructFromCache] Block subject: :Extruded resolved to: http://example.org/aec-drawing-ontology#Extruded found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 60 of 188 elapsed: 4 ms
+[reconstructFromCache] Resolved prefixed name: :Fabricated -> http://example.org/aec-drawing-ontology#Fabricated
+[reconstructFromCache] Block subject: :Fabricated resolved to: http://example.org/aec-drawing-ontology#Fabricated found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FacadeCladding -> http://example.org/aec-drawing-ontology#FacadeCladding
+[reconstructFromCache] Block subject: :FacadeCladding resolved to: http://example.org/aec-drawing-ontology#FacadeCladding found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FacadeComponent -> http://example.org/aec-drawing-ontology#FacadeComponent
+[reconstructFromCache] Block subject: :FacadeComponent resolved to: http://example.org/aec-drawing-ontology#FacadeComponent found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :FacadeSecondaryStructure -> http://example.org/aec-drawing-ontology#FacadeSecondaryStructure
+[reconstructFromCache] Block subject: :FacadeSecondaryStructure resolved to: http://example.org/aec-drawing-ontology#FacadeSecondaryStructure found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FacadeShape -> http://example.org/aec-drawing-ontology#FacadeShape
+[reconstructFromCache] Block subject: :FacadeShape resolved to: http://example.org/aec-drawing-ontology#FacadeShape found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FacadeSystem -> http://example.org/aec-drawing-ontology#FacadeSystem
+[reconstructFromCache] Block subject: :FacadeSystem resolved to: http://example.org/aec-drawing-ontology#FacadeSystem found 6 quads
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_6 normalized: df_0_6
+[reconstructFromCache] Collecting blank node quads for 2 blank nodes, currentQuads: 6
+[reconstructFromCache] Blank node df_0_6 has 3 quads (where blank is SUBJECT)
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#someValuesFrom -> http://example.org/aec-drawing-ontology#FacadeComp
+[reconstructFromCache] Added 3 quads for restriction blank node: df_0_6 (total currentQuads now: 9 )
+[reconstructFromCache] WARNING: Blank node df_0_6 missing required properties - onProperty: true onClass: false type: true
+[reconstructFromCache] Blank node _:df_0_6 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_6 (total currentQuads now: 9 )
+[reconstructFromCache] WARNING: Blank node _:df_0_6 missing required properties - onProperty: true onClass: false type: true
+[reconstructFromCache] SUCCESS: Collected 3 quads where blank nodes are subjects for 2 restriction blank nodes
+[quadsAreDifferent] Missing signature in current: http://example.org/aec-drawing-ontology#FacadeSystem|http://www.w3.org/2000/01/rdf-schema#subClassOf|_:undefined
+[reconstructFromCache] Block marked as modified: :FacadeSystem type: Class
+[reconstructFromCache] Resolved prefixed name: :Faceted -> http://example.org/aec-drawing-ontology#Faceted
+[reconstructFromCache] Block subject: :Faceted resolved to: http://example.org/aec-drawing-ontology#Faceted found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FacingMaterial -> http://example.org/aec-drawing-ontology#FacingMaterial
+[reconstructFromCache] Block subject: :FacingMaterial resolved to: http://example.org/aec-drawing-ontology#FacingMaterial found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Fin -> http://example.org/aec-drawing-ontology#Fin
+[reconstructFromCache] Block subject: :Fin resolved to: http://example.org/aec-drawing-ontology#Fin found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FireCompartmentation -> http://example.org/aec-drawing-ontology#FireCompartmentation
+[reconstructFromCache] Block subject: :FireCompartmentation resolved to: http://example.org/aec-drawing-ontology#FireCompartmentation found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 70 of 188 elapsed: 5 ms
+[reconstructFromCache] Resolved prefixed name: :Firestop -> http://example.org/aec-drawing-ontology#Firestop
+[reconstructFromCache] Block subject: :Firestop resolved to: http://example.org/aec-drawing-ontology#Firestop found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Fixing -> http://example.org/aec-drawing-ontology#Fixing
+[reconstructFromCache] Block subject: :Fixing resolved to: http://example.org/aec-drawing-ontology#Fixing found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Flipper -> http://example.org/aec-drawing-ontology#Flipper
+[reconstructFromCache] Block subject: :Flipper resolved to: http://example.org/aec-drawing-ontology#Flipper found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FrameType -> http://example.org/aec-drawing-ontology#FrameType
+[reconstructFromCache] Block subject: :FrameType resolved to: http://example.org/aec-drawing-ontology#FrameType found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Function -> http://example.org/aec-drawing-ontology#Function
+[reconstructFromCache] Block subject: :Function resolved to: http://example.org/aec-drawing-ontology#Function found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :FunctionalProperties -> http://example.org/aec-drawing-ontology#FunctionalProperties
+[reconstructFromCache] Block subject: :FunctionalProperties resolved to: http://example.org/aec-drawing-ontology#FunctionalProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Gasket -> http://example.org/aec-drawing-ontology#Gasket
+[reconstructFromCache] Block subject: :Gasket resolved to: http://example.org/aec-drawing-ontology#Gasket found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :GenericShapeProperty -> http://example.org/aec-drawing-ontology#GenericShapeProperty
+[reconstructFromCache] Block subject: :GenericShapeProperty resolved to: http://example.org/aec-drawing-ontology#GenericShapeProperty found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :GeometricProperties -> http://example.org/aec-drawing-ontology#GeometricProperties
+[reconstructFromCache] Block subject: :GeometricProperties resolved to: http://example.org/aec-drawing-ontology#GeometricProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Glass -> http://example.org/aec-drawing-ontology#Glass
+[reconstructFromCache] Block subject: :Glass resolved to: http://example.org/aec-drawing-ontology#Glass found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 80 of 188 elapsed: 5 ms
+[reconstructFromCache] Resolved prefixed name: :GlazingProperties -> http://example.org/aec-drawing-ontology#GlazingProperties
+[reconstructFromCache] Block subject: :GlazingProperties resolved to: http://example.org/aec-drawing-ontology#GlazingProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :GlazingRetention -> http://example.org/aec-drawing-ontology#GlazingRetention
+[reconstructFromCache] Block subject: :GlazingRetention resolved to: http://example.org/aec-drawing-ontology#GlazingRetention found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :GRC -> http://example.org/aec-drawing-ontology#GRC
+[reconstructFromCache] Block subject: :GRC resolved to: http://example.org/aec-drawing-ontology#GRC found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Head -> http://example.org/aec-drawing-ontology#Head
+[reconstructFromCache] Block subject: :Head resolved to: http://example.org/aec-drawing-ontology#Head found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :HelpingHandBracket -> http://example.org/aec-drawing-ontology#HelpingHandBracket
+[reconstructFromCache] Block subject: :HelpingHandBracket resolved to: http://example.org/aec-drawing-ontology#HelpingHandBracket found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :HollowGasketShape -> http://example.org/aec-drawing-ontology#HollowGasketShape
+[reconstructFromCache] Block subject: :HollowGasketShape resolved to: http://example.org/aec-drawing-ontology#HollowGasketShape found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Horizontal -> http://example.org/aec-drawing-ontology#Horizontal
+[reconstructFromCache] Block subject: :Horizontal resolved to: http://example.org/aec-drawing-ontology#Horizontal found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Image -> http://example.org/aec-drawing-ontology#Image
+[reconstructFromCache] Block subject: :Image resolved to: http://example.org/aec-drawing-ontology#Image found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Insulation -> http://example.org/aec-drawing-ontology#Insulation
+[reconstructFromCache] Block subject: :Insulation resolved to: http://example.org/aec-drawing-ontology#Insulation found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :ISection -> http://example.org/aec-drawing-ontology#ISection
+[reconstructFromCache] Block subject: :ISection resolved to: http://example.org/aec-drawing-ontology#ISection found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 90 of 188 elapsed: 6 ms
+[reconstructFromCache] Resolved prefixed name: :Laminated -> http://example.org/aec-drawing-ontology#Laminated
+[reconstructFromCache] Block subject: :Laminated resolved to: http://example.org/aec-drawing-ontology#Laminated found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Landscape -> http://example.org/aec-drawing-ontology#Landscape
+[reconstructFromCache] Block subject: :Landscape resolved to: http://example.org/aec-drawing-ontology#Landscape found 3 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 3
+[reconstructFromCache] Resolved prefixed name: :Layout -> http://example.org/aec-drawing-ontology#Layout
+[reconstructFromCache] Block subject: :Layout resolved to: http://example.org/aec-drawing-ontology#Layout found 6 quads
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_7 normalized: df_0_7
+[reconstructFromCache] Found blank node in subClassOf: _:df_0_8 normalized: df_0_8
+[reconstructFromCache] Collecting blank node quads for 4 blank nodes, currentQuads: 6
+[reconstructFromCache] Blank node df_0_7 has 4 quads (where blank is SUBJECT)
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#DrawingEle
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "0"
+[reconstructFromCache] Added 4 quads for restriction blank node: df_0_7 (total currentQuads now: 10 )
+[reconstructFromCache] Blank node df_0_8 has 4 quads (where blank is SUBJECT)
+[reconstructFromCache] Added quad: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#hasPropert
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#DrawingTyp
+[reconstructFromCache] Added quad: http://www.w3.org/2002/07/owl#qualifiedCardinality -> "1"
+[reconstructFromCache] Added 4 quads for restriction blank node: df_0_8 (total currentQuads now: 14 )
+[reconstructFromCache] Blank node _:df_0_7 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_7 (total currentQuads now: 14 )
+[reconstructFromCache] Blank node _:df_0_8 has 0 quads (where blank is SUBJECT)
+[reconstructFromCache] Added 0 quads for restriction blank node: _:df_0_8 (total currentQuads now: 14 )
+[reconstructFromCache] SUCCESS: Collected 8 quads where blank nodes are subjects for 4 restriction blank nodes
+[quadsAreDifferent] Different signature sizes: 12 vs 14
+[reconstructFromCache] Block marked as modified: :Layout type: Class
+[reconstructFromCache] Resolved prefixed name: :Legend -> http://example.org/aec-drawing-ontology#Legend
+[reconstructFromCache] Block subject: :Legend resolved to: http://example.org/aec-drawing-ontology#Legend found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :LinearComponent -> http://example.org/aec-drawing-ontology#LinearComponent
+[reconstructFromCache] Block subject: :LinearComponent resolved to: http://example.org/aec-drawing-ontology#LinearComponent found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :LinearStructuralComponent -> http://example.org/aec-drawing-ontology#LinearStructuralComponent
+[reconstructFromCache] Block subject: :LinearStructuralComponent resolved to: http://example.org/aec-drawing-ontology#LinearStructuralComponent found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :LocalisedPenetration -> http://example.org/aec-drawing-ontology#LocalisedPenetration
+[reconstructFromCache] Block subject: :LocalisedPenetration resolved to: http://example.org/aec-drawing-ontology#LocalisedPenetration found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Louvre -> http://example.org/aec-drawing-ontology#Louvre
+[reconstructFromCache] Block subject: :Louvre resolved to: http://example.org/aec-drawing-ontology#Louvre found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Masonry -> http://example.org/aec-drawing-ontology#Masonry
+[reconstructFromCache] Block subject: :Masonry resolved to: http://example.org/aec-drawing-ontology#Masonry found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Material -> http://example.org/aec-drawing-ontology#Material
+[reconstructFromCache] Block subject: :Material resolved to: http://example.org/aec-drawing-ontology#Material found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 100 of 188 elapsed: 7 ms
+[reconstructFromCache] Resolved prefixed name: :MaterialProperties -> http://example.org/aec-drawing-ontology#MaterialProperties
+[reconstructFromCache] Block subject: :MaterialProperties resolved to: http://example.org/aec-drawing-ontology#MaterialProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Membrane -> http://example.org/aec-drawing-ontology#Membrane
+[reconstructFromCache] Block subject: :Membrane resolved to: http://example.org/aec-drawing-ontology#Membrane found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Metadata -> http://example.org/aec-drawing-ontology#Metadata
+[reconstructFromCache] Block subject: :Metadata resolved to: http://example.org/aec-drawing-ontology#Metadata found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :Metal -> http://example.org/aec-drawing-ontology#Metal
+[reconstructFromCache] Block subject: :Metal resolved to: http://example.org/aec-drawing-ontology#Metal found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :MineralWool -> http://example.org/aec-drawing-ontology#MineralWool
+[reconstructFromCache] Block subject: :MineralWool resolved to: http://example.org/aec-drawing-ontology#MineralWool found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Monolithic -> http://example.org/aec-drawing-ontology#Monolithic
+[reconstructFromCache] Block subject: :Monolithic resolved to: http://example.org/aec-drawing-ontology#Monolithic found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Mullion -> http://example.org/aec-drawing-ontology#Mullion
+[reconstructFromCache] Block subject: :Mullion resolved to: http://example.org/aec-drawing-ontology#Mullion found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Note -> http://example.org/aec-drawing-ontology#Note
+[reconstructFromCache] Block subject: :Note resolved to: http://example.org/aec-drawing-ontology#Note found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :OGasket -> http://example.org/aec-drawing-ontology#OGasket
+[reconstructFromCache] Block subject: :OGasket resolved to: http://example.org/aec-drawing-ontology#OGasket found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :OpenState -> http://example.org/aec-drawing-ontology#OpenState
+[reconstructFromCache] Block subject: :OpenState resolved to: http://example.org/aec-drawing-ontology#OpenState found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 110 of 188 elapsed: 7 ms
+[reconstructFromCache] Resolved prefixed name: :Orientation -> http://example.org/aec-drawing-ontology#Orientation
+[reconstructFromCache] Block subject: :Orientation resolved to: http://example.org/aec-drawing-ontology#Orientation found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :OtherInsulation -> http://example.org/aec-drawing-ontology#OtherInsulation
+[reconstructFromCache] Block subject: :OtherInsulation resolved to: http://example.org/aec-drawing-ontology#OtherInsulation found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :PanelComponent -> http://example.org/aec-drawing-ontology#PanelComponent
+[reconstructFromCache] Block subject: :PanelComponent resolved to: http://example.org/aec-drawing-ontology#PanelComponent found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :PanelStructuralComponent -> http://example.org/aec-drawing-ontology#PanelStructuralComponent
+[reconstructFromCache] Block subject: :PanelStructuralComponent resolved to: http://example.org/aec-drawing-ontology#PanelStructuralComponent found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Perspective -> http://example.org/aec-drawing-ontology#Perspective
+[reconstructFromCache] Block subject: :Perspective resolved to: http://example.org/aec-drawing-ontology#Perspective found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :PGasket -> http://example.org/aec-drawing-ontology#PGasket
+[reconstructFromCache] Block subject: :PGasket resolved to: http://example.org/aec-drawing-ontology#PGasket found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Plan -> http://example.org/aec-drawing-ontology#Plan
+[reconstructFromCache] Block subject: :Plan resolved to: http://example.org/aec-drawing-ontology#Plan found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Planar -> http://example.org/aec-drawing-ontology#Planar
+[reconstructFromCache] Block subject: :Planar resolved to: http://example.org/aec-drawing-ontology#Planar found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Plasterboard -> http://example.org/aec-drawing-ontology#Plasterboard
+[reconstructFromCache] Block subject: :Plasterboard resolved to: http://example.org/aec-drawing-ontology#Plasterboard found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :PointComponent -> http://example.org/aec-drawing-ontology#PointComponent
+[reconstructFromCache] Block subject: :PointComponent resolved to: http://example.org/aec-drawing-ontology#PointComponent found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[PERF] Processing block 120 of 188 elapsed: 8 ms
+[reconstructFromCache] Resolved prefixed name: :Polycarbonate -> http://example.org/aec-drawing-ontology#Polycarbonate
+[reconstructFromCache] Block subject: :Polycarbonate resolved to: http://example.org/aec-drawing-ontology#Polycarbonate found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Portrait -> http://example.org/aec-drawing-ontology#Portrait
+[reconstructFromCache] Block subject: :Portrait resolved to: http://example.org/aec-drawing-ontology#Portrait found 3 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 3
+[reconstructFromCache] Resolved prefixed name: :Precast -> http://example.org/aec-drawing-ontology#Precast
+[reconstructFromCache] Block subject: :Precast resolved to: http://example.org/aec-drawing-ontology#Precast found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :PrecastConcrete -> http://example.org/aec-drawing-ontology#PrecastConcrete
+[reconstructFromCache] Block subject: :PrecastConcrete resolved to: http://example.org/aec-drawing-ontology#PrecastConcrete found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :PrecastRestraintBracket -> http://example.org/aec-drawing-ontology#PrecastRestraintBracket
+[reconstructFromCache] Block subject: :PrecastRestraintBracket resolved to: http://example.org/aec-drawing-ontology#PrecastRestraintBracket found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :PrecastSystem -> http://example.org/aec-drawing-ontology#PrecastSystem
+[reconstructFromCache] Block subject: :PrecastSystem resolved to: http://example.org/aec-drawing-ontology#PrecastSystem found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :ProfiledMetal -> http://example.org/aec-drawing-ontology#ProfiledMetal
+[reconstructFromCache] Block subject: :ProfiledMetal resolved to: http://example.org/aec-drawing-ontology#ProfiledMetal found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :PushIn -> http://example.org/aec-drawing-ontology#PushIn
+[reconstructFromCache] Block subject: :PushIn resolved to: http://example.org/aec-drawing-ontology#PushIn found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Rail -> http://example.org/aec-drawing-ontology#Rail
+[reconstructFromCache] Block subject: :Rail resolved to: http://example.org/aec-drawing-ontology#Rail found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :RainscreenSystem -> http://example.org/aec-drawing-ontology#RainscreenSystem
+[reconstructFromCache] Block subject: :RainscreenSystem resolved to: http://example.org/aec-drawing-ontology#RainscreenSystem found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 130 of 188 elapsed: 8 ms
+[reconstructFromCache] Resolved prefixed name: :Rectangular -> http://example.org/aec-drawing-ontology#Rectangular
+[reconstructFromCache] Block subject: :Rectangular resolved to: http://example.org/aec-drawing-ontology#Rectangular found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Reflvet -> http://example.org/aec-drawing-ontology#Reflvet
+[reconstructFromCache] Block subject: :Reflvet resolved to: http://example.org/aec-drawing-ontology#Reflvet found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Restraint -> http://example.org/aec-drawing-ontology#Restraint
+[reconstructFromCache] Block subject: :Restraint resolved to: http://example.org/aec-drawing-ontology#Restraint found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :RevisionTable -> http://example.org/aec-drawing-ontology#RevisionTable
+[reconstructFromCache] Block subject: :RevisionTable resolved to: http://example.org/aec-drawing-ontology#RevisionTable found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :RHS -> http://example.org/aec-drawing-ontology#RHS
+[reconstructFromCache] Block subject: :RHS resolved to: http://example.org/aec-drawing-ontology#RHS found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :RoofCladding -> http://example.org/aec-drawing-ontology#RoofCladding
+[reconstructFromCache] Block subject: :RoofCladding resolved to: http://example.org/aec-drawing-ontology#RoofCladding found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Screw -> http://example.org/aec-drawing-ontology#Screw
+[reconstructFromCache] Block subject: :Screw resolved to: http://example.org/aec-drawing-ontology#Screw found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Sealant -> http://example.org/aec-drawing-ontology#Sealant
+[reconstructFromCache] Block subject: :Sealant resolved to: http://example.org/aec-drawing-ontology#Sealant found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Section -> http://example.org/aec-drawing-ontology#Section
+[reconstructFromCache] Block subject: :Section resolved to: http://example.org/aec-drawing-ontology#Section found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SectionChannel -> http://example.org/aec-drawing-ontology#SectionChannel
+[reconstructFromCache] Block subject: :SectionChannel resolved to: http://example.org/aec-drawing-ontology#SectionChannel found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 140 of 188 elapsed: 8 ms
+[reconstructFromCache] Resolved prefixed name: :SectionProperties -> http://example.org/aec-drawing-ontology#SectionProperties
+[reconstructFromCache] Block subject: :SectionProperties resolved to: http://example.org/aec-drawing-ontology#SectionProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SectionShape -> http://example.org/aec-drawing-ontology#SectionShape
+[reconstructFromCache] Block subject: :SectionShape resolved to: http://example.org/aec-drawing-ontology#SectionShape found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SemiUnitisedCurtainWall -> http://example.org/aec-drawing-ontology#SemiUnitisedCurtainWall
+[reconstructFromCache] Block subject: :SemiUnitisedCurtainWall resolved to: http://example.org/aec-drawing-ontology#SemiUnitisedCurtainWall found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :SerratedSawtooth -> http://example.org/aec-drawing-ontology#SerratedSawtooth
+[reconstructFromCache] Block subject: :SerratedSawtooth resolved to: http://example.org/aec-drawing-ontology#SerratedSawtooth found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SFS -> http://example.org/aec-drawing-ontology#SFS
+[reconstructFromCache] Block subject: :SFS resolved to: http://example.org/aec-drawing-ontology#SFS found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :ShelfAngle -> http://example.org/aec-drawing-ontology#ShelfAngle
+[reconstructFromCache] Block subject: :ShelfAngle resolved to: http://example.org/aec-drawing-ontology#ShelfAngle found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Silicone -> http://example.org/aec-drawing-ontology#Silicone
+[reconstructFromCache] Block subject: :Silicone resolved to: http://example.org/aec-drawing-ontology#Silicone found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Slab -> http://example.org/aec-drawing-ontology#Slab
+[reconstructFromCache] Block subject: :Slab resolved to: http://example.org/aec-drawing-ontology#Slab found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SlabEdge -> http://example.org/aec-drawing-ontology#SlabEdge
+[reconstructFromCache] Block subject: :SlabEdge resolved to: http://example.org/aec-drawing-ontology#SlabEdge found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SlideIn -> http://example.org/aec-drawing-ontology#SlideIn
+[reconstructFromCache] Block subject: :SlideIn resolved to: http://example.org/aec-drawing-ontology#SlideIn found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 150 of 188 elapsed: 9 ms
+[reconstructFromCache] Resolved prefixed name: :SmallPanels -> http://example.org/aec-drawing-ontology#SmallPanels
+[reconstructFromCache] Block subject: :SmallPanels resolved to: http://example.org/aec-drawing-ontology#SmallPanels found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SolidGasketShape -> http://example.org/aec-drawing-ontology#SolidGasketShape
+[reconstructFromCache] Block subject: :SolidGasketShape resolved to: http://example.org/aec-drawing-ontology#SolidGasketShape found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Square -> http://example.org/aec-drawing-ontology#Square
+[reconstructFromCache] Block subject: :Square resolved to: http://example.org/aec-drawing-ontology#Square found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :SSG -> http://example.org/aec-drawing-ontology#SSG
+[reconstructFromCache] Block subject: :SSG resolved to: http://example.org/aec-drawing-ontology#SSG found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Stick -> http://example.org/aec-drawing-ontology#Stick
+[reconstructFromCache] Block subject: :Stick resolved to: http://example.org/aec-drawing-ontology#Stick found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :StickCurtainWall -> http://example.org/aec-drawing-ontology#StickCurtainWall
+[reconstructFromCache] Block subject: :StickCurtainWall resolved to: http://example.org/aec-drawing-ontology#StickCurtainWall found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :Stone -> http://example.org/aec-drawing-ontology#Stone
+[reconstructFromCache] Block subject: :Stone resolved to: http://example.org/aec-drawing-ontology#Stone found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :StructuralComponent -> http://example.org/aec-drawing-ontology#StructuralComponent
+[reconstructFromCache] Block subject: :StructuralComponent resolved to: http://example.org/aec-drawing-ontology#StructuralComponent found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :StructuralMember -> http://example.org/aec-drawing-ontology#StructuralMember
+[reconstructFromCache] Block subject: :StructuralMember resolved to: http://example.org/aec-drawing-ontology#StructuralMember found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :StructuralProperties -> http://example.org/aec-drawing-ontology#StructuralProperties
+[reconstructFromCache] Block subject: :StructuralProperties resolved to: http://example.org/aec-drawing-ontology#StructuralProperties found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 160 of 188 elapsed: 9 ms
+[reconstructFromCache] Resolved prefixed name: :Symmetrical -> http://example.org/aec-drawing-ontology#Symmetrical
+[reconstructFromCache] Block subject: :Symmetrical resolved to: http://example.org/aec-drawing-ontology#Symmetrical found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Symmetry -> http://example.org/aec-drawing-ontology#Symmetry
+[reconstructFromCache] Block subject: :Symmetry resolved to: http://example.org/aec-drawing-ontology#Symmetry found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Terracotta -> http://example.org/aec-drawing-ontology#Terracotta
+[reconstructFromCache] Block subject: :Terracotta resolved to: http://example.org/aec-drawing-ontology#Terracotta found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :TextualNote -> http://example.org/aec-drawing-ontology#TextualNote
+[reconstructFromCache] Block subject: :TextualNote resolved to: http://example.org/aec-drawing-ontology#TextualNote found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :TGU -> http://example.org/aec-drawing-ontology#TGU
+[reconstructFromCache] Block subject: :TGU resolved to: http://example.org/aec-drawing-ontology#TGU found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :Thermal -> http://example.org/aec-drawing-ontology#Thermal
+[reconstructFromCache] Block subject: :Thermal resolved to: http://example.org/aec-drawing-ontology#Thermal found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Timber -> http://example.org/aec-drawing-ontology#Timber
+[reconstructFromCache] Block subject: :Timber resolved to: http://example.org/aec-drawing-ontology#Timber found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :TimberCassette -> http://example.org/aec-drawing-ontology#TimberCassette
+[reconstructFromCache] Block subject: :TimberCassette resolved to: http://example.org/aec-drawing-ontology#TimberCassette found 3 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 3
+[reconstructFromCache] Resolved prefixed name: :Titleblock -> http://example.org/aec-drawing-ontology#Titleblock
+[reconstructFromCache] Block subject: :Titleblock resolved to: http://example.org/aec-drawing-ontology#Titleblock found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Toggle -> http://example.org/aec-drawing-ontology#Toggle
+[reconstructFromCache] Block subject: :Toggle resolved to: http://example.org/aec-drawing-ontology#Toggle found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 170 of 188 elapsed: 9 ms
+[reconstructFromCache] Resolved prefixed name: :TopHat -> http://example.org/aec-drawing-ontology#TopHat
+[reconstructFromCache] Block subject: :TopHat resolved to: http://example.org/aec-drawing-ontology#TopHat found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Transom -> http://example.org/aec-drawing-ontology#Transom
+[reconstructFromCache] Block subject: :Transom resolved to: http://example.org/aec-drawing-ontology#Transom found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Typical -> http://example.org/aec-drawing-ontology#Typical
+[reconstructFromCache] Block subject: :Typical resolved to: http://example.org/aec-drawing-ontology#Typical found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :UMPC -> http://example.org/aec-drawing-ontology#UMPC
+[reconstructFromCache] Block subject: :UMPC resolved to: http://example.org/aec-drawing-ontology#UMPC found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Unitised -> http://example.org/aec-drawing-ontology#Unitised
+[reconstructFromCache] Block subject: :Unitised resolved to: http://example.org/aec-drawing-ontology#Unitised found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :UnitisedCurtainWall -> http://example.org/aec-drawing-ontology#UnitisedCurtainWall
+[reconstructFromCache] Block subject: :UnitisedCurtainWall resolved to: http://example.org/aec-drawing-ontology#UnitisedCurtainWall found 5 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 5
+[reconstructFromCache] Resolved prefixed name: :Upstand -> http://example.org/aec-drawing-ontology#Upstand
+[reconstructFromCache] Block subject: :Upstand resolved to: http://example.org/aec-drawing-ontology#Upstand found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :VCL -> http://example.org/aec-drawing-ontology#VCL
+[reconstructFromCache] Block subject: :VCL resolved to: http://example.org/aec-drawing-ontology#VCL found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Vertical -> http://example.org/aec-drawing-ontology#Vertical
+[reconstructFromCache] Block subject: :Vertical resolved to: http://example.org/aec-drawing-ontology#Vertical found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Vision -> http://example.org/aec-drawing-ontology#Vision
+[reconstructFromCache] Block subject: :Vision resolved to: http://example.org/aec-drawing-ontology#Vision found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[PERF] Processing block 180 of 188 elapsed: 10 ms
+[reconstructFromCache] Resolved prefixed name: :Wall -> http://example.org/aec-drawing-ontology#Wall
+[reconstructFromCache] Block subject: :Wall resolved to: http://example.org/aec-drawing-ontology#Wall found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Waterproofing -> http://example.org/aec-drawing-ontology#Waterproofing
+[reconstructFromCache] Block subject: :Waterproofing resolved to: http://example.org/aec-drawing-ontology#Waterproofing found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :WaterproofingMembrane -> http://example.org/aec-drawing-ontology#WaterproofingMembrane
+[reconstructFromCache] Block subject: :WaterproofingMembrane resolved to: http://example.org/aec-drawing-ontology#WaterproofingMembrane found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :Wedge -> http://example.org/aec-drawing-ontology#Wedge
+[reconstructFromCache] Block subject: :Wedge resolved to: http://example.org/aec-drawing-ontology#Wedge found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :WeldedBolt -> http://example.org/aec-drawing-ontology#WeldedBolt
+[reconstructFromCache] Block subject: :WeldedBolt resolved to: http://example.org/aec-drawing-ontology#WeldedBolt found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :WindowSystem -> http://example.org/aec-drawing-ontology#WindowSystem
+[reconstructFromCache] Block subject: :WindowSystem resolved to: http://example.org/aec-drawing-ontology#WindowSystem found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :WoodFibre -> http://example.org/aec-drawing-ontology#WoodFibre
+[reconstructFromCache] Block subject: :WoodFibre resolved to: http://example.org/aec-drawing-ontology#WoodFibre found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[reconstructFromCache] Resolved prefixed name: :ZigZag -> http://example.org/aec-drawing-ontology#ZigZag
+[reconstructFromCache] Block subject: :ZigZag resolved to: http://example.org/aec-drawing-ontology#ZigZag found 4 quads
+[reconstructFromCache] Collecting blank node quads for 0 blank nodes, currentQuads: 4
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 3 property matches
+[extractPropertyLines] Parsed 3 property matches from text
+[extractPropertyLines] Extracted 3 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 5 property matches
+[extractPropertyLines] Parsed 5 property matches from text
+[extractPropertyLines] Extracted 5 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[parsePropertyLinesWithStateMachine] Extracted 4 property matches
+[extractPropertyLines] Parsed 4 property matches from text
+[extractPropertyLines] Extracted 4 property lines with 0 validation warnings
+[reconstructFromCache] detectPropertyLevelChanges returned 5 changes
+[reconstructFromCache] Property change: rdfs:subClassOf at line 248
+[reconstructFromCache] Property change: rdfs:subClassOf at line 279
+[reconstructFromCache] Property change: rdfs:label at line 285
+[reconstructFromCache] Property change: rdfs:subClassOf at line 339
+[reconstructFromCache] Property change: rdfs:subClassOf at line 472
+[reconstructFromCache] Cannot use targeted replacement (complex changes or blank node properties), using block-level serialization
+[reconstructFromCache] Using block-level serialization, modifiedBlocks: 4
+[reconstructFromCache] Found 4 modified blocks out of 188 total blocks
+[reconstructFromCache] Modified block subjects: [ ':Detail', ':DrawingSheet', ':FacadeSystem', ':Layout' ]
+[reconstructFromCache] DrawingSheet block in modifiedBlocks - quads count: 30
+[reconstructFromCache] DrawingSheet block - rdfs:subClassOf quads: 5
+[reconstructFromCache] DrawingSheet block - rdf:type owl:Class quads: 1
+[PERF] reconstructFromOriginalText START, modifiedBlocks: 4
+[PERF] Processing 4 modified/deleted blocks
+[PERF] Serializing block 0 of 4 elapsed: 0 ms
+[reconstructFromOriginalText] Block has blank node quads, must serialize to ensure blank node IDs match current store: :Layout
+[serializeBlockToTurtle] Serializing 14 quads, grouped into 3 subjects, added 14 quads to writer
+[serializeBlockToTurtle] Predicates in quads: [
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+  'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+  'http://www.w3.org/2000/01/rdf-schema#comment',
+  'http://www.w3.org/2000/01/rdf-schema#label',
+  'http://example.org/aec-drawing-ontology#labellableRoot',
+  'http://www.w3.org/2002/07/owl#onProperty',
+  'http://www.w3.org/2002/07/owl#onClass',
+  'http://www.w3.org/2002/07/owl#minQualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#qualifiedCardinality'
+]
+[serializeBlockToTurtle] Removed 7 prefix/base declarations from N3 Writer output
+[serializeBlockToTurtle] Building inline forms from block.quads ( 14 quads)
+[serializeBlockToTurtle] Block has 10 quads involving blank nodes
+[serializeBlockToTurtle] Blank nodes as SUBJECT: 8 quads
+[serializeBlockToTurtle] Blank nodes as OBJECT: 2 quads
+[serializeBlockToTurtle] Converted prefix map to externalRefs format: 7 prefixes
+[serializeBlockToTurtle] Built 2 inline forms
+[serializeBlockToTurtle] Inline forms keys: [ '_:df_0_7', '_:df_0_8' ]
+[serializeBlockToTurtle] Inline forms count: 2
+[serializeBlockToTurtle] Inline form 1 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :DrawingElement ; owl:minQualifiedCardinality "0"^^xsd:integer ]
+[serializeBlockToTurtle] Inline form 2 : [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_7', '_:df_0_8', '_:df_0_7', '_:df_0_8' ]
+[serializeBlockToTurtle] Failed to parse N3 Writer output for structure matching: Error: Undefined prefix ":" on line 1.
+    at N3Parser._error (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:846:17)
+    at N3Parser._readEntity (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:177:47)
+    at N3Parser._readSubject (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:244:35)
+    at N3Parser._readInTopContext (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:158:21)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:980:42
+    at Array.every (<anonymous>)
+    at N3Parser.parse (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:979:35)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\src\rdf\sourcePreservation.ts:1789:52
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:355:26
+    at Object.end (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:64:19) {
+  context: {
+    token: {
+      type: 'prefixed',
+      value: 'Layout',
+      prefix: '',
+      line: 1,
+      start: 0,
+      end: 8
+    },
+    line: 1,
+    previousToken: { type: '.', value: '', prefix: '', line: 13, start: 52, end: 53 }
+  }
+}
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_7', '_:df_0_8' ]
+[serializeBlockToTurtle] Output before replacement (first 200 chars): :Layout a owl:Class;
+    rdfs:subClassOf _:df_0_7, _:df_0_8;
+    rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
+    rdf
+[serializeBlockToTurtle] Structure-based matching failed or incomplete, falling back to replaceBlankRefs
+[serializeBlockToTurtle] After replaceBlankRefs - has inline blanks: true
+[serializeBlockToTurtle] Output after replaceBlankRefs (first 200 chars): :Layout a owl:Class;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :DrawingElement ; owl:minQualifiedCardinality "0"^^xsd:integer ], [ rdf:type owl:Restrictio
+[serializeBlockToTurtle] SUCCESS: Blank nodes successfully inlined for block: :Layout
+[reconstructFromOriginalText] Block has blank node quads, must serialize to ensure blank node IDs match current store: :FacadeSystem
+[serializeBlockToTurtle] Serializing 9 quads, grouped into 2 subjects, added 9 quads to writer
+[serializeBlockToTurtle] Predicates in quads: [
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+  'http://www.w3.org/2000/01/rdf-schema#comment',
+  'http://www.w3.org/2000/01/rdf-schema#label',
+  'http://example.org/aec-drawing-ontology#labellableRoot',
+  'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+  'http://www.w3.org/2002/07/owl#onProperty',
+  'http://www.w3.org/2002/07/owl#someValuesFrom'
+]
+[serializeBlockToTurtle] Removed 7 prefix/base declarations from N3 Writer output
+[serializeBlockToTurtle] Building inline forms from block.quads ( 9 quads)
+[serializeBlockToTurtle] Block has 4 quads involving blank nodes
+[serializeBlockToTurtle] Blank nodes as SUBJECT: 3 quads
+[serializeBlockToTurtle] Blank nodes as OBJECT: 1 quads
+[serializeBlockToTurtle] Converted prefix map to externalRefs format: 7 prefixes
+[serializeBlockToTurtle] Built 1 inline forms
+[serializeBlockToTurtle] Inline forms keys: [ '_:df_0_6' ]
+[serializeBlockToTurtle] Inline forms count: 1
+[serializeBlockToTurtle] Inline form 1 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ]
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_6', '_:df_0_6' ]
+[serializeBlockToTurtle] Failed to parse N3 Writer output for structure matching: Error: Undefined prefix ":" on line 1.
+    at N3Parser._error (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:846:17)
+    at N3Parser._readEntity (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:177:47)
+    at N3Parser._readSubject (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:244:35)
+    at N3Parser._readInTopContext (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:158:21)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:980:42
+    at Array.every (<anonymous>)
+    at N3Parser.parse (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:979:35)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\src\rdf\sourcePreservation.ts:1789:52
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:355:26
+    at Object.end (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:64:19) {
+  context: {
+    token: {
+      type: 'prefixed',
+      value: 'FacadeSystem',
+      prefix: '',
+      line: 1,
+      start: 0,
+      end: 14
+    },
+    line: 1,
+    previousToken: { type: '.', value: '', prefix: '', line: 8, start: 35, end: 36 }
+  }
+}
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_6' ]
+[serializeBlockToTurtle] Output before replacement (first 200 chars): :FacadeSystem a owl:Class;
+    rdfs:comment "Facade system - part of support type ; a type of drawing element";
+    rdfs:label "Facade system";
+    :labellableRoot false;
+    rdfs:subClassOf :DrawingE
+[serializeBlockToTurtle] Structure-based matching failed or incomplete, falling back to replaceBlankRefs
+[serializeBlockToTurtle] After replaceBlankRefs - has inline blanks: true
+[serializeBlockToTurtle] Output after replaceBlankRefs (first 200 chars): :FacadeSystem a owl:Class;
+    rdfs:comment "Facade system - part of support type ; a type of drawing element";
+    rdfs:label "Facade system";
+    :labellableRoot false;
+    rdfs:subClassOf :DrawingE
+[serializeBlockToTurtle] SUCCESS: Blank nodes successfully inlined for block: :FacadeSystem
+[reconstructFromOriginalText] Block has blank node quads, must serialize to ensure blank node IDs match current store: :DrawingSheet
+[serializeBlockToTurtle] :DrawingSheet - block.quads.length: 30
+[serializeBlockToTurtle] :DrawingSheet - blank nodes as subjects: 21
+[serializeBlockToTurtle] :DrawingSheet - blank nodes as objects: 5
+[serializeBlockToTurtle] :DrawingSheet - quad[0]: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Class
+[serializeBlockToTurtle] :DrawingSheet - quad[1]: http://www.w3.org/2000/01/rdf-schema#comment -> "Top-level container for a drawing. Contains Layout(s)."
+[serializeBlockToTurtle] :DrawingSheet - quad[2]: http://www.w3.org/2000/01/rdf-schema#label -> "Drawing sheet renamed"
+[serializeBlockToTurtle] :DrawingSheet - quad[3]: http://example.org/aec-drawing-ontology#labellableRoot -> "false"
+[serializeBlockToTurtle] :DrawingSheet - quad[4]: http://www.w3.org/2000/01/rdf-schema#subClassOf -> df_0_1
+[serializeBlockToTurtle] :DrawingSheet - quad[5]: http://www.w3.org/2000/01/rdf-schema#subClassOf -> df_0_2
+[serializeBlockToTurtle] :DrawingSheet - quad[6]: http://www.w3.org/2000/01/rdf-schema#subClassOf -> df_0_3
+[serializeBlockToTurtle] :DrawingSheet - quad[7]: http://www.w3.org/2000/01/rdf-schema#subClassOf -> df_0_4
+[serializeBlockToTurtle] :DrawingSheet - quad[8]: http://www.w3.org/2000/01/rdf-schema#subClassOf -> df_0_5
+[serializeBlockToTurtle] :DrawingSheet - quad[9]: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[serializeBlockToTurtle] :DrawingSheet - quad[10]: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[serializeBlockToTurtle] :DrawingSheet - quad[11]: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#Note
+[serializeBlockToTurtle] :DrawingSheet - quad[12]: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "0"
+[serializeBlockToTurtle] :DrawingSheet - quad[13]: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[serializeBlockToTurtle] :DrawingSheet - quad[14]: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[serializeBlockToTurtle] :DrawingSheet - quad[15]: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#RevisionTable
+[serializeBlockToTurtle] :DrawingSheet - quad[16]: http://www.w3.org/2002/07/owl#qualifiedCardinality -> "1"
+[serializeBlockToTurtle] :DrawingSheet - quad[17]: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "0"
+[serializeBlockToTurtle] :DrawingSheet - quad[18]: http://www.w3.org/2002/07/owl#maxQualifiedCardinality -> "1"
+[serializeBlockToTurtle] :DrawingSheet - quad[19]: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[serializeBlockToTurtle] :DrawingSheet - quad[20]: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[serializeBlockToTurtle] :DrawingSheet - quad[21]: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#Layout
+[serializeBlockToTurtle] :DrawingSheet - quad[22]: http://www.w3.org/2002/07/owl#minQualifiedCardinality -> "1"
+[serializeBlockToTurtle] :DrawingSheet - quad[23]: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[serializeBlockToTurtle] :DrawingSheet - quad[24]: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#contains
+[serializeBlockToTurtle] :DrawingSheet - quad[25]: http://www.w3.org/2002/07/owl#someValuesFrom -> http://example.org/aec-drawing-ontology#FacadeComponent
+[serializeBlockToTurtle] :DrawingSheet - quad[26]: http://www.w3.org/1999/02/22-rdf-syntax-ns#type -> http://www.w3.org/2002/07/owl#Restriction
+[serializeBlockToTurtle] :DrawingSheet - quad[27]: http://www.w3.org/2002/07/owl#onProperty -> http://example.org/aec-drawing-ontology#hasProperty
+[serializeBlockToTurtle] :DrawingSheet - quad[28]: http://www.w3.org/2002/07/owl#onClass -> http://example.org/aec-drawing-ontology#DrawingOrientation
+[serializeBlockToTurtle] :DrawingSheet - quad[29]: http://www.w3.org/2002/07/owl#qualifiedCardinality -> "1"
+[serializeBlockToTurtle] :DrawingSheet - propertyOrder extracted: [ 'type', 'subClassOf', 'comment', 'label', 'labellableRoot' ]
+[serializeBlockToTurtle] :DrawingSheet - originalText length: 1028
+[serializeBlockToTurtle] :DrawingSheet - originalText (first 300 chars): :DrawingSheet rdf:type owl:Class ;
+    rdfs:subClassOf 
+        [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], 
+        [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^
+[serializeBlockToTurtle] DrawingSheet - Sorting 9 quads by propertyOrder
+[serializeBlockToTurtle] DrawingSheet - Sorting 4 quads by propertyOrder
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onProperty indexA: -1 normB: type indexB: 0
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onClass indexA: -1 normB: onProperty indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: minQualifiedCardinality indexA: -1 normB: onClass indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Sorting 6 quads by propertyOrder
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onProperty indexA: -1 normB: type indexB: 0
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onClass indexA: -1 normB: onProperty indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: qualifiedCardinality indexA: -1 normB: onClass indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: minQualifiedCardinality indexA: -1 normB: qualifiedCardinality indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: maxQualifiedCardinality indexA: -1 normB: minQualifiedCardinality indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Sorting 4 quads by propertyOrder
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onProperty indexA: -1 normB: type indexB: 0
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onClass indexA: -1 normB: onProperty indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: minQualifiedCardinality indexA: -1 normB: onClass indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Sorting 3 quads by propertyOrder
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onProperty indexA: -1 normB: type indexB: 0
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: someValuesFrom indexA: -1 normB: onProperty indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Sorting 4 quads by propertyOrder
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onProperty indexA: -1 normB: type indexB: 0
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: onClass indexA: -1 normB: onProperty indexB: -1
+[serializeBlockToTurtle] DrawingSheet - Property not in order - normA: qualifiedCardinality indexA: -1 normB: onClass indexB: -1
+[serializeBlockToTurtle] Serializing 30 quads, grouped into 6 subjects, added 30 quads to writer
+[serializeBlockToTurtle] Predicates in quads: [
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+  'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+  'http://www.w3.org/2000/01/rdf-schema#comment',
+  'http://www.w3.org/2000/01/rdf-schema#label',
+  'http://example.org/aec-drawing-ontology#labellableRoot',
+  'http://www.w3.org/2002/07/owl#onProperty',
+  'http://www.w3.org/2002/07/owl#onClass',
+  'http://www.w3.org/2002/07/owl#minQualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#qualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#maxQualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#someValuesFrom'
+]
+[serializeBlockToTurtle] :DrawingSheet - quadsBySubject.size: 6
+[serializeBlockToTurtle] :DrawingSheet - totalQuadsAdded: 30
+[serializeBlockToTurtle] :DrawingSheet - predicatesAdded: [
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+  'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+  'http://www.w3.org/2000/01/rdf-schema#comment',
+  'http://www.w3.org/2000/01/rdf-schema#label',
+  'http://example.org/aec-drawing-ontology#labellableRoot',
+  'http://www.w3.org/2002/07/owl#onProperty',
+  'http://www.w3.org/2002/07/owl#onClass',
+  'http://www.w3.org/2002/07/owl#minQualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#qualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#maxQualifiedCardinality',
+  'http://www.w3.org/2002/07/owl#someValuesFrom'
+]
+[serializeBlockToTurtle] :DrawingSheet - subject "http://example.org/aec-drawing-ontology#DrawingSheet" has 9 quads
+[serializeBlockToTurtle] :DrawingSheet - subject "_:_:df_0_1" has 4 quads
+[serializeBlockToTurtle] :DrawingSheet - subject "_:_:df_0_2" has 6 quads
+[serializeBlockToTurtle] :DrawingSheet - subject "_:_:df_0_3" has 4 quads
+[serializeBlockToTurtle] :DrawingSheet - subject "_:_:df_0_4" has 3 quads
+[serializeBlockToTurtle] :DrawingSheet - subject "_:_:df_0_5" has 4 quads
+[serializeBlockToTurtle] DrawingSheet block - rdfs:subClassOf quads: 5
+[serializeBlockToTurtle] DrawingSheet block - rdf:type owl:Class quads: 1
+[serializeBlockToTurtle] N3 Writer RAW result for DrawingSheet (full):
+"@prefix : <http://example.org/aec-drawing-ontology#>.\n@prefix owl: <http://www.w3.org/2002/07/owl#>.\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.\n@prefix xml: <http://www.w3.org/XML/1998/namespace#>.\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.\n@prefix dano: <https://w3id.org/dano>.\n\n:DrawingSheet a owl:Class;\n    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;\n    rdfs:comment \"Top-level container for a drawing. Contains Layout(s).\";\n    rdfs:label \"Drawing sheet renamed\";\n    :labellableRoot false.\n_:df_0_1 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:onClass :Note;\n    owl:minQualifiedCardinality \"0\"^^xsd:nonNegativeInteger.\n_:df_0_2 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:onClass :RevisionTable;\n    owl:qualifiedCardinality \"1\"^^xsd:nonNegativeInteger;\n    owl:minQualifiedCardinality \"0\"^^xsd:nonNegativeInteger;\n    owl:maxQualifiedCardinality \"1\"^^xsd:nonNegativeInteger.\n_:df_0_3 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:onClass :Layout;\n    owl:minQualifiedCardinality \"1\"^^xsd:nonNegativeInteger.\n_:df_0_4 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:someValuesFrom :FacadeComponent.\n_:df_0_5 a owl:Restriction;\n    owl:onProperty :hasProperty;\n    owl:onClass :DrawingOrientation;\n    owl:qualifiedCardinality \"1\"^^xsd:nonNegativeInteger.\n"
+[serializeBlockToTurtle] N3 Writer result contains rdfs:subClassOf: true
+[serializeBlockToTurtle] N3 Writer result for DrawingSheet (first 500 chars): @prefix : <http://example.org/aec-drawing-ontology#>.
+@prefix owl: <http://www.w3.org/2002/07/owl#>.
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix xml: <http://www.w3.org/XML/1998/namespace#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix dano: <https://w3id.org/dano>.
+
+:DrawingSheet a owl:Class;
+    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;
+    rdfs:comment "Top-level container for a
+[serializeBlockToTurtle] N3 Writer result contains rdfs:subClassOf: true
+[serializeBlockToTurtle] Removed 7 prefix/base declarations from N3 Writer output
+[serializeBlockToTurtle] result after prefix removal (JSON):
+":DrawingSheet a owl:Class;\n    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;\n    rdfs:comment \"Top-level container for a drawing. Contains Layout(s).\";\n    rdfs:label \"Drawing sheet renamed\";\n    :labellableRoot false.\n_:df_0_1 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:onClass :Note;\n    owl:minQualifiedCardinality \"0\"^^xsd:nonNegativeInteger.\n_:df_0_2 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:onClass :RevisionTable;\n    owl:qualifiedCardinality \"1\"^^xsd:nonNegativeInteger;\n    owl:minQualifiedCardinality \"0\"^^xsd:nonNegativeInteger;\n    owl:maxQualifiedCardinality \"1\"^^xsd:nonNegativeInteger.\n_:df_0_3 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:onClass :Layout;\n    owl:minQualifiedCardinality \"1\"^^xsd:nonNegativeInteger.\n_:df_0_4 a owl:Restriction;\n    owl:onProperty :contains;\n    owl:someValuesFrom :FacadeComponent.\n_:df_0_5 a owl:Restriction;\n    owl:onProperty :hasProperty;\n    owl:onClass :DrawingOrientation;\n    owl:qualifiedCardinality \"1\"^^xsd:nonNegativeInteger."
+[serializeBlockToTurtle] result length: 1049
+[serializeBlockToTurtle] result contains rdfs:subClassOf: true
+[serializeBlockToTurtle] rdfs:subClassOf index: 31
+[serializeBlockToTurtle] rdfs:subClassOf context: :DrawingSheet a owl:Class;
+    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
+    rdfs:label "Drawing sheet renamed";
+    :labellableRoot
+[serializeBlockToTurtle] Building inline forms from block.quads ( 30 quads)
+[serializeBlockToTurtle] Block has 26 quads involving blank nodes
+[serializeBlockToTurtle] Blank nodes as SUBJECT: 21 quads
+[serializeBlockToTurtle] Blank nodes as OBJECT: 5 quads
+[serializeBlockToTurtle] Converted prefix map to externalRefs format: 7 prefixes
+[buildInlineForms] Found blank node as object: _:df_0_1 from predicate: http://www.w3.org/2000/01/rdf-schema#subClassOf
+[buildInlineForms] Found blank node as object: _:df_0_2 from predicate: http://www.w3.org/2000/01/rdf-schema#subClassOf
+[buildInlineForms] Found blank node as object: _:df_0_3 from predicate: http://www.w3.org/2000/01/rdf-schema#subClassOf
+[buildInlineForms] Found blank node as object: _:df_0_4 from predicate: http://www.w3.org/2000/01/rdf-schema#subClassOf
+[buildInlineForms] Found blank node as object: _:df_0_5 from predicate: http://www.w3.org/2000/01/rdf-schema#subClassOf
+[buildInlineForms] Found blank node as subject: _:df_0_1 predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[buildInlineForms] Found blank node as subject: _:df_0_1 predicate: http://www.w3.org/2002/07/owl#onProperty
+[buildInlineForms] Found blank node as subject: _:df_0_1 predicate: http://www.w3.org/2002/07/owl#onClass
+[buildInlineForms] Found blank node as subject: _:df_0_1 predicate: http://www.w3.org/2002/07/owl#minQualifiedCardinality
+[buildInlineForms] Found blank node as subject: _:df_0_2 predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[buildInlineForms] Found blank node as subject: _:df_0_2 predicate: http://www.w3.org/2002/07/owl#onProperty
+[buildInlineForms] Found blank node as subject: _:df_0_2 predicate: http://www.w3.org/2002/07/owl#onClass
+[buildInlineForms] Found blank node as subject: _:df_0_2 predicate: http://www.w3.org/2002/07/owl#qualifiedCardinality
+[buildInlineForms] Found blank node as subject: _:df_0_2 predicate: http://www.w3.org/2002/07/owl#minQualifiedCardinality
+[buildInlineForms] Found blank node as subject: _:df_0_2 predicate: http://www.w3.org/2002/07/owl#maxQualifiedCardinality
+[buildInlineForms] Found blank node as subject: _:df_0_3 predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[buildInlineForms] Found blank node as subject: _:df_0_3 predicate: http://www.w3.org/2002/07/owl#onProperty
+[buildInlineForms] Found blank node as subject: _:df_0_3 predicate: http://www.w3.org/2002/07/owl#onClass
+[buildInlineForms] Found blank node as subject: _:df_0_3 predicate: http://www.w3.org/2002/07/owl#minQualifiedCardinality
+[buildInlineForms] Found blank node as subject: _:df_0_4 predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[buildInlineForms] Found blank node as subject: _:df_0_4 predicate: http://www.w3.org/2002/07/owl#onProperty
+[buildInlineForms] Found blank node as subject: _:df_0_4 predicate: http://www.w3.org/2002/07/owl#someValuesFrom
+[buildInlineForms] Found blank node as subject: _:df_0_5 predicate: http://www.w3.org/1999/02/22-rdf-syntax-ns#type
+[buildInlineForms] Found blank node as subject: _:df_0_5 predicate: http://www.w3.org/2002/07/owl#onProperty
+[buildInlineForms] Found blank node as subject: _:df_0_5 predicate: http://www.w3.org/2002/07/owl#onClass
+[buildInlineForms] Found blank node as subject: _:df_0_5 predicate: http://www.w3.org/2002/07/owl#qualifiedCardinality
+[buildInlineForms] Total quads: 30
+[buildInlineForms] Blank nodes as subjects: 5 IDs: [ '_:df_0_1', '_:df_0_2', '_:df_0_3', '_:df_0_4', '_:df_0_5' ]
+[buildInlineForms] Blank nodes as objects: 5 IDs: [ '_:df_0_1', '_:df_0_2', '_:df_0_3', '_:df_0_4', '_:df_0_5' ]
+[buildInlineForms] Sorted blank nodes to build: [ '_:df_0_1', '_:df_0_2', '_:df_0_3', '_:df_0_4', '_:df_0_5' ]
+[buildInlineForms] buildFor( _:df_0_1 ) - found 4 quads in quadsBySubject
+[buildInlineForms] Built inline form for _:df_0_1 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ]
+[buildInlineForms] buildFor( _:df_0_2 ) - found 6 quads in quadsBySubject
+[buildInlineForms] Built inline form for _:df_0_2 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[buildInlineForms] buildFor( _:df_0_3 ) - found 4 quads in quadsBySubject
+[buildInlineForms] Built inline form for _:df_0_3 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[buildInlineForms] buildFor( _:df_0_4 ) - found 3 quads in quadsBySubject
+[buildInlineForms] Built inline form for _:df_0_4 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ]
+[buildInlineForms] buildFor( _:df_0_5 ) - found 4 quads in quadsBySubject
+[buildInlineForms] Built inline form for _:df_0_5 : [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[buildInlineForms] Final result map size: 5
+[buildInlineForms] Final result keys: [ '_:df_0_1', '_:df_0_2', '_:df_0_3', '_:df_0_4', '_:df_0_5' ]
+[buildInlineForms] Result for _:df_0_1 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ]
+[buildInlineForms] Result for _:df_0_2 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[buildInlineForms] Result for _:df_0_3 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[buildInlineForms] Result for _:df_0_4 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ]
+[buildInlineForms] Result for _:df_0_5 : [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Built 5 inline forms
+[serializeBlockToTurtle] Inline forms keys: [ '_:df_0_1', '_:df_0_2', '_:df_0_3', '_:df_0_4', '_:df_0_5' ]
+[serializeBlockToTurtle] Inline forms count: 5
+[serializeBlockToTurtle] Inline forms for DrawingSheet:
+[serializeBlockToTurtle] Inline form 1: [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Inline form 2: [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Inline form 3: [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Inline form 4: [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ]
+[serializeBlockToTurtle] Inline form 5: [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Inline form 1 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Inline form 2 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; ow
+[serializeBlockToTurtle] Inline form 3 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Inline form 4 : [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ]
+[serializeBlockToTurtle] Inline form 5 : [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Found blank node refs in output: [
+  '_:df_0_1', '_:df_0_2',
+  '_:df_0_3', '_:df_0_4',
+  '_:df_0_5', '_:df_0_1',
+  '_:df_0_2', '_:df_0_3',
+  '_:df_0_4', '_:df_0_5'
+]
+[serializeBlockToTurtle] Failed to parse N3 Writer output for structure matching: Error: Undefined prefix ":" on line 1.
+    at N3Parser._error (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:846:17)
+    at N3Parser._readEntity (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:177:47)
+    at N3Parser._readSubject (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:244:35)
+    at N3Parser._readInTopContext (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:158:21)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:980:42
+    at Array.every (<anonymous>)
+    at N3Parser.parse (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:979:35)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\src\rdf\sourcePreservation.ts:1789:52
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:355:26
+    at Object.end (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:64:19) {
+  context: {
+    token: {
+      type: 'prefixed',
+      value: 'DrawingSheet',
+      prefix: '',
+      line: 1,
+      start: 0,
+      end: 14
+    },
+    line: 1,
+    previousToken: { type: '.', value: '', prefix: '', line: 26, start: 52, end: 53 }
+  }
+}
+[serializeBlockToTurtle] Removing blank node block line: _:df_0_1 a owl:Restriction;
+[serializeBlockToTurtle] Removing blank node block line: _:df_0_2 a owl:Restriction;
+[serializeBlockToTurtle] Removing blank node block line: _:df_0_3 a owl:Restriction;
+[serializeBlockToTurtle] Removing blank node block line: _:df_0_4 a owl:Restriction;
+[serializeBlockToTurtle] Removing blank node block line: _:df_0_5 a owl:Restriction;
+[serializeBlockToTurtle] Output after removing blank node blocks (FULL):
+:DrawingSheet a owl:Class;
+    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
+    rdfs:label "Drawing sheet renamed";
+    :labellableRoot false.
+[serializeBlockToTurtle] Output length: 238
+[serializeBlockToTurtle] Output contains rdfs:subClassOf: true
+[serializeBlockToTurtle] filteredLines count: 5
+[serializeBlockToTurtle] filteredLines: [
+  ':DrawingSheet a owl:Class;',
+  '    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;',
+  '    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";',
+  '    rdfs:label "Drawing sheet renamed";',
+  '    :labellableRoot false.'
+]
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_1', '_:df_0_2', '_:df_0_3', '_:df_0_4', '_:df_0_5' ]
+[serializeBlockToTurtle] Output before replacement (first 200 chars): :DrawingSheet a owl:Class;
+    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
+    rdfs:label "Drawing shee
+[serializeBlockToTurtle] Output before replacement (FULL):
+:DrawingSheet a owl:Class;
+    rdfs:subClassOf _:df_0_1, _:df_0_2, _:df_0_3, _:df_0_4, _:df_0_5;
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
+    rdfs:label "Drawing sheet renamed";
+    :labellableRoot false.
+[serializeBlockToTurtle] structureBasedMatchingWorked: false
+[serializeBlockToTurtle] outputIdToInlineForm.size: 0
+[serializeBlockToTurtle] Structure-based matching failed or incomplete, falling back to replaceBlankRefs
+[serializeBlockToTurtle] After replaceBlankRefs - has inline blanks: true
+[serializeBlockToTurtle] Output after replaceBlankRefs (first 200 chars): :DrawingSheet a owl:Class;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ], [ rdf:type owl:Res
+[serializeBlockToTurtle] SUCCESS: Blank nodes successfully inlined for block: :DrawingSheet
+[serializeBlockToTurtle] processedResult before formatting (FULL):
+:DrawingSheet a owl:Class;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
+    rdfs:label "Drawing sheet renamed";
+    :labellableRoot false.
+[serializeBlockToTurtle] processedResult contains rdfs:subClassOf: true
+[serializeBlockToTurtle] formatted after formatting (FULL):
+:DrawingSheet a owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s)." ;
+    rdfs:label "Drawing sheet renamed" ;
+    :labellableRoot false .
+[serializeBlockToTurtle] formatted contains rdfs:subClassOf: true
+[serializeBlockToTurtle] Final formatted result: :DrawingSheet a owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s)." ;
+    rdfs:label "Drawing sheet renamed" ;
+    :labellableRoot false .
+[serializeBlockToTurtle] Final formatted contains rdfs:subClassOf: true
+[reconstructFromOriginalText] DrawingSheet block position calculation:
+  block.position.start: 9537
+  block.position.end: 10563
+  originalEndPos: 10565
+  blankLinesCount: 0
+  originalNextContentStart: 10565
+  finalNewText length: 971
+  finalNewText (first 200 chars): :DrawingSheet a owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ], [ rdf:type owl:R
+  finalNewText (last 100 chars): ing. Contains Layout(s)." ;
+    rdfs:label "Drawing sheet renamed" ;
+    :labellableRoot false .
+
+[reconstructFromOriginalText] DrawingSheet nextContentStart calculation:
+  block.position.start: 9537
+  block.position.end: 10563
+  endPos: 10565
+  finalNewText.length: 971
+  calculated nextContentStart: 10565
+  result.length: 31650
+  result.slice(nextContentStart) (first 100 chars): :DrawingType rdf:type owl:Class ;
+    rdfs:comment "Type of drawing view" ;
+    rdfs:label "Drawin
+[reconstructFromOriginalText] Block has blank node quads, must serialize to ensure blank node IDs match current store: :Detail
+[serializeBlockToTurtle] Serializing 10 quads, grouped into 2 subjects, added 10 quads to writer
+[serializeBlockToTurtle] Predicates in quads: [
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+  'http://www.w3.org/2000/01/rdf-schema#subClassOf',
+  'http://www.w3.org/2000/01/rdf-schema#label',
+  'http://www.w3.org/2000/01/rdf-schema#comment',
+  'http://example.org/aec-drawing-ontology#labellableRoot',
+  'http://www.w3.org/2002/07/owl#onProperty',
+  'http://www.w3.org/2002/07/owl#onClass',
+  'http://www.w3.org/2002/07/owl#qualifiedCardinality'
+]
+[serializeBlockToTurtle] Removed 7 prefix/base declarations from N3 Writer output
+[serializeBlockToTurtle] Building inline forms from block.quads ( 10 quads)
+[serializeBlockToTurtle] Block has 5 quads involving blank nodes
+[serializeBlockToTurtle] Blank nodes as SUBJECT: 4 quads
+[serializeBlockToTurtle] Blank nodes as OBJECT: 1 quads
+[serializeBlockToTurtle] Converted prefix map to externalRefs format: 7 prefixes
+[serializeBlockToTurtle] Built 1 inline forms
+[serializeBlockToTurtle] Inline forms keys: [ '_:df_0_0' ]
+[serializeBlockToTurtle] Inline forms count: 1
+[serializeBlockToTurtle] Inline form 1 : [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_0', '_:df_0_0' ]
+[serializeBlockToTurtle] Failed to parse N3 Writer output for structure matching: Error: Undefined prefix ":" on line 1.
+    at N3Parser._error (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:846:17)
+    at N3Parser._readEntity (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:177:47)
+    at N3Parser._readSubject (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:244:35)
+    at N3Parser._readInTopContext (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:158:21)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:980:42
+    at Array.every (<anonymous>)
+    at N3Parser.parse (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Parser.js:979:35)
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\src\rdf\sourcePreservation.ts:1789:52
+    at C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:355:26
+    at Object.end (C:\Users\alombardi\Documents\GitHub\KG-processing\node_modules\n3\lib\N3Writer.js:64:19) {
+  context: {
+    token: {
+      type: 'prefixed',
+      value: 'Detail',
+      prefix: '',
+      line: 1,
+      start: 0,
+      end: 8
+    },
+    line: 1,
+    previousToken: { type: '.', value: '', prefix: '', line: 9, start: 52, end: 53 }
+  }
+}
+[serializeBlockToTurtle] Found blank node refs in output: [ '_:df_0_0' ]
+[serializeBlockToTurtle] Output before replacement (first 200 chars): :Detail a owl:Class;
+    rdfs:subClassOf :DrawingType, _:df_0_0;
+    rdfs:label "Detail";
+    rdfs:comment "Detail drawing";
+    :labellableRoot true.
+[serializeBlockToTurtle] Structure-based matching failed or incomplete, falling back to replaceBlankRefs
+[serializeBlockToTurtle] After replaceBlankRefs - has inline blanks: true
+[serializeBlockToTurtle] Output after replaceBlankRefs (first 200 chars): :Detail a owl:Class;
+    rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+   
+[serializeBlockToTurtle] SUCCESS: Blank nodes successfully inlined for block: :Detail
+[PERF] Modified blocks serialized in 16 ms
+[PERF] Processing 0 new blocks
+
+ ├ù tests/unit/customSerializerTests/targetedLabelReplacement.test.ts > Targeted label replacement (Option A) > should preserve exact formatting of DrawingSheet block when only label changes
+   ÔåÆ expected ':DrawingSheet a owl:Class ;\r\n    rdÔÇª' to be ':DrawingSheet rdf:type owl:Class ;\r\ÔÇª' // Object.is equality
+stderr | tests/unit/customSerializerTests/targetedLabelReplacement.test.ts > Targeted label replacement (Option A) > 
+should preserve exact formatting of DrawingSheet block when only label changes
+[serializeBlockToTurtle] Detected "wl:" corruption in formatted output, attempting to fix
+[serializeBlockToTurtle] Detected "wl:" corruption in formatted output, attempting to fix
+[serializeBlockToTurtle] Detected "wl:" corruption in formatted output, attempting to fix
+[serializeBlockToTurtle] Detected "wl:" corruption in formatted output, attempting to fix
+[reconstructFromCache] SAFETY CHECK: Detected "wl:" corruption, fixing
+[reconstructFromCache] After protecting "owl:", found 0 standalone "wl:" occurrences
+[reconstructFromCache] SAFETY CHECK: Fixed corruption
+
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ» Failed Tests 1 ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+
+ FAIL  tests/unit/customSerializerTests/targetedLabelReplacement.test.ts > Targeted label replacement (Option A) > 
+should preserve exact formatting of DrawingSheet block when only label changes
+AssertionError: expected ':DrawingSheet a owl:Class ;\r\n    rdÔÇª' to be ':DrawingSheet rdf:type owl:Class ;\r\ÔÇª' 
+// Object.is equality
+
+- Expected
++ Received
+
+- :DrawingSheet rdf:type owl:Class ;
++ :DrawingSheet a owl:Class ;
+-     rdfs:subClassOf 
+-         [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality 
+"0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], 
+-         [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality 
+"0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; 
+owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; 
+owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], 
+-         [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], 
+-         [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; 
+owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ;
++     rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Note ; 
+owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; 
+owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:minQualifiedCardinality 
+"0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; 
+owl:onProperty :contains ; owl:onClass :Layout ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type 
+owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :FacadeComponent ], [ rdf:type owl:Restriction ; 
+owl:onProperty :hasProperty ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
+      rdfs:comment "Top-level container for a drawing. Contains Layout(s)." ;
+      rdfs:label "Drawing sheet renamed" ;
+-     :labellableRoot "false"^^xsd:boolean .
++     :labellableRoot false .
+
+ ÔØ» tests/unit/customSerializerTests/targetedLabelReplacement.test.ts:102:29
+    100| 
+    101|     const expected = expectedBlockWithNewLabel(originalBlock!, 'DrawinÔÇª
+    102|     expect(serializedBlock).toBe(expected);
+       |                             ^
+    103|   });
+    104| 
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[1/1]ÔÄ»
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  11:53:08
+   Duration  1.01s (transform 180ms, setup 14ms, collect 459ms, tests 96ms, environment 0ms, prepare 93ms)
+

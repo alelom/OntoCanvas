@@ -191,6 +191,12 @@ export function buildInlineForms(
   const quadsBySubject = new Map<string, Quad[]>();
   const allBlankNodeIds = new Set<string>();
 
+  // Debug logging for DrawingSheet block
+  const isDrawingSheetBlock = quads.some(q => {
+    const subj = q.subject.termType === 'NamedNode' ? (q.subject as { value?: string }).value : '';
+    return subj && subj.includes('DrawingSheet');
+  });
+
   for (const q of quads) {
     const subjId = q.subject.termType === 'BlankNode' ? blankNodeId(q.subject as BlankNode) : null;
     const objId = q.object.termType === 'BlankNode' ? blankNodeId(q.object as BlankNode) : null;
@@ -199,11 +205,23 @@ export function buildInlineForms(
       const list = quadsBySubject.get(subjId) ?? [];
       list.push(q);
       quadsBySubject.set(subjId, list);
+      if (isDrawingSheetBlock) {
+        console.log('[buildInlineForms] Found blank node as subject:', subjId, 'predicate:', (q.predicate as { value?: string }).value);
+      }
     }
     if (objId) {
       allBlankNodeIds.add(objId);
       blankAsObject.add(objId);
+      if (isDrawingSheetBlock) {
+        console.log('[buildInlineForms] Found blank node as object:', objId, 'from predicate:', (q.predicate as { value?: string }).value);
+      }
     }
+  }
+
+  if (isDrawingSheetBlock) {
+    console.log('[buildInlineForms] Total quads:', quads.length);
+    console.log('[buildInlineForms] Blank nodes as subjects:', quadsBySubject.size, 'IDs:', Array.from(quadsBySubject.keys()));
+    console.log('[buildInlineForms] Blank nodes as objects:', blankAsObject.size, 'IDs:', Array.from(blankAsObject));
   }
 
   // CRITICAL: Include ALL blank nodes that are used as objects OR nested within other blank nodes
@@ -216,6 +234,9 @@ export function buildInlineForms(
     if (cached) return cached;
 
     let list = quadsBySubject.get(id) ?? [];
+    if (isDrawingSheetBlock) {
+      console.log('[buildInlineForms] buildFor(', id, ') - found', list.length, 'quads in quadsBySubject');
+    }
     list = deduplicateRestrictionQuads(list);
     const parts: string[] = [];
     for (const q of list) {
@@ -237,12 +258,18 @@ export function buildInlineForms(
     }
     const inline = `[ ${parts.join(' ; ')} ]`;
     result.set(id, inline);
+    if (isDrawingSheetBlock) {
+      console.log('[buildInlineForms] Built inline form for', id, ':', inline);
+    }
     return inline;
   }
 
   // Build inline forms for all blank nodes that are used as objects
   // This will recursively build nested blank nodes as well
   const sorted = topologicalSortBlanks(quadsBySubject, inlinedIds);
+  if (isDrawingSheetBlock) {
+    console.log('[buildInlineForms] Sorted blank nodes to build:', sorted);
+  }
   for (const id of sorted) {
     buildFor(id);
   }
@@ -250,7 +277,18 @@ export function buildInlineForms(
   // Also build any remaining blank nodes that might be nested but not in the sorted list
   for (const id of allBlankNodeIds) {
     if (!result.has(id) && inlinedIds.has(id)) {
+      if (isDrawingSheetBlock) {
+        console.log('[buildInlineForms] Building remaining blank node:', id);
+      }
       buildFor(id);
+    }
+  }
+  
+  if (isDrawingSheetBlock) {
+    console.log('[buildInlineForms] Final result map size:', result.size);
+    console.log('[buildInlineForms] Final result keys:', Array.from(result.keys()));
+    for (const [id, form] of result.entries()) {
+      console.log('[buildInlineForms] Result for', id, ':', form);
     }
   }
   
@@ -388,6 +426,19 @@ export function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>)
   // If map is empty, return early
   if (inlineBlanks.size === 0) return output;
   
+  // SAFETY CHECK: Verify inline forms don't contain corrupted prefixes
+  for (const [id, inline] of inlineBlanks.entries()) {
+    if (inline.includes('wl:') && !inline.includes('owl:')) {
+      // This inline form has "wl:" but no "owl:" - likely corruption
+      // Check if it should have "owl:" instead
+      const corrected = inline.replace(/\bwl:/g, 'owl:');
+      if (corrected !== inline) {
+        console.error(`[replaceBlankRefs] Detected "wl:" corruption in inline form for ${id}, correcting to "owl:"`);
+        inlineBlanks.set(id, corrected);
+      }
+    }
+  }
+  
   // Process in reverse dependency order so nested blanks get replaced first
   const sorted = [...inlineBlanks.entries()].reverse();
   
@@ -463,6 +514,34 @@ export function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>)
           }
         }
       }
+    }
+  }
+  
+  // FINAL SAFETY CHECK: Verify output doesn't contain corrupted "wl:" prefix
+  if (output.includes('wl:') && !output.match(/@prefix\s+wl:/)) {
+    // "wl:" appears but there's no @prefix wl: declaration - this is corruption
+    // Check if it should be "owl:" instead
+    const wlMatches = output.matchAll(/\bwl:/g);
+    const corruptedPositions: Array<{ pos: number; context: string }> = [];
+    for (const match of wlMatches) {
+      const pos = match.index!;
+      const contextStart = Math.max(0, pos - 20);
+      const contextEnd = Math.min(output.length, pos + 20);
+      corruptedPositions.push({
+        pos,
+        context: output.substring(contextStart, contextEnd)
+      });
+    }
+    
+    if (corruptedPositions.length > 0) {
+      console.error('[replaceBlankRefs] Detected "wl:" corruption in output:');
+      for (const cp of corruptedPositions) {
+        console.error(`  Position ${cp.pos}: ...${cp.context}...`);
+      }
+      // Attempt to fix by replacing "wl:" with "owl:" (but be careful not to replace valid "wl:" if it exists)
+      // Only replace if there's no @prefix wl: declaration
+      output = output.replace(/\bwl:/g, 'owl:');
+      console.error('[replaceBlankRefs] Attempted to fix by replacing "wl:" with "owl:"');
     }
   }
   

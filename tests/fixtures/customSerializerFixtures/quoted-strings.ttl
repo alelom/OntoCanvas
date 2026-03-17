@@ -1,0 +1,11 @@
+@prefix : <http://example.org/test#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label "Simple string" ;
+    rdfs:comment "String with \"escaped quotes\"" ;
+    :description "String with \\backslash" ;
+    :englishLabel "Example"@en ;
+    :age "25"^^xsd:integer ;
+    :combined "Value"@en^^xsd:string .

@@ -370,20 +370,20 @@ describe('OWL Restriction Preservation', () => {
   it('should preserve OWL restrictions in round-trip (parse, rename, save, parse)', async () => {
     const fixturePath = join(TEST_FIXTURES_DIR, 'aec_drawing_metadata.ttl');
     const originalContent = readFileSync(fixturePath, 'utf-8');
-    
-    // Parse original
+
+    // Parse original (with cache so we can use custom serializer for round-trip)
     const parseResult1 = await parseRdfToGraph(originalContent, { path: fixturePath });
-    const { store: store1 } = parseResult1;
-    
+    const { store: store1, originalFileCache: cache1 } = parseResult1;
+
     // Get all quads for DrawingSheet before rename
-    const drawingSheetUri = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#DrawingSheet';
+    const drawingSheetUri = 'http://example.org/aec-drawing-ontology#DrawingSheet';
     const beforeQuads = store1.getQuads(
       DataFactory.namedNode(drawingSheetUri),
       null,
       null,
       null
     );
-    
+
     // Count restriction-related quads
     const beforeRestrictionQuads = beforeQuads.filter(q => {
       if (q.predicate.value.includes('subClassOf') && q.object.termType === 'BlankNode') {
@@ -401,13 +401,15 @@ describe('OWL Restriction Preservation', () => {
       }
       return false;
     });
-    
+
     // Rename
     updateLabelInStore(store1, 'DrawingSheet', 'Drawing Sheeta');
-    
-    // Serialize
-    const serialized = await storeToTurtle(store1);
-    
+
+    // Serialize with custom serializer (cache-based) so output re-parses correctly
+    const serialized = cache1
+      ? await storeToTurtle(store1, undefined, originalContent, cache1, 'custom')
+      : await storeToTurtle(store1);
+
     // Re-parse
     const parseResult2 = await parseRdfToGraph(serialized, { path: fixturePath });
     const { store: store2 } = parseResult2;
@@ -449,17 +451,18 @@ describe('OWL Restriction Preservation', () => {
       null
     );
     const blankNodesAfter = subClassAfter.filter(q => q.object.termType === 'BlankNode');
-    expect(blankNodesAfter.length).toBe(4); // Should have 4 restrictions
+    expect(blankNodesAfter.length).toBe(5); // Fixture has 5 restrictions (Note, RevisionTable, Layout, FacadeComponent, DrawingOrientation)
     
-    // Verify each restriction has required properties
+    // Verify each restriction has required properties (onClass or someValuesFrom)
     for (const quad of blankNodesAfter) {
       const blank = quad.object as BlankNode;
       const onProperty = store2.getQuads(blank, DataFactory.namedNode(OWL + 'onProperty'), null, null);
       const onClass = store2.getQuads(blank, DataFactory.namedNode(OWL + 'onClass'), null, null);
+      const someValuesFrom = store2.getQuads(blank, DataFactory.namedNode(OWL + 'someValuesFrom'), null, null);
       const restrictionType = store2.getQuads(blank, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Restriction'), null);
       
       expect(onProperty.length).toBeGreaterThan(0);
-      expect(onClass.length).toBeGreaterThan(0);
+      expect(onClass.length > 0 || someValuesFrom.length > 0).toBe(true);
       expect(restrictionType.length).toBeGreaterThan(0);
     }
   });
@@ -522,7 +525,7 @@ describe('OWL Restriction Preservation', () => {
     expect(cache).toBeDefined();
     
     // Count restrictions before rename
-    const drawingSheetUri = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#DrawingSheet';
+    const drawingSheetUri = 'http://example.org/aec-drawing-ontology#DrawingSheet';
     const beforeQuads = store.getQuads(
       DataFactory.namedNode(drawingSheetUri),
       DataFactory.namedNode(RDFS + 'subClassOf'),
@@ -549,7 +552,7 @@ describe('OWL Restriction Preservation', () => {
     
     // Save using cache-based reconstruction (like GUI does)
     // Note: This now requires explicit enablement via useCacheBasedReconstruction parameter
-    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, true);
+    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, 'custom');
     
     // Re-parse to verify restrictions are preserved
     const reparseResult = await parseRdfToGraph(serialized, { path: fixturePath });
@@ -613,7 +616,7 @@ describe('OWL Restriction Preservation', () => {
     
     expect(cache).toBeDefined();
     
-    const drawingSheetUri = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#DrawingSheet';
+    const drawingSheetUri = 'http://example.org/aec-drawing-ontology#DrawingSheet';
     
     // Get restrictions before rename and verify cardinalities
     const beforeQuads = store.getQuads(
@@ -651,7 +654,7 @@ describe('OWL Restriction Preservation', () => {
     
     // Save using cache-based reconstruction (like GUI does)
     // Note: This now requires explicit enablement via useCacheBasedReconstruction parameter
-    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, true);
+    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, 'custom');
     
     // Re-parse to verify cardinalities are preserved
     const reparseResult = await parseRdfToGraph(serialized, { path: fixturePath });
@@ -728,7 +731,7 @@ describe('OWL Restriction Preservation', () => {
     
     expect(cache).toBeDefined();
     
-    const drawingSheetUri = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#DrawingSheet';
+    const drawingSheetUri = 'http://example.org/aec-drawing-ontology#DrawingSheet';
     
     // Get comment before rename
     const beforeCommentQuads = store.getQuads(
@@ -746,7 +749,7 @@ describe('OWL Restriction Preservation', () => {
     
     // Save using cache-based reconstruction (like GUI does)
     // Note: This now requires explicit enablement via useCacheBasedReconstruction parameter
-    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, true);
+    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, 'custom');
     
     // Re-parse to verify comment is preserved
     const reparseResult = await parseRdfToGraph(serialized, { path: fixturePath });
@@ -778,10 +781,10 @@ describe('OWL Restriction Preservation', () => {
     
     expect(cache).toBeDefined();
     
-    const drawingSheetUri = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#DrawingSheet';
+    const drawingSheetUri = 'http://example.org/aec-drawing-ontology#DrawingSheet';
     
     // Get labellableRoot before rename
-    const labellableRootPredicate = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#labellableRoot';
+    const labellableRootPredicate = 'http://example.org/aec-drawing-ontology#labellableRoot';
     const beforeLabellableQuads = store.getQuads(
       DataFactory.namedNode(drawingSheetUri),
       DataFactory.namedNode(labellableRootPredicate),
@@ -797,7 +800,7 @@ describe('OWL Restriction Preservation', () => {
     
     // Save using cache-based reconstruction (like GUI does)
     // Note: This now requires explicit enablement via useCacheBasedReconstruction parameter
-    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, true);
+    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, 'custom');
     
     // Re-parse to verify labellableRoot is preserved
     const reparseResult = await parseRdfToGraph(serialized, { path: fixturePath });
@@ -869,7 +872,7 @@ describe('OWL Restriction Preservation', () => {
     
     // Save using cache-based reconstruction (like GUI does)
     // Note: This now requires explicit enablement via useCacheBasedReconstruction parameter
-    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, true);
+    const serialized = await storeToTurtle(store, undefined, originalContent, cache ?? undefined, 'custom');
     
     // Extract the DrawingSheet block from serialized output
     const serializedStart = serialized.indexOf(':DrawingSheet');

@@ -1,0 +1,6 @@
+@prefix : <http://example.org/test#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label "Test" ;
+    rdfs:comment "Comment" .

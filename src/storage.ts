@@ -41,6 +41,12 @@ export interface ExternalOntologyReference {
   opacity?: number;
 }
 
+export type SerializerType = 'custom' | 'rdflib';
+
+export interface SerializerConfig {
+  serializerType: SerializerType;
+}
+
 export const DISPLAY_CONFIG_VERSION = 1;
 
 export function getDisplayConfigKey(filePath: string | null, fileName: string | null): string | null {
@@ -100,32 +106,40 @@ export async function loadDisplayConfigFromIndexedDB(filePath: string | null, fi
       }
     }
     db.close();
-  } catch {
-    // ignore
+    return null;
+  } catch (err) {
+    return null;
   }
-  return null;
 }
 
 export async function saveDisplayConfigToIndexedDB(config: DisplayConfig, filePath: string | null, fileName: string | null): Promise<void> {
-  const key = getDisplayConfigKeyNormalized(filePath, fileName) || getDisplayConfigKey(filePath, fileName);
-  if (!key) return;
+  const keysToTry = [
+    getDisplayConfigKeyNormalized(filePath, fileName),
+    getDisplayConfigKey(filePath, fileName),
+  ].filter((k): k is string => !!k);
+  const seen = new Set<string>();
+  const uniqueKeys = keysToTry.filter((k) => {
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  if (uniqueKeys.length === 0) return;
   try {
     const db = await openDisplayConfigDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_DISPLAY_STORE);
-      store.put({ ...config, version: DISPLAY_CONFIG_VERSION }, key);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    // ignore
+    for (const key of uniqueKeys) {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_DISPLAY_STORE);
+        const req = store.put(config, key);
+        req.onsuccess = () => {
+          resolve();
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }
+    db.close();
+  } catch (err) {
+    // Ignore errors
   }
 }
 
@@ -134,27 +148,29 @@ export async function deleteDisplayConfigFromIndexedDB(filePath: string | null, 
     getDisplayConfigKeyNormalized(filePath, fileName),
     getDisplayConfigKey(filePath, fileName),
   ].filter((k): k is string => !!k);
-  if (keysToTry.length === 0) return;
+  const seen = new Set<string>();
+  const uniqueKeys = keysToTry.filter((k) => {
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  if (uniqueKeys.length === 0) return;
   try {
     const db = await openDisplayConfigDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_DISPLAY_STORE);
-      // Delete all possible key variants
-      keysToTry.forEach((key) => {
-        store.delete(key);
+    for (const key of uniqueKeys) {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(IDB_DISPLAY_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_DISPLAY_STORE);
+        const req = store.delete(key);
+        req.onsuccess = () => {
+          resolve();
+        };
+        req.onerror = () => reject(req.error);
       });
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    // ignore
+    }
+    db.close();
+  } catch (err) {
+    // Ignore errors
   }
 }
 
@@ -173,56 +189,48 @@ async function openExternalRefsDB(): Promise<IDBDatabase> {
 }
 
 export async function loadExternalRefsFromIndexedDB(filePath: string | null, fileName: string | null): Promise<ExternalOntologyReference[]> {
-  const key = getDisplayConfigKeyNormalized(filePath, fileName) || getDisplayConfigKey(filePath, fileName);
+  const key = getDisplayConfigKeyNormalized(filePath, fileName);
   if (!key) return [];
   try {
     const db = await openExternalRefsDB();
-    return new Promise((resolve, reject) => {
+    const result = await new Promise<ExternalOntologyReference[]>((resolve) => {
       const tx = db.transaction(IDB_EXTERNAL_REFS_STORE, 'readonly');
       const store = tx.objectStore(IDB_EXTERNAL_REFS_STORE);
       const req = store.get(key);
       req.onsuccess = () => {
-        db.close();
-        resolve((req.result as ExternalOntologyReference[]) || []);
+        const v = req.result;
+        resolve(Array.isArray(v) ? v : []);
       };
-      req.onerror = () => {
-        db.close();
-        reject(req.error);
-      };
+      req.onerror = () => resolve([]);
     });
-  } catch {
+    db.close();
+    return result;
+  } catch (err) {
     return [];
   }
 }
 
 export async function saveExternalRefsToIndexedDB(refs: ExternalOntologyReference[], filePath: string | null, fileName: string | null): Promise<void> {
-  const key = getDisplayConfigKeyNormalized(filePath, fileName) || getDisplayConfigKey(filePath, fileName);
+  const key = getDisplayConfigKeyNormalized(filePath, fileName);
   if (!key) return;
   try {
     const db = await openExternalRefsDB();
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IDB_EXTERNAL_REFS_STORE, 'readwrite');
       const store = tx.objectStore(IDB_EXTERNAL_REFS_STORE);
-      store.put(refs, key);
-      tx.oncomplete = () => {
-        db.close();
+      const req = store.put(refs, key);
+      req.onsuccess = () => {
         resolve();
       };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
+      req.onerror = () => reject(req.error);
     });
-  } catch {
-    // ignore
+    db.close();
+  } catch (err) {
+    // Ignore errors
   }
 }
 
-export async function getLastFileFromIndexedDB(): Promise<{
-  handle: FileSystemFileHandle;
-  name: string;
-  pathHint?: string;
-} | null> {
+export async function getLastFileFromIndexedDB(): Promise<{ handle: FileSystemFileHandle; pathHint?: string } | null> {
   return new Promise((resolve) => {
     const req = indexedDB.open(IDB_NAME, 1);
     req.onerror = () => resolve(null);
@@ -238,7 +246,7 @@ export async function getLastFileFromIndexedDB(): Promise<{
       const getReq = store.get(IDB_KEY);
       getReq.onsuccess = () => {
         const v = getReq.result;
-        resolve(v && v.handle && v.name ? { handle: v.handle, name: v.name, pathHint: v.pathHint } : null);
+        resolve(v && v.handle ? { handle: v.handle, pathHint: v.pathHint } : null);
       };
       getReq.onerror = () => resolve(null);
     };
@@ -253,7 +261,6 @@ export async function getLastFileFromIndexedDB(): Promise<{
 
 export async function saveLastFileToIndexedDB(
   handle: FileSystemFileHandle,
-  name: string,
   pathHint?: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -263,7 +270,7 @@ export async function saveLastFileToIndexedDB(
       const db = req.result;
       const tx = db.transaction(IDB_STORE, 'readwrite');
       const store = tx.objectStore(IDB_STORE);
-      store.put({ handle, name, pathHint }, IDB_KEY);
+      store.put({ handle, pathHint }, IDB_KEY);
       tx.oncomplete = () => {
         db.close();
         resolve();
@@ -279,10 +286,7 @@ export async function saveLastFileToIndexedDB(
   });
 }
 
-export async function getLastUrlFromIndexedDB(): Promise<{
-  url: string;
-  name: string;
-} | null> {
+export async function getLastUrlFromIndexedDB(): Promise<{ url: string; name: string } | null> {
   return new Promise((resolve) => {
     const req = indexedDB.open(IDB_NAME, 1);
     req.onerror = () => resolve(null);
@@ -336,4 +340,77 @@ export async function saveLastUrlToIndexedDB(
       }
     };
   });
+}
+
+// ============================================================================
+// Serializer Config IndexedDB Functions
+// ============================================================================
+
+const IDB_SERIALIZER_NAME = 'OntologyEditorSerializer';
+const IDB_SERIALIZER_STORE = 'config';
+
+async function openSerializerConfigDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_SERIALIZER_NAME, 1);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_SERIALIZER_STORE)) {
+        db.createObjectStore(IDB_SERIALIZER_STORE);
+      }
+    };
+  });
+}
+
+export async function loadSerializerConfigFromIndexedDB(
+  filePath: string | null,
+  fileName: string | null
+): Promise<SerializerConfig | null> {
+  const key = getDisplayConfigKeyNormalized(filePath, fileName);
+  if (!key) return null;
+  
+  try {
+    const db = await openSerializerConfigDB();
+    const result = await new Promise<SerializerConfig | null>((resolve) => {
+      const tx = db.transaction(IDB_SERIALIZER_STORE, 'readonly');
+      const store = tx.objectStore(IDB_SERIALIZER_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => {
+        const v = req.result;
+        resolve(v && typeof v === 'object' && v.serializerType ? v : null);
+      };
+      req.onerror = () => resolve(null);
+    });
+    db.close();
+    return result;
+  } catch (err) {
+    console.warn('[loadSerializerConfigFromIndexedDB] Failed:', err);
+    return null;
+  }
+}
+
+export async function saveSerializerConfigToIndexedDB(
+  config: SerializerConfig,
+  filePath: string | null,
+  fileName: string | null
+): Promise<void> {
+  const key = getDisplayConfigKeyNormalized(filePath, fileName);
+  if (!key) return;
+  
+  try {
+    const db = await openSerializerConfigDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_SERIALIZER_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_SERIALIZER_STORE);
+      const req = store.put(config, key);
+      req.onsuccess = () => {
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+  } catch (err) {
+    console.warn('[saveSerializerConfigToIndexedDB] Failed:', err);
+  }
 }
