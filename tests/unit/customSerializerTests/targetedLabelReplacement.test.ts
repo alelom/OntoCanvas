@@ -173,4 +173,49 @@ describe('Targeted label replacement (Option A)', () => {
       expect(ser).toBe(orig);
     }
   });
+
+  it('should preserve blank lines between blocks when only label changes (DrawingSheet -> DrawingType)', async () => {
+    const originalContent = readFileSync(AEC_FIXTURE_PATH, 'utf-8');
+    const parseResult = await parseRdfToGraph(originalContent, { path: AEC_FIXTURE_PATH });
+    const { store, originalFileCache } = parseResult;
+
+    if (!originalFileCache) {
+      throw new Error('Original file cache not available');
+    }
+
+    // Extract the newlines between end of DrawingSheet block and start of :DrawingType class block.
+    const betweenDrawingSheetAndDrawingType = (content: string): string => {
+      const drawingTypeBlockMatch = content.match(/\r?\n:DrawingType\s+rdf:type/);
+      const drawingTypeStart = drawingTypeBlockMatch
+        ? drawingTypeBlockMatch.index! + drawingTypeBlockMatch[0].indexOf(':DrawingType')
+        : content.indexOf(':DrawingType');
+      if (drawingTypeStart === -1) return '';
+      const sheetStart = content.indexOf(':DrawingSheet ');
+      if (sheetStart === -1 || sheetStart >= drawingTypeStart) return '';
+      const betweenBlocks = content.slice(sheetStart, drawingTypeStart);
+      const le1 = betweenBlocks.lastIndexOf('^^xsd:boolean .\n');
+      const le2 = betweenBlocks.lastIndexOf('^^xsd:boolean .\r\n');
+      const endOfLineInSlice = Math.max(le1, le2);
+      if (endOfLineInSlice === -1) return '';
+      const betweenStart = sheetStart + endOfLineInSlice + '^^xsd:boolean .'.length;
+      return content.slice(betweenStart, drawingTypeStart);
+    };
+
+    const originalBetween = betweenDrawingSheetAndDrawingType(originalContent);
+    expect(originalBetween).toBeTruthy();
+    expect(originalBetween).toMatch(/(\r?\n)(\r?\n)/); // at least one blank line (two line endings)
+
+    updateLabelInStore(store, 'DrawingSheet', 'Drawing sheet renamed');
+
+    const serialized = await storeToTurtle(
+      store,
+      undefined,
+      originalContent,
+      originalFileCache,
+      'custom'
+    );
+
+    const serializedBetween = betweenDrawingSheetAndDrawingType(serialized);
+    expect(serializedBetween).toBe(originalBetween);
+  });
 });

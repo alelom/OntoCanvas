@@ -255,8 +255,8 @@ export async function parseTurtleWithPositions(
     if (isStatementStart) {
       // Past header section
       
-      // Finalize previous block if exists
-      if (currentBlock) {
+      // Finalize previous block if exists (do not overwrite if already ended at a period, e.g. with blank lines after)
+      if (currentBlock && !currentBlock.originalText) {
         // Block ends at the end of previous line (before this new statement)
         currentBlock.position.end = lineStart - formattingStyle.lineEnding.length;
         currentBlock.position.endLine = lineNumber - 1;
@@ -264,8 +264,6 @@ export async function parseTurtleWithPositions(
           currentBlock.position.start,
           currentBlock.position.end + formattingStyle.lineEnding.length
         );
-        
-        // Detect formatting from this block
         currentBlock.formattingStyle = detectBlockFormatting(currentBlock.originalText, formattingStyle);
       }
       
@@ -328,24 +326,32 @@ export async function parseTurtleWithPositions(
       
       currentSection.blocks.push(currentBlock);
       
-    } else if (currentBlock) {
-      // Continuation of current block (indented line or property continuation)
-      // Update end position to include this line
+    } else if (currentBlock && trimmed !== '') {
+      // Continuation of current block (indented line or property continuation); do not extend over blank lines
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
     }
     
-    // Check if this line ends the block (ends with period, and next line is statement start or EOF)
+    // Check if this line ends the block (ends with period, and next non-empty line is statement start or EOF)
+    // Allow blank lines between blocks: block ends at period if next content (after any blank lines) is a statement
     const endsWithPeriod = trimmed.endsWith('.');
-    const nextLineIsStatement = i + 1 < lines.length && 
+    const nextLineIsStatement = i + 1 < lines.length &&
       lines[i + 1].trim() !== '' &&
-      !lines[i + 1].trim().startsWith(' ') && 
+      !lines[i + 1].trim().startsWith(' ') &&
       !lines[i + 1].trim().startsWith('\t') &&
       !lines[i + 1].trim().startsWith('#');
+    let nextContentIndex = i + 1;
+    while (nextContentIndex < lines.length && lines[nextContentIndex].trim() === '') {
+      nextContentIndex++;
+    }
+    const nextContentIsStatement = nextContentIndex < lines.length &&
+      !lines[nextContentIndex].trim().startsWith(' ') &&
+      !lines[nextContentIndex].trim().startsWith('\t') &&
+      !lines[nextContentIndex].trim().startsWith('#');
     const isLastLine = i === lines.length - 1;
-    
-    if (endsWithPeriod && (nextLineIsStatement || isLastLine) && currentBlock) {
-      // Block ends here
+
+    if (endsWithPeriod && (nextLineIsStatement || nextContentIsStatement || isLastLine) && currentBlock) {
+      // Block ends here (at the period; blank lines after this are not part of the block)
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
       currentBlock.originalText = content.slice(
