@@ -943,40 +943,16 @@ export async function reconstructFromOriginalText(
         .sort((a, b) => a.position.start - b.position.start)[0];
       
       if (nextBlock) {
-        // Since we're processing blocks in reverse order (by position.end),
-        // blocks before the current block haven't been replaced yet.
-        // However, blocks after the current block have been replaced, which may have shifted
-        // the position of content after the current block.
-        
-        // Since we're processing blocks in reverse order (by position.end),
-        // blocks before the current block haven't been replaced yet.
-        // However, blocks after the current block have been replaced, which shifts positions.
-        // We need to adjust originalNextContentStart by cumulative length changes from blocks after it.
-        
+        // We're processing blocks in reverse order (by position.end), so when we replace this block,
+        // blocks after it have already been replaced. The next block's start in the current result
+        // is still nextBlock.position.start (replacing a block only shifts content after that block).
+        // So we slice from nextBlock.position.start to get the next block and everything after it.
         let nextContentStart: number;
         if (blankLinesCount === 0) {
-          // No blank lines: finalNewText doesn't include extra blank lines, so we can use endPos directly
-          // endPos is still correct in the current result since no blocks before have been replaced
           nextContentStart = endPos;
         } else {
-          // Has blank lines: finalNewText includes blank lines, so we need to skip them when slicing
-          // Find all blocks that come after originalNextContentStart in the original content
-          // and check if they've been replaced (by checking lengthChanges)
-          let cumulativeLengthChange = 0;
-          for (const otherBlock of cache.statementBlocks) {
-            // Check if this block comes after originalNextContentStart
-            // A block comes after originalNextContentStart if its position.start > originalNextContentStart
-            if (otherBlock.position.start > originalNextContentStart) {
-              // Check if this block has been replaced (it will be in lengthChanges if it has)
-              const lengthChange = lengthChanges.get(otherBlock.position.end);
-              if (lengthChange !== undefined) {
-                cumulativeLengthChange += lengthChange;
-              }
-            }
-          }
-          // originalNextContentStart is the position in the original content
-          // Adjust it by cumulative length changes from blocks after originalNextContentStart
-          nextContentStart = originalNextContentStart + cumulativeLengthChange;
+          // Has blank lines: skip this block's newline and blank lines by starting at the next block
+          nextContentStart = nextBlock.position.start;
         }
         
         // DEBUG: Log nextContentStart calculation for DrawingSheet block
