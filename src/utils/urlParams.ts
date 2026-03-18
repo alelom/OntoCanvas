@@ -3,6 +3,23 @@
  */
 
 /**
+ * Remove ontology-related query params (onto, localFile) from the address bar.
+ * Use when the user opens a local file so the URL reflects that we are no longer viewing a URL-based ontology.
+ */
+export function clearOntologyParamsFromAddressBar(): void {
+  const url = new URL(window.location.href);
+  const hadOnto = url.searchParams.has('onto');
+  const hadLocalFile = url.searchParams.has('localFile');
+  if (!hadOnto && !hadLocalFile) {
+    return;
+  }
+  url.searchParams.delete('onto');
+  url.searchParams.delete('localFile');
+  const newUrl = url.pathname + url.search + url.hash;
+  window.history.replaceState(null, '', newUrl);
+}
+
+/**
  * Get the local file token from the 'localFile' URL parameter.
  * 
  * @returns The token if present, or null if not found

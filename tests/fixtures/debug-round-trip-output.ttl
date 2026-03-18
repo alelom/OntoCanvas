@@ -10,7 +10,7 @@
 @prefix aec: <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata/>.
 @prefix ae: <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#>.
 @prefix a: <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#>.
-# Created/edited with https://alelom.github.io/OntoCanvas/ version 1.11.0
+# Created/edited with https://alelom.github.io/OntoCanvas/ version 1.14.0
 
 ADIRO:aec-drawing-metadata
     rdf:type owl:Ontology;

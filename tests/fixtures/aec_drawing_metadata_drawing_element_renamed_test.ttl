@@ -11,7 +11,7 @@
 @prefix aec: <http://example.org/aec-drawing-ontology#>.
 @prefix nam: <http://www.w3.org/XML/1998/namespace#>.
 @prefix w: <https://w3id.org/>.
-# Created/edited with https://alelom.github.io/OntoCanvas/ version 1.11.0
+# Created/edited with https://alelom.github.io/OntoCanvas/ version 1.14.0
 
 aec:AddOn
     rdf:type owl:Class;

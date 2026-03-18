@@ -128,6 +128,7 @@ import {
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
+import { clearOntologyParamsFromAddressBar } from './utils/urlParams';
 import {
   extractExternalRefsFromStore,
   extractUsedNamespaceRefsFromStore,
@@ -7869,6 +7870,7 @@ async function loadFromFile(): Promise<void> {
         });
       }
       
+      clearOntologyParamsFromAddressBar();
       hideLoadingModal();
       hideOpenOntologyModal();
     } catch (err) {
@@ -8163,6 +8165,7 @@ function setupEventListeners(): void {
     try {
       const ttl = await file.text();
       await loadTtlAndRender(ttl, file.name, null);
+      clearOntologyParamsFromAddressBar();
       hideLoadingModal();
       hideOpenOntologyModal();
     } catch (err) {
