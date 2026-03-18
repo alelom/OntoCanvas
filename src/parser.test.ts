@@ -479,10 +479,11 @@ describe('storeToTurtle (save)', () => {
     expect(output).toMatch(/#\s+Classes/);
   });
 
-  it('output uses :prefix style for ontology IRIs', async () => {
+  it('output uses :prefix style for ontology IRIs when original TTL provides base', async () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
-    const output = await storeToTurtle(store);
+    // Pass original TTL so serializer can extract base and emit correct @prefix :
+    const output = await storeToTurtle(store, undefined, ttl);
 
     expect(output).toMatch(/@prefix : <http:\/\/example\.org\/aec-drawing-ontology#>?\s*\./);
     expect(output).toMatch(/:Ontology|:Layout|:FacadeComponent/);

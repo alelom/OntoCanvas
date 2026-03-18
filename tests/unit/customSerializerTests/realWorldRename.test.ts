@@ -10,6 +10,9 @@
  * 3. Understand what's wrong if issues are found
  * 4. Write new unit tests to cover the errors
  * 5. Proceed with fixes
+ *
+ * Skipped in CI: non-deterministic, manual-inspection only; would add log spam
+ * without providing pass/fail signal. Run locally when needed.
  */
 
 import { describe, it } from 'vitest';
@@ -25,7 +28,8 @@ const __dirname = dirname(__filename);
 const TEST_FIXTURES_DIR = join(__dirname, '../../fixtures');
 const FIXTURE_PATH = join(TEST_FIXTURES_DIR, 'aec_drawing_metadata.ttl');
 
-describe('Real-World Rename Test', () => {
+const isCI = !!process.env.CI;
+describe.skipIf(isCI)('Real-World Rename Test', () => {
   it('should rename Drawing Sheet class label and output serialized TTL for inspection', async () => {
     // Step 1: Read the original TTL file
     const originalContent = readFileSync(FIXTURE_PATH, 'utf-8');

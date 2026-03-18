@@ -107,7 +107,9 @@ function convertRdflibTerm(term: Statement['subject'] | Statement['object']): Re
 
   // Check if it's a BlankNode
   if (term.termType === 'BlankNode' || (term as { id?: string }).id !== undefined) {
-    const blankId = (term as { id?: string; value?: string }).id ?? (term as { value?: string }).value ?? '';
+    const rawId = (term as { id?: string; value?: string }).id ?? (term as { value?: string }).value ?? '';
+    // Normalize like n3ToRdflib: strip leading _: so DataFactory.blankNode() doesn't produce _:_:id
+    const blankId = rawId.startsWith('_:') ? rawId.slice(2) : rawId;
     return DataFactory.blankNode(blankId);
   }
 

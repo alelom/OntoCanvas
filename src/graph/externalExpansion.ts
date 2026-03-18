@@ -12,7 +12,6 @@ import { getMainOntologyBase, getObjectProperties, extractLocalName, findRestric
 import { getCachedExternalClasses } from '../externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
-// const OWL = 'http://www.w3.org/2000/01/rdf-schema#'; // Unused - kept for reference
 
 export interface ExternalExpansionOptions {
   displayExternalReferences: boolean;

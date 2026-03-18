@@ -59,12 +59,10 @@ export async function serializeStoreWithRdflib(
       'xsd': 'http://www.w3.org/2001/XMLSchema#',
     };
     
-    // Add main ontology base if found (empty prefix)
+    // Add empty prefix only when we know the correct base. Omitting it when unknown
+    // avoids forcing a wrong default and breaking round-trips for other ontologies.
     if (baseUri) {
       prefixes[''] = baseUri;
-    } else {
-      // Default empty prefix if no base found
-      prefixes[''] = 'http://example.org/aec-drawing-ontology#';
     }
 
     // Add prefixes for external ontologies that use prefix
@@ -73,6 +71,13 @@ export async function serializeStoreWithRdflib(
         if (ref.usePrefix && ref.prefix) {
           prefixes[ref.prefix] = ref.url;
         }
+      }
+    }
+
+    // Merge options.prefixes (add/override); allows callers to add custom prefixes or override built-ins
+    if (options.prefixes && Object.keys(options.prefixes).length > 0) {
+      for (const [prefix, namespace] of Object.entries(options.prefixes)) {
+        prefixes[prefix] = namespace;
       }
     }
 
