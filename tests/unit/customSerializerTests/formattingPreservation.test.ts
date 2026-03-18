@@ -94,29 +94,31 @@ describe('Formatting Preservation', () => {
   });
 
   it('should preserve line ending style (\\n vs \\r\\n)', async () => {
-    // Test CRLF
-    const contentCrlf = readFileSync(join(FIXTURES_DIR, 'line-endings-crlf.ttl'), 'utf-8');
+    // Test CRLF: ensure input actually has CRLF so the test is reliable in CI (Git may checkout with LF).
+    let contentCrlf = readFileSync(join(FIXTURES_DIR, 'line-endings-crlf.ttl'), 'utf-8');
+    contentCrlf = contentCrlf.replace(/^\uFEFF/, ''); // Strip BOM if present (CI/Windows)
+    contentCrlf = contentCrlf.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'); // Force CRLF
     const { store: storeCrlf, cache: cacheCrlf } = await parseTtlWithCache(contentCrlf);
-    
+
     const classUri = 'http://example.org/test#TestClass';
     modifyLabel(storeCrlf, classUri, 'New Label');
-    
+
     const serializedCrlf = await storeToTurtle(storeCrlf, undefined, contentCrlf, cacheCrlf, 'custom');
-    
+
     // Verify CRLF preserved
     expect(serializedCrlf).toMatch(/\r\n/);
-    
+
     // Test LF
     // Note: On Windows, the file might have CRLF due to Git autocrlf or file system conversion
     // Normalize to LF for testing purposes
     let contentLf = readFileSync(join(FIXTURES_DIR, 'line-endings-lf.ttl'), 'utf-8');
-    contentLf = contentLf.replace(/\r\n/g, '\n'); // Normalize to LF
+    contentLf = contentLf.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n'); // Strip BOM, normalize to LF
     const { store: storeLf, cache: cacheLf } = await parseTtlWithCache(contentLf);
-    
+
     modifyLabel(storeLf, classUri, 'New Label');
-    
+
     const serializedLf = await storeToTurtle(storeLf, undefined, contentLf, cacheLf, 'custom');
-    
+
     // Verify LF preserved (no CRLF)
     expect(serializedLf).not.toMatch(/\r\n/);
     expect(serializedLf).toMatch(/\n/);
