@@ -1,3 +1,10 @@
+## [1.14.2](https://github.com/alelom/OntoCanvas/compare/v1.14.1...v1.14.2) (2026-03-18)
+
+
+### Bug Fixes
+
+*  embed mode not taking all flex space ([cdb72a8](https://github.com/alelom/OntoCanvas/commit/cdb72a8ada7d9ed0c8c686d612a44a8f29a1d1f4))
+
 ## [1.14.1](https://github.com/alelom/OntoCanvas/compare/v1.14.0...v1.14.1) (2026-03-18)
 
 
