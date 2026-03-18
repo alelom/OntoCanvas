@@ -8135,10 +8135,11 @@ function setupEventListeners(): void {
   // Initialize status bar after DOM is ready
   initStatusBar();
   
-  // Initialize version display
+  // Initialize version display (clickable link to repo)
   const versionDisplay = document.getElementById('versionDisplay');
   if (versionDisplay) {
-    versionDisplay.textContent = `OntoCanvas v${getAppVersion()} |`;
+    const repoUrl = 'https://github.com/alelom/OntoCanvas';
+    versionDisplay.innerHTML = `<a href="${repoUrl}" target="_blank" rel="noopener noreferrer" class="version-link" title="OntoCanvas on GitHub">OntoCanvas v${getAppVersion()}</a> |`;
   }
   
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
