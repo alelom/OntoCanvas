@@ -1,12 +1,12 @@
-import { DataFactory, Parser, Store, Writer, BlankNode } from 'n3';
+import { DataFactory, Parser, Store, BlankNode } from 'n3';
 import type { Quad as N3Quad } from 'n3';
-import { postProcessTurtle } from './turtlePostProcess';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
-import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
+import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
+import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -887,10 +887,10 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
     // First parse with rdf-parse to get quads (handles prefixes correctly)
     const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
     
-    // Then do position-aware parsing to build cache
-    try {
-      const { cache } = parseTurtleWithPositions(ttlString);
-      return quadsToParseResult(quads as N3Quad[], cache);
+      // Then do position-aware parsing to build cache
+      try {
+        const { cache } = await parseTurtleWithPositions(ttlString, quads as N3Quad[]);
+        return quadsToParseResult(quads as N3Quad[], cache);
     } catch (cacheError) {
       // If position tracking fails, still return quads but without cache
       debugWarn('[parseTtlToGraph] Position-aware parsing failed, continuing without cache:', cacheError);
@@ -932,7 +932,7 @@ export async function parseRdfToGraph(
       
       // Then do position-aware parsing to build cache
       try {
-        const { cache } = parseTurtleWithPositions(content);
+        const { cache } = await parseTurtleWithPositions(content, quads as N3Quad[]);
         return quadsToParseResult(quads as N3Quad[], cache);
       } catch (cacheError) {
         // If position tracking fails, still return quads but without cache
@@ -1869,7 +1869,7 @@ export function updateDataPropertyDomainsInStore(
   }
   
   if (!propUri) {
-    console.warn(`Data property URI for "${propertyName}" not found in store.`);
+    debugWarn(`Data property URI for "${propertyName}" not found in store.`);
     return false;
   }
   
@@ -2544,90 +2544,37 @@ export function removeObjectPropertyFromStore(store: Store, propertyName: string
  * Serialize the store to Turtle string with section dividers and spacing.
  * @param originalTtlString Optional original TTL string to preserve format (colon vs base notation)
  * @param originalFileCache Optional original file cache for source preservation (idempotent round-trips)
+ * @param useCacheBasedReconstruction If true and cache is available, use cache-based reconstruction (default: false)
  */
+import type { SerializerType } from './storage';
+
+// Re-export for convenience
+export type { SerializerType };
+
 export function storeToTurtle(
   store: Store, 
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
   originalTtlString?: string,
-  originalFileCache?: OriginalFileCache
+  originalFileCache?: OriginalFileCache,
+  serializerType: SerializerType = 'rdflib'
 ): Promise<string> {
-  // If cache is available, use reconstruction approach
-  debugLog('[storeToTurtle] Cache check:', {
-    hasCache: !!originalFileCache,
-    format: originalFileCache?.format,
-    blocksCount: originalFileCache?.statementBlocks.length,
-    willUseCache: originalFileCache && originalFileCache.format === 'turtle'
-  });
-  
-  if (originalFileCache && originalFileCache.format === 'turtle') {
-    debugLog('[storeToTurtle] Using cache-based reconstruction, cache has', originalFileCache.statementBlocks.length, 'blocks');
+  // Custom serializer uses cache-based reconstruction with line-level tracking
+  if (serializerType === 'custom') {
+    if (!originalFileCache || originalFileCache.format !== 'turtle') {
+      throw new Error(
+        'Custom TTL Serializer requires original file cache. ' +
+        'Please ensure the file was loaded as a Turtle (.ttl) file with position tracking enabled.'
+      );
+    }
+    debugLog('[storeToTurtle] Using custom TTL serializer with cache-based reconstruction, cache has', originalFileCache.statementBlocks.length, 'blocks');
     return reconstructFromCache(store, originalFileCache, externalRefs);
   }
-  debugLog('[storeToTurtle] Using fallback post-processing (no cache or wrong format)');
   
-  // Fallback to current post-processing approach
-  return new Promise((resolve, reject) => {
-    const prefixes = { ...TURTLE_PREFIXES };
-    
-    // Extract base IRI from original file if provided
-    let mainOntologyBase: string | null = null;
-    if (originalTtlString) {
-      const prefixMatch = originalTtlString.match(/@prefix\s+:\s*<([^>]+)>/);
-      const baseMatch = originalTtlString.match(/@base\s+<([^>]+)>/);
-      if (prefixMatch) {
-        mainOntologyBase = prefixMatch[1];
-      } else if (baseMatch) {
-        mainOntologyBase = baseMatch[1];
-      }
-    }
-    
-    // If we found a base IRI from the original, update the empty prefix to use it
-    if (mainOntologyBase) {
-      prefixes[''] = mainOntologyBase;
-    }
-    
-    // Add prefixes for external ontologies that use prefix
-    if (externalRefs) {
-      for (const ref of externalRefs) {
-        if (ref.usePrefix && ref.prefix) {
-          prefixes[ref.prefix] = ref.url;
-        }
-      }
-    }
-    
-    // Determine if we should use baseIRI (for base notation) or not (for colon notation)
-    const useColonNotation = !originalTtlString || 
-      (!originalTtlString.includes('@base') && !/<#[^>]+>/.test(originalTtlString));
-    
-    const writerOptions: { prefixes: Record<string, string>; baseIRI?: string } = {
-      prefixes,
-    };
-    
-    // Only set baseIRI if using base notation (not colon notation)
-    if (!useColonNotation && mainOntologyBase) {
-      writerOptions.baseIRI = mainOntologyBase;
-    }
-    
-    const writer = new Writer(writerOptions);
-    for (const q of store) {
-      writer.addQuad(q);
-    }
-    writer.end((err: Error | null, result: string) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      try {
-        // ARCHITECTURAL FIX: Pass store quads to postProcessTurtle for blank node inlining
-        // N3 Writer doesn't serialize blank node blocks when they're only used as objects,
-        // so we need the original quads to build inline forms
-        const storeQuads = Array.from(store);
-        const processed = postProcessTurtle(result, externalRefs, originalTtlString, storeQuads);
-        resolve(processed);
-      } catch (postProcessError) {
-        reject(postProcessError);
-      }
-    });
+  // Default: Use rdflib serialization
+  debugLog('[storeToTurtle] Using rdflib serialization');
+  return serializeStoreWithRdflib(store, {
+    externalRefs,
+    originalTtlString,
   });
 }
 
@@ -2714,22 +2661,64 @@ async function reconstructFromCache(
     }
     if (block.type === 'Header') continue; // Header blocks don't change
     
+    if (block.subject && block.subject.includes('DrawingSheet')) {
+      debugLog('[reconstructFromCache] Processing DrawingSheet block, subject:', block.subject, 'type:', block.type);
+    }
+    
     // Get current quads for this block's subject
     let currentQuads: N3Quad[] = [];
+    let effectiveSubjectUri: string | null = null;
     if (block.subject) {
       const resolvedUri = resolvePrefixedName(block.subject);
       if (resolvedUri) {
+        effectiveSubjectUri = resolvedUri;
         currentQuads = currentQuadsBySubject.get(resolvedUri) || [];
+        // When parser base IRI differs from file @prefix (e.g. path vs ontology URI), store may key by different subject URI; match by local name
+        if (currentQuads.length === 0) {
+          const localName = extractLocalName(resolvedUri);
+          for (const [subjectUri, quads] of currentQuadsBySubject.entries()) {
+            if (extractLocalName(subjectUri) === localName) {
+              effectiveSubjectUri = subjectUri;
+              currentQuads = quads;
+              debugLog('[reconstructFromCache] Block subject:', block.subject, 'matched by local name to', subjectUri, 'found', quads.length, 'quads');
+              break;
+            }
+          }
+        }
         debugLog('[reconstructFromCache] Block subject:', block.subject, 'resolved to:', resolvedUri, 'found', currentQuads.length, 'quads');
+        if (block.subject === ':TestClass') {
+          debugLog('[reconstructFromCache] TestClass - currentQuads.length:', currentQuads.length);
+          currentQuads.forEach((q, i) => {
+            const pred = (q.predicate as { value: string }).value;
+            const obj = q.object.termType === 'Literal' 
+              ? `"${(q.object as { value: string }).value}"` 
+              : (q.object as { value: string }).value;
+            debugLog(`[reconstructFromCache] TestClass - quad[${i}]: ${pred} -> ${obj}`);
+          });
+        }
         
-        // For class blocks, include blank node restriction quads
+        // For blocks with rdfs:subClassOf quads (typically Class blocks, but also check for Other blocks),
+        // include blank node restriction quads
         // These are connected via rdfs:subClassOf where the class is subject and blank node is object
         // CRITICAL: We need to collect blank node quads from the CURRENT store, not just from block.quads
         // This ensures that even if blank node IDs changed after re-parsing, we still get all the quads
-        if (block.type === 'Class') {
-          const classSubject = DataFactory.namedNode(resolvedUri);
-          const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+        // Check if this block has rdfs:subClassOf quads with blank nodes (regardless of block type)
+        // Use effectiveSubjectUri (store's subject URI) so we find quads when base IRI differed at parse time
+        const classSubject = DataFactory.namedNode(effectiveSubjectUri!);
+        const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+        const hasSubClassOfWithBlanks = subClassOfQuads.some(q => q.object.termType === 'BlankNode');
+        
+        if (block.subject && block.subject.includes('DrawingSheet')) {
+          debugLog('[reconstructFromCache] DrawingSheet - subClassOfQuads.length:', subClassOfQuads.length);
+          debugLog('[reconstructFromCache] DrawingSheet - hasSubClassOfWithBlanks:', hasSubClassOfWithBlanks);
+          debugLog('[reconstructFromCache] DrawingSheet - block.type:', block.type);
+        }
+        
+        if (block.type === 'Class' || hasSubClassOfWithBlanks) {
           const restrictionBlankNodes = new Set<string>();
+          if (block.subject && block.subject.includes('DrawingSheet')) {
+            debugLog('[reconstructFromCache] DrawingSheet - Entering blank node collection block');
+          }
           
           // Find all blank nodes referenced in subClassOf quads
           // Note: subClassOf quads are already in currentQuads (from currentQuadsBySubject)
@@ -2737,8 +2726,22 @@ async function reconstructFromCache(
           for (const subClassQuad of subClassOfQuads) {
             if (subClassQuad.object.termType === 'BlankNode') {
               const blankId = (subClassQuad.object as { id: string }).id;
-              restrictionBlankNodes.add(blankId);
-              debugLog('[reconstructFromCache] Found blank node in subClassOf:', blankId, 'type:', typeof blankId);
+              // Normalize blank node ID - remove _: prefix if present
+              const normalizedBlankId = blankId.startsWith('_:') ? blankId.slice(2) : blankId;
+              restrictionBlankNodes.add(normalizedBlankId);
+              debugLog('[reconstructFromCache] Found blank node in subClassOf:', blankId, 'normalized:', normalizedBlankId);
+              if (block.subject && block.subject.includes('DrawingSheet')) {
+                debugLog('[reconstructFromCache] DrawingSheet - Found blank node in subClassOf quad:', blankId, 'normalized:', normalizedBlankId);
+                // Check if we can find quads for this blank node in the store
+                const testBlankNode = DataFactory.blankNode(normalizedBlankId);
+                const testQuads = store.getQuads(testBlankNode, null, null, null);
+                debugLog('[reconstructFromCache] DrawingSheet - Store has', testQuads.length, 'quads for blank node', normalizedBlankId);
+                if (testQuads.length > 0) {
+                  debugLog('[reconstructFromCache] DrawingSheet - First quad predicate:', (testQuads[0].predicate as { value: string }).value);
+                } else {
+                  debugLog('[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node', normalizedBlankId);
+                }
+              }
             }
           }
           
@@ -2776,13 +2779,29 @@ async function reconstructFromCache(
           }
           
           debugLog('[reconstructFromCache] Collecting blank node quads for', restrictionBlankNodes.size, 'blank nodes, currentQuads:', currentQuads.length);
+          if (block.subject && block.subject.includes('DrawingSheet')) {
+            debugLog('[reconstructFromCache] DrawingSheet - restrictionBlankNodes:', Array.from(restrictionBlankNodes));
+          }
           for (const blankId of restrictionBlankNodes) {
-            // CRITICAL: blankId might be in format "df_0_0" or "_:df_0_0" - need to handle both
+            // CRITICAL: blankId is already normalized (no _: prefix) from the loop above
             // DataFactory.blankNode expects just the ID part (without _: prefix)
-            const cleanBlankId = blankId.startsWith('_:') ? blankId.slice(2) : blankId;
-            const blankNode = DataFactory.blankNode(cleanBlankId);
+            const blankNode = DataFactory.blankNode(blankId);
             const blankQuads = store.getQuads(blankNode, null, null, null);
-            debugLog('[reconstructFromCache] Blank node', blankId, '(clean:', cleanBlankId, ') has', blankQuads.length, 'quads (where blank is SUBJECT)');
+            debugLog('[reconstructFromCache] Blank node', blankId, 'has', blankQuads.length, 'quads (where blank is SUBJECT)');
+            if (block.subject && block.subject.includes('DrawingSheet')) {
+              debugLog('[reconstructFromCache] DrawingSheet - blank node', blankId, '- found', blankQuads.length, 'quads from store');
+              if (blankQuads.length === 0) {
+                debugLog('[reconstructFromCache] DrawingSheet - WARNING: No quads found for blank node', blankId);
+                // Try alternative ID formats
+                const altId1 = `_:${blankId}`;
+                debugLog('[reconstructFromCache] DrawingSheet - Trying alternative ID:', altId1);
+                const blankNodeAlt1 = DataFactory.blankNode(blankId); // Already normalized, no need to slice
+                const blankQuadsAlt1 = store.getQuads(blankNodeAlt1, null, null, null);
+                debugLog('[reconstructFromCache] DrawingSheet - alt1 quads:', blankQuadsAlt1.length);
+              } else {
+                debugLog('[reconstructFromCache] DrawingSheet - Successfully found', blankQuads.length, 'quads for blank node', blankId);
+              }
+            }
             
             // Only add quads that aren't already in currentQuads (avoid duplicates)
             let addedCount = 0;
@@ -2818,11 +2837,50 @@ async function reconstructFromCache(
                 quadSignatures.add(sig);
                 addedCount++;
                 debugLog('[reconstructFromCache] Added quad:', blankQuad.predicate.value, '->', objSig.substring(0, 50));
+                if (block.subject && block.subject.includes('DrawingSheet')) {
+                  debugLog('[reconstructFromCache] DrawingSheet - Added blank node quad:', (blankQuad.predicate as { value: string }).value);
+                }
               } else {
                 debugLog('[reconstructFromCache] Skipped duplicate quad:', sig.substring(0, 100));
               }
             }
             debugLog('[reconstructFromCache] Added', addedCount, 'quads for restriction blank node:', blankId, '(total currentQuads now:', currentQuads.length, ')');
+            if (block.subject && block.subject.includes('DrawingSheet')) {
+              debugLog('[reconstructFromCache] DrawingSheet - After adding blank node quads, currentQuads.length:', currentQuads.length);
+              const blankAsSubject = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
+              debugLog('[reconstructFromCache] DrawingSheet - Blank nodes as subjects in currentQuads:', blankAsSubject);
+            }
+            
+            // Validation: ensure blank node has required properties
+            const blankQuadsForValidation = blankQuads.length > 0 ? blankQuads : (blankId.startsWith('_:') ? store.getQuads(DataFactory.blankNode(blankId.slice(2)), null, null, null) : store.getQuads(DataFactory.blankNode(`_:${blankId}`), null, null, null));
+            const hasOnProperty = blankQuadsForValidation.some(q => (q.predicate as { value: string }).value.includes('onProperty'));
+            const hasOnClass = blankQuadsForValidation.some(q => (q.predicate as { value: string }).value.includes('onClass'));
+            const hasRestrictionType = blankQuadsForValidation.some(q => (q.predicate as { value: string }).value.includes('type') && q.object.termType === 'NamedNode' && (q.object as { value: string }).value.includes('Restriction'));
+            if (!hasOnProperty || !hasOnClass || !hasRestrictionType) {
+              debugLog('[reconstructFromCache] WARNING: Blank node', blankId, 'missing required properties - onProperty:', hasOnProperty, 'onClass:', hasOnClass, 'type:', hasRestrictionType);
+            }
+          }
+          
+          // Validation: ensure we collected blank node quads
+          const blankNodeQuadsAsSubjects = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
+          if (restrictionBlankNodes.size > 0 && blankNodeQuadsAsSubjects === 0) {
+            debugLog('[reconstructFromCache] ERROR: Found', restrictionBlankNodes.size, 'restriction blank nodes but NO quads where blank nodes are subjects!');
+            debugLog('[reconstructFromCache] This will cause buildInlineForms to create empty forms [ ]');
+          } else if (restrictionBlankNodes.size > 0) {
+            debugLog('[reconstructFromCache] SUCCESS: Collected', blankNodeQuadsAsSubjects, 'quads where blank nodes are subjects for', restrictionBlankNodes.size, 'restriction blank nodes');
+          }
+          
+          // Specific diagnostic for DrawingSheet class
+          if (block.subject && (block.subject.includes('DrawingSheet') || block.subject.includes('Drawing'))) {
+            debugLog('[reconstructFromCache] DIAGNOSTIC - DrawingSheet block (main path):', {
+              subject: block.subject,
+              resolvedUri: resolvedUri,
+              quadsBefore: currentQuadsBySubject.get(resolvedUri)?.length || 0,
+              quadsAfter: currentQuads.length,
+              blankNodeCount: restrictionBlankNodes.size,
+              blankNodeIds: Array.from(restrictionBlankNodes),
+              blankNodeQuadsAsSubjects: blankNodeQuadsAsSubjects
+            });
           }
         }
       } else {
@@ -2841,26 +2899,130 @@ async function reconstructFromCache(
             currentQuads = quads;
             debugLog('[reconstructFromCache] Found match by local name:', subjectUri, 'with', quads.length, 'quads');
             
-            // Also include restriction blank node quads for class blocks
-            if (block.type === 'Class') {
-              const classSubject = DataFactory.namedNode(subjectUri);
-              const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+            // Also include restriction blank node quads for blocks with rdfs:subClassOf
+            const classSubject = DataFactory.namedNode(subjectUri);
+            const subClassOfQuads = store.getQuads(classSubject, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
+            const hasSubClassOfWithBlanks = subClassOfQuads.some(q => q.object.termType === 'BlankNode');
+            
+            if (block.type === 'Class' || hasSubClassOfWithBlanks) {
+              const quadsBeforeBlankNodes = currentQuads.length;
               const restrictionBlankNodes = new Set<string>();
+              
+              debugLog('[reconstructFromCache] Class block:', block.subject, 'found', subClassOfQuads.length, 'rdfs:subClassOf quads');
               
               for (const subClassQuad of subClassOfQuads) {
                 if (subClassQuad.object.termType === 'BlankNode') {
                   const blankId = (subClassQuad.object as { id: string }).id;
-                  restrictionBlankNodes.add(blankId);
+                  // Normalize blank node ID - remove _: prefix if present
+                  const normalizedBlankId = blankId.startsWith('_:') ? blankId.slice(2) : blankId;
+                  restrictionBlankNodes.add(normalizedBlankId);
                   // Include the subClassOf quad itself (connects class to blank node)
                   currentQuads.push(subClassQuad);
+                  debugLog('[reconstructFromCache] Found restriction blank node:', blankId, 'normalized:', normalizedBlankId, 'for class:', block.subject);
                 }
               }
               
+              debugLog('[reconstructFromCache] Total restriction blank nodes found:', restrictionBlankNodes.size, 'for class:', block.subject);
+              
+              // Log blank node IDs found vs expected (from original block.quads)
+              const originalBlankNodeIds = new Set<string>();
+              for (const q of block.quads) {
+                if (q.object.termType === 'BlankNode') {
+                  const origBlankId = (q.object as { id: string }).id;
+                  originalBlankNodeIds.add(origBlankId);
+                }
+                if (q.subject.termType === 'BlankNode') {
+                  const origBlankId = (q.subject as { id: string }).id;
+                  originalBlankNodeIds.add(origBlankId);
+                }
+              }
+              debugLog('[reconstructFromCache] Original block had', originalBlankNodeIds.size, 'blank node IDs:', Array.from(originalBlankNodeIds));
+              debugLog('[reconstructFromCache] Current store has', restrictionBlankNodes.size, 'blank node IDs:', Array.from(restrictionBlankNodes));
+              
+              // Use deduplication logic similar to main path
+              const quadSignatures = new Set<string>();
+              for (const q of currentQuads) {
+                const subjSig = q.subject.termType === 'NamedNode' ? q.subject.value : q.subject.termType === 'BlankNode' ? (q.subject as { id: string }).id : '';
+                const objSig = q.object.termType === 'NamedNode' ? q.object.value : q.object.termType === 'Literal' ? `"${(q.object as { value: string }).value}"` : q.object.termType === 'BlankNode' ? (q.object as { id: string }).id : '';
+                const sig = `${subjSig}|${q.predicate.value}|${objSig}`;
+                quadSignatures.add(sig);
+              }
+              
+              debugLog('[reconstructFromCache] Collecting blank node quads for', restrictionBlankNodes.size, 'blank nodes, currentQuads:', currentQuads.length);
               for (const blankId of restrictionBlankNodes) {
+                // CRITICAL: blankId is already normalized (no _: prefix) from the loop above
+                // DataFactory.blankNode expects just the ID part (without _: prefix)
                 const blankNode = DataFactory.blankNode(blankId);
-                const blankQuads = store.getQuads(blankNode, null, null, null);
-                currentQuads.push(...blankQuads);
-                debugLog('[reconstructFromCache] Added', blankQuads.length, 'quads for restriction blank node:', blankId);
+                let blankQuads = store.getQuads(blankNode, null, null, null);
+                debugLog('[reconstructFromCache] Blank node', blankId, 'has', blankQuads.length, 'quads (where blank is SUBJECT)');
+                
+                // If no quads found, try with _: prefix (shouldn't happen if normalized correctly)
+                if (blankQuads.length === 0) {
+                  const blankNodeWithPrefix = DataFactory.blankNode(`_:${blankId}`);
+                  const blankQuadsWithPrefix = store.getQuads(blankNodeWithPrefix, null, null, null);
+                  debugLog('[reconstructFromCache] Tried with _: prefix, found', blankQuadsWithPrefix.length, 'quads');
+                  if (blankQuadsWithPrefix.length > 0) {
+                    blankQuads = blankQuadsWithPrefix;
+                  }
+                }
+                
+                // Only add quads that aren't already in currentQuads (avoid duplicates)
+                let addedCount = 0;
+                for (const blankQuad of blankQuads) {
+                  const subjSig = (blankQuad.subject as { id: string }).id;
+                  const objSig = blankQuad.object.termType === 'NamedNode' ? blankQuad.object.value : blankQuad.object.termType === 'Literal' ? `"${(blankQuad.object as { value: string }).value}"` : blankQuad.object.termType === 'BlankNode' ? (blankQuad.object as { id: string }).id : '';
+                  const sig = `${subjSig}|${blankQuad.predicate.value}|${objSig}`;
+                  if (!quadSignatures.has(sig)) {
+                    currentQuads.push(blankQuad);
+                    quadSignatures.add(sig);
+                    addedCount++;
+                    debugLog('[reconstructFromCache] Added quad:', blankQuad.predicate.value, '->', objSig.substring(0, 50));
+                  } else {
+                    debugLog('[reconstructFromCache] Skipped duplicate quad:', sig.substring(0, 100));
+                  }
+                }
+                debugLog('[reconstructFromCache] Added', addedCount, 'quads for restriction blank node:', blankId, '(total currentQuads now:', currentQuads.length, ')');
+                
+                // Log what properties this blank node has
+                const blankNodeProps = blankQuads.map(q => {
+                  const pred = (q.predicate as { value: string }).value;
+                  const predLocal = pred.split('#').pop()?.split('/').pop() || pred;
+                  return predLocal;
+                });
+                debugLog('[reconstructFromCache] Blank node', blankId, 'has properties:', blankNodeProps);
+                
+                // Validation: ensure blank node has required properties
+                const hasOnProperty = blankQuads.some(q => (q.predicate as { value: string }).value.includes('onProperty'));
+                const hasOnClass = blankQuads.some(q => (q.predicate as { value: string }).value.includes('onClass'));
+                const hasRestrictionType = blankQuads.some(q => (q.predicate as { value: string }).value.includes('type') && q.object.termType === 'NamedNode' && (q.object as { value: string }).value.includes('Restriction'));
+                if (!hasOnProperty || !hasOnClass || !hasRestrictionType) {
+                  debugLog('[reconstructFromCache] WARNING: Blank node', blankId, 'missing required properties - onProperty:', hasOnProperty, 'onClass:', hasOnClass, 'type:', hasRestrictionType);
+                }
+              }
+              
+              const quadsAfterBlankNodes = currentQuads.length;
+              debugLog('[reconstructFromCache] Quads count - before blank nodes:', quadsBeforeBlankNodes, 'after:', quadsAfterBlankNodes, 'added:', quadsAfterBlankNodes - quadsBeforeBlankNodes);
+              
+              // Validation: ensure we collected blank node quads
+              const blankNodeQuadsAsSubjects = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
+              if (restrictionBlankNodes.size > 0 && blankNodeQuadsAsSubjects === 0) {
+                debugLog('[reconstructFromCache] ERROR: Found', restrictionBlankNodes.size, 'restriction blank nodes but NO quads where blank nodes are subjects!');
+                debugLog('[reconstructFromCache] This will cause buildInlineForms to create empty forms [ ]');
+              } else if (restrictionBlankNodes.size > 0) {
+                debugLog('[reconstructFromCache] SUCCESS: Collected', blankNodeQuadsAsSubjects, 'quads where blank nodes are subjects for', restrictionBlankNodes.size, 'restriction blank nodes');
+              }
+              
+              // Specific diagnostic for DrawingSheet class
+              if (block.subject && (block.subject.includes('DrawingSheet') || block.subject.includes('Drawing'))) {
+                debugLog('[reconstructFromCache] DIAGNOSTIC - DrawingSheet block:', {
+                  subject: block.subject,
+                  quadsBefore: quadsBeforeBlankNodes,
+                  quadsAfter: quadsAfterBlankNodes,
+                  blankNodeCount: restrictionBlankNodes.size,
+                  blankNodeIds: Array.from(restrictionBlankNodes),
+                  expectedBlankNodes: originalBlankNodeIds.size,
+                  blankNodeQuadsAsSubjects: blankNodeQuadsAsSubjects
+                });
               }
             }
             break;
@@ -2901,6 +3063,16 @@ async function reconstructFromCache(
     // If it does, we need to serialize it even if not modified, to ensure blank node IDs match current store
     const hasBlankNodeQuads = currentQuads.some(q => q.subject.termType === 'BlankNode');
     
+    if (block.subject && block.subject.includes('DrawingSheet')) {
+      debugLog('[reconstructFromCache] DrawingSheet - Reached point before creating modifiedBlock');
+      const blankAsSubject = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
+      debugLog('[reconstructFromCache] DrawingSheet - Before creating modifiedBlock:');
+      debugLog('[reconstructFromCache] DrawingSheet - currentQuads.length:', currentQuads.length);
+      debugLog('[reconstructFromCache] DrawingSheet - blank nodes as subjects:', blankAsSubject);
+      debugLog('[reconstructFromCache] DrawingSheet - isModified:', isModified);
+      debugLog('[reconstructFromCache] DrawingSheet - hasBlankNodeQuads:', hasBlankNodeQuads);
+    }
+    
     if (isModified || hasBlankNodeQuads) {
       const modifiedBlock: StatementBlock = {
         ...block,
@@ -2908,6 +3080,12 @@ async function reconstructFromCache(
         isModified: isModified || hasBlankNodeQuads // Mark as modified if quads changed OR if has blank node quads
       };
       modifiedBlocks.push(modifiedBlock);
+      if (block.subject && block.subject.includes('DrawingSheet')) {
+        const blankAsSubject = modifiedBlock.quads.filter(q => q.subject.termType === 'BlankNode').length;
+        debugLog('[reconstructFromCache] DrawingSheet - After creating modifiedBlock:');
+        debugLog('[reconstructFromCache] DrawingSheet - modifiedBlock.quads.length:', modifiedBlock.quads.length);
+        debugLog('[reconstructFromCache] DrawingSheet - blank nodes as subjects in modifiedBlock.quads:', blankAsSubject);
+      }
       if (hasBlankNodeQuads && !isModified) {
         debugLog('[reconstructFromCache] Block marked as modified due to blank node quads (to ensure IDs match):', block.subject, 'type:', block.type);
       } else {
@@ -2921,11 +3099,161 @@ async function reconstructFromCache(
     }
   }
   
-  // Reconstruct from original with modifications
+  // Try line-level replacement first for simple changes
+  const propertyLevelChanges = detectPropertyLevelChanges(store, cache);
+  debugLog('[reconstructFromCache] detectPropertyLevelChanges returned', propertyLevelChanges.size, 'changes');
+  if (propertyLevelChanges.size > 0) {
+    for (const [propLine, changeSet] of propertyLevelChanges.entries()) {
+      debugLog('[reconstructFromCache] Property change:', propLine.predicate, 'at line', propLine.lineNumbers[0]);
+    }
+  }
+  
+  // Check if all changes are simple (can use targeted line replacement)
+  const allChangesSimple = propertyLevelChanges.size > 0 && 
+    Array.from(propertyLevelChanges.values()).every(changeSet => 
+      isSimplePropertyChange(changeSet.propertyLine, changeSet)
+    );
+  
+  // CRITICAL: We can only use targeted replacement for blocks that don't have blank node properties.
+  // Targeted replacement only replaces individual lines and cannot preserve multi-line blank node structures.
+  // However, we can use targeted replacement for SOME blocks even if OTHER blocks have blank nodes.
+  // So we need to check each block individually and only disable targeted replacement for blocks with blank nodes.
+  let canUseTargetedReplacement = allChangesSimple && propertyLevelChanges.size > 0;
+  if (canUseTargetedReplacement) {
+    // Check which blocks have changes and which ones have blank node properties
+    const blocksWithChanges = new Set<string>();
+    const blocksWithBlankNodes = new Set<string>();
+    
+    for (const changeSet of propertyLevelChanges.values()) {
+      // Find which block this property line belongs to
+      for (const block of cache.statementBlocks) {
+        if (block.position.start <= changeSet.propertyLine.position.start && 
+            block.position.end >= changeSet.propertyLine.position.end) {
+          blocksWithChanges.add(block.subject || '');
+          break;
+        }
+      }
+    }
+    
+    // For each block with changes, check if it has any blank node properties
+    for (const blockSubject of blocksWithChanges) {
+      const block = cache.statementBlocks.find(b => b.subject === blockSubject);
+      if (block) {
+        // Check if block has any property lines with blank nodes (multi-line properties)
+        try {
+          const propertyLines = extractPropertyLines(block, cache);
+          const hasBlankNodeProperties = propertyLines.some(propLine => 
+            propLine.isMultiLine || propLine.quads.some(q => q.object.termType === 'BlankNode')
+          );
+          if (hasBlankNodeProperties) {
+            debugLog('[reconstructFromCache] Block', blockSubject, 'has blank node properties, will use block-level serialization for this block');
+            blocksWithBlankNodes.add(blockSubject);
+          }
+        } catch (error) {
+          // If property line extraction fails, fall back to block-level for this block
+          debugWarn('[reconstructFromCache] Failed to extract property lines for', blockSubject, ', will use block-level serialization:', error);
+          blocksWithBlankNodes.add(blockSubject);
+        }
+      }
+    }
+    
+    // Only use targeted replacement if NO blocks with changes have blank nodes
+    // If some blocks have blank nodes, we'll use a hybrid approach: targeted for simple blocks, block-level for blank node blocks
+    if (blocksWithBlankNodes.size > 0) {
+      debugLog('[reconstructFromCache] Some blocks have blank nodes, using hybrid approach');
+      // For now, disable targeted replacement entirely if any block has blank nodes
+      // TODO: Implement hybrid approach where we use targeted replacement for simple blocks and block-level for blank node blocks
+      canUseTargetedReplacement = false;
+    }
+  }
+  
+  if (canUseTargetedReplacement) {
+    debugLog('[reconstructFromCache] All changes are simple and no blank node properties, using targeted line replacement');
+    debugLog('[reconstructFromCache] Using targeted replacement with', propertyLevelChanges.size, 'property changes');
+    try {
+      const result = performTargetedLineReplacement(cache, propertyLevelChanges);
+      debugLog('[reconstructFromCache] Targeted replacement result length:', result.length);
+      debugLog('[reconstructFromCache] Targeted replacement result (first 300 chars):', result.substring(0, 300));
+      debugLog('[reconstructFromCache] Result === cache.content?', result === cache.content);
+      if (result === cache.content) {
+        debugWarn('[reconstructFromCache] Targeted replacement returned unchanged content, falling back to block-level');
+        // Fall through to block-level
+      } else {
+        return result;
+      }
+    } catch (error) {
+      debugWarn('[reconstructFromCache] Targeted line replacement failed, falling back to block-level:', error);
+      // Fall through to block-level reconstruction
+    }
+  } else {
+    debugLog('[reconstructFromCache] Cannot use targeted replacement (complex changes or blank node properties), using block-level serialization');
+    debugLog('[reconstructFromCache] Using block-level serialization, modifiedBlocks:', modifiedBlocks.length);
+  }
+  
+  // Reconstruct from original with modifications (block-level)
   debugLog('[reconstructFromCache] Found', modifiedBlocks.length, 'modified blocks out of', cache.statementBlocks.length, 'total blocks');
   if (modifiedBlocks.length > 0) {
     debugLog('[reconstructFromCache] Modified block subjects:', modifiedBlocks.map(b => b.subject).filter(Boolean));
-    return await reconstructFromOriginalText(cache, modifiedBlocks);
+    // Debug: Check DrawingSheet block quads
+    const drawingSheetBlock = modifiedBlocks.find(b => b.subject && b.subject.includes('DrawingSheet'));
+    if (drawingSheetBlock) {
+      debugLog('[reconstructFromCache] DrawingSheet block in modifiedBlocks - quads count:', drawingSheetBlock.quads.length);
+      const subClassOfQuads = drawingSheetBlock.quads.filter(q => (q.predicate as { value: string }).value.includes('subClassOf'));
+      debugLog('[reconstructFromCache] DrawingSheet block - rdfs:subClassOf quads:', subClassOfQuads.length);
+      const typeQuads = drawingSheetBlock.quads.filter(q => (q.predicate as { value: string }).value.includes('type') && (q.object as { value?: string }).value?.includes('Class'));
+      debugLog('[reconstructFromCache] DrawingSheet block - rdf:type owl:Class quads:', typeQuads.length);
+    }
+    const result = await reconstructFromOriginalText(cache, modifiedBlocks);
+    
+    // SAFETY CHECK: Verify result doesn't contain corrupted "wl:" prefix
+    // If "wl:" appears and there's no @prefix wl: declaration, it's corruption
+    // Since we've verified there's no @prefix wl:, it's safe to replace ALL "wl:" with "owl:"
+    // (The "wl:" in "owl:" will be unaffected since we're replacing the whole "wl:" string)
+    if (result.includes('wl:')) {
+      const hasWlPrefix = result.match(/@prefix\s+wl:/);
+      if (!hasWlPrefix) {
+        // "wl:" appears but there's no @prefix wl: declaration - this is corruption
+        console.warn('[reconstructFromCache] SAFETY CHECK: Detected "wl:" corruption, fixing');
+        
+        // CRITICAL: We must NOT replace "wl:" that's part of "owl:" (would turn "owl:" into "oowl:")
+        // Strategy: Use placeholder to protect "owl:" during replacement
+        // 1. Temporarily replace all "owl:" with a unique placeholder
+        const placeholder = '__OWL_PLACEHOLDER_XYZ__';
+        let fixed = result.replace(/owl:/g, placeholder);
+        
+        // Debug: Check how many "wl:" we have after protecting "owl:"
+        const wlCountAfterProtect = (fixed.match(/wl:/g) || []).length;
+        console.warn('[reconstructFromCache] After protecting "owl:", found', wlCountAfterProtect, 'standalone "wl:" occurrences');
+        
+        // 2. Now safely replace all "wl:" with "owl:" (no risk of matching "owl:")
+        fixed = fixed.replace(/wl:/g, 'owl:');
+        
+        // 3. Restore "owl:" from placeholder
+        const placeholderRegex = new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+        fixed = fixed.replace(placeholderRegex, 'owl:');
+        
+        // Verify the fix worked - check for standalone "wl:" (not part of "owl:")
+        const remainingWl = fixed.match(/(^|@prefix\s|\s|[^o])(wl:)/g);
+        if (remainingWl && remainingWl.length > 0 && !fixed.match(/@prefix\s+wl:/)) {
+          console.error('[reconstructFromCache] WARNING: Fix incomplete, still have', remainingWl.length, 'standalone "wl:" occurrences, trying again');
+          // Last resort: try one more time with the placeholder approach
+          fixed = fixed.replace(/owl:/g, placeholder);
+          fixed = fixed.replace(/wl:/g, 'owl:');
+          fixed = fixed.replace(placeholderRegex, 'owl:');
+          
+          // Final check
+          const finalWl = fixed.match(/(^|@prefix\s|\s|[^o])(wl:)/g);
+          if (finalWl && finalWl.length > 0) {
+            console.error('[reconstructFromCache] ERROR: Fix failed, still have', finalWl.length, 'standalone "wl:" occurrences after second attempt');
+          }
+        }
+        
+        console.warn('[reconstructFromCache] SAFETY CHECK: Fixed corruption');
+        return fixed;
+      }
+    }
+    
+    return result;
   }
   
   // No modifications - return original

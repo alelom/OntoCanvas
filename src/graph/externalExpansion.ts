@@ -8,11 +8,10 @@ import { DataFactory, type Store } from 'n3';
 import type { GraphData, GraphEdge, GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import type { ExternalNodeLayout } from '../storage';
-import { getMainOntologyBase, getObjectProperties, extractLocalName, findRestrictionBlank, toClassUri } from '../parser';
+import { getMainOntologyBase, getObjectProperties, extractLocalName, findRestrictionBlank } from '../parser';
 import { getCachedExternalClasses } from '../externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
-const OWL = 'http://www.w3.org/2002/07/owl#';
 
 export interface ExternalExpansionOptions {
   displayExternalReferences: boolean;
@@ -165,11 +164,15 @@ export function expandWithExternalRefs(
     const rangeQuads = store.getQuads(propNode, DataFactory.namedNode(RDFS_RANGE), null, null);
 
     for (const dq of domainQuads) {
-      if (dq.object.termType !== 'NamedNode') continue;
-      const domainUri = (dq.object as { value: string }).value;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dqObj = dq.object as any;
+      if (dqObj.termType !== 'NamedNode') continue;
+      const domainUri = dqObj.value as string;
       for (const rq of rangeQuads) {
-        if (rq.object.termType !== 'NamedNode') continue;
-        const rangeUri = (rq.object as { value: string }).value;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rqObj = rq.object as any;
+        if (rqObj.termType !== 'NamedNode') continue;
+        const rangeUri = rqObj.value as string;
 
         const domainLocal = extractLocalName(domainUri);
         const rangeLocal = extractLocalName(rangeUri);
@@ -297,8 +300,9 @@ export function expandWithExternalRefs(
   const subClassOfQuads = store.getQuads(null, DataFactory.namedNode(RDFS_SUBCLASS_OF), null, null);
   for (const q of subClassOfQuads) {
     // Only process direct subClassOf relationships (not restrictions - those are blank nodes)
-    if (q.object.termType !== 'NamedNode') continue;
-    const superClassUri = (q.object as { value: string }).value;
+    const qObj = q.object as { termType: string; value?: string };
+    if (qObj.termType !== 'NamedNode') continue;
+    const superClassUri = qObj.value!;
     const superClassIsLocal = isLocalUri(superClassUri, mainBase);
     if (!superClassIsLocal) {
       const ref = findRefForUri(superClassUri, externalRefs);

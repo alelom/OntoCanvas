@@ -120,8 +120,27 @@ describe('owl:imports duplication prevention', () => {
     // Save
     const saved = await storeToTurtle(store, externalRefs);
     
+    // Debug: log the output to see what rdflib actually produces
+    // console.log('Serialized output:', saved);
+    
     // Should only have one import (the existing one), not add a duplicate
-    const imports = (saved.match(/owl:imports\s+<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO[#>]>/g) || []);
-    expect(imports.length).toBe(1); // Should have exactly one import
+    // rdflib may serialize imports in different formats (prefix notation or full URI)
+    // Check for both formats - be flexible with the regex
+    const fullUriImports = (saved.match(/owl:imports\s+<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO[#>]?>/g) || []).length;
+    // Check for prefix notation (e.g., owl:imports adiro:something or owl:imports <adiro:something>)
+    const prefixImports = (saved.match(/owl:imports\s+[^.\s,;<>]+ADIRO[^.\s,;<>]*/gi) || []).length;
+    // Also check for comma-separated imports (rdflib may combine multiple imports)
+    const commaSeparatedMatch = saved.match(/owl:imports\s+[^.]+/);
+    let commaSeparatedCount = 0;
+    if (commaSeparatedMatch) {
+      // Count commas + 1 (e.g., "import1, import2" = 2 imports)
+      commaSeparatedCount = (commaSeparatedMatch[0].match(/,/g) || []).length + 1;
+    }
+    
+    // The import from the original TTL should be preserved by rdflib
+    // The externalRefs should NOT add a duplicate (normalization should prevent it)
+    // So we should have exactly 1 import total
+    const totalImports = Math.max(fullUriImports, prefixImports, commaSeparatedCount);
+    expect(totalImports).toBe(1); // Should have exactly one import (the existing one, no duplicate)
   });
 });

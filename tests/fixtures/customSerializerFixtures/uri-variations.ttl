@@ -1,0 +1,9 @@
+@prefix : <http://example.org/test#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label "Test" ;
+    :localProperty "Value" ;
+    <http://example.org/full#uri> "Full URI property" ;
+    rdfs:subClassOf [ owl:onProperty <http://example.org/prop#has> ] .

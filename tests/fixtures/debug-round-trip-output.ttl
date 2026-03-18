@@ -1,189 +1,228 @@
-@prefix : <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#> .
-@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix xml: <http://www.w3.org/XML/1998/namespace#> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-#################################################################
-#    Ontology
-#################################################################
+@prefix owl: <http://www.w3.org/2002/07/owl#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+@prefix ADIRO: <https://burohappoldmachinelearning.github.io/ADIRO/>.
+@prefix aec: <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata/>.
+@prefix ae: <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#>.
+@prefix a: <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#>.
+# Created/edited with https://alelom.github.io/OntoCanvas/ version 1.11.0
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata> rdf:type owl:Ontology ;
-    rdfs:label "AEC Drawing Metadata Ontology" ;
-    rdfs:comment "Sheet/layout/document structure for AEC drawings." ;
-    owl:versionIRI <https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata/1.0.0> ;
-    owl:versionInfo "1.0.0" ;
-    owl:imports <http://www.w3.org/2002/07/owl#> .
-
-
-#################################################################
-#    Annotation properties
-#################################################################
-
-:exampleImage rdf:type owl:AnnotationProperty ;
-    rdfs:label "example image"@en ;
-    rdfs:comment "Links a class or concept to an example image illustrating it."@en .
-
-:labellableRoot rdf:type owl:AnnotationProperty;
-    rdfs:label "Labellable root";
-    rdfs:comment "When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).";
-    rdfs:range xsd:boolean.
-
-#################################################################
-#    Object Properties
-#################################################################
-
-:contains rdf:type owl:ObjectProperty;
-    rdfs:label "contains";
-    rdfs:comment "Direct containment or has-part relationship. Min cardinality 0 by default (can contain).";
-    rdfs:range owl:Thing;
-    rdfs:domain owl:Thing.
-
-:has rdf:type owl:ObjectProperty;
-    rdfs:label "hasProperty";
-    rdfs:comment "Subject is characterised by a property.";
-    rdfs:range owl:Thing;
-    rdfs:domain owl:Thing.
-
-#################################################################
-#    Data Properties
-#################################################################
-
-:refersToDrawingId rdf:type owl:DatatypeProperty;
-    rdfs:label "refersToDrawingId";
-    rdfs:comment "References another Drawing by using a drawing identifier, like a drawing number.";
-    rdfs:range xsd:string;
-    rdfs:domain :TextualNote.
-
-#################################################################
-#    Classes
-#################################################################
-
-:TextualNote rdfs:subClassOf :Note;
-    rdfs:label "TextModified0";
-    :labellableRoot true; rdf:type owl:Class.
-:Note rdf:type owl:Class;
-    rdfs:subClassOf :Metadata;
-    rdfs:label "Note";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Metadata rdf:type owl:Class;
-    rdfs:label "Metadata";
-    rdfs:comment "Can be standalone label - drawing metadata";
-    :labellableRoot "false"^^xsd:boolean.
-
-:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Drawing sheet";
-    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
-    a owl:Class;
-    :labellableRoot false.
-:RevisionTable rdf:type owl:Class;
-    rdfs:subClassOf :Metadata;
-    rdfs:label "Revision table";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:onClass <https://burohappoldmachinelearning.github.io/ADIRO/aec-common-symbols#DrawingElement> ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Layout";
-    rdfs:comment "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content."; rdf:type owl:Class;
-    :labellableRoot true.
-:DrawingOrientation rdf:type owl:Class;
-    rdfs:subClassOf :Portrait, :Landscape;
-    rdfs:label "DrawingOrientation".
-
-:DrawingType rdf:type owl:Class;
-    rdfs:label "Drawing type";
-    rdfs:comment "Type of drawing view";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Portrait rdf:type owl:Class;
-    rdfs:label "Portrait";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Landscape rdf:type owl:Class;
-    rdfs:label "Landscape";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Titleblock rdf:type owl:Class;
-    rdfs:subClassOf :Metadata;
-    rdfs:label "Titleblock";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Legend rdf:type owl:Class;
-    rdfs:subClassOf :Metadata;
-    rdfs:label "Legend";
-    rdfs:comment "A legend containing mapping information between symbols and a text signifier.";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Image rdf:type owl:Class;
-    rdfs:subClassOf :Note;
-    rdfs:label "Image";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Plan rdf:type owl:Class;
-    rdfs:subClassOf :DrawingType;
-    rdfs:label "Plan";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Section rdf:type owl:Class;
-    rdfs:subClassOf :DrawingType;
-    rdfs:label "Vertical Section";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Elevation rdf:type owl:Class;
-    rdfs:subClassOf :DrawingType;
-    rdfs:label "Elevation";
-    :labellableRoot "true"^^xsd:boolean.
-
-:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ];
-    rdfs:label "Detail";
-    rdfs:comment "Detail drawing";
-    :labellableRoot true; rdf:type owl:Class.
-:Orientation rdf:type owl:Class;
-    rdfs:label "Detail Orientation";
-    rdfs:comment "Can be standalone label - drawing orientation";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Perspective rdf:type owl:Class;
-    rdfs:subClassOf :DrawingType;
-    rdfs:label "Perspective";
-    :labellableRoot "true"^^xsd:boolean.
-
-:DetailLocation rdf:type owl:Class;
-    rdfs:label "Detail location";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Base rdf:type owl:Class;
-    rdfs:subClassOf :DetailLocation;
+ADIRO:aec-drawing-metadata
+    rdf:type owl:Ontology;
+    rdfs:comment "Sheet/layout/document structure for AEC drawings.";
+    rdfs:label "AEC Drawing Metadata Ontology";
+    owl:imports owl:;
+    owl:versionInfo "1.0.0";
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    rdf:type owl:Class;
     rdfs:label "Base";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Corner rdf:type owl:Class;
-    rdfs:subClassOf :DetailLocation;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:contains
+    rdf:type owl:ObjectProperty;
+    rdfs:comment
+        "Direct containment or has-part relationship. Min cardinality 0 by default (can contain).";
+    rdfs:domain owl:Thing;
+    rdfs:label "contains";
+    rdfs:range owl:Thing.
+ae:Corner
+    rdf:type owl:Class;
     rdfs:label "Corner";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Head rdf:type owl:Class;
-    rdfs:subClassOf :DetailLocation;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:Detail
+    rdf:type owl:Class;
+    rdfs:comment "Detail drawing";
+    rdfs:label "Detail";
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                rdf:type owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:DetailLocation
+a owl:Class; rdfs:label "Detail location"; ae:labellableRoot "false"^^xsd:boolean.
+ae:DrawingOrientation
+    rdf:type owl:Class;
+    rdfs:label "DrawingOrientation";
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    rdf:type owl:Class;
+    rdfs:comment "Top-level container for a drawing. Contains Layout(s).";
+    rdfs:label "Drawing sheet";
+    rdfs:subClassOf
+            [
+                rdf:type owl:Restriction;
+                owl:maxQualifiedCardinality "1"^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger
+            ],
+            [
+                rdf:type owl:Restriction;
+                owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                rdf:type owl:Restriction;
+                owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                rdf:type owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:DrawingType
+    rdf:type owl:Class;
+    rdfs:comment "Type of drawing view";
+    rdfs:label "Drawing type";
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:Elevation
+    rdf:type owl:Class;
+    rdfs:label "Elevation";
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:exampleImage
+    rdf:type owl:AnnotationProperty;
+    rdfs:comment
+    "Links a class or concept to an example image illustrating it."@en;
+    rdfs:label "example image"@en.
+ae:has
+    rdf:type owl:ObjectProperty;
+    rdfs:comment "Subject is characterised by a property.";
+    rdfs:domain owl:Thing;
+    rdfs:label "hasProperty";
+    rdfs:range owl:Thing.
+ae:Head
+    rdf:type owl:Class;
     rdfs:label "Head";
-    :labellableRoot "false"^^xsd:boolean.
-
-:SlabEdge rdf:type owl:Class;
-    rdfs:subClassOf :DetailLocation;
-    rdfs:label "Slab edge";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Typical rdf:type owl:Class;
-    rdfs:subClassOf :DetailLocation;
-    rdfs:label "Typical";
-    :labellableRoot "false"^^xsd:boolean.
-
-:Horizontal rdf:type owl:Class;
-    rdfs:subClassOf :Orientation;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:Horizontal
+    rdf:type owl:Class;
     rdfs:label "Horizontal";
-    :labellableRoot "true"^^xsd:boolean.
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Image
+    rdf:type owl:Class;
+    rdfs:label "Image";
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:labellableRoot
+    rdf:type owl:AnnotationProperty;
+    rdfs:comment
+        "When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).";
+    rdfs:label "Labellable root";
+    rdfs:range xsd:boolean.
+ae:Landscape rdf:type owl:Class; rdfs:label "Landscape"; ae:labellableRoot "true"^^xsd:boolean.
 
-:Vertical rdf:type owl:Class;
-    rdfs:subClassOf :Orientation;
+ae:Layout
+    rdf:type owl:Class;
+    rdfs:comment
+        "Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.";
+    rdfs:label "Layout";
+    rdfs:subClassOf
+            [
+                rdf:type owl:Restriction;
+                owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger;
+                owl:onClass a:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                rdf:type owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Legend
+    rdf:type owl:Class;
+    rdfs:comment
+        "A legend containing mapping information between symbols and a text signifier.";
+    rdfs:label "Legend";
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Metadata
+    rdf:type owl:Class;
+    rdfs:comment "Can be standalone label - drawing metadata";
+    rdfs:label "Metadata";
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:Note
+    rdf:type owl:Class;
+    rdfs:label "Note";
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Orientation
+    rdf:type owl:Class;
+    rdfs:comment "Can be standalone label - drawing orientation";
+    rdfs:label "Detail Orientation";
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:Perspective
+    rdf:type owl:Class;
+    rdfs:label "Perspective";
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Plan
+    rdf:type owl:Class;
+    rdfs:label "Plan";
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Portrait rdf:type owl:Class; rdfs:label "Portrait"; ae:labellableRoot "true"^^xsd:boolean.
+
+ae:refersToDrawingId
+    rdf:type owl:DatatypeProperty;
+    rdfs:comment
+        "References another Drawing by using a drawing identifier, like a drawing number.";
+    rdfs:domain ae:TextualNote;
+    rdfs:label "refersToDrawingId";
+    rdfs:range xsd:string.
+ae:RevisionTable
+    rdf:type owl:Class;
+    rdfs:label "Revision table";
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Section
+    rdf:type owl:Class;
+    rdfs:label "Vertical Section";
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:SlabEdge
+    rdf:type owl:Class;
+    rdfs:label "Slab edge";
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:TextualNote
+    rdf:type owl:Class;
+    rdfs:label "TextModified0";
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Titleblock
+    rdf:type owl:Class;
+    rdfs:label "Titleblock";
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot "true"^^xsd:boolean.
+ae:Typical
+    rdf:type owl:Class;
+    rdfs:label "Typical";
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot "false"^^xsd:boolean.
+ae:Vertical
+    rdf:type owl:Class;
     rdfs:label "Vertical";
-    :labellableRoot "true"^^xsd:boolean.
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot "true"^^xsd:boolean.

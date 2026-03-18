@@ -8,9 +8,11 @@ import {
 // Use jsdom environment for DOM tests
 // @vitest-environment jsdom
 
-// Mock storage
+// Mock storage (default: no last file)
+const mockGetLastFile = vi.fn().mockResolvedValue(null);
 vi.mock('../storage', () => ({
-  getLastFileFromIndexedDB: vi.fn().mockResolvedValue(null),
+  getLastFileFromIndexedDB: (...args: unknown[]) => mockGetLastFile(...args),
+  getLastUrlFromIndexedDB: vi.fn().mockResolvedValue(null),
 }));
 
 describe('openOntologyModal', () => {
@@ -118,6 +120,31 @@ describe('openOntologyModal', () => {
         // If button not found, skip test
         expect(true).toBe(true);
       }
+    });
+
+    it('should show last opened file name in button when storage returns handle and pathHint', async () => {
+      mockGetLastFile.mockResolvedValue({
+        handle: { name: 'my-ontology.owl' },
+        pathHint: 'my-ontology.owl',
+      });
+      const onFile = vi.fn();
+      const onUrl = vi.fn();
+      const onLast = vi.fn();
+      const onLastUrl = vi.fn();
+
+      initOpenOntologyModal(onFile, onUrl, onLast, onLastUrl);
+      showOpenOntologyModal();
+
+      const lastFileBtn = document.getElementById('openOntologyLoadLastFile') as HTMLButtonElement | null;
+      expect(lastFileBtn).toBeTruthy();
+      await vi.waitFor(
+        () => {
+          expect(lastFileBtn?.textContent).toContain('my-ontology.owl');
+          expect(lastFileBtn?.disabled).toBe(false);
+        },
+        { timeout: 1000 }
+      );
+      mockGetLastFile.mockResolvedValue(null);
     });
 
     it('should call onUrl callback when URL button is clicked', async () => {

@@ -3,7 +3,7 @@ import { Store, DataFactory } from 'n3';
 import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalClassInfo, type ExternalOntologyReference } from './externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
-const OWL = 'http://www.w3.org/2002/07/owl#';
+// const OWL = 'http://www.w3.org/2002/07/owl#'; // Unused - kept for reference
 const TA = 'http://example.org/task-assignment#';
 const PM = 'http://example.org/project-mgmt#';
 
@@ -30,6 +30,8 @@ describe('externalOntologySearch', () => {
     });
 
     it('should search case-insensitively', async () => {
+      // Variable defined but not used - kept for test structure/documentation
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const mockClasses: ExternalClassInfo[] = [
         {
           uri: 'https://w3id.org/dano#AxisLine',

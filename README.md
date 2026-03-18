@@ -31,7 +31,7 @@ If you want a good hierarchical (taxonomical) view of ontologies, rather than a 
 - **Search** – Filter by node label or relationship type
 - **Relationships filters** – Show/hide by relationship type
 - **Open:** Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and other formats supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js).
-- **Save:** Turtle only.
+- **Save:** Turtle only. When editing a Turtle file, a **formatting-preserving serializer** keeps comments, blank lines, property order, and OWL restrictions (see [Serialization (saving)](#serialization-saving)).
 
 
 ## Comparison with other ontology editors and visualisers 
@@ -64,6 +64,21 @@ If you want a good hierarchical (taxonomical) view of ontologies, rather than a 
 - **rdf-parse** – Multi-format RDF parsing (Turtle, RDF/XML, JSON-LD, etc.) in the browser
 - **N3.js** – In-memory RDF store and Turtle serialisation (save)
 - **vis-network** – Graph visualization
+
+## Serialization (saving)
+
+Save output is **Turtle only**. How the Turtle is produced depends on how the file was loaded:
+
+- **Turtle file loaded (`.ttl`)**  
+  The app keeps a **source cache** of the original file (block positions, formatting, line endings). On save it uses a **custom serializer** that:
+  - Reconstructs the file from the cache and only replaces the blocks or lines that changed (e.g. after a label rename).
+  - Preserves **formatting** (indentation, blank lines between blocks, line endings), **comments**, **property order**, and **OWL restrictions** (inline blank nodes).
+  - For simple edits (e.g. only a label changes), it does **targeted text replacement** so the rest of the file is unchanged; for blocks with structural changes it re-serializes only those blocks and stitches them back into the cached text.
+
+- **Other format loaded (RDF/XML, JSON-LD, etc.) or no cache**  
+  The app falls back to **standard Turtle serialization** (N3/rdflib). Output is valid Turtle but formatting, comments, and property order are not preserved.
+
+So for round-trip editing of Turtle ontologies (minimal diff, preserved structure), open a `.ttl` file and save again; for other formats, saving produces a fresh Turtle dump.
 
 
 

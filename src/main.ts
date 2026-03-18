@@ -71,6 +71,8 @@ import {
   type DisplayConfig,
   type ExternalOntologyReference,
   type ExternalNodeLayout,
+  type SerializerType,
+  type SerializerConfig,
   loadDisplayConfigFromIndexedDB,
   saveDisplayConfigToIndexedDB,
   deleteDisplayConfigFromIndexedDB,
@@ -80,6 +82,8 @@ import {
   saveLastFileToIndexedDB,
   getLastUrlFromIndexedDB,
   saveLastUrlToIndexedDB,
+  loadSerializerConfigFromIndexedDB,
+  saveSerializerConfigToIndexedDB,
   DISPLAY_CONFIG_VERSION,
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
@@ -437,9 +441,14 @@ function scheduleDisplayConfigSave(): void {
   if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
   displayConfigSaveTimer = window.setTimeout(() => {
     displayConfigSaveTimer = null;
-    const config = collectDisplayConfig();
-    if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
+    flushDisplayConfigSave();
   }, 500);
+}
+
+/** Run display config save immediately (e.g. after drag end so refresh preserves positions). */
+function flushDisplayConfigSave(): void {
+  const config = collectDisplayConfig();
+  if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
 }
 
 
@@ -469,6 +478,8 @@ let fileHandle: FileSystemFileHandle | null = null;
 let hasUnsavedChanges = false;
 let originalTtlString: string | null = null; // Store original TTL to preserve format
 let originalFileCache: OriginalFileCache | null = null; // Store original file cache for source preservation
+let currentSerializerType: SerializerType = 'custom'; // Default to custom for TTL files
+let isTtlFile: boolean = false; // Track if current file is TTL
 let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
 let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: string; to: string; id?: string } | null) => void } | null = null;
 /** Initial data property restrictions when rename modal was opened (single-node mode). */
@@ -4412,6 +4423,44 @@ function updateFilePathDisplay(): void {
   updateStatusBarFilePath(loadedFilePath);
 }
 
+function updateSerializerDropdown(): void {
+  const dropdown = document.getElementById('serializerSelect') as HTMLSelectElement | null;
+  if (!dropdown) {
+    // Dropdown doesn't exist - might not be in DEV mode or DOM not ready
+    debugLog('[updateSerializerDropdown] Dropdown not found, isDebugMode:', isDebugMode());
+    return;
+  }
+  
+  // Only show for TTL files in debug mode
+  if (isTtlFile && isDebugMode()) {
+    dropdown.style.display = 'inline-block';
+    dropdown.value = currentSerializerType;
+    debugLog('[updateSerializerDropdown] Showing dropdown, isTtlFile:', isTtlFile, 'currentSerializerType:', currentSerializerType);
+    
+    // Disable custom option if prerequisites not met
+    const customOption = dropdown.querySelector('option[value="custom"]') as HTMLOptionElement;
+    if (customOption) {
+      if (!originalFileCache || originalFileCache.format !== 'turtle') {
+        customOption.disabled = true;
+        customOption.title = 'Custom serializer requires file cache (load a .ttl file)';
+        debugLog('[updateSerializerDropdown] Custom option disabled, cache:', !!originalFileCache);
+        // If custom was selected but prerequisites not met, switch to rdflib
+        if (currentSerializerType === 'custom') {
+          currentSerializerType = 'rdflib';
+          dropdown.value = 'rdflib';
+        }
+      } else {
+        customOption.disabled = false;
+        customOption.title = '';
+        debugLog('[updateSerializerDropdown] Custom option enabled');
+      }
+    }
+  } else {
+    dropdown.style.display = 'none';
+    debugLog('[updateSerializerDropdown] Hiding dropdown, isTtlFile:', isTtlFile, 'isDebugMode:', isDebugMode());
+  }
+}
+
 function showRenameModal(
   nodeId: string,
   currentLabel: string,
@@ -6205,11 +6254,34 @@ async function saveTtl(): Promise<void> {
     debugError('[saveTtl] No ttlStore available');
     return;
   }
+  
+  // Validate custom serializer prerequisites
+  if (currentSerializerType === 'custom') {
+    if (!originalFileCache || originalFileCache.format !== 'turtle') {
+      const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+      if (errorMsg) {
+        errorMsg.textContent = 
+          'Custom TTL Serializer requires original file cache. ' +
+          'Please reload the file as a Turtle (.ttl) file or switch to rdflib serializer.';
+        errorMsg.style.display = 'block';
+      }
+      throw new Error('Custom serializer prerequisites not met');
+    }
+  }
+  
   const overwriteCb = document.getElementById('overwriteFile') as HTMLInputElement | null;
   const doOverwrite = overwriteCb?.checked === true && fileHandle;
   try {
-    debugLog('[saveTtl] Starting save, doOverwrite:', doOverwrite);
-    const ttlString = await storeToTurtle(ttlStore, externalOntologyReferences, originalTtlString ?? undefined, originalFileCache ?? undefined);
+    debugLog('[saveTtl] Starting save, serializer:', currentSerializerType, 'doOverwrite:', doOverwrite);
+    
+    // Pass serializer type to storeToTurtle
+    const ttlString = await storeToTurtle(
+      ttlStore, 
+      externalOntologyReferences, 
+      originalTtlString ?? undefined, 
+      originalFileCache ?? undefined,
+      currentSerializerType
+    );
     debugLog('[saveTtl] Got ttlString, length:', ttlString.length);
     if (doOverwrite) {
       if (!fileHandle) {
@@ -6228,6 +6300,8 @@ async function saveTtl(): Promise<void> {
           const pathForParse = loadedFilePath ?? loadedFileName ?? '';
           const { parseResult: newParseResult } = await loadOntologyFromContent(ttlString, pathForParse);
           originalFileCache = newParseResult.originalFileCache ?? null;
+          // Update dropdown state after cache update
+          updateSerializerDropdown();
         } catch (e) {
           debugWarn('[saveTtl] Failed to update cache after save:', e);
         }
@@ -6275,7 +6349,16 @@ async function saveTtl(): Promise<void> {
     debugError('[saveTtl] Error during save:', err);
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
     if (errorMsg) {
-      errorMsg.textContent = `Save error: ${err instanceof Error ? err.message : String(err)}`;
+      let errorText = `Save error: ${err instanceof Error ? err.message : String(err)}`;
+      
+      // Special handling for custom serializer errors
+      if (currentSerializerType === 'custom' && 
+          err instanceof Error && 
+          err.message.includes('cache')) {
+        errorText += ' Try switching to "rdflib Serializer" in the dropdown.';
+      }
+      
+      errorMsg.textContent = errorText;
       errorMsg.style.display = 'block';
     }
     // Re-throw to ensure the error is visible
@@ -6373,6 +6456,12 @@ function renderApp(): void {
             <input type="checkbox" id="overwriteFile"> Overwrite file on save
           </label>
         </span>
+        ${isDebugMode() ? `
+          <select id="serializerSelect" style="font-size: 11px; padding: 2px 4px;" title="Serializer type (DEV mode only)">
+            <option value="custom">Custom TTL Serializer</option>
+            <option value="rdflib">rdflib Serializer</option>
+          </select>
+        ` : ''}
       </span>
       <span id="displayConfigGroup" style="display: none; gap: 4px; align-items: center; flex-direction: column;">
         <button type="button" id="saveDisplayConfig" title="Save display config to a .display.json file (e.g. next to your ontology)">Save display config</button>
@@ -6799,6 +6888,29 @@ async function loadTtlAndRender(
     
     // Store original file cache for source preservation
     originalFileCache = cache ?? null;
+    
+    // Detect if file is TTL and load serializer config
+    const isTurtle = pathForParse.toLowerCase().endsWith('.ttl') || 
+                     pathForParse.toLowerCase().endsWith('.turtle') ||
+                     (!pathForParse && cache?.format === 'turtle');
+    isTtlFile = isTurtle;
+    
+    // Load serializer config from IndexedDB
+    if (isTurtle && !skipSlowOperationsForTests) {
+      const savedConfig = await loadSerializerConfigFromIndexedDB(loadedFilePath, loadedFileName);
+      if (savedConfig) {
+        currentSerializerType = savedConfig.serializerType;
+      } else {
+        // Default to 'custom' for TTL files
+        currentSerializerType = 'custom';
+      }
+    } else {
+      // Non-TTL files: default to rdflib (dropdown will be hidden)
+      currentSerializerType = 'rdflib';
+    }
+    
+    // Update dropdown visibility and state (call after cache is set)
+    updateSerializerDropdown();
     
     // Merge external refs early so we can detect used annotation properties before processing nodes
     // Skip IndexedDB operations in test mode for faster execution
@@ -7676,6 +7788,7 @@ function applyFilter(preserveView = false): void {
       onDragEnd: () => {
         if (!network) return;
         persistNodePositionsFromNetwork(network, rawData, scheduleDisplayConfigSave);
+        flushDisplayConfigSave();
       },
     });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
@@ -8455,6 +8568,26 @@ function setupEventListeners(): void {
     network?.fit();
   });
   document.getElementById('saveChanges')?.addEventListener('click', saveTtl);
+  
+  // Serializer dropdown change handler (DEV mode only)
+  const serializerSelect = document.getElementById('serializerSelect') as HTMLSelectElement;
+  if (serializerSelect) {
+    serializerSelect.addEventListener('change', async (e) => {
+      const newType = (e.target as HTMLSelectElement).value as SerializerType;
+      currentSerializerType = newType;
+      
+      // Save to IndexedDB
+      if (isTtlFile && !skipSlowOperationsForTests) {
+        await saveSerializerConfigToIndexedDB(
+          { serializerType: newType },
+          loadedFilePath,
+          loadedFileName
+        );
+      }
+      
+      debugLog('[serializerSelect] Changed to:', newType);
+    });
+  }
 
   document.getElementById('saveDisplayConfig')?.addEventListener('click', async () => {
     if (rawData.nodes.length === 0) return;
@@ -8990,6 +9123,10 @@ document.addEventListener('click', (e) => {
 
 renderApp();
 setupEventListeners();
+// Update serializer dropdown after DOM is ready (in case it was rendered)
+if (isDebugMode()) {
+  setTimeout(() => updateSerializerDropdown(), 0);
+}
 // Check for URL parameter and load ontology if present, otherwise show modal
 setTimeout(async () => {
   const loadedFromParam = await handleUrlParameterLoad(

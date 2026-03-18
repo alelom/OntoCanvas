@@ -1,0 +1,23 @@
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+#################################################################
+#    Classes Section
+#################################################################
+
+# This is a comment before the class
+:TestClass rdf:type owl:Class ; # inline comment
+    rdfs:label "Test Class" . # comment after
+
+# Another comment between classes
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label "Another Class" .
+
+#################################################################
+#    Properties Section
+#################################################################
+
+:hasProperty a owl:ObjectProperty ;
+    rdfs:label "has property" .

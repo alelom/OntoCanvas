@@ -1,0 +1,4467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDFLib Serialization Experiments Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 10px; }
+        .summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .stat {
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .stat.total { background: #e3f2fd; color: #1976d2; }
+        .stat.passed { background: #e8f5e9; color: #388e3c; }
+        .stat.failed { background: #ffebee; color: #d32f2f; }
+        .scenario {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .scenario h2 {
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .test-case {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .test-header {
+            padding: 15px;
+            background: #f9f9f9;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .test-header.passed { background: #e8f5e9; }
+        .test-header.failed { background: #ffebee; }
+        .status {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+        .status.passed { background: #4caf50; color: white; }
+        .status.failed { background: #f44336; color: white; }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }
+        .code-panel {
+            padding: 15px;
+            background: #fafafa;
+            border-right: 1px solid #ddd;
+        }
+        .code-panel:last-child { border-right: none; }
+        .code-panel h3 {
+            margin-bottom: 10px;
+            color: #666;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+        pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .issues {
+            padding: 15px;
+            background: #fff3cd;
+            border-top: 1px solid #ddd;
+        }
+        .issues h4 { margin-bottom: 10px; color: #856404; }
+        .issues ul { margin-left: 20px; }
+        .issues li { margin: 5px 0; }
+        .requirements {
+            padding: 15px;
+            background: #f9f9f9;
+            border-top: 1px solid #ddd;
+        }
+        .requirements h4 { margin-bottom: 10px; }
+        .requirement {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .requirement.passed { background: #e8f5e9; }
+        .requirement.failed { background: #ffebee; }
+        .requirement-icon {
+            font-weight: bold;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RDFLib Serialization Experiments Report</h1>
+        <div class="summary">
+            <p><strong>Generated:</strong> 13/03/2026, 12:50:35</p>
+            <div class="summary-stats">
+                
+    <div class="stat total">Total: 24</div>
+    <div class="stat passed">Passed: 19</div>
+    <div class="stat failed">Failed: 5</div>
+  
+            </div>
+        </div>
+        
+      <div class="scenario">
+        <h2>blankNodes</h2>
+        
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Simple restriction (one blank node)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:TestClass rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :hasProperty ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :OtherClass ] ;
+    rdfs:label &quot;Test Class&quot; ;
+    a owl:Class .
+
+:OtherClass a owl:Class .
+:hasProperty a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:hasProperty a owl:ObjectProperty.
+
+test:OtherClass a owl:Class.
+
+test:TestClass
+    a owl:Class;
+    rdfs:label &quot;Test Class&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:OtherClass;
+                owl:onProperty test:hasProperty
+            ].
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-definitions</strong>: Blank node definitions are serialized correctly
+              
+            </div>
+          </div>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-inline-forms</strong>: Blank nodes are serialized as inline forms
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Multiple restrictions (4 blank nodes)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:DrawingSheet rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :Note ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :RevisionTable ; 
+      owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :Layout ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :has ; 
+      owl:onClass :DrawingOrientation ; 
+      owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ] ;
+    rdfs:label &quot;Drawing Sheet&quot; ;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot; ;
+    a owl:Class ;
+    :labellableRoot false .
+
+:Note a owl:Class .
+:RevisionTable a owl:Class .
+:Layout a owl:Class .
+:DrawingOrientation a owl:Class .
+:contains a owl:ObjectProperty .
+:has a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:contains a owl:ObjectProperty.
+
+test:DrawingOrientation a owl:Class.
+
+test:DrawingSheet
+    a owl:Class;
+    test:labellableRoot false;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:RevisionTable;
+                owl:onProperty test:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:Note;
+                owl:onProperty test:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:Layout;
+                owl:onProperty test:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass test:DrawingOrientation;
+                owl:onProperty test:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ].
+test:has a owl:ObjectProperty.
+
+test:Layout a owl:Class.
+
+test:Note a owl:Class.
+
+test:RevisionTable a owl:Class.
+
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-definitions</strong>: Blank node definitions are serialized correctly
+              
+            </div>
+          </div>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-inline-forms</strong>: Blank nodes are serialized as inline forms
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Nested blank nodes</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:ComplexClass rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :hasProperty ; 
+      owl:someValuesFrom [ rdf:type owl:Class ;
+          rdfs:subClassOf :BaseClass ;
+          rdfs:label &quot;Nested Class&quot; ] ] ;
+    rdfs:label &quot;Complex Class&quot; ;
+    a owl:Class .
+
+:BaseClass a owl:Class .
+:hasProperty a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:BaseClass a owl:Class.
+
+test:ComplexClass
+    a owl:Class;
+    rdfs:label &quot;Complex Class&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:onProperty test:hasProperty;
+                owl:someValuesFrom
+                        [
+                            a owl:Class;
+                            rdfs:label &quot;Nested Class&quot;;
+                            rdfs:subClassOf test:BaseClass
+                        ]
+            ].
+test:hasProperty a owl:ObjectProperty.
+
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-definitions</strong>: Blank node definitions are serialized correctly
+              
+            </div>
+          </div>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-inline-forms</strong>: Blank nodes are serialized as inline forms
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Real-world example (aec_drawing_metadata.ttl)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Ontology
+#################################################################
+
+&lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot; ;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot; ;
+    owl:versionIRI &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/1.0.0&gt; ;
+    owl:versionInfo &quot;1.0.0&quot; ;
+    owl:imports &lt;http://www.w3.org/2002/07/owl#&gt; .
+
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class or concept to an example image illustrating it.&quot;@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:range xsd:boolean.
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty;
+    rdfs:label &quot;contains&quot;;
+    rdfs:comment &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:hasProperty rdf:type owl:ObjectProperty;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:comment &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:comment &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:range xsd:string;
+    rdfs:domain :TextualNote.
+
+#################################################################
+#    Classes
+#################################################################
+
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Text&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Note&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Metadata rdf:type owl:Class;
+    rdfs:label &quot;Metadata&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    a owl:Class;
+    :labellableRoot false.
+
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Revision table&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Layout&quot;;
+    rdfs:comment &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;; rdf:type owl:Class;
+    :labellableRoot true.
+
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
+    rdfs:label &quot;DrawingOrientation&quot;.
+
+:DrawingType rdf:type owl:Class;
+    rdfs:label &quot;Drawing type&quot;;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Portrait rdf:type owl:Class;
+    rdfs:label &quot;Portrait&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Landscape rdf:type owl:Class;
+    rdfs:label &quot;Landscape&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Titleblock&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:comment &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Image&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Plan&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Vertical Section&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Elevation&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DetailLocation ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Detail&quot;;
+    rdfs:comment &quot;Detail drawing&quot;;
+    :labellableRoot true; rdf:type owl:Class.
+    
+:Orientation rdf:type owl:Class;
+    rdfs:label &quot;Detail Orientation&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Perspective&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DetailLocation rdf:type owl:Class;
+    rdfs:label &quot;Detail location&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Base&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Corner&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Head&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Slab edge&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Typical&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Horizontal&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Vertical&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix ADIRO: &lt;https://burohappoldmachinelearning.github.io/ADIRO/&gt;.
+@prefix aec: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/&gt;.
+@prefix ae: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt;.
+
+ADIRO:aec_drawing_metadata
+    a owl:Ontology;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot;;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot;;
+    owl:imports owl:;
+    owl:versionInfo &quot;1.0.0&quot;;
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    a owl:Class;
+    rdfs:label &quot;Base&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:contains
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;contains&quot;;
+    rdfs:range owl:Thing.
+ae:Corner
+    a owl:Class;
+    rdfs:label &quot;Corner&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Detail
+    a owl:Class;
+    rdfs:comment &quot;Detail drawing&quot;;
+    rdfs:label &quot;Detail&quot;;
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DetailLocation;
+                owl:onProperty ae:has
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:DetailLocation
+a owl:Class; rdfs:label &quot;Detail location&quot;; ae:labellableRoot false.
+ae:DrawingElement
+    a owl:Class;
+    rdfs:comment
+        &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    ae:labellableRoot false.
+ae:DrawingOrientation
+    a owl:Class;
+    rdfs:label &quot;DrawingOrientation&quot;;
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    a owl:Class;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot false.
+ae:DrawingType
+    a owl:Class;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    rdfs:label &quot;Drawing type&quot;;
+    ae:labellableRoot false.
+ae:Elevation
+    a owl:Class;
+    rdfs:label &quot;Elevation&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment
+    &quot;Links a class or concept to an example image illustrating it.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+ae:hasProperty
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:range owl:Thing.
+ae:Head
+    a owl:Class;
+    rdfs:label &quot;Head&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Horizontal
+    a owl:Class;
+    rdfs:label &quot;Horizontal&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+ae:Image
+    a owl:Class;
+    rdfs:label &quot;Image&quot;;
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot true.
+ae:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment
+        &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+ae:Landscape a owl:Class; rdfs:label &quot;Landscape&quot;; ae:labellableRoot true.
+
+ae:Layout
+    a owl:Class;
+    rdfs:comment
+        &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;;
+    rdfs:label &quot;Layout&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:Legend
+    a owl:Class;
+    rdfs:comment
+        &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Metadata
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    rdfs:label &quot;Metadata&quot;;
+    ae:labellableRoot false.
+ae:Note
+    a owl:Class;
+    rdfs:label &quot;Note&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Orientation
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    rdfs:label &quot;Detail Orientation&quot;;
+    ae:labellableRoot false.
+ae:Perspective
+    a owl:Class;
+    rdfs:label &quot;Perspective&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Plan
+    a owl:Class;
+    rdfs:label &quot;Plan&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Portrait a owl:Class; rdfs:label &quot;Portrait&quot;; ae:labellableRoot true.
+
+ae:refersToDrawingId
+    a owl:DatatypeProperty;
+    rdfs:comment
+        &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:domain ae:TextualNote;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:range xsd:string.
+ae:RevisionTable
+    a owl:Class;
+    rdfs:label &quot;Revision table&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Section
+    a owl:Class;
+    rdfs:label &quot;Vertical Section&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:SlabEdge
+    a owl:Class;
+    rdfs:label &quot;Slab edge&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:TextualNote
+a owl:Class; rdfs:label &quot;Text&quot;; rdfs:subClassOf ae:Note; ae:labellableRoot true.
+ae:Titleblock
+    a owl:Class;
+    rdfs:label &quot;Titleblock&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Typical
+    a owl:Class;
+    rdfs:label &quot;Typical&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Vertical
+    a owl:Class;
+    rdfs:label &quot;Vertical&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-definitions</strong>: Blank node definitions are serialized correctly
+              
+            </div>
+          </div>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-inline-forms</strong>: Blank nodes are serialized as inline forms
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+      <div class="scenario">
+        <h2>propertyOrder</h2>
+        
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Class with restrictions (subClassOf, label, comment, type, annotation)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:DrawingSheet rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :Note ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :RevisionTable ; 
+      owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :Layout ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :has ; 
+      owl:onClass :DrawingOrientation ; 
+      owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ] ;
+    rdfs:label &quot;Drawing Sheet&quot; ;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot; ;
+    a owl:Class ;
+    :labellableRoot false .
+
+:Note a owl:Class .
+:RevisionTable a owl:Class .
+:Layout a owl:Class .
+:DrawingOrientation a owl:Class .
+:contains a owl:ObjectProperty .
+:has a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:contains a owl:ObjectProperty.
+
+test:DrawingOrientation a owl:Class.
+
+test:DrawingSheet
+    a owl:Class;
+    test:labellableRoot false;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:RevisionTable;
+                owl:onProperty test:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:Note;
+                owl:onProperty test:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:Layout;
+                owl:onProperty test:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass test:DrawingOrientation;
+                owl:onProperty test:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ].
+test:has a owl:ObjectProperty.
+
+test:Layout a owl:Class.
+
+test:Note a owl:Class.
+
+test:RevisionTable a owl:Class.
+
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>property-order</strong>: No properties to check order
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Simple class (label, comment, type)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+:Ontology rdf:type owl:Ontology ;
+    rdfs:comment &quot;Test ontology with colon notation&quot; .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; ;
+    rdfs:subClassOf :ParentClass .
+
+:ParentClass rdf:type owl:Class ;
+    rdfs:label &quot;Parent Class&quot; .
+
+:hasProperty rdf:type owl:ObjectProperty ;
+    rdfs:domain :TestClass ;
+    rdfs:range :ParentClass .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:hasProperty
+a owl:ObjectProperty; rdfs:domain test:TestClass; rdfs:range test:ParentClass.
+test:Ontology a owl:Ontology; rdfs:comment &quot;Test ontology with colon notation&quot;.
+
+test:ParentClass a owl:Class; rdfs:label &quot;Parent Class&quot;.
+
+test:TestClass
+a owl:Class; rdfs:label &quot;Test Class&quot;; rdfs:subClassOf test:ParentClass.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>property-order</strong>: No properties to check order
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Real-world example (aec_drawing_metadata.ttl)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Ontology
+#################################################################
+
+&lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot; ;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot; ;
+    owl:versionIRI &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/1.0.0&gt; ;
+    owl:versionInfo &quot;1.0.0&quot; ;
+    owl:imports &lt;http://www.w3.org/2002/07/owl#&gt; .
+
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class or concept to an example image illustrating it.&quot;@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:range xsd:boolean.
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty;
+    rdfs:label &quot;contains&quot;;
+    rdfs:comment &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:hasProperty rdf:type owl:ObjectProperty;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:comment &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:comment &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:range xsd:string;
+    rdfs:domain :TextualNote.
+
+#################################################################
+#    Classes
+#################################################################
+
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Text&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Note&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Metadata rdf:type owl:Class;
+    rdfs:label &quot;Metadata&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    a owl:Class;
+    :labellableRoot false.
+
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Revision table&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Layout&quot;;
+    rdfs:comment &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;; rdf:type owl:Class;
+    :labellableRoot true.
+
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
+    rdfs:label &quot;DrawingOrientation&quot;.
+
+:DrawingType rdf:type owl:Class;
+    rdfs:label &quot;Drawing type&quot;;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Portrait rdf:type owl:Class;
+    rdfs:label &quot;Portrait&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Landscape rdf:type owl:Class;
+    rdfs:label &quot;Landscape&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Titleblock&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:comment &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Image&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Plan&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Vertical Section&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Elevation&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DetailLocation ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Detail&quot;;
+    rdfs:comment &quot;Detail drawing&quot;;
+    :labellableRoot true; rdf:type owl:Class.
+    
+:Orientation rdf:type owl:Class;
+    rdfs:label &quot;Detail Orientation&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Perspective&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DetailLocation rdf:type owl:Class;
+    rdfs:label &quot;Detail location&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Base&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Corner&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Head&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Slab edge&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Typical&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Horizontal&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Vertical&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix ADIRO: &lt;https://burohappoldmachinelearning.github.io/ADIRO/&gt;.
+@prefix aec: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/&gt;.
+@prefix ae: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt;.
+
+ADIRO:aec_drawing_metadata
+    a owl:Ontology;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot;;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot;;
+    owl:imports owl:;
+    owl:versionInfo &quot;1.0.0&quot;;
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    a owl:Class;
+    rdfs:label &quot;Base&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:contains
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;contains&quot;;
+    rdfs:range owl:Thing.
+ae:Corner
+    a owl:Class;
+    rdfs:label &quot;Corner&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Detail
+    a owl:Class;
+    rdfs:comment &quot;Detail drawing&quot;;
+    rdfs:label &quot;Detail&quot;;
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DetailLocation;
+                owl:onProperty ae:has
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:DetailLocation
+a owl:Class; rdfs:label &quot;Detail location&quot;; ae:labellableRoot false.
+ae:DrawingElement
+    a owl:Class;
+    rdfs:comment
+        &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    ae:labellableRoot false.
+ae:DrawingOrientation
+    a owl:Class;
+    rdfs:label &quot;DrawingOrientation&quot;;
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    a owl:Class;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot false.
+ae:DrawingType
+    a owl:Class;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    rdfs:label &quot;Drawing type&quot;;
+    ae:labellableRoot false.
+ae:Elevation
+    a owl:Class;
+    rdfs:label &quot;Elevation&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment
+    &quot;Links a class or concept to an example image illustrating it.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+ae:hasProperty
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:range owl:Thing.
+ae:Head
+    a owl:Class;
+    rdfs:label &quot;Head&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Horizontal
+    a owl:Class;
+    rdfs:label &quot;Horizontal&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+ae:Image
+    a owl:Class;
+    rdfs:label &quot;Image&quot;;
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot true.
+ae:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment
+        &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+ae:Landscape a owl:Class; rdfs:label &quot;Landscape&quot;; ae:labellableRoot true.
+
+ae:Layout
+    a owl:Class;
+    rdfs:comment
+        &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;;
+    rdfs:label &quot;Layout&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:Legend
+    a owl:Class;
+    rdfs:comment
+        &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Metadata
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    rdfs:label &quot;Metadata&quot;;
+    ae:labellableRoot false.
+ae:Note
+    a owl:Class;
+    rdfs:label &quot;Note&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Orientation
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    rdfs:label &quot;Detail Orientation&quot;;
+    ae:labellableRoot false.
+ae:Perspective
+    a owl:Class;
+    rdfs:label &quot;Perspective&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Plan
+    a owl:Class;
+    rdfs:label &quot;Plan&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Portrait a owl:Class; rdfs:label &quot;Portrait&quot;; ae:labellableRoot true.
+
+ae:refersToDrawingId
+    a owl:DatatypeProperty;
+    rdfs:comment
+        &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:domain ae:TextualNote;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:range xsd:string.
+ae:RevisionTable
+    a owl:Class;
+    rdfs:label &quot;Revision table&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Section
+    a owl:Class;
+    rdfs:label &quot;Vertical Section&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:SlabEdge
+    a owl:Class;
+    rdfs:label &quot;Slab edge&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:TextualNote
+a owl:Class; rdfs:label &quot;Text&quot;; rdfs:subClassOf ae:Note; ae:labellableRoot true.
+ae:Titleblock
+    a owl:Class;
+    rdfs:label &quot;Titleblock&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Typical
+    a owl:Class;
+    rdfs:label &quot;Typical&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Vertical
+    a owl:Class;
+    rdfs:label &quot;Vertical&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>property-order</strong>: No properties to check order
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+      <div class="scenario">
+        <h2>comments</h2>
+        
+    <div class="test-case">
+      <div class="test-header failed">
+        <strong>Section divider comments (################################)</strong>
+        <span class="status failed">FAIL</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Classes Section
+#################################################################
+
+# This is a comment before the class
+:TestClass rdf:type owl:Class ; # inline comment
+    rdfs:label &quot;Test Class&quot; . # comment after
+
+# Another comment between classes
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label &quot;Another Class&quot; .
+
+#################################################################
+#    Properties Section
+#################################################################
+
+:hasProperty a owl:ObjectProperty ;
+    rdfs:label &quot;has property&quot; .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:AnotherClass a owl:Class; rdfs:label &quot;Another Class&quot;.
+
+test:hasProperty a owl:ObjectProperty; rdfs:label &quot;has property&quot;.
+
+test:TestClass a owl:Class; rdfs:label &quot;Test Class&quot;.
+
+</pre>
+        </div>
+      </div>
+      
+        <div class="issues">
+          <h4>Issues</h4>
+          <ul>
+            <li>comments: Comments not preserved: original has 8, serialized has 0</li>
+          </ul>
+        </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement failed">
+            <span class="requirement-icon">✗</span>
+            <div>
+              <strong>comments</strong>: Comments not preserved: original has 8, serialized has 0
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header failed">
+        <strong>Inline comments (# inline comment)</strong>
+        <span class="status failed">FAIL</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+# This is a comment before the class
+:TestClass rdf:type owl:Class ; # inline comment
+    rdfs:label &quot;Test&quot; . # comment after
+
+# Another comment
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label &quot;Another&quot; .
+
+#################################################################
+#    Section divider comment
+#################################################################
+
+:ThirdClass rdf:type owl:Class .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix exa: &lt;http://example.org#&gt;.
+
+exa:AnotherClass a owl:Class; rdfs:label &quot;Another&quot;.
+
+exa:TestClass a owl:Class; rdfs:label &quot;Test&quot;.
+
+exa:ThirdClass a owl:Class.
+
+</pre>
+        </div>
+      </div>
+      
+        <div class="issues">
+          <h4>Issues</h4>
+          <ul>
+            <li>comments: Comments not preserved: original has 5, serialized has 0</li>
+          </ul>
+        </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement failed">
+            <span class="requirement-icon">✗</span>
+            <div>
+              <strong>comments</strong>: Comments not preserved: original has 5, serialized has 0
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header failed">
+        <strong>Comments-only file</strong>
+        <span class="status failed">FAIL</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre># This file contains only comments
+# No actual RDF statements
+# Just testing comment preservation
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>
+</pre>
+        </div>
+      </div>
+      
+        <div class="issues">
+          <h4>Issues</h4>
+          <ul>
+            <li>comments: Comments not preserved: original has 3, serialized has 0</li>
+          </ul>
+        </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement failed">
+            <span class="requirement-icon">✗</span>
+            <div>
+              <strong>comments</strong>: Comments not preserved: original has 3, serialized has 0
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header failed">
+        <strong>Real-world example with comments (aec_drawing_metadata.ttl)</strong>
+        <span class="status failed">FAIL</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Ontology
+#################################################################
+
+&lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot; ;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot; ;
+    owl:versionIRI &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/1.0.0&gt; ;
+    owl:versionInfo &quot;1.0.0&quot; ;
+    owl:imports &lt;http://www.w3.org/2002/07/owl#&gt; .
+
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class or concept to an example image illustrating it.&quot;@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:range xsd:boolean.
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty;
+    rdfs:label &quot;contains&quot;;
+    rdfs:comment &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:hasProperty rdf:type owl:ObjectProperty;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:comment &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:comment &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:range xsd:string;
+    rdfs:domain :TextualNote.
+
+#################################################################
+#    Classes
+#################################################################
+
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Text&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Note&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Metadata rdf:type owl:Class;
+    rdfs:label &quot;Metadata&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    a owl:Class;
+    :labellableRoot false.
+
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Revision table&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Layout&quot;;
+    rdfs:comment &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;; rdf:type owl:Class;
+    :labellableRoot true.
+
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
+    rdfs:label &quot;DrawingOrientation&quot;.
+
+:DrawingType rdf:type owl:Class;
+    rdfs:label &quot;Drawing type&quot;;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Portrait rdf:type owl:Class;
+    rdfs:label &quot;Portrait&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Landscape rdf:type owl:Class;
+    rdfs:label &quot;Landscape&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Titleblock&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:comment &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Image&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Plan&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Vertical Section&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Elevation&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DetailLocation ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Detail&quot;;
+    rdfs:comment &quot;Detail drawing&quot;;
+    :labellableRoot true; rdf:type owl:Class.
+    
+:Orientation rdf:type owl:Class;
+    rdfs:label &quot;Detail Orientation&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Perspective&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DetailLocation rdf:type owl:Class;
+    rdfs:label &quot;Detail location&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Base&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Corner&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Head&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Slab edge&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Typical&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Horizontal&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Vertical&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix ADIRO: &lt;https://burohappoldmachinelearning.github.io/ADIRO/&gt;.
+@prefix aec: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/&gt;.
+@prefix ae: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt;.
+
+ADIRO:aec_drawing_metadata
+    a owl:Ontology;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot;;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot;;
+    owl:imports owl:;
+    owl:versionInfo &quot;1.0.0&quot;;
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    a owl:Class;
+    rdfs:label &quot;Base&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:contains
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;contains&quot;;
+    rdfs:range owl:Thing.
+ae:Corner
+    a owl:Class;
+    rdfs:label &quot;Corner&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Detail
+    a owl:Class;
+    rdfs:comment &quot;Detail drawing&quot;;
+    rdfs:label &quot;Detail&quot;;
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DetailLocation;
+                owl:onProperty ae:has
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:DetailLocation
+a owl:Class; rdfs:label &quot;Detail location&quot;; ae:labellableRoot false.
+ae:DrawingElement
+    a owl:Class;
+    rdfs:comment
+        &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    ae:labellableRoot false.
+ae:DrawingOrientation
+    a owl:Class;
+    rdfs:label &quot;DrawingOrientation&quot;;
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    a owl:Class;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot false.
+ae:DrawingType
+    a owl:Class;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    rdfs:label &quot;Drawing type&quot;;
+    ae:labellableRoot false.
+ae:Elevation
+    a owl:Class;
+    rdfs:label &quot;Elevation&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment
+    &quot;Links a class or concept to an example image illustrating it.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+ae:hasProperty
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:range owl:Thing.
+ae:Head
+    a owl:Class;
+    rdfs:label &quot;Head&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Horizontal
+    a owl:Class;
+    rdfs:label &quot;Horizontal&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+ae:Image
+    a owl:Class;
+    rdfs:label &quot;Image&quot;;
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot true.
+ae:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment
+        &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+ae:Landscape a owl:Class; rdfs:label &quot;Landscape&quot;; ae:labellableRoot true.
+
+ae:Layout
+    a owl:Class;
+    rdfs:comment
+        &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;;
+    rdfs:label &quot;Layout&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:Legend
+    a owl:Class;
+    rdfs:comment
+        &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Metadata
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    rdfs:label &quot;Metadata&quot;;
+    ae:labellableRoot false.
+ae:Note
+    a owl:Class;
+    rdfs:label &quot;Note&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Orientation
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    rdfs:label &quot;Detail Orientation&quot;;
+    ae:labellableRoot false.
+ae:Perspective
+    a owl:Class;
+    rdfs:label &quot;Perspective&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Plan
+    a owl:Class;
+    rdfs:label &quot;Plan&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Portrait a owl:Class; rdfs:label &quot;Portrait&quot;; ae:labellableRoot true.
+
+ae:refersToDrawingId
+    a owl:DatatypeProperty;
+    rdfs:comment
+        &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:domain ae:TextualNote;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:range xsd:string.
+ae:RevisionTable
+    a owl:Class;
+    rdfs:label &quot;Revision table&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Section
+    a owl:Class;
+    rdfs:label &quot;Vertical Section&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:SlabEdge
+    a owl:Class;
+    rdfs:label &quot;Slab edge&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:TextualNote
+a owl:Class; rdfs:label &quot;Text&quot;; rdfs:subClassOf ae:Note; ae:labellableRoot true.
+ae:Titleblock
+    a owl:Class;
+    rdfs:label &quot;Titleblock&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Typical
+    a owl:Class;
+    rdfs:label &quot;Typical&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Vertical
+    a owl:Class;
+    rdfs:label &quot;Vertical&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+</pre>
+        </div>
+      </div>
+      
+        <div class="issues">
+          <h4>Issues</h4>
+          <ul>
+            <li>comments: Comments not preserved: original has 15, serialized has 0</li>
+          </ul>
+        </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement failed">
+            <span class="requirement-icon">✗</span>
+            <div>
+              <strong>comments</strong>: Comments not preserved: original has 15, serialized has 0
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+      <div class="scenario">
+        <h2>annotations</h2>
+        
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Boolean annotations (:labellableRoot false)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;Labellable root&quot; ;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot; ;
+    rdfs:range xsd:boolean .
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; ;
+    rdfs:comment &quot;A test class with annotations&quot; ;
+    :labellableRoot false ;
+    :exampleImage &lt;http://example.org/image.jpg&gt; .
+
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label &quot;Another Class&quot; ;
+    :labellableRoot &quot;true&quot;^^xsd:boolean .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+@prefix exa: &lt;http://example.org/&gt;.
+
+test:AnotherClass
+a owl:Class; test:labellableRoot true; rdfs:label &quot;Another Class&quot;.
+test:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+test:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+test:TestClass
+    a owl:Class;
+    test:exampleImage exa:image.jpg;
+    test:labellableRoot false;
+    rdfs:comment &quot;A test class with annotations&quot;;
+    rdfs:label &quot;Test Class&quot;.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>annotations</strong>: Annotation properties are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>String annotations (:exampleImage <uri>)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;Labellable root&quot; ;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot; ;
+    rdfs:range xsd:boolean .
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; ;
+    rdfs:comment &quot;A test class with annotations&quot; ;
+    :labellableRoot false ;
+    :exampleImage &lt;http://example.org/image.jpg&gt; .
+
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label &quot;Another Class&quot; ;
+    :labellableRoot &quot;true&quot;^^xsd:boolean .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+@prefix exa: &lt;http://example.org/&gt;.
+
+test:AnotherClass
+a owl:Class; test:labellableRoot true; rdfs:label &quot;Another Class&quot;.
+test:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+test:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+test:TestClass
+    a owl:Class;
+    test:exampleImage exa:image.jpg;
+    test:labellableRoot false;
+    rdfs:comment &quot;A test class with annotations&quot;;
+    rdfs:label &quot;Test Class&quot;.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>annotations</strong>: Annotation properties are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Multiple annotations on same class</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;Labellable root&quot; ;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot; ;
+    rdfs:range xsd:boolean .
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; ;
+    rdfs:comment &quot;A test class with annotations&quot; ;
+    :labellableRoot false ;
+    :exampleImage &lt;http://example.org/image.jpg&gt; .
+
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label &quot;Another Class&quot; ;
+    :labellableRoot &quot;true&quot;^^xsd:boolean .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+@prefix exa: &lt;http://example.org/&gt;.
+
+test:AnotherClass
+a owl:Class; test:labellableRoot true; rdfs:label &quot;Another Class&quot;.
+test:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+test:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+test:TestClass
+    a owl:Class;
+    test:exampleImage exa:image.jpg;
+    test:labellableRoot false;
+    rdfs:comment &quot;A test class with annotations&quot;;
+    rdfs:label &quot;Test Class&quot;.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>annotations</strong>: Annotation properties are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Real-world example (aec_drawing_metadata.ttl)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Ontology
+#################################################################
+
+&lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot; ;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot; ;
+    owl:versionIRI &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/1.0.0&gt; ;
+    owl:versionInfo &quot;1.0.0&quot; ;
+    owl:imports &lt;http://www.w3.org/2002/07/owl#&gt; .
+
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class or concept to an example image illustrating it.&quot;@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:range xsd:boolean.
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty;
+    rdfs:label &quot;contains&quot;;
+    rdfs:comment &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:hasProperty rdf:type owl:ObjectProperty;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:comment &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:comment &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:range xsd:string;
+    rdfs:domain :TextualNote.
+
+#################################################################
+#    Classes
+#################################################################
+
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Text&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Note&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Metadata rdf:type owl:Class;
+    rdfs:label &quot;Metadata&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    a owl:Class;
+    :labellableRoot false.
+
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Revision table&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Layout&quot;;
+    rdfs:comment &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;; rdf:type owl:Class;
+    :labellableRoot true.
+
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
+    rdfs:label &quot;DrawingOrientation&quot;.
+
+:DrawingType rdf:type owl:Class;
+    rdfs:label &quot;Drawing type&quot;;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Portrait rdf:type owl:Class;
+    rdfs:label &quot;Portrait&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Landscape rdf:type owl:Class;
+    rdfs:label &quot;Landscape&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Titleblock&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:comment &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Image&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Plan&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Vertical Section&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Elevation&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DetailLocation ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Detail&quot;;
+    rdfs:comment &quot;Detail drawing&quot;;
+    :labellableRoot true; rdf:type owl:Class.
+    
+:Orientation rdf:type owl:Class;
+    rdfs:label &quot;Detail Orientation&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Perspective&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DetailLocation rdf:type owl:Class;
+    rdfs:label &quot;Detail location&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Base&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Corner&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Head&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Slab edge&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Typical&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Horizontal&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Vertical&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix ADIRO: &lt;https://burohappoldmachinelearning.github.io/ADIRO/&gt;.
+@prefix aec: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/&gt;.
+@prefix ae: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt;.
+
+ADIRO:aec_drawing_metadata
+    a owl:Ontology;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot;;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot;;
+    owl:imports owl:;
+    owl:versionInfo &quot;1.0.0&quot;;
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    a owl:Class;
+    rdfs:label &quot;Base&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:contains
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;contains&quot;;
+    rdfs:range owl:Thing.
+ae:Corner
+    a owl:Class;
+    rdfs:label &quot;Corner&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Detail
+    a owl:Class;
+    rdfs:comment &quot;Detail drawing&quot;;
+    rdfs:label &quot;Detail&quot;;
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DetailLocation;
+                owl:onProperty ae:has
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:DetailLocation
+a owl:Class; rdfs:label &quot;Detail location&quot;; ae:labellableRoot false.
+ae:DrawingElement
+    a owl:Class;
+    rdfs:comment
+        &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    ae:labellableRoot false.
+ae:DrawingOrientation
+    a owl:Class;
+    rdfs:label &quot;DrawingOrientation&quot;;
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    a owl:Class;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot false.
+ae:DrawingType
+    a owl:Class;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    rdfs:label &quot;Drawing type&quot;;
+    ae:labellableRoot false.
+ae:Elevation
+    a owl:Class;
+    rdfs:label &quot;Elevation&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment
+    &quot;Links a class or concept to an example image illustrating it.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+ae:hasProperty
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:range owl:Thing.
+ae:Head
+    a owl:Class;
+    rdfs:label &quot;Head&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Horizontal
+    a owl:Class;
+    rdfs:label &quot;Horizontal&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+ae:Image
+    a owl:Class;
+    rdfs:label &quot;Image&quot;;
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot true.
+ae:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment
+        &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+ae:Landscape a owl:Class; rdfs:label &quot;Landscape&quot;; ae:labellableRoot true.
+
+ae:Layout
+    a owl:Class;
+    rdfs:comment
+        &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;;
+    rdfs:label &quot;Layout&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:Legend
+    a owl:Class;
+    rdfs:comment
+        &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Metadata
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    rdfs:label &quot;Metadata&quot;;
+    ae:labellableRoot false.
+ae:Note
+    a owl:Class;
+    rdfs:label &quot;Note&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Orientation
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    rdfs:label &quot;Detail Orientation&quot;;
+    ae:labellableRoot false.
+ae:Perspective
+    a owl:Class;
+    rdfs:label &quot;Perspective&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Plan
+    a owl:Class;
+    rdfs:label &quot;Plan&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Portrait a owl:Class; rdfs:label &quot;Portrait&quot;; ae:labellableRoot true.
+
+ae:refersToDrawingId
+    a owl:DatatypeProperty;
+    rdfs:comment
+        &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:domain ae:TextualNote;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:range xsd:string.
+ae:RevisionTable
+    a owl:Class;
+    rdfs:label &quot;Revision table&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Section
+    a owl:Class;
+    rdfs:label &quot;Vertical Section&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:SlabEdge
+    a owl:Class;
+    rdfs:label &quot;Slab edge&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:TextualNote
+a owl:Class; rdfs:label &quot;Text&quot;; rdfs:subClassOf ae:Note; ae:labellableRoot true.
+ae:Titleblock
+    a owl:Class;
+    rdfs:label &quot;Titleblock&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Typical
+    a owl:Class;
+    rdfs:label &quot;Typical&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Vertical
+    a owl:Class;
+    rdfs:label &quot;Vertical&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>annotations</strong>: Annotation properties are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+      <div class="scenario">
+        <h2>imports</h2>
+        
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Single import</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+&lt;http://example.org/test&gt; rdf:type owl:Ontology ;
+    owl:imports &lt;http://example.org/import1&gt; .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix exa: &lt;http://example.org/&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+exa:test a owl:Ontology; owl:imports exa:import1 .
+
+test:TestClass a owl:Class; rdfs:label &quot;Test Class&quot;.
+
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>imports</strong>: Imports are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Multiple imports</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+&lt;http://example.org/test&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;Test Ontology&quot; ;
+    rdfs:comment &quot;Test ontology with imports&quot; ;
+    owl:imports &lt;http://example.org/import1&gt; ;
+    owl:imports &lt;http://example.org/import2&gt; ;
+    owl:imports &lt;http://example.org/import3&gt; .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix exa: &lt;http://example.org/&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+exa:test
+    a owl:Ontology;
+    rdfs:comment &quot;Test ontology with imports&quot;;
+    rdfs:label &quot;Test Ontology&quot;;
+    owl:imports exa:import1, exa:import2, exa:import3 .
+test:TestClass a owl:Class; rdfs:label &quot;Test Class&quot;.
+
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>imports</strong>: Imports are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Real-world example (aec_drawing_metadata.ttl)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Ontology
+#################################################################
+
+&lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot; ;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot; ;
+    owl:versionIRI &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/1.0.0&gt; ;
+    owl:versionInfo &quot;1.0.0&quot; ;
+    owl:imports &lt;http://www.w3.org/2002/07/owl#&gt; .
+
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class or concept to an example image illustrating it.&quot;@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:range xsd:boolean.
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty;
+    rdfs:label &quot;contains&quot;;
+    rdfs:comment &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:hasProperty rdf:type owl:ObjectProperty;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:comment &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:comment &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:range xsd:string;
+    rdfs:domain :TextualNote.
+
+#################################################################
+#    Classes
+#################################################################
+
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Text&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Note&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Metadata rdf:type owl:Class;
+    rdfs:label &quot;Metadata&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    a owl:Class;
+    :labellableRoot false.
+
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Revision table&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Layout&quot;;
+    rdfs:comment &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;; rdf:type owl:Class;
+    :labellableRoot true.
+
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
+    rdfs:label &quot;DrawingOrientation&quot;.
+
+:DrawingType rdf:type owl:Class;
+    rdfs:label &quot;Drawing type&quot;;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Portrait rdf:type owl:Class;
+    rdfs:label &quot;Portrait&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Landscape rdf:type owl:Class;
+    rdfs:label &quot;Landscape&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Titleblock&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:comment &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Image&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Plan&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Vertical Section&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Elevation&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DetailLocation ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Detail&quot;;
+    rdfs:comment &quot;Detail drawing&quot;;
+    :labellableRoot true; rdf:type owl:Class.
+    
+:Orientation rdf:type owl:Class;
+    rdfs:label &quot;Detail Orientation&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Perspective&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DetailLocation rdf:type owl:Class;
+    rdfs:label &quot;Detail location&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Base&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Corner&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Head&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Slab edge&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Typical&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Horizontal&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Vertical&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix ADIRO: &lt;https://burohappoldmachinelearning.github.io/ADIRO/&gt;.
+@prefix aec: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/&gt;.
+@prefix ae: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt;.
+
+ADIRO:aec_drawing_metadata
+    a owl:Ontology;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot;;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot;;
+    owl:imports owl:;
+    owl:versionInfo &quot;1.0.0&quot;;
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    a owl:Class;
+    rdfs:label &quot;Base&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:contains
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;contains&quot;;
+    rdfs:range owl:Thing.
+ae:Corner
+    a owl:Class;
+    rdfs:label &quot;Corner&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Detail
+    a owl:Class;
+    rdfs:comment &quot;Detail drawing&quot;;
+    rdfs:label &quot;Detail&quot;;
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DetailLocation;
+                owl:onProperty ae:has
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:DetailLocation
+a owl:Class; rdfs:label &quot;Detail location&quot;; ae:labellableRoot false.
+ae:DrawingElement
+    a owl:Class;
+    rdfs:comment
+        &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    ae:labellableRoot false.
+ae:DrawingOrientation
+    a owl:Class;
+    rdfs:label &quot;DrawingOrientation&quot;;
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    a owl:Class;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot false.
+ae:DrawingType
+    a owl:Class;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    rdfs:label &quot;Drawing type&quot;;
+    ae:labellableRoot false.
+ae:Elevation
+    a owl:Class;
+    rdfs:label &quot;Elevation&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment
+    &quot;Links a class or concept to an example image illustrating it.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+ae:hasProperty
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:range owl:Thing.
+ae:Head
+    a owl:Class;
+    rdfs:label &quot;Head&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Horizontal
+    a owl:Class;
+    rdfs:label &quot;Horizontal&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+ae:Image
+    a owl:Class;
+    rdfs:label &quot;Image&quot;;
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot true.
+ae:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment
+        &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+ae:Landscape a owl:Class; rdfs:label &quot;Landscape&quot;; ae:labellableRoot true.
+
+ae:Layout
+    a owl:Class;
+    rdfs:comment
+        &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;;
+    rdfs:label &quot;Layout&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:Legend
+    a owl:Class;
+    rdfs:comment
+        &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Metadata
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    rdfs:label &quot;Metadata&quot;;
+    ae:labellableRoot false.
+ae:Note
+    a owl:Class;
+    rdfs:label &quot;Note&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Orientation
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    rdfs:label &quot;Detail Orientation&quot;;
+    ae:labellableRoot false.
+ae:Perspective
+    a owl:Class;
+    rdfs:label &quot;Perspective&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Plan
+    a owl:Class;
+    rdfs:label &quot;Plan&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Portrait a owl:Class; rdfs:label &quot;Portrait&quot;; ae:labellableRoot true.
+
+ae:refersToDrawingId
+    a owl:DatatypeProperty;
+    rdfs:comment
+        &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:domain ae:TextualNote;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:range xsd:string.
+ae:RevisionTable
+    a owl:Class;
+    rdfs:label &quot;Revision table&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Section
+    a owl:Class;
+    rdfs:label &quot;Vertical Section&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:SlabEdge
+    a owl:Class;
+    rdfs:label &quot;Slab edge&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:TextualNote
+a owl:Class; rdfs:label &quot;Text&quot;; rdfs:subClassOf ae:Note; ae:labellableRoot true.
+ae:Titleblock
+    a owl:Class;
+    rdfs:label &quot;Titleblock&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Typical
+    a owl:Class;
+    rdfs:label &quot;Typical&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Vertical
+    a owl:Class;
+    rdfs:label &quot;Vertical&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>imports</strong>: Imports are preserved
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+      <div class="scenario">
+        <h2>multiFormat</h2>
+        
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Serialize to Turtle</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:TestClass rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :hasProperty ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :OtherClass ] ;
+    rdfs:label &quot;Test Class&quot; ;
+    a owl:Class .
+
+:OtherClass a owl:Class .
+:hasProperty a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:hasProperty a owl:ObjectProperty.
+
+test:OtherClass a owl:Class.
+
+test:TestClass
+    a owl:Class;
+    rdfs:label &quot;Test Class&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:OtherClass;
+                owl:onProperty test:hasProperty
+            ].
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-definitions</strong>: Blank node definitions are serialized correctly
+              
+            </div>
+          </div>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>blank-node-inline-forms</strong>: Blank nodes are serialized as inline forms
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header failed">
+        <strong>Serialize to RDF/XML</strong>
+        <span class="status failed">FAIL</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:TestClass rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :hasProperty ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :OtherClass ] ;
+    rdfs:label &quot;Test Class&quot; ;
+    a owl:Class .
+
+:OtherClass a owl:Class .
+:hasProperty a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>&lt;rdf:RDF
+ xmlns:rdf=&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;
+ xmlns:owl=&quot;http://www.w3.org/2002/07/owl#&quot;
+ xmlns:rdfs=&quot;http://www.w3.org/2000/01/rdf-schema#&quot;&gt;
+    &lt;owl:ObjectProperty rdf:about=&quot;http://example.org/test#hasProperty&quot;&gt;
+        &lt;/owl:ObjectProperty&gt;
+   &lt;owl:Class rdf:about=&quot;http://example.org/test#OtherClass&quot;&gt;&lt;/owl:Class&gt;
+    &lt;owl:Class rdf:about=&quot;http://example.org/test#TestClass&quot;&gt;
+        &lt;rdfs:label&gt;Test Class&lt;/rdfs:label&gt;
+        &lt;rdfs:subClassOf rdf:parseType=&quot;Resource&quot;&gt;
+            &lt;owl:Restriction&gt;
+                &lt;owl:minQualifiedCardinality rdf:datatype=&quot;http://www.w3.org/2001/XMLSchema#nonNegativeInteger&quot;&gt;1&lt;/owl:minQualifiedCardinality&gt;
+                &lt;owl:onClass rdf:resource=&quot;http://example.org/test#OtherClass&quot;/&gt;
+                &lt;owl:onProperty rdf:resource=&quot;http://example.org/test#hasProperty&quot;/&gt;
+            &lt;/owl:Restriction&gt;
+        &lt;/rdfs:subClassOf&gt;
+    &lt;/owl:Class&gt;
+&lt;/rdf:RDF&gt;
+</pre>
+        </div>
+      </div>
+      
+        <div class="issues">
+          <h4>Issues</h4>
+          <ul>
+            <li>Invalid RDF/XML format</li>
+          </ul>
+        </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement failed">
+            <span class="requirement-icon">✗</span>
+            <div>
+              <strong>rdf-xml-format</strong>: Invalid RDF/XML format
+              
+            </div>
+          </div>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>rdf-xml-restrictions</strong>: Restrictions found in RDF/XML
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Serialize to JSON-LD</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:TestClass rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :hasProperty ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :OtherClass ] ;
+    rdfs:label &quot;Test Class&quot; ;
+    a owl:Class .
+
+:OtherClass a owl:Class .
+:hasProperty a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>{
+  &quot;@context&quot;: {
+    &quot;owl&quot;: &quot;http://www.w3.org/2002/07/owl#&quot;,
+    &quot;rdfs&quot;: &quot;http://www.w3.org/2000/01/rdf-schema#&quot;,
+    &quot;xsd&quot;: &quot;http://www.w3.org/2001/XMLSchema#&quot;,
+    &quot;test&quot;: &quot;http://example.org/test#&quot;
+  },
+  &quot;@graph&quot;: [
+    {
+      &quot;@id&quot;: &quot;test:hasProperty&quot;,
+      &quot;@type&quot;: &quot;owl:ObjectProperty&quot;
+    },
+    {
+      &quot;@id&quot;: &quot;test:OtherClass&quot;,
+      &quot;@type&quot;: &quot;owl:Class&quot;
+    },
+    {
+      &quot;@id&quot;: &quot;test:TestClass&quot;,
+      &quot;@type&quot;: &quot;owl:Class&quot;,
+      &quot;rdfs:label&quot;: &quot;Test Class&quot;,
+      &quot;rdfs:subClassOf&quot;: {
+        &quot;@type&quot;: &quot;owl:Restriction&quot;,
+        &quot;owl:minQualifiedCardinality&quot;: {
+          &quot;@value&quot;: &quot;1&quot;,
+          &quot;@type&quot;: &quot;xsd:nonNegativeInteger&quot;
+        },
+        &quot;owl:onClass&quot;: {
+          &quot;@id&quot;: &quot;test:OtherClass&quot;
+        },
+        &quot;owl:onProperty&quot;: {
+          &quot;@id&quot;: &quot;test:hasProperty&quot;
+        }
+      }
+    }
+  ]
+}</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>json-ld-format</strong>: Valid JSON-LD format
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+      <div class="scenario">
+        <h2>roundTrip</h2>
+        
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Round-trip with restrictions</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:DrawingSheet rdfs:subClassOf 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :Note ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :RevisionTable ; 
+      owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :contains ; 
+      owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; 
+      owl:onClass :Layout ], 
+    [ rdf:type owl:Restriction ; 
+      owl:onProperty :has ; 
+      owl:onClass :DrawingOrientation ; 
+      owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ] ;
+    rdfs:label &quot;Drawing Sheet&quot; ;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot; ;
+    a owl:Class ;
+    :labellableRoot false .
+
+:Note a owl:Class .
+:RevisionTable a owl:Class .
+:Layout a owl:Class .
+:DrawingOrientation a owl:Class .
+:contains a owl:ObjectProperty .
+:has a owl:ObjectProperty .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+
+test:contains a owl:ObjectProperty.
+
+test:DrawingOrientation a owl:Class.
+
+test:DrawingSheet
+    a owl:Class;
+    test:labellableRoot false;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:RevisionTable;
+                owl:onProperty test:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:Note;
+                owl:onProperty test:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass test:Layout;
+                owl:onProperty test:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass test:DrawingOrientation;
+                owl:onProperty test:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ].
+test:has a owl:ObjectProperty.
+
+test:Layout a owl:Class.
+
+test:Note a owl:Class.
+
+test:RevisionTable a owl:Class.
+
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>round-trip</strong>: All quads preserved after round-trip
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Round-trip with annotations</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;Labellable root&quot; ;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot; ;
+    rdfs:range xsd:boolean .
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en .
+
+:TestClass rdf:type owl:Class ;
+    rdfs:label &quot;Test Class&quot; ;
+    rdfs:comment &quot;A test class with annotations&quot; ;
+    :labellableRoot false ;
+    :exampleImage &lt;http://example.org/image.jpg&gt; .
+
+:AnotherClass rdf:type owl:Class ;
+    rdfs:label &quot;Another Class&quot; ;
+    :labellableRoot &quot;true&quot;^^xsd:boolean .
+</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;http://example.org/test#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix test: &lt;http://example.org/test#&gt;.
+@prefix exa: &lt;http://example.org/&gt;.
+
+test:AnotherClass
+a owl:Class; test:labellableRoot true; rdfs:label &quot;Another Class&quot;.
+test:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;Links a class to an example image.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+test:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators.&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+test:TestClass
+    a owl:Class;
+    test:exampleImage exa:image.jpg;
+    test:labellableRoot false;
+    rdfs:comment &quot;A test class with annotations&quot;;
+    rdfs:label &quot;Test Class&quot;.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>round-trip</strong>: All quads preserved after round-trip
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+    <div class="test-case">
+      <div class="test-header passed">
+        <strong>Round-trip with complex structure (aec_drawing_metadata.ttl)</strong>
+        <span class="status passed">PASS</span>
+      </div>
+      <div class="comparison">
+        <div class="code-panel">
+          <h3>Original</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+#################################################################
+#    Ontology
+#################################################################
+
+&lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata&gt; rdf:type owl:Ontology ;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot; ;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot; ;
+    owl:versionIRI &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/1.0.0&gt; ;
+    owl:versionInfo &quot;1.0.0&quot; ;
+    owl:imports &lt;http://www.w3.org/2002/07/owl#&gt; .
+
+
+#################################################################
+#    Annotation properties
+#################################################################
+
+:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label &quot;example image&quot;@en ;
+    rdfs:comment &quot;Links a class or concept to an example image illustrating it.&quot;@en .
+
+:labellableRoot rdf:type owl:AnnotationProperty;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:comment &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:range xsd:boolean.
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:contains rdf:type owl:ObjectProperty;
+    rdfs:label &quot;contains&quot;;
+    rdfs:comment &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+:hasProperty rdf:type owl:ObjectProperty;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:comment &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:range owl:Thing;
+    rdfs:domain owl:Thing.
+
+#################################################################
+#    Data Properties
+#################################################################
+
+:refersToDrawingId rdf:type owl:DatatypeProperty;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:comment &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:range xsd:string;
+    rdfs:domain :TextualNote.
+
+#################################################################
+#    Classes
+#################################################################
+
+:TextualNote rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Text&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Note rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Note&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Metadata rdf:type owl:Class;
+    rdfs:label &quot;Metadata&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:DrawingSheet rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :Note ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :RevisionTable ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ; owl:onClass :Layout ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingOrientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    a owl:Class;
+    :labellableRoot false.
+
+:RevisionTable rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Revision table&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Layout rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DrawingElement ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :DrawingType ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Layout&quot;;
+    rdfs:comment &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;; rdf:type owl:Class;
+    :labellableRoot true.
+
+:DrawingOrientation rdf:type owl:Class;
+    rdfs:subClassOf :Portrait, :Landscape;
+    rdfs:label &quot;DrawingOrientation&quot;.
+
+:DrawingType rdf:type owl:Class;
+    rdfs:label &quot;Drawing type&quot;;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Portrait rdf:type owl:Class;
+    rdfs:label &quot;Portrait&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Landscape rdf:type owl:Class;
+    rdfs:label &quot;Landscape&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Titleblock rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Titleblock&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Legend rdf:type owl:Class;
+    rdfs:subClassOf :Metadata;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:comment &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Image rdf:type owl:Class;
+    rdfs:subClassOf :Note;
+    rdfs:label &quot;Image&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Plan rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Plan&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Section rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Vertical Section&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Elevation rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Elevation&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Detail rdfs:subClassOf :DrawingType, [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:onClass :Orientation ; owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ], [ rdf:type owl:Restriction ; owl:onProperty :has ; owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger ; owl:onClass :DetailLocation ; owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger ];
+    rdfs:label &quot;Detail&quot;;
+    rdfs:comment &quot;Detail drawing&quot;;
+    :labellableRoot true; rdf:type owl:Class.
+    
+:Orientation rdf:type owl:Class;
+    rdfs:label &quot;Detail Orientation&quot;;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Perspective rdf:type owl:Class;
+    rdfs:subClassOf :DrawingType;
+    rdfs:label &quot;Perspective&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DetailLocation rdf:type owl:Class;
+    rdfs:label &quot;Detail location&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Base rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Base&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Corner rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Corner&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Head rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Head&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:SlabEdge rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Slab edge&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Typical rdf:type owl:Class;
+    rdfs:subClassOf :DetailLocation;
+    rdfs:label &quot;Typical&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.
+
+:Horizontal rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Horizontal&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:Vertical rdf:type owl:Class;
+    rdfs:subClassOf :Orientation;
+    rdfs:label &quot;Vertical&quot;;
+    :labellableRoot &quot;true&quot;^^xsd:boolean.
+
+:DrawingElement rdf:type owl:Class;
+    rdfs:comment &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    :labellableRoot &quot;false&quot;^^xsd:boolean.</pre>
+        </div>
+        <div class="code-panel">
+          <h3>Serialized (rdflib)</h3>
+          <pre>@prefix : &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix xml: &lt;http://www.w3.org/XML/1998/namespace#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt;.
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;.
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt;.
+@prefix ADIRO: &lt;https://burohappoldmachinelearning.github.io/ADIRO/&gt;.
+@prefix aec: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/&gt;.
+@prefix ae: &lt;https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#&gt;.
+
+ADIRO:aec_drawing_metadata
+    a owl:Ontology;
+    rdfs:comment &quot;Sheet/layout/document structure for AEC drawings.&quot;;
+    rdfs:label &quot;AEC Drawing Metadata Ontology&quot;;
+    owl:imports owl:;
+    owl:versionInfo &quot;1.0.0&quot;;
+    owl:versionIRI aec:1.0.0 .
+ae:Base
+    a owl:Class;
+    rdfs:label &quot;Base&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:contains
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Direct containment: indicates physical containment of something within a parent thing (e.g. object in a box). Min cardinality 0 by default (can contain).&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;contains&quot;;
+    rdfs:range owl:Thing.
+ae:Corner
+    a owl:Class;
+    rdfs:label &quot;Corner&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Detail
+    a owl:Class;
+    rdfs:comment &quot;Detail drawing&quot;;
+    rdfs:label &quot;Detail&quot;;
+    rdfs:subClassOf
+        ae:DrawingType,
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DetailLocation;
+                owl:onProperty ae:has
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:Orientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:DetailLocation
+a owl:Class; rdfs:label &quot;Detail location&quot;; ae:labellableRoot false.
+ae:DrawingElement
+    a owl:Class;
+    rdfs:comment
+        &quot;Element depicted on a drawing. Contained by Layout. Can be a Facade system or Facade component, or other domain-specific symbols, or generic symbols like dimensions, grids, etc.&quot;;
+    rdfs:label &quot;Drawing element&quot;;
+    ae:labellableRoot false.
+ae:DrawingOrientation
+    a owl:Class;
+    rdfs:label &quot;DrawingOrientation&quot;;
+    rdfs:subClassOf ae:Landscape, ae:Portrait.
+ae:DrawingSheet
+    a owl:Class;
+    rdfs:comment &quot;Top-level container for a drawing. Contains Layout(s).&quot;;
+    rdfs:label &quot;Drawing Sheet&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:maxQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:RevisionTable;
+                owl:onProperty ae:contains;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Note;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:Layout;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingOrientation;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot false.
+ae:DrawingType
+    a owl:Class;
+    rdfs:comment &quot;Type of drawing view&quot;;
+    rdfs:label &quot;Drawing type&quot;;
+    ae:labellableRoot false.
+ae:Elevation
+    a owl:Class;
+    rdfs:label &quot;Elevation&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:exampleImage
+    a owl:AnnotationProperty;
+    rdfs:comment
+    &quot;Links a class or concept to an example image illustrating it.&quot;@en;
+    rdfs:label &quot;example image&quot;@en.
+ae:hasProperty
+    a owl:ObjectProperty;
+    rdfs:comment
+        &quot;Subject is characterised by a property, or quality. Used for example to indicate qualitative things like &#039;it is vertical&#039; or &#039;it has a colour blue&#039;.&quot;;
+    rdfs:domain owl:Thing;
+    rdfs:label &quot;hasProperty&quot;;
+    rdfs:range owl:Thing.
+ae:Head
+    a owl:Class;
+    rdfs:label &quot;Head&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Horizontal
+    a owl:Class;
+    rdfs:label &quot;Horizontal&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+ae:Image
+    a owl:Class;
+    rdfs:label &quot;Image&quot;;
+    rdfs:subClassOf ae:Note;
+    ae:labellableRoot true.
+ae:labellableRoot
+    a owl:AnnotationProperty;
+    rdfs:comment
+        &quot;When true, this class can be used as a label by annotators (solid contour in diagram). When false, non-labellable (dashed contour).&quot;;
+    rdfs:label &quot;Labellable root&quot;;
+    rdfs:range xsd:boolean.
+ae:Landscape a owl:Class; rdfs:label &quot;Landscape&quot;; ae:labellableRoot true.
+
+ae:Layout
+    a owl:Class;
+    rdfs:comment
+        &quot;Drawing layout - contained by DrawingSheet. Contains DrawingElement(s), annotations, drawing type, and content.&quot;;
+    rdfs:label &quot;Layout&quot;;
+    rdfs:subClassOf
+            [
+                a owl:Restriction;
+                owl:minQualifiedCardinality &quot;0&quot;^^xsd:nonNegativeInteger;
+                owl:onClass ae:DrawingElement;
+                owl:onProperty ae:contains
+            ],
+            [
+                a owl:Restriction;
+                owl:onClass ae:DrawingType;
+                owl:onProperty ae:has;
+                owl:qualifiedCardinality &quot;1&quot;^^xsd:nonNegativeInteger
+            ];
+    ae:labellableRoot true.
+ae:Legend
+    a owl:Class;
+    rdfs:comment
+        &quot;A legend containing mapping information between symbols and a text signifier.&quot;;
+    rdfs:label &quot;Legend&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Metadata
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing metadata&quot;;
+    rdfs:label &quot;Metadata&quot;;
+    ae:labellableRoot false.
+ae:Note
+    a owl:Class;
+    rdfs:label &quot;Note&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Orientation
+    a owl:Class;
+    rdfs:comment &quot;Can be standalone label - drawing orientation&quot;;
+    rdfs:label &quot;Detail Orientation&quot;;
+    ae:labellableRoot false.
+ae:Perspective
+    a owl:Class;
+    rdfs:label &quot;Perspective&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Plan
+    a owl:Class;
+    rdfs:label &quot;Plan&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:Portrait a owl:Class; rdfs:label &quot;Portrait&quot;; ae:labellableRoot true.
+
+ae:refersToDrawingId
+    a owl:DatatypeProperty;
+    rdfs:comment
+        &quot;References another Drawing by using a drawing identifier, like a drawing number.&quot;;
+    rdfs:domain ae:TextualNote;
+    rdfs:label &quot;refersToDrawingId&quot;;
+    rdfs:range xsd:string.
+ae:RevisionTable
+    a owl:Class;
+    rdfs:label &quot;Revision table&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Section
+    a owl:Class;
+    rdfs:label &quot;Vertical Section&quot;;
+    rdfs:subClassOf ae:DrawingType;
+    ae:labellableRoot true.
+ae:SlabEdge
+    a owl:Class;
+    rdfs:label &quot;Slab edge&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:TextualNote
+a owl:Class; rdfs:label &quot;Text&quot;; rdfs:subClassOf ae:Note; ae:labellableRoot true.
+ae:Titleblock
+    a owl:Class;
+    rdfs:label &quot;Titleblock&quot;;
+    rdfs:subClassOf ae:Metadata;
+    ae:labellableRoot true.
+ae:Typical
+    a owl:Class;
+    rdfs:label &quot;Typical&quot;;
+    rdfs:subClassOf ae:DetailLocation;
+    ae:labellableRoot false.
+ae:Vertical
+    a owl:Class;
+    rdfs:label &quot;Vertical&quot;;
+    rdfs:subClassOf ae:Orientation;
+    ae:labellableRoot true.
+</pre>
+        </div>
+      </div>
+      
+      <div class="requirements">
+        <h4>Requirement Checks</h4>
+        
+          <div class="requirement passed">
+            <span class="requirement-icon">✓</span>
+            <div>
+              <strong>round-trip</strong>: All quads preserved after round-trip
+              
+            </div>
+          </div>
+        
+      </div>
+    </div>
+  
+      </div>
+    
+    </div>
+</body>
+</html>
