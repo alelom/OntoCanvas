@@ -7622,6 +7622,11 @@ function applyFilter(preserveView = false): void {
     deleteEdge: false,
   };
 
+  // In embed mode (iframe without showMenuInEmbedded), disable manipulation UI entirely (no X, Edit, Add Node/Edge)
+  const manipulationToUse = getShouldShowTopMenu()
+    ? manipulationOptions
+    : { enabled: false as const };
+
   const networkContainer = document.getElementById('network')!;
   
   // Update status bar with node/edge counts
@@ -7633,7 +7638,7 @@ function applyFilter(preserveView = false): void {
     network.setData(data);
     network.setOptions({
       ...options,
-      manipulation: manipulationOptions,
+      manipulation: manipulationToUse,
       width: '100%',
       height: '100%',
     });
@@ -7656,7 +7661,7 @@ function applyFilter(preserveView = false): void {
   } else {
     const opts = {
       ...options,
-      manipulation: manipulationOptions,
+      manipulation: manipulationToUse,
       width: '100%',
       height: '100%',
     };

@@ -65,11 +65,24 @@ body {
 #controls button.primary:hover {
   background: #2980b9;
 }
-#app.embed-no-menu {
-  grid-template-rows: 0 1fr auto;
-}
 #app.embed-no-menu #controls {
   display: none;
+}
+/* In embed mode use flex layout so the graph container reliably fills space down to the status bar */
+#app.embed-no-menu {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+#app.embed-no-menu #networkWrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#app.embed-no-menu #network {
+  flex: 1;
+  min-height: 0;
 }
 /* Hide Add Node | Add Edge toolbar when embedded in iframe */
 #app.embed-no-menu .vis-manipulation {
