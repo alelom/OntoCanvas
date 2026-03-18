@@ -148,6 +148,7 @@ import {
   setRenameModalTipButtonVisible,
 } from './ui/renameModalHeaderIcons';
 import { getAppVersion } from './utils/version';
+import { getShouldShowTopMenu } from './utils/embedMode';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
@@ -9122,6 +9123,10 @@ document.addEventListener('click', (e) => {
 });
 
 renderApp();
+const appEl = document.getElementById('app');
+if (appEl && !getShouldShowTopMenu()) {
+  appEl.classList.add('embed-no-menu');
+}
 setupEventListeners();
 // Update serializer dropdown after DOM is ready (in case it was rendered)
 if (isDebugMode()) {

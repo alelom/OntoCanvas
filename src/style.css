@@ -65,6 +65,9 @@ body {
 #controls button.primary:hover {
   background: #2980b9;
 }
+#app.embed-no-menu #controls {
+  display: none;
+}
 #networkWrapper {
   position: relative;
   min-height: 0;
