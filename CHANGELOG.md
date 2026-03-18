@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/alelom/OntoCanvas/compare/v1.13.0...v1.14.0) (2026-03-18)
+
+
+### Features
+
+* add embed mode functionality for top menu visibility ([d888ea4](https://github.com/alelom/OntoCanvas/commit/d888ea4219584243fde37e2da72778ecbe4501f2))
+
 # [1.13.0](https://github.com/alelom/OntoCanvas/compare/v1.12.0...v1.13.0) (2026-03-18)
 
 
