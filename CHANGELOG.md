@@ -1,3 +1,11 @@
+## [1.14.1](https://github.com/alelom/OntoCanvas/compare/v1.14.0...v1.14.1) (2026-03-18)
+
+
+### Bug Fixes
+
+* add clearOntologyParamsFromAddressBar utility and integrate into file loading ([7bff49d](https://github.com/alelom/OntoCanvas/commit/7bff49d881035e007302b45261cec853b6f2757a))
+* enhance embed mode styling and functionality ([81e4114](https://github.com/alelom/OntoCanvas/commit/81e41142a7cfe8f5dfac4b09ea0b78932db73bfb))
+
 # [1.14.0](https://github.com/alelom/OntoCanvas/compare/v1.13.0...v1.14.0) (2026-03-18)
 
 
