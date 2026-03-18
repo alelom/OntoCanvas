@@ -1,3 +1,19 @@
+# [1.13.0](https://github.com/alelom/OntoCanvas/compare/v1.12.0...v1.13.0) (2026-03-18)
+
+
+### Bug Fixes
+
+* improve blank line handling in Turtle serialization ([ed201b0](https://github.com/alelom/OntoCanvas/commit/ed201b089e73c19867e732d31c1efad968e7ab05))
+* line ending preservation in formatting tests ([92622cc](https://github.com/alelom/OntoCanvas/commit/92622cc92a5b710b30312b136bb8f7ba4d604e5e))
+* preserve blank lines between blocks in Turtle parsing ([aa190f1](https://github.com/alelom/OntoCanvas/commit/aa190f143e384701a97a71cadc26aabcf1a7d3fe))
+
+
+### Features
+
+* add diagnostic documentation and enhance blank node handling in reconstruction ([0a88318](https://github.com/alelom/OntoCanvas/commit/0a8831803ef1eb58f272c3e03b5bf85be0faeb78))
+* add documentation and tests for OWL restriction preservation ([1c5434e](https://github.com/alelom/OntoCanvas/commit/1c5434e327bb648e9b50316900b3b690eca5ca99))
+* enhance serializer configuration and debugging for TTL files ([9a2bded](https://github.com/alelom/OntoCanvas/commit/9a2bded9442c57315159df9931c5006f1ae3be8b))
+
 # [1.12.0](https://github.com/alelom/OntoCanvas/compare/v1.11.0...v1.12.0) (2026-03-13)
 
 
