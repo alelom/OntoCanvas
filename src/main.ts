@@ -441,9 +441,14 @@ function scheduleDisplayConfigSave(): void {
   if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
   displayConfigSaveTimer = window.setTimeout(() => {
     displayConfigSaveTimer = null;
-    const config = collectDisplayConfig();
-    if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
+    flushDisplayConfigSave();
   }, 500);
+}
+
+/** Run display config save immediately (e.g. after drag end so refresh preserves positions). */
+function flushDisplayConfigSave(): void {
+  const config = collectDisplayConfig();
+  if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
 }
 
 
@@ -7783,6 +7788,7 @@ function applyFilter(preserveView = false): void {
       onDragEnd: () => {
         if (!network) return;
         persistNodePositionsFromNetwork(network, rawData, scheduleDisplayConfigSave);
+        flushDisplayConfigSave();
       },
     });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {

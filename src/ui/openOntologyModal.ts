@@ -194,6 +194,8 @@ export function initOpenOntologyModal(
     });
 
     document.body.appendChild(modalElement);
+  } else if (!document.body.contains(modalElement)) {
+    document.body.appendChild(modalElement);
   }
 
   // Update last opened buttons (non-blocking)
@@ -225,13 +227,14 @@ export function hideOpenOntologyModal(): void {
 async function updateLastOpenedButtons(): Promise<void> {
   if (!modalElement) return;
   
-  // Update last opened file button
+  // Update last opened file button (stored value has handle + pathHint; display name from pathHint or handle.name)
   const fileBtn = document.getElementById('openOntologyLoadLastFile') as HTMLButtonElement;
   if (fileBtn) {
     const storedFile = await getLastFileFromIndexedDB();
-    if (storedFile && storedFile.name) {
-      fileBtn.textContent = `Open last opened file: ${storedFile.name}`;
-      fileBtn.title = storedFile.pathHint ?? storedFile.name;
+    const displayName = storedFile?.pathHint ?? storedFile?.handle?.name ?? '(unknown)';
+    if (storedFile && storedFile.handle) {
+      fileBtn.textContent = `Open last opened file: ${displayName}`;
+      fileBtn.title = storedFile.pathHint ?? displayName;
       fileBtn.disabled = false;
       fileBtn.dataset.hasLast = '1';
       fileBtn.style.background = '#f5f5f5';
