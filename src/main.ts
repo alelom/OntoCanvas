@@ -9129,6 +9129,7 @@ renderApp();
 const appEl = document.getElementById('app');
 if (appEl && !getShouldShowTopMenu()) {
   appEl.classList.add('embed-no-menu');
+  document.body.classList.add('embed-no-menu');
 }
 setupEventListeners();
 // Update serializer dropdown after DOM is ready (in case it was rendered)

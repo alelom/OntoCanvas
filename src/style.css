@@ -65,8 +65,15 @@ body {
 #controls button.primary:hover {
   background: #2980b9;
 }
+#app.embed-no-menu {
+  grid-template-rows: 0 1fr auto;
+}
 #app.embed-no-menu #controls {
   display: none;
+}
+/* Hide Add Node | Add Edge toolbar when embedded in iframe */
+#app.embed-no-menu .vis-manipulation {
+  display: none !important;
 }
 #networkWrapper {
   position: relative;
@@ -120,6 +127,20 @@ body {
   font-size: 12px;
   color: #666;
   background: #fafafa;
+}
+/* Keep status bar at bottom with normal height when embedded in iframe */
+#app.embed-no-menu #info {
+  flex: 0 0 auto;
+  min-height: 0;
+  height: fit-content;
+  align-self: end;
+}
+/* Hide issues (⚠️ issues (n)) section in status bar when embedded in iframe */
+#app.embed-no-menu #ontologyIssuesBtn {
+  display: none !important;
+}
+body.embed-no-menu #ontologyIssuesPopup {
+  display: none !important;
 }
 #searchWrap {
   position: relative;
