@@ -1199,6 +1199,18 @@ function toClassUri(localName: string): string {
   return BASE_IRI + localName;
 }
 
+/**
+ * Resolve the namespace to use for class URIs from the loaded store, so edge/restriction/node
+ * operations target the ontology's actual namespace instead of the hardcoded BASE_IRI default.
+ * Falls back to BASE_IRI for empty ontologies. For files whose class namespace already equals
+ * BASE_IRI this returns BASE_IRI unchanged (no behaviour change).
+ */
+function resolveClassBase(store: Store): string {
+  let base = getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI;
+  if (!base.endsWith('#') && !base.endsWith('/')) base += '#';
+  return base;
+}
+
 function getPropertyUri(edgeType: string): string {
   // If edgeType is already a full URI (starts with http:// or https://), return it as-is
   if (edgeType.startsWith('http://') || edgeType.startsWith('https://')) {
@@ -1226,15 +1238,16 @@ export function findRestrictionBlank(
   propertyLocalName: string,
   targetLocalName: string
 ): import('n3').BlankNode | null {
-  const classUri = toClassUri(classLocalName);
+  const base = resolveClassBase(store);
+  const classUri = base + classLocalName;
   const subClassQuads = store.getQuads(
     DataFactory.namedNode(classUri),
     DataFactory.namedNode(RDFS + 'subClassOf'),
     null,
     null
   );
-  const propUri = getPropertyUri(propertyLocalName);
-  const targetUri = toClassUri(targetLocalName);
+  const propUri = getObjectPropertyUriFromStore(store, propertyLocalName);
+  const targetUri = base + targetLocalName;
   for (const q of subClassQuads) {
     const obj = q.object;
     if (obj.termType !== 'BlankNode') continue;
@@ -1264,9 +1277,10 @@ export function updateEdgeInStore(
   newTo: string,
   cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
 ): boolean {
+  const base = resolveClassBase(store);
   if (edgeType === 'subClassOf') {
-    const subjUri = toClassUri(oldFrom);
-    const objUri = toClassUri(oldTo);
+    const subjUri = base + oldFrom;
+    const objUri = base + oldTo;
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
     const quads = store.getQuads(
       DataFactory.namedNode(subjUri),
@@ -1278,9 +1292,9 @@ export function updateEdgeInStore(
     const graph = quads[0].graph ?? DataFactory.defaultGraph();
     for (const q of quads) store.removeQuad(q);
     store.addQuad(
-      DataFactory.namedNode(toClassUri(newFrom)),
+      DataFactory.namedNode(base + newFrom),
       subClassOfPred,
-      DataFactory.namedNode(toClassUri(newTo)),
+      DataFactory.namedNode(base + newTo),
       graph
     );
     return true;
@@ -1326,7 +1340,12 @@ export function addNodeToStore(
   }
   const id = localName ?? deriveNewNodeIdentifier(label);
   if (existingIdsLower.has(id.toLowerCase())) return null;
-  const subjUri = toClassUri(id);
+  // Derive the namespace from the loaded ontology so the new class lands in the same
+  // namespace as its siblings (and serializes with the file's prefix), instead of the
+  // hardcoded BASE_IRI default which would force an out-of-namespace full URI.
+  let baseIri = getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI;
+  if (!baseIri.endsWith('#') && !baseIri.endsWith('/')) baseIri += '#';
+  const subjUri = baseIri + id;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), graph);
@@ -1339,7 +1358,7 @@ export function addNodeToStore(
  * Also removes any domain/range quads that reference this node.
  */
 export function removeNodeFromStore(store: Store, localName: string): boolean {
-  const subjUri = toClassUri(localName);
+  const subjUri = resolveClassBase(store) + localName;
   const subject = DataFactory.namedNode(subjUri);
   
   // Remove all quads where this node is the subject
@@ -2013,7 +2032,7 @@ export function addDataPropertyRestrictionToClass(
       break;
     }
   }
-  const blank = new BlankNode();
+  const blank = DataFactory.blankNode();
   const min = cardinality?.minCardinality;
   const max = cardinality?.maxCardinality;
   store.addQuad(DataFactory.namedNode(classUri), DataFactory.namedNode(RDFS + 'subClassOf'), blank, graph);
@@ -2099,10 +2118,11 @@ export function addRestrictionToStore(
   edgeType: string,
   cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
 ): void {
+  const base = resolveClassBase(store);
   if (edgeType === 'subClassOf') {
     // subClassOf is not a restriction, it's a direct relationship
-    const subjUri = toClassUri(from);
-    const objUri = toClassUri(to);
+    const subjUri = base + from;
+    const objUri = base + to;
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
     const existing = store.getQuads(
       DataFactory.namedNode(subjUri),
@@ -2129,10 +2149,10 @@ export function addRestrictionToStore(
       throw new Error(`Cannot add restriction: ${from} -> ${to} : ${edgeType} (restriction already exists in store)`);
     }
     const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
-    const blank = new BlankNode();
-    const fromUri = DataFactory.namedNode(toClassUri(from));
-    const propUri = DataFactory.namedNode(getPropertyUri(edgeType));
-    const toUri = DataFactory.namedNode(toClassUri(to));
+    const blank = DataFactory.blankNode();
+    const fromUri = DataFactory.namedNode(base + from);
+    const propUri = DataFactory.namedNode(getObjectPropertyUriFromStore(store, edgeType));
+    const toUri = DataFactory.namedNode(base + to);
     const restrictionType = DataFactory.namedNode(OWL + 'Restriction');
     const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
     const onPropertyPred = DataFactory.namedNode(OWL + 'onProperty');
@@ -2204,8 +2224,9 @@ export function addEdgeToStore(
   }
   
   const propNode = DataFactory.namedNode(propUri);
-  const fromUri = toClassUri(from);
-  const toUri = toClassUri(to);
+  const base = resolveClassBase(store);
+  const fromUri = base + from;
+  const toUri = base + to;
   const fromUriNode = DataFactory.namedNode(fromUri);
   const toUriNode = DataFactory.namedNode(toUri);
   
@@ -2253,10 +2274,11 @@ export function removeRestrictionFromStore(
   to: string,
   edgeType: string
 ): void {
+  const base = resolveClassBase(store);
   if (edgeType === 'subClassOf') {
     // subClassOf is not a restriction, it's a direct relationship
-    const subjUri = toClassUri(from);
-    const objUri = toClassUri(to);
+    const subjUri = base + from;
+    const objUri = base + to;
     const quads = store.getQuads(
       DataFactory.namedNode(subjUri),
       DataFactory.namedNode(RDFS + 'subClassOf'),
@@ -2269,15 +2291,15 @@ export function removeRestrictionFromStore(
     for (const q of quads) store.removeQuad(q);
     return;
   }
-  
+
   // Find and remove the restriction blank node
   const blank = findRestrictionBlank(store, from, edgeType, to);
   if (!blank) {
     throw new Error(`Cannot remove restriction: ${from} -> ${to} : ${edgeType} (restriction not found in store)`);
   }
-  
+
   // Restriction exists - remove it
-  const fromUri = DataFactory.namedNode(toClassUri(from));
+  const fromUri = DataFactory.namedNode(base + from);
   const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
   for (const q of subClassOfQuads) store.removeQuad(q);
   const blankQuads = store.getQuads(blank, null, null, null);
@@ -2310,9 +2332,10 @@ export function removeEdgeFromStore(
     debugLog(`[DELETE EDGE] removeEdgeFromStore called: ${from} -> ${to} : ${edgeType}`);
   }
   
+  const base = resolveClassBase(store);
   if (edgeType === 'subClassOf') {
-    const subjUri = toClassUri(from);
-    const objUri = toClassUri(to);
+    const subjUri = base + from;
+    const objUri = base + to;
     const quads = store.getQuads(
       DataFactory.namedNode(subjUri),
       DataFactory.namedNode(RDFS + 'subClassOf'),
@@ -2339,7 +2362,7 @@ export function removeEdgeFromStore(
     if (isDebugMode()) {
       debugLog(`[DELETE EDGE] Found restriction blank node: ${blank.value}`);
     }
-    const fromUri = DataFactory.namedNode(toClassUri(from));
+    const fromUri = DataFactory.namedNode(base + from);
     const subClassOfQuads = store.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), blank, null);
     if (isDebugMode()) {
       debugLog(`[DELETE EDGE] Removing ${subClassOfQuads.length} subClassOf quads pointing to restriction`);
@@ -2363,8 +2386,8 @@ export function removeEdgeFromStore(
   
   // Always remove domain/range definition to completely remove the edge
   // Domain/range quads are on the property, not the nodes, so we can remove them even if nodes don't exist
-  const fromUri = toClassUri(from);
-  const toUri = toClassUri(to);
+  const fromUri = base + from;
+  const toUri = base + to;
   if (isDebugMode()) {
     debugLog(`[DELETE EDGE] Resolving property URI for edgeType: ${edgeType}`);
     debugLog(`[DELETE EDGE] From URI: ${fromUri}, To URI: ${toUri}`);
@@ -2649,7 +2672,10 @@ async function reconstructFromCache(
   
   // Detect modifications by comparing current store with cache
   const modifiedBlocks: StatementBlock[] = [];
-  
+  // Subjects whose blocks are structurally unchanged (used to suppress false-positive
+  // property-level "changes" caused by blank-node id drift — see filtering below).
+  const structurallyUnchangedSubjects = new Set<string>();
+
   const blockCheckStart = Date.now();
   debugLog('[PERF] Starting block check loop, blocks:', cache.statementBlocks.length);
   
@@ -3059,48 +3085,127 @@ async function reconstructFromCache(
       debugLog('[reconstructFromCache] Label quads - original:', originalLabelQuads.map(q => q.object.value), 'current:', currentLabelQuads.map(q => q.object.value));
     }
     
-    // Check if block has blank node quads (where blank node is subject)
-    // If it does, we need to serialize it even if not modified, to ensure blank node IDs match current store
-    const hasBlankNodeQuads = currentQuads.some(q => q.subject.termType === 'BlankNode');
-    
-    if (block.subject && block.subject.includes('DrawingSheet')) {
-      debugLog('[reconstructFromCache] DrawingSheet - Reached point before creating modifiedBlock');
-      const blankAsSubject = currentQuads.filter(q => q.subject.termType === 'BlankNode').length;
-      debugLog('[reconstructFromCache] DrawingSheet - Before creating modifiedBlock:');
-      debugLog('[reconstructFromCache] DrawingSheet - currentQuads.length:', currentQuads.length);
-      debugLog('[reconstructFromCache] DrawingSheet - blank nodes as subjects:', blankAsSubject);
-      debugLog('[reconstructFromCache] DrawingSheet - isModified:', isModified);
-      debugLog('[reconstructFromCache] DrawingSheet - hasBlankNodeQuads:', hasBlankNodeQuads);
+    // Deletion: the block's subject existed in the original file but now has no quads in the
+    // store (the entity was removed, e.g. a deleted class). The quad-collection above already
+    // tried both the resolved URI and a local-name fallback, so an empty currentQuads here
+    // means genuine absence. Mark the block deleted; otherwise an emptied block would be
+    // re-emitted verbatim (the class would "come back" after saving).
+    if (block.subject && originalQuads.length > 0 && currentQuads.length === 0) {
+      modifiedBlocks.push({ ...block, quads: [], isDeleted: true });
+      debugLog('[reconstructFromCache] Block marked as deleted (subject removed from store):', block.subject, 'type:', block.type);
+      continue;
     }
-    
-    if (isModified || hasBlankNodeQuads) {
+
+    // Check if block has blank node quads (where blank node is subject or object).
+    const hasBlankNodeQuads = currentQuads.some(
+      q => q.subject.termType === 'BlankNode' || q.object.termType === 'BlankNode'
+    );
+
+    // Decide whether this block genuinely changed.
+    //
+    // For blocks WITHOUT blank nodes, quadsAreDifferent (isModified) is exact.
+    //
+    // For blocks WITH blank nodes (e.g. classes with rdfs:subClassOf [ owl:Restriction … ]),
+    // quadsAreDifferent is unreliable: it signs blank nodes by raw id, and blank-node ids
+    // drift between the cache parse and the store parse, so an UNCHANGED restriction block
+    // looks "modified". Previously such blocks were unconditionally re-serialized, which
+    // reflowed multi-line subClassOf lists, reordered restriction properties, rewrote
+    // `rdf:type`→`a`, and normalized typed literals — i.e. it thrashed unedited blocks.
+    // Use a blank-node-identity-insensitive structural comparison instead, so only blocks
+    // that actually changed are re-serialized; unchanged blocks keep their original text.
+    const changed = hasBlankNodeQuads
+      ? blockStructurallyChanged(originalQuads, currentQuads)
+      : isModified;
+
+    if (changed) {
       const modifiedBlock: StatementBlock = {
         ...block,
         quads: currentQuads, // Use currentQuads which includes updated label and all blank node quads
-        isModified: isModified || hasBlankNodeQuads // Mark as modified if quads changed OR if has blank node quads
+        isModified: true
       };
       modifiedBlocks.push(modifiedBlock);
-      if (block.subject && block.subject.includes('DrawingSheet')) {
-        const blankAsSubject = modifiedBlock.quads.filter(q => q.subject.termType === 'BlankNode').length;
-        debugLog('[reconstructFromCache] DrawingSheet - After creating modifiedBlock:');
-        debugLog('[reconstructFromCache] DrawingSheet - modifiedBlock.quads.length:', modifiedBlock.quads.length);
-        debugLog('[reconstructFromCache] DrawingSheet - blank nodes as subjects in modifiedBlock.quads:', blankAsSubject);
+      debugLog('[reconstructFromCache] Block marked as modified:', block.subject, 'type:', block.type);
+    } else {
+      // Block is structurally unchanged. Remember its subject so we can drop any
+      // false-positive property-level changes detected on it (blank-node id drift).
+      if (block.subject) structurallyUnchangedSubjects.add(block.subject);
+      if (block.type === 'Class' && currentQuads.length > 0) {
+        // For unchanged class blocks, still refresh block.quads with currentQuads for consistency.
+        block.quads = currentQuads;
       }
-      if (hasBlankNodeQuads && !isModified) {
-        debugLog('[reconstructFromCache] Block marked as modified due to blank node quads (to ensure IDs match):', block.subject, 'type:', block.type);
-      } else {
-        debugLog('[reconstructFromCache] Block marked as modified:', block.subject, 'type:', block.type);
-      }
-    } else if (block.type === 'Class' && currentQuads.length > 0) {
-      // ARCHITECTURAL FIX: For class blocks that aren't modified and don't have blank node quads,
-      // still update block.quads with currentQuads for consistency
-      // But we don't mark as modified since the quads are semantically the same
-      block.quads = currentQuads;
     }
   }
-  
+
+  // Detect NEW subjects: named subjects present in the store but absent from every cache block.
+  // These are entities the user added (e.g. a new class). Emit them as isNew blocks so
+  // reconstructFromOriginalText inserts them into the appropriate section instead of dropping them.
+  const cacheSubjectUris = new Set<string>();
+  for (const b of cache.statementBlocks) {
+    if (b.type === 'Header' || !b.subject) continue;
+    const uri = resolvePrefixedName(b.subject);
+    if (uri) cacheSubjectUris.add(uri);
+  }
+  /** Render a full URI in prefixed form using the file's prefixes (longest namespace wins). */
+  const toPrefixedSubject = (uri: string): string => {
+    let best: string | null = null;
+    let bestNsLen = -1;
+    for (const [prefix, ns] of prefixMap) {
+      if (uri.startsWith(ns) && ns.length > bestNsLen) {
+        best = `${prefix}:${uri.slice(ns.length)}`;
+        bestNsLen = ns.length;
+      }
+    }
+    return best ?? `<${uri}>`;
+  };
+  const detectTypeFromQuads = (quads: N3Quad[]): StatementBlock['type'] => {
+    for (const q of quads) {
+      if ((q.predicate as { value: string }).value !== RDF + 'type') continue;
+      const o = (q.object as { value: string }).value;
+      if (o === OWL + 'Class') return 'Class';
+      if (o === OWL + 'ObjectProperty') return 'ObjectProperty';
+      if (o === OWL + 'DatatypeProperty') return 'DatatypeProperty';
+      if (o === OWL + 'AnnotationProperty') return 'AnnotationProperty';
+      if (o === OWL + 'Ontology') return 'Ontology';
+    }
+    return 'Other';
+  };
+  const newBlocks: StatementBlock[] = [];
+  for (const [subjectUri, subjectQuads] of currentQuadsBySubject) {
+    if (cacheSubjectUris.has(subjectUri)) continue;
+    const newBlock: StatementBlock = {
+      type: detectTypeFromQuads(subjectQuads),
+      position: { start: 0, end: 0, startLine: 0, endLine: 0 },
+      originalText: '',
+      quads: [...subjectQuads],
+      subject: toPrefixedSubject(subjectUri),
+      isModified: false,
+      isNew: true,
+      isDeleted: false,
+    };
+    newBlocks.push(newBlock);
+    modifiedBlocks.push(newBlock);
+    debugLog('[reconstructFromCache] New subject detected, will insert block:', newBlock.subject, 'type:', newBlock.type);
+  }
+
   // Try line-level replacement first for simple changes
   const propertyLevelChanges = detectPropertyLevelChanges(store, cache);
+  // Suppress false-positive changes on structurally-unchanged blocks. detectPropertyLevelChanges
+  // signs blank nodes in a way that is sensitive to id drift, so an unchanged class with an
+  // inline rdfs:subClassOf restriction can be falsely reported as changed. Such a false positive
+  // on a blank-node property would otherwise disable targeted line replacement for the WHOLE
+  // file, forcing the genuinely-edited (simple) block through full re-serialization (which
+  // rewrites rdf:type→a, normalizes typed literals, reorders/reflows). Drop them here.
+  if (structurallyUnchangedSubjects.size > 0) {
+    for (const propLine of [...propertyLevelChanges.keys()]) {
+      const owner = cache.statementBlocks.find(
+        b => b.position.start <= propLine.position.start && b.position.end >= propLine.position.end
+      );
+      if (owner && owner.subject && structurallyUnchangedSubjects.has(owner.subject)) {
+        propertyLevelChanges.delete(propLine);
+        debugLog('[reconstructFromCache] Dropped false-positive change on unchanged block:', owner.subject, propLine.predicate);
+      }
+    }
+  }
   debugLog('[reconstructFromCache] detectPropertyLevelChanges returned', propertyLevelChanges.size, 'changes');
   if (propertyLevelChanges.size > 0) {
     for (const [propLine, changeSet] of propertyLevelChanges.entries()) {
@@ -3118,7 +3223,9 @@ async function reconstructFromCache(
   // Targeted replacement only replaces individual lines and cannot preserve multi-line blank node structures.
   // However, we can use targeted replacement for SOME blocks even if OTHER blocks have blank nodes.
   // So we need to check each block individually and only disable targeted replacement for blocks with blank nodes.
-  let canUseTargetedReplacement = allChangesSimple && propertyLevelChanges.size > 0;
+  // New blocks must be inserted by the block-level reconstruction path; the targeted
+  // line-replacement path only edits existing lines and would silently drop them.
+  let canUseTargetedReplacement = allChangesSimple && propertyLevelChanges.size > 0 && newBlocks.length === 0;
   if (canUseTargetedReplacement) {
     // Check which blocks have changes and which ones have blank node properties
     const blocksWithChanges = new Set<string>();
@@ -3313,6 +3420,107 @@ export function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolea
       return true;
     }
   }
-  
+
   return false;
+}
+
+/**
+ * Structural comparison of two quad sets that IGNORES blank-node identity.
+ *
+ * quadsAreDifferent() signs blank nodes by their raw id (`_:id`), so a block containing
+ * an inline blank-node restriction reads as "different" whenever blank-node ids drift
+ * between the cache parse and the store parse — even when nothing actually changed. That
+ * false positive is what forced the custom serializer to re-serialize (and thereby reflow
+ * / reorder / normalize) every restriction-bearing block on every save.
+ *
+ * This compares structure instead:
+ *  - Named-subject quads are matched by (subject, predicate, object), with blank-node
+ *    OBJECTS reduced to a placeholder (their identity is irrelevant; their structure is
+ *    compared separately).
+ *  - Blank-subject quads are grouped per blank node (normalized id) and matched 1:1 by
+ *    structure via blankNodesMatchByStructure.
+ *
+ * Returns true if the block is genuinely (structurally) changed.
+ */
+export function blockStructurallyChanged(original: N3Quad[], current: N3Quad[]): boolean {
+  const litSig = (lit: { value: string; datatype?: { value: string }; language?: string }): string =>
+    `"${lit.value}"${lit.language ? `@${lit.language}` : lit.datatype ? `^^${lit.datatype.value}` : ''}`;
+
+  const objSig = (obj: N3Quad['object']): string => {
+    if (obj.termType === 'NamedNode') return (obj as { value: string }).value;
+    if (obj.termType === 'BlankNode') return '_:BLANK';
+    if (obj.termType === 'Literal') return litSig(obj as { value: string; datatype?: { value: string }; language?: string });
+    return '';
+  };
+
+  // 1) Named-subject quads: exact signature, blank objects collapsed to a placeholder.
+  const namedSigs = (qs: N3Quad[]): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const q of qs) {
+      if (q.subject.termType !== 'NamedNode') continue;
+      const sig = `${(q.subject as { value: string }).value}|${(q.predicate as { value: string }).value}|${objSig(q.object)}`;
+      m.set(sig, (m.get(sig) ?? 0) + 1);
+    }
+    return m;
+  };
+  const oNamed = namedSigs(original);
+  const cNamed = namedSigs(current);
+  if (oNamed.size !== cNamed.size) return true;
+  for (const [sig, count] of oNamed) {
+    if (cNamed.get(sig) !== count) return true;
+  }
+
+  // 2) Blank-subject quads: group per blank node, match 1:1 by structure.
+  const groupBlanks = (qs: N3Quad[]): N3Quad[][] => {
+    const m = new Map<string, N3Quad[]>();
+    for (const q of qs) {
+      if (q.subject.termType !== 'BlankNode') continue;
+      const raw = (q.subject as { id?: string; value?: string }).id ?? (q.subject as { value?: string }).value ?? '';
+      const id = raw.startsWith('_:') ? raw.slice(2) : raw;
+      const list = m.get(id) ?? [];
+      list.push(q);
+      m.set(id, list);
+    }
+    return Array.from(m.values());
+  };
+  const oBlanks = groupBlanks(original);
+  const cBlanks = groupBlanks(current);
+  if (oBlanks.length !== cBlanks.length) return true;
+
+  const used = new Set<number>();
+  for (const og of oBlanks) {
+    let matched = false;
+    for (let i = 0; i < cBlanks.length; i++) {
+      if (used.has(i)) continue;
+      if (blankGroupsMatchByStructure(og, cBlanks[i], objSig)) {
+        used.add(i);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) return true;
+  }
+  return false;
+}
+
+/** Match two blank-node quad groups by (predicate, object) signatures, blank objects collapsed. */
+function blankGroupsMatchByStructure(
+  a: N3Quad[],
+  b: N3Quad[],
+  objSig: (o: N3Quad['object']) => string
+): boolean {
+  if (a.length !== b.length) return false;
+  const sig = (qs: N3Quad[]): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const q of qs) {
+      const s = `${(q.predicate as { value: string }).value}|${objSig(q.object)}`;
+      m.set(s, (m.get(s) ?? 0) + 1);
+    }
+    return m;
+  };
+  const as = sig(a);
+  const bs = sig(b);
+  if (as.size !== bs.size) return false;
+  for (const [s, c] of as) if (bs.get(s) !== c) return false;
+  return true;
 }

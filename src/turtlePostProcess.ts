@@ -6,7 +6,7 @@
 import { Parser } from 'n3';
 import type { Quad, Term, BlankNode, NamedNode, Literal } from 'n3';
 import { getAppVersion } from './utils/version';
-import { debugError } from './utils/debug';
+import { debugError, debugLog } from './utils/debug';
 
 // --- Constants (aligned with parser.ts) ---
 
@@ -206,22 +206,22 @@ export function buildInlineForms(
       list.push(q);
       quadsBySubject.set(subjId, list);
       if (isDrawingSheetBlock) {
-        console.log('[buildInlineForms] Found blank node as subject:', subjId, 'predicate:', (q.predicate as { value?: string }).value);
+        debugLog('[buildInlineForms] Found blank node as subject:', subjId, 'predicate:', (q.predicate as { value?: string }).value);
       }
     }
     if (objId) {
       allBlankNodeIds.add(objId);
       blankAsObject.add(objId);
       if (isDrawingSheetBlock) {
-        console.log('[buildInlineForms] Found blank node as object:', objId, 'from predicate:', (q.predicate as { value?: string }).value);
+        debugLog('[buildInlineForms] Found blank node as object:', objId, 'from predicate:', (q.predicate as { value?: string }).value);
       }
     }
   }
 
   if (isDrawingSheetBlock) {
-    console.log('[buildInlineForms] Total quads:', quads.length);
-    console.log('[buildInlineForms] Blank nodes as subjects:', quadsBySubject.size, 'IDs:', Array.from(quadsBySubject.keys()));
-    console.log('[buildInlineForms] Blank nodes as objects:', blankAsObject.size, 'IDs:', Array.from(blankAsObject));
+    debugLog('[buildInlineForms] Total quads:', quads.length);
+    debugLog('[buildInlineForms] Blank nodes as subjects:', quadsBySubject.size, 'IDs:', Array.from(quadsBySubject.keys()));
+    debugLog('[buildInlineForms] Blank nodes as objects:', blankAsObject.size, 'IDs:', Array.from(blankAsObject));
   }
 
   // CRITICAL: Include ALL blank nodes that are used as objects OR nested within other blank nodes
@@ -235,7 +235,7 @@ export function buildInlineForms(
 
     let list = quadsBySubject.get(id) ?? [];
     if (isDrawingSheetBlock) {
-      console.log('[buildInlineForms] buildFor(', id, ') - found', list.length, 'quads in quadsBySubject');
+      debugLog('[buildInlineForms] buildFor(', id, ') - found', list.length, 'quads in quadsBySubject');
     }
     list = deduplicateRestrictionQuads(list);
     const parts: string[] = [];
@@ -259,7 +259,7 @@ export function buildInlineForms(
     const inline = `[ ${parts.join(' ; ')} ]`;
     result.set(id, inline);
     if (isDrawingSheetBlock) {
-      console.log('[buildInlineForms] Built inline form for', id, ':', inline);
+      debugLog('[buildInlineForms] Built inline form for', id, ':', inline);
     }
     return inline;
   }
@@ -268,7 +268,7 @@ export function buildInlineForms(
   // This will recursively build nested blank nodes as well
   const sorted = topologicalSortBlanks(quadsBySubject, inlinedIds);
   if (isDrawingSheetBlock) {
-    console.log('[buildInlineForms] Sorted blank nodes to build:', sorted);
+    debugLog('[buildInlineForms] Sorted blank nodes to build:', sorted);
   }
   for (const id of sorted) {
     buildFor(id);
@@ -278,17 +278,17 @@ export function buildInlineForms(
   for (const id of allBlankNodeIds) {
     if (!result.has(id) && inlinedIds.has(id)) {
       if (isDrawingSheetBlock) {
-        console.log('[buildInlineForms] Building remaining blank node:', id);
+        debugLog('[buildInlineForms] Building remaining blank node:', id);
       }
       buildFor(id);
     }
   }
   
   if (isDrawingSheetBlock) {
-    console.log('[buildInlineForms] Final result map size:', result.size);
-    console.log('[buildInlineForms] Final result keys:', Array.from(result.keys()));
+    debugLog('[buildInlineForms] Final result map size:', result.size);
+    debugLog('[buildInlineForms] Final result keys:', Array.from(result.keys()));
     for (const [id, form] of result.entries()) {
-      console.log('[buildInlineForms] Result for', id, ':', form);
+      debugLog('[buildInlineForms] Result for', id, ':', form);
     }
   }
   

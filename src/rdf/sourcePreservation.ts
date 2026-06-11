@@ -1088,6 +1088,50 @@ function insertAtPosition(
 // ============================================================================
 
 /**
+ * Restore explicit-datatype literal forms that N3 Writer shortens to bare Turtle tokens.
+ * N3 emits xsd:boolean/integer/decimal/double objects as `false`/`0`/`1.5`; when the source
+ * wrote them as `"false"^^xsd:boolean` we put that back so block re-serialization stays
+ * minimal-diff. Replacement is anchored to each predicate so unrelated tokens are untouched.
+ */
+function restoreShortenedLiterals(
+  text: string,
+  quads: N3Quad[],
+  prefixMap: Record<string, string>
+): string {
+  const SHORTENED = new Set([
+    'http://www.w3.org/2001/XMLSchema#boolean',
+    'http://www.w3.org/2001/XMLSchema#integer',
+    'http://www.w3.org/2001/XMLSchema#decimal',
+    'http://www.w3.org/2001/XMLSchema#double',
+  ]);
+  const toPrefixed = (uri: string): string => {
+    let best: string | null = null;
+    let bestLen = -1;
+    for (const [p, ns] of Object.entries(prefixMap)) {
+      if (uri.startsWith(ns) && ns.length > bestLen) {
+        best = `${p}:${uri.slice(ns.length)}`;
+        bestLen = ns.length;
+      }
+    }
+    return best ?? `<${uri}>`;
+  };
+  const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = text;
+  for (const q of quads) {
+    if (q.object.termType !== 'Literal') continue;
+    const dt = (q.object as { datatype?: { value: string } }).datatype?.value;
+    if (!dt || !SHORTENED.has(dt)) continue;
+    const value = (q.object as { value: string }).value;
+    const predToken = toPrefixed((q.predicate as { value: string }).value);
+    const dtToken = toPrefixed(dt);
+    // Anchor on the predicate so we only touch this property's value.
+    const re = new RegExp(`(${esc(predToken)}\\s+)${esc(value)}(\\s*[;.])`, 'g');
+    out = out.replace(re, `$1"${value}"^^${dtToken}$2`);
+  }
+  return out;
+}
+
+/**
  * Serialize a block to Turtle with formatting preservation
  */
 async function serializeBlockToTurtle(
@@ -2080,12 +2124,20 @@ async function serializeBlockToTurtle(
         formatted = formatted.replace(/\s+a\s+:/g, ' rdf:type :');
         formatted = formatted.replace(/\s+a\s+</g, ' rdf:type <');
       }
-      
+
+      // N3 Writer renders xsd:boolean/integer/decimal/double literals in bare Turtle form
+      // (`false`, `0`, `1.5`). If the original used an explicit datatype (e.g.
+      // `"false"^^xsd:boolean`), restore it so an unrelated edit (e.g. adding a comment)
+      // doesn't silently rewrite typed literals on the same block.
+      if (block.originalText && block.originalText.includes('^^')) {
+        formatted = restoreShortenedLiterals(formatted, block.quads, prefixMap);
+      }
+
       if (block.subject && block.subject.includes('DrawingSheet')) {
         debugLog('[serializeBlockToTurtle] Final formatted result:', formatted);
         debugLog('[serializeBlockToTurtle] Final formatted contains rdfs:subClassOf:', formatted.includes('rdfs:subClassOf'));
       }
-      
+
       resolve(formatted);
     });
   });
@@ -3696,20 +3748,29 @@ export function performTargetedLineReplacement(
     const newQuads = changeSet.newQuads;
     
     if (newQuads.length === 0) {
-      // Property was removed - remove the line
-      const lineStart = propertyLine.position.start;
-      const lineEnd = propertyLine.position.end;
-      
-      // Find the end of the line (including trailing comma/semicolon and whitespace)
-      let actualEnd = lineEnd;
-      const afterLine = result.slice(lineEnd);
-      const lineEndMatch = afterLine.match(/^([,;]?\s*)/);
-      if (lineEndMatch) {
-        actualEnd = lineEnd + lineEndMatch[0].length;
+      // Property was removed - remove the entire physical line, then fix punctuation.
+      // Expand to the full line: from the start of the line (including its indentation)
+      // through the end of the line (including its trailing newline).
+      let lineStart = propertyLine.position.start;
+      while (lineStart > 0 && result[lineStart - 1] !== '\n') lineStart--;
+      let lineEnd = propertyLine.position.end;
+      while (lineEnd < result.length && result[lineEnd] !== '\n') lineEnd++;
+
+      // Was this property the statement terminator (ends with '.', not ';'/',')?
+      const removedLineText = result.slice(lineStart, lineEnd);
+      const isLastProperty = /\.\s*$/.test(removedLineText) && !/[;,]\s*$/.test(removedLineText);
+
+      const removeEnd = lineEnd < result.length ? lineEnd + 1 : lineEnd; // include newline
+      let before = result.slice(0, lineStart);
+      const after = result.slice(removeEnd);
+
+      if (isLastProperty) {
+        // The removed property terminated the statement with '.'. The preceding property
+        // line must now terminate it: turn its trailing ';' or ',' into '.'.
+        before = before.replace(/[;,](\s*)$/, '.$1');
       }
-      
-      // Remove the line
-      result = result.slice(0, lineStart) + result.slice(actualEnd);
+
+      result = before + after;
       continue;
     }
     
