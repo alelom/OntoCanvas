@@ -4622,6 +4622,7 @@ function showRenameModal(
     }
   }
   modal.style.display = 'flex';
+  refreshRenameModalFromInput();
   input.focus();
   input.select();
 }

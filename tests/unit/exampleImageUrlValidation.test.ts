@@ -169,7 +169,7 @@ describe('exampleImageUrlValidation', () => {
         src: '',
         addEventListener: vi.fn(),
       };
-      global.Image = vi.fn(() => mockImage as any) as any;
+      global.Image = vi.fn(function () { return mockImage; }) as any;
       
       // Simulate image load failure
       setTimeout(() => {
@@ -197,7 +197,7 @@ describe('exampleImageUrlValidation', () => {
         src: '',
         addEventListener: vi.fn(),
       };
-      global.Image = vi.fn(() => mockImage as any) as any;
+      global.Image = vi.fn(function () { return mockImage; }) as any;
       
       setTimeout(() => {
         if (mockImage.onerror) mockImage.onerror();
@@ -238,7 +238,7 @@ describe('exampleImageUrlValidation', () => {
         src: '',
         addEventListener: vi.fn(),
       };
-      global.Image = vi.fn(() => mockImage as any) as any;
+      global.Image = vi.fn(function () { return mockImage; }) as any;
       
       // Simulate successful image load
       setTimeout(() => {
