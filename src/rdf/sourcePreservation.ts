@@ -237,8 +237,10 @@ export async function parseTurtleWithPositions(
     
     // Skip regular comments (they're part of the block they're associated with)
     if (trimmed.startsWith('#') && !trimmed.startsWith('##')) {
-      // Comment line - if we have a current block, it's part of it
-      if (currentBlock) {
+      // Comment line - if we have a current OPEN block, it's part of it. Do NOT re-extend a
+      // block that already terminated at its '.', otherwise a trailing section-divider comment
+      // would be absorbed into the preceding block (and then lost on re-serialization).
+      if (currentBlock && !currentBlock.originalText) {
         currentBlock.position.end = lineEnd;
         currentBlock.position.endLine = lineNumber;
       }
@@ -326,8 +328,9 @@ export async function parseTurtleWithPositions(
       
       currentSection.blocks.push(currentBlock);
       
-    } else if (currentBlock && trimmed !== '') {
-      // Continuation of current block (indented line or property continuation); do not extend over blank lines
+    } else if (currentBlock && !currentBlock.originalText && trimmed !== '') {
+      // Continuation of the current OPEN block (indented line or property continuation); do not
+      // extend over blank lines, and never re-extend a block that already terminated at its '.'.
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
     }
@@ -348,9 +351,14 @@ export async function parseTurtleWithPositions(
       !lines[nextContentIndex].trim().startsWith(' ') &&
       !lines[nextContentIndex].trim().startsWith('\t') &&
       !lines[nextContentIndex].trim().startsWith('#');
+    // A top-level '.' definitively ends a Turtle statement, so the block also ends when the next
+    // non-empty content is a comment (e.g. a section divider). Treating that as a block end keeps
+    // the divider in the inter-block gap instead of absorbing it into the preceding block.
+    const nextContentIsComment = nextContentIndex < lines.length &&
+      lines[nextContentIndex].trim().startsWith('#');
     const isLastLine = i === lines.length - 1;
 
-    if (endsWithPeriod && (nextLineIsStatement || nextContentIsStatement || isLastLine) && currentBlock) {
+    if (endsWithPeriod && (nextLineIsStatement || nextContentIsStatement || nextContentIsComment || isLastLine) && currentBlock && !currentBlock.originalText) {
       // Block ends here (at the period; blank lines after this are not part of the block)
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
@@ -911,11 +919,11 @@ export async function reconstructFromOriginalText(
       }
       finalNewText += cache.formattingStyle.lineEnding;
       
-      // Preserve blank lines after the block (from original)
-      for (let i = 0; i < blankLinesCount; i++) {
-        finalNewText += cache.formattingStyle.lineEnding;
-      }
-      
+      // Do NOT synthesize blank lines here. The suffix (sliced at endPos below) already
+      // contains the original blank lines AND any section-divider comments that follow this
+      // block; re-adding blank lines used to go hand-in-hand with slicing from the next block's
+      // start, which dropped those dividers.
+
       // DEBUG: Log position calculations for DrawingSheet block
       if (block.subject && block.subject.includes('DrawingSheet')) {
         debugLog('[reconstructFromOriginalText] DrawingSheet block position calculation:');
@@ -937,58 +945,12 @@ export async function reconstructFromOriginalText(
       // Calculate original block length
       const originalLength = block.position.end - block.position.start + cache.formattingStyle.lineEnding.length;
       
-      // Find the next block after this one in the cache
-      const nextBlock = cache.statementBlocks
-        .filter(b => b.position.start > block.position.end)
-        .sort((a, b) => a.position.start - b.position.start)[0];
-      
-      if (nextBlock) {
-        // We're processing blocks in reverse order (by position.end), so when we replace this block,
-        // blocks after it have already been replaced. The next block's start in the current result
-        // is still nextBlock.position.start (replacing a block only shifts content after that block).
-        // So we slice from nextBlock.position.start to get the next block and everything after it.
-        let nextContentStart: number;
-        if (blankLinesCount === 0) {
-          nextContentStart = endPos;
-        } else {
-          // Has blank lines: skip this block's newline and blank lines by starting at the next block
-          nextContentStart = nextBlock.position.start;
-        }
-        
-        // DEBUG: Log nextContentStart calculation for DrawingSheet block
-        if (block.subject && block.subject.includes('DrawingSheet')) {
-          debugLog('[reconstructFromOriginalText] DrawingSheet nextContentStart calculation:');
-          debugLog('  block.position.start:', block.position.start);
-          debugLog('  block.position.end:', block.position.end);
-          debugLog('  endPos:', endPos);
-          debugLog('  finalNewText.length:', finalNewText.length);
-          debugLog('  calculated nextContentStart:', nextContentStart);
-          debugLog('  result.length:', result.length);
-          debugLog('  result.slice(nextContentStart) (first 100 chars):', result.slice(nextContentStart).substring(0, 100));
-        }
-        
-        // SAFETY CHECK: Verify nextContentStart is within bounds
-        if (nextContentStart < block.position.start || nextContentStart > result.length) {
-          debugError('[reconstructFromOriginalText] Invalid nextContentStart:', nextContentStart, 'for block:', block.subject, 'result length:', result.length);
-          // Use fallback: original end + blank lines
-          const fallbackNextContentStart = endPos + (blankLinesCount * cache.formattingStyle.lineEnding.length);
-          result = result.slice(0, block.position.start) + 
-                   finalNewText + 
-                   result.slice(fallbackNextContentStart);
-        } else {
-          // Replace the block: everything before + new text + everything after
-          result = result.slice(0, block.position.start) + 
-                   finalNewText + 
-                   result.slice(nextContentStart);
-        }
-      } else {
-        // No next block - this is the last block, preserve everything after
-        // Use the original calculation
-        const nextContentStart = endPos + (blankLinesCount * cache.formattingStyle.lineEnding.length);
-        result = result.slice(0, block.position.start) + 
-                 finalNewText + 
-                 result.slice(nextContentStart);
-      }
+      // Replace ONLY this block's own text; keep everything after it verbatim by slicing the
+      // suffix at endPos (just past the block's terminating newline). That suffix contains the
+      // original blank lines, any section-divider comments, and the already-processed later
+      // blocks — all preserved exactly. This is position-safe because blocks are processed in
+      // reverse order, so content at positions <= block.position.end is unchanged in `result`.
+      result = result.slice(0, block.position.start) + finalNewText + result.slice(endPos);
       
       // Track length change for this block
       const newLength = finalNewText.length;
@@ -1086,6 +1048,199 @@ function insertAtPosition(
 // ============================================================================
 // Phase 7: Formatting-Preserving Serialization
 // ============================================================================
+
+/**
+ * Restore explicit-datatype literal forms that N3 Writer shortens to bare Turtle tokens.
+ * N3 emits xsd:boolean/integer/decimal/double objects as `false`/`0`/`1.5`; when the source
+ * wrote them as `"false"^^xsd:boolean` we put that back so block re-serialization stays
+ * minimal-diff. Replacement is anchored to each predicate so unrelated tokens are untouched.
+ */
+function restoreShortenedLiterals(
+  text: string,
+  quads: N3Quad[],
+  prefixMap: Record<string, string>
+): string {
+  const SHORTENED = new Set([
+    'http://www.w3.org/2001/XMLSchema#boolean',
+    'http://www.w3.org/2001/XMLSchema#integer',
+    'http://www.w3.org/2001/XMLSchema#decimal',
+    'http://www.w3.org/2001/XMLSchema#double',
+  ]);
+  const toPrefixed = (uri: string): string => {
+    let best: string | null = null;
+    let bestLen = -1;
+    for (const [p, ns] of Object.entries(prefixMap)) {
+      if (uri.startsWith(ns) && ns.length > bestLen) {
+        best = `${p}:${uri.slice(ns.length)}`;
+        bestLen = ns.length;
+      }
+    }
+    return best ?? `<${uri}>`;
+  };
+  const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = text;
+  for (const q of quads) {
+    if (q.object.termType !== 'Literal') continue;
+    const dt = (q.object as { datatype?: { value: string } }).datatype?.value;
+    if (!dt || !SHORTENED.has(dt)) continue;
+    const value = (q.object as { value: string }).value;
+    const predToken = toPrefixed((q.predicate as { value: string }).value);
+    const dtToken = toPrefixed(dt);
+    // Anchor on the predicate so we only touch this property's value.
+    const re = new RegExp(`(${esc(predToken)}\\s+)${esc(value)}(\\s*[;.])`, 'g');
+    out = out.replace(re, `$1"${value}"^^${dtToken}$2`);
+  }
+  return out;
+}
+
+const RDFS_SUBCLASSOF = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+
+/**
+ * If the only change to a class block is one or more ADDED rdfs:subClassOf items (every other
+ * property unchanged, and no existing subClassOf item changed or removed), return the original
+ * block text with the new item(s) spliced into the rdfs:subClassOf list — preserving the list's
+ * existing multi-line / single-line formatting. Otherwise return null (caller falls back to full
+ * serialization). This keeps hand-formatted, one-item-per-line subClassOf lists intact when an
+ * edge or restriction is added.
+ */
+function tryAppendSubClassOfItems(
+  block: StatementBlock,
+  cache: OriginalFileCache,
+  prefixMap: Record<string, string>
+): string | null {
+  const originalBlock = findOriginalBlockForTargetedReplacement(cache, block);
+  if (!originalBlock || !originalBlock.originalText) return null;
+
+  let origQuads: N3Quad[] = originalBlock.quads?.length ? [...originalBlock.quads] : [];
+  if (origQuads.length === 0 && cache.quadToBlockMap) {
+    for (const [q, b] of cache.quadToBlockMap) if (b === originalBlock) origQuads.push(q);
+  }
+  const curQuads = block.quads;
+  if (origQuads.length === 0 || curQuads.length === 0) return null;
+
+  const isSubClassOf = (q: N3Quad): boolean =>
+    q.subject.termType === 'NamedNode' && (q.predicate as { value: string }).value === RDFS_SUBCLASSOF;
+
+  // 1) Every non-subClassOf named-subject quad must be identical between original and current.
+  const otherSig = (qs: N3Quad[]): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const q of qs) {
+      if (q.subject.termType !== 'NamedNode' || isSubClassOf(q)) continue;
+      const sig = `${(q.subject as { value: string }).value}|${(q.predicate as { value: string }).value}|${objectSignatureForStructureMatch(q.object)}`;
+      m.set(sig, (m.get(sig) ?? 0) + 1);
+    }
+    return m;
+  };
+  const oOther = otherSig(origQuads);
+  const cOther = otherSig(curQuads);
+  if (oOther.size !== cOther.size) return null;
+  for (const [s, n] of oOther) if (cOther.get(s) !== n) return null;
+
+  // 2) Collect blank-node restriction quads (grouped by normalized blank id) for structure matching.
+  const groupBlanks = (qs: N3Quad[]): Map<string, N3Quad[]> => {
+    const m = new Map<string, N3Quad[]>();
+    for (const q of qs) {
+      if (q.subject.termType !== 'BlankNode') continue;
+      const id = normalizeBlankNodeIdForGrouping(getBlankNodeId(q.subject as { id?: string; value?: string }));
+      const list = m.get(id) ?? [];
+      list.push(q);
+      m.set(id, list);
+    }
+    return m;
+  };
+  const oBlanks = groupBlanks(origQuads);
+  const cBlanks = groupBlanks(curQuads);
+
+  // 3) Match each ORIGINAL subClassOf item to a current one; collect current items with no match
+  //    (the additions). Any original item without a current match means a removal/change → bail.
+  type Item = { named?: string; blankId?: string };
+  const subClassItems = (qs: N3Quad[]): Item[] =>
+    qs.filter(isSubClassOf).map((q) =>
+      q.object.termType === 'BlankNode'
+        ? { blankId: normalizeBlankNodeIdForGrouping(getBlankNodeId(q.object as { id?: string; value?: string })) }
+        : { named: (q.object as { value: string }).value }
+    );
+  const oItems = subClassItems(origQuads);
+  const cItems = subClassItems(curQuads);
+
+  const matchedCur = new Set<number>();
+  const itemsMatch = (o: Item, c: Item): boolean => {
+    if (o.named !== undefined || c.named !== undefined) return o.named === c.named;
+    const og = oBlanks.get(o.blankId!) ?? [];
+    const cg = cBlanks.get(c.blankId!) ?? [];
+    return og.length > 0 && cg.length > 0 && blankNodesMatchByStructure(og, cg);
+  };
+  for (const o of oItems) {
+    let found = false;
+    for (let i = 0; i < cItems.length; i++) {
+      if (matchedCur.has(i)) continue;
+      if (itemsMatch(o, cItems[i])) { matchedCur.add(i); found = true; break; }
+    }
+    if (!found) return null; // an existing item changed or was removed — not a pure append
+  }
+  const newItems = cItems.filter((_, i) => !matchedCur.has(i));
+  if (newItems.length === 0) return null; // nothing added (shouldn't happen for isModified)
+
+  // 4) Render each new item to its inline text.
+  const toPrefixed = (uri: string): string => {
+    let best: string | null = null;
+    let bestLen = -1;
+    for (const [p, ns] of Object.entries(prefixMap)) {
+      if (uri.startsWith(ns) && ns.length > bestLen) { best = `${p}:${uri.slice(ns.length)}`; bestLen = ns.length; }
+    }
+    return best ?? `<${uri}>`;
+  };
+  const externalRefs = Object.entries(prefixMap).map(([prefix, url]) => ({ url, usePrefix: true, prefix: prefix || '' }));
+  let inlineForms: Map<string, string> | null = null;
+  const newItemTexts: string[] = [];
+  for (const item of newItems) {
+    if (item.named !== undefined) {
+      newItemTexts.push(toPrefixed(item.named));
+    } else {
+      if (!inlineForms) inlineForms = buildInlineForms(curQuads, externalRefs, true);
+      const form = inlineForms.get(item.blankId!) ?? inlineForms.get(`_:${item.blankId!}`);
+      if (!form) return null; // couldn't build inline form — fall back
+      newItemTexts.push(form);
+    }
+  }
+
+  // 5) Splice the new item(s) into the rdfs:subClassOf list in the original block text.
+  const text = originalBlock.originalText;
+  const scoMatch = text.match(/rdfs:subClassOf\b/);
+  if (!scoMatch || scoMatch.index === undefined) return null;
+  const valueStart = scoMatch.index + scoMatch[0].length;
+  // Find the statement terminator (';' or '.') at bracket depth 0 after the value starts.
+  let depth = 0;
+  let termPos = -1;
+  for (let i = valueStart; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '[') depth++;
+    else if (ch === ']') depth--;
+    else if (depth <= 0 && (ch === ';' || ch === '.')) { termPos = i; break; }
+  }
+  if (termPos === -1) return null;
+
+  const valueRegion = text.slice(valueStart, termPos);
+  // Inter-item separator: whitespace following the first depth-0 comma in the value region.
+  // Defaults to a single space if the list currently has one item.
+  let sepWs = ' ';
+  let d2 = 0;
+  for (let i = 0; i < valueRegion.length; i++) {
+    const ch = valueRegion[i];
+    if (ch === '[') d2++;
+    else if (ch === ']') d2--;
+    else if (d2 <= 0 && ch === ',') {
+      const m = valueRegion.slice(i + 1).match(/^\s*/);
+      sepWs = m ? m[0] : ' ';
+      break;
+    }
+  }
+  // Insert position: just after the last non-whitespace char of the value region.
+  const trimmedLen = valueRegion.replace(/\s+$/, '').length;
+  const insertAt = valueStart + trimmedLen;
+  const addition = newItemTexts.map((t) => `,${sepWs}${t}`).join('');
+  return text.slice(0, insertAt) + addition + text.slice(insertAt);
+}
 
 /**
  * Serialize a block to Turtle with formatting preservation
@@ -1306,6 +1461,18 @@ async function serializeBlockToTurtle(
     }
   }
   
+  // Targeted append: if the ONLY change to this block is added rdfs:subClassOf items (existing
+  // items and every other property unchanged), keep the original block text verbatim and splice
+  // the new item(s) into the list, preserving its existing per-item line formatting. This avoids
+  // the N3 Writer collapsing a hand-formatted multi-line subClassOf list onto a single line.
+  if (block.originalText && block.isModified && cache) {
+    const appended = tryAppendSubClassOfItems(block, cache, prefixMap);
+    if (appended !== null) {
+      debugLog('[serializeBlockToTurtle] Used targeted subClassOf append to preserve list formatting');
+      return appended;
+    }
+  }
+
   // Serialize quads using N3 Writer with prefix map to preserve prefixed names
   return new Promise((resolve, reject) => {
     // @ts-expect-error - N3 Writer constructor accepts options but TypeScript definitions are incorrect
@@ -1622,6 +1789,10 @@ async function serializeBlockToTurtle(
       // Check if original text has inline blank nodes (not explicit _: references)
       const hasInlineBlanks = block.originalText && /\[[\s\S]*?\]/.test(block.originalText);
       const hasExplicitBlanks = block.originalText && /_\:[a-zA-Z0-9_-]+\s+[a-z]/.test(block.originalText);
+      // Also inline when the serialized output itself contains blank-node references — this covers
+      // a block that GAINED its first restriction (the original had no inline blanks, so the gate
+      // above would otherwise skip inlining and leave an expanded "_:n3-0 …" chain).
+      const outputHasBlankRefs = /_:df_\d+_\d+/.test(result) || /_:n3-\d+/.test(result);
       
       /**
        * BLANK NODE INLINING ATTEMPTS - DOCUMENTED FOR FUTURE REFERENCE
@@ -1651,7 +1822,7 @@ async function serializeBlockToTurtle(
        */
       
       let processedResult = result;
-      if (hasInlineBlanks && !hasExplicitBlanks) {
+      if (!hasExplicitBlanks && (hasInlineBlanks || outputHasBlankRefs)) {
         // Approach 1: Build inline forms directly from block.quads (using original blank node IDs)
         // This is more robust because N3 Writer might not serialize blank node quads as separate blocks
         // when they're only used as objects
@@ -2072,20 +2243,31 @@ async function serializeBlockToTurtle(
       }
       
       // CRITICAL: Apply style fixes to match original format (e.g., convert "a" to "rdf:type")
-      // This ensures that when we serialize, we match the original style
-      // Check if original uses "rdf:type" instead of "a"
-      if (block.originalText && block.originalText.includes('rdf:type') && !block.originalText.match(/\s+a\s+/)) {
+      // This ensures that when we serialize, we match the original style.
+      // Decide based on the original block's TYPE declaration, not on raw text: strip string
+      // literals first so a stray word "a" inside a comment/label (e.g. "of a site") does not
+      // look like the `a` keyword and suppress the conversion.
+      const originalNoStrings = (block.originalText ?? '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
+      if (block.originalText && originalNoStrings.includes('rdf:type') && !originalNoStrings.match(/\s+a\s+/)) {
         // Original uses rdf:type, so convert "a" to "rdf:type" in serialized output
         formatted = formatted.replace(/\s+a\s+(owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
         formatted = formatted.replace(/\s+a\s+:/g, ' rdf:type :');
         formatted = formatted.replace(/\s+a\s+</g, ' rdf:type <');
       }
-      
+
+      // N3 Writer renders xsd:boolean/integer/decimal/double literals in bare Turtle form
+      // (`false`, `0`, `1.5`). If the original used an explicit datatype (e.g.
+      // `"false"^^xsd:boolean`), restore it so an unrelated edit (e.g. adding a comment)
+      // doesn't silently rewrite typed literals on the same block.
+      if (block.originalText && block.originalText.includes('^^')) {
+        formatted = restoreShortenedLiterals(formatted, block.quads, prefixMap);
+      }
+
       if (block.subject && block.subject.includes('DrawingSheet')) {
         debugLog('[serializeBlockToTurtle] Final formatted result:', formatted);
         debugLog('[serializeBlockToTurtle] Final formatted contains rdfs:subClassOf:', formatted.includes('rdfs:subClassOf'));
       }
-      
+
       resolve(formatted);
     });
   });
@@ -3696,20 +3878,29 @@ export function performTargetedLineReplacement(
     const newQuads = changeSet.newQuads;
     
     if (newQuads.length === 0) {
-      // Property was removed - remove the line
-      const lineStart = propertyLine.position.start;
-      const lineEnd = propertyLine.position.end;
-      
-      // Find the end of the line (including trailing comma/semicolon and whitespace)
-      let actualEnd = lineEnd;
-      const afterLine = result.slice(lineEnd);
-      const lineEndMatch = afterLine.match(/^([,;]?\s*)/);
-      if (lineEndMatch) {
-        actualEnd = lineEnd + lineEndMatch[0].length;
+      // Property was removed - remove the entire physical line, then fix punctuation.
+      // Expand to the full line: from the start of the line (including its indentation)
+      // through the end of the line (including its trailing newline).
+      let lineStart = propertyLine.position.start;
+      while (lineStart > 0 && result[lineStart - 1] !== '\n') lineStart--;
+      let lineEnd = propertyLine.position.end;
+      while (lineEnd < result.length && result[lineEnd] !== '\n') lineEnd++;
+
+      // Was this property the statement terminator (ends with '.', not ';'/',')?
+      const removedLineText = result.slice(lineStart, lineEnd);
+      const isLastProperty = /\.\s*$/.test(removedLineText) && !/[;,]\s*$/.test(removedLineText);
+
+      const removeEnd = lineEnd < result.length ? lineEnd + 1 : lineEnd; // include newline
+      let before = result.slice(0, lineStart);
+      const after = result.slice(removeEnd);
+
+      if (isLastProperty) {
+        // The removed property terminated the statement with '.'. The preceding property
+        // line must now terminate it: turn its trailing ';' or ',' into '.'.
+        before = before.replace(/[;,](\s*)$/, '.$1');
       }
-      
-      // Remove the line
-      result = result.slice(0, lineStart) + result.slice(actualEnd);
+
+      result = before + after;
       continue;
     }
     
