@@ -30,8 +30,8 @@ If you want a good hierarchical (taxonomical) view of ontologies, rather than a 
 - **Nodes and edges styling based on rules**: font size, line colour, rule based, great for presentations.
 - **Search** – Filter by node label or relationship type
 - **Relationships filters** – Show/hide by relationship type
-- **Open:** Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and other formats supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js).
-- **Save:** Turtle only. When editing a Turtle file, a **formatting-preserving serializer** keeps comments, blank lines, property order, and OWL restrictions (see [Serialization (saving)](#serialization-saving)).
+- **Open:** any RDF format supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js) — Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and more.
+- **Save:** Turtle only. When editing a Turtle file, a **minimal-diff, formatting-preserving serializer** rewrites only the lines an edit touches — keeping comments, blank lines, section dividers, property order, typed literals, `rdf:type` notation, and OWL restrictions (including multi-line `rdfs:subClassOf` lists) intact (see [Serialization (saving)](#serialization-saving)).
 
 
 ## Comparison with other ontology editors and visualisers 
@@ -67,18 +67,21 @@ If you want a good hierarchical (taxonomical) view of ontologies, rather than a 
 
 ## Serialization (saving)
 
-Save output is **Turtle only**. How the Turtle is produced depends on how the file was loaded:
+**Input can be any RDF format rdf-parse understands; output is always Turtle.** How the Turtle is produced depends on how the file was loaded:
 
-- **Turtle file loaded (`.ttl`)**  
-  The app keeps a **source cache** of the original file (block positions, formatting, line endings). On save it uses a **custom serializer** that:
-  - Reconstructs the file from the cache and only replaces the blocks or lines that changed (e.g. after a label rename).
-  - Preserves **formatting** (indentation, blank lines between blocks, line endings), **comments**, **property order**, and **OWL restrictions** (inline blank nodes).
-  - For simple edits (e.g. only a label changes), it does **targeted text replacement** so the rest of the file is unchanged; for blocks with structural changes it re-serializes only those blocks and stitches them back into the cached text.
+- **Turtle file loaded (`.ttl`)** — *minimal-diff, formatting-preserving save*  
+  The app keeps a **source cache** of the original file (block positions, formatting, line endings) and a **custom serializer** rewrites only the lines an edit actually touches. Unedited content stays **byte-for-byte identical**, so saving after an edit produces a clean, reviewable diff. Preserved across edits:
+  - indentation, blank lines, line endings, and `#### … ####` **section dividers**;
+  - **comments**, **property order**, and **typed literals** (e.g. `"true"^^xsd:boolean` is not rewritten to `true`);
+  - **`rdf:type`** notation (not rewritten to `a`);
+  - **OWL restrictions** as inline blank nodes, including **multi-line `rdfs:subClassOf` lists** (one item per line) — adding a relationship appends a new item without reflowing the existing ones.
 
-- **Other format loaded (RDF/XML, JSON-LD, etc.) or no cache**  
-  The app falls back to **standard Turtle serialization** (N3/rdflib). Output is valid Turtle but formatting, comments, and property order are not preserved.
+  This holds for renaming a class, adding/changing/removing a comment, adding/deleting a class, adding/editing/removing edges and restrictions, editing object/data properties, toggling annotation properties, and editing example images. The behaviour is pinned by the minimal-diff test suite in `tests/unit/customSerializerTests/`.
 
-So for round-trip editing of Turtle ontologies (minimal diff, preserved structure), open a `.ttl` file and save again; for other formats, saving produces a fresh Turtle dump.
+- **Other format loaded (RDF/XML, JSON-LD, N-Triples, …) or no source cache**  
+  Saving falls back to **standard Turtle serialization** (rdflib). Output is valid Turtle, but the original formatting, comments, and property order are not preserved — the file is effectively converted to a fresh Turtle dump.
+
+So for round-trip editing with minimal diffs, open a `.ttl` file and save again; opening any other format and saving converts it to Turtle.
 
 
 
