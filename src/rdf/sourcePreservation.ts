@@ -1093,6 +1093,155 @@ function restoreShortenedLiterals(
   return out;
 }
 
+const RDFS_SUBCLASSOF = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+
+/**
+ * If the only change to a class block is one or more ADDED rdfs:subClassOf items (every other
+ * property unchanged, and no existing subClassOf item changed or removed), return the original
+ * block text with the new item(s) spliced into the rdfs:subClassOf list — preserving the list's
+ * existing multi-line / single-line formatting. Otherwise return null (caller falls back to full
+ * serialization). This keeps hand-formatted, one-item-per-line subClassOf lists intact when an
+ * edge or restriction is added.
+ */
+function tryAppendSubClassOfItems(
+  block: StatementBlock,
+  cache: OriginalFileCache,
+  prefixMap: Record<string, string>
+): string | null {
+  const originalBlock = findOriginalBlockForTargetedReplacement(cache, block);
+  if (!originalBlock || !originalBlock.originalText) return null;
+
+  let origQuads: N3Quad[] = originalBlock.quads?.length ? [...originalBlock.quads] : [];
+  if (origQuads.length === 0 && cache.quadToBlockMap) {
+    for (const [q, b] of cache.quadToBlockMap) if (b === originalBlock) origQuads.push(q);
+  }
+  const curQuads = block.quads;
+  if (origQuads.length === 0 || curQuads.length === 0) return null;
+
+  const isSubClassOf = (q: N3Quad): boolean =>
+    q.subject.termType === 'NamedNode' && (q.predicate as { value: string }).value === RDFS_SUBCLASSOF;
+
+  // 1) Every non-subClassOf named-subject quad must be identical between original and current.
+  const otherSig = (qs: N3Quad[]): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (const q of qs) {
+      if (q.subject.termType !== 'NamedNode' || isSubClassOf(q)) continue;
+      const sig = `${(q.subject as { value: string }).value}|${(q.predicate as { value: string }).value}|${objectSignatureForStructureMatch(q.object)}`;
+      m.set(sig, (m.get(sig) ?? 0) + 1);
+    }
+    return m;
+  };
+  const oOther = otherSig(origQuads);
+  const cOther = otherSig(curQuads);
+  if (oOther.size !== cOther.size) return null;
+  for (const [s, n] of oOther) if (cOther.get(s) !== n) return null;
+
+  // 2) Collect blank-node restriction quads (grouped by normalized blank id) for structure matching.
+  const groupBlanks = (qs: N3Quad[]): Map<string, N3Quad[]> => {
+    const m = new Map<string, N3Quad[]>();
+    for (const q of qs) {
+      if (q.subject.termType !== 'BlankNode') continue;
+      const id = normalizeBlankNodeIdForGrouping(getBlankNodeId(q.subject as { id?: string; value?: string }));
+      const list = m.get(id) ?? [];
+      list.push(q);
+      m.set(id, list);
+    }
+    return m;
+  };
+  const oBlanks = groupBlanks(origQuads);
+  const cBlanks = groupBlanks(curQuads);
+
+  // 3) Match each ORIGINAL subClassOf item to a current one; collect current items with no match
+  //    (the additions). Any original item without a current match means a removal/change → bail.
+  type Item = { named?: string; blankId?: string };
+  const subClassItems = (qs: N3Quad[]): Item[] =>
+    qs.filter(isSubClassOf).map((q) =>
+      q.object.termType === 'BlankNode'
+        ? { blankId: normalizeBlankNodeIdForGrouping(getBlankNodeId(q.object as { id?: string; value?: string })) }
+        : { named: (q.object as { value: string }).value }
+    );
+  const oItems = subClassItems(origQuads);
+  const cItems = subClassItems(curQuads);
+
+  const matchedCur = new Set<number>();
+  const itemsMatch = (o: Item, c: Item): boolean => {
+    if (o.named !== undefined || c.named !== undefined) return o.named === c.named;
+    const og = oBlanks.get(o.blankId!) ?? [];
+    const cg = cBlanks.get(c.blankId!) ?? [];
+    return og.length > 0 && cg.length > 0 && blankNodesMatchByStructure(og, cg);
+  };
+  for (const o of oItems) {
+    let found = false;
+    for (let i = 0; i < cItems.length; i++) {
+      if (matchedCur.has(i)) continue;
+      if (itemsMatch(o, cItems[i])) { matchedCur.add(i); found = true; break; }
+    }
+    if (!found) return null; // an existing item changed or was removed — not a pure append
+  }
+  const newItems = cItems.filter((_, i) => !matchedCur.has(i));
+  if (newItems.length === 0) return null; // nothing added (shouldn't happen for isModified)
+
+  // 4) Render each new item to its inline text.
+  const toPrefixed = (uri: string): string => {
+    let best: string | null = null;
+    let bestLen = -1;
+    for (const [p, ns] of Object.entries(prefixMap)) {
+      if (uri.startsWith(ns) && ns.length > bestLen) { best = `${p}:${uri.slice(ns.length)}`; bestLen = ns.length; }
+    }
+    return best ?? `<${uri}>`;
+  };
+  const externalRefs = Object.entries(prefixMap).map(([prefix, url]) => ({ url, usePrefix: true, prefix: prefix || '' }));
+  let inlineForms: Map<string, string> | null = null;
+  const newItemTexts: string[] = [];
+  for (const item of newItems) {
+    if (item.named !== undefined) {
+      newItemTexts.push(toPrefixed(item.named));
+    } else {
+      if (!inlineForms) inlineForms = buildInlineForms(curQuads, externalRefs, true);
+      const form = inlineForms.get(item.blankId!) ?? inlineForms.get(`_:${item.blankId!}`);
+      if (!form) return null; // couldn't build inline form — fall back
+      newItemTexts.push(form);
+    }
+  }
+
+  // 5) Splice the new item(s) into the rdfs:subClassOf list in the original block text.
+  const text = originalBlock.originalText;
+  const scoMatch = text.match(/rdfs:subClassOf\b/);
+  if (!scoMatch || scoMatch.index === undefined) return null;
+  const valueStart = scoMatch.index + scoMatch[0].length;
+  // Find the statement terminator (';' or '.') at bracket depth 0 after the value starts.
+  let depth = 0;
+  let termPos = -1;
+  for (let i = valueStart; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '[') depth++;
+    else if (ch === ']') depth--;
+    else if (depth <= 0 && (ch === ';' || ch === '.')) { termPos = i; break; }
+  }
+  if (termPos === -1) return null;
+
+  const valueRegion = text.slice(valueStart, termPos);
+  // Inter-item separator: whitespace following the first depth-0 comma in the value region.
+  // Defaults to a single space if the list currently has one item.
+  let sepWs = ' ';
+  let d2 = 0;
+  for (let i = 0; i < valueRegion.length; i++) {
+    const ch = valueRegion[i];
+    if (ch === '[') d2++;
+    else if (ch === ']') d2--;
+    else if (d2 <= 0 && ch === ',') {
+      const m = valueRegion.slice(i + 1).match(/^\s*/);
+      sepWs = m ? m[0] : ' ';
+      break;
+    }
+  }
+  // Insert position: just after the last non-whitespace char of the value region.
+  const trimmedLen = valueRegion.replace(/\s+$/, '').length;
+  const insertAt = valueStart + trimmedLen;
+  const addition = newItemTexts.map((t) => `,${sepWs}${t}`).join('');
+  return text.slice(0, insertAt) + addition + text.slice(insertAt);
+}
+
 /**
  * Serialize a block to Turtle with formatting preservation
  */
@@ -1312,6 +1461,18 @@ async function serializeBlockToTurtle(
     }
   }
   
+  // Targeted append: if the ONLY change to this block is added rdfs:subClassOf items (existing
+  // items and every other property unchanged), keep the original block text verbatim and splice
+  // the new item(s) into the list, preserving its existing per-item line formatting. This avoids
+  // the N3 Writer collapsing a hand-formatted multi-line subClassOf list onto a single line.
+  if (block.originalText && block.isModified && cache) {
+    const appended = tryAppendSubClassOfItems(block, cache, prefixMap);
+    if (appended !== null) {
+      debugLog('[serializeBlockToTurtle] Used targeted subClassOf append to preserve list formatting');
+      return appended;
+    }
+  }
+
   // Serialize quads using N3 Writer with prefix map to preserve prefixed names
   return new Promise((resolve, reject) => {
     // @ts-expect-error - N3 Writer constructor accepts options but TypeScript definitions are incorrect

@@ -27,7 +27,7 @@ import {
   removeEdgeFromStore,
   type SerializerType,
 } from '../../../src/parser';
-import { changedLineCount, formatDiff, isAttributionOnlyChange } from './minimalDiff';
+import { changedLineCount, formatDiff, isAttributionOnlyChange, blockUnchanged } from './minimalDiff';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '../../fixtures');
@@ -92,17 +92,26 @@ describe('Group E — object-property edges', () => {
     ).toBe(true);
   });
 
-  it.skip('E4 (known limitation): appending a restriction to a class with a MULTI-LINE subClassOf list should not reflow that list', async () => {
-    // NARROWED after Phase 1: rdf:type is preserved, the new restriction is inlined, domain/range
-    // is updated, and sibling blocks are untouched. The only remaining non-minimal behaviour is
-    // that a class whose ORIGINAL rdfs:subClassOf list spans MULTIPLE lines (one item per line)
-    // gets that list collapsed onto a single line when a new item is appended (output is valid &
-    // re-parseable). Fixing requires per-LIST-ITEM preservation: keep each existing item's
-    // original line text and only append the new "[ … ]". Tracked as future work.
+  it('E4: appending a restriction to a class with a MULTI-LINE subClassOf list preserves the existing items', async () => {
     const { original, store, serialize } = await load(AEC);
     addEdgeToStore(store, 'Detail', 'Note', 'contains', { minCardinality: 0, maxCardinality: 1 });
     const out = await serialize();
-    expect(changedLineCount(original, out)).toBeLessThanOrEqual(3);
+
+    // The existing items of :Detail's subClassOf list must remain on their own lines, verbatim.
+    expect(out).toContain('rdfs:subClassOf :DrawingType, ');
+    expect(out).toContain(
+      '        [ rdf:type owl:Restriction ; owl:onProperty :hasProperty ; owl:onClass :Orientation ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ]'
+    );
+    // The new restriction is appended (inline), referencing :Note.
+    expect(out).toMatch(/owl:onProperty :contains ;[^[\]]*owl:onClass :Note/);
+    // :Detail's rdf:type and label must be untouched.
+    expect(out).toContain(':Detail rdf:type owl:Class');
+    expect(out).toContain('rdfs:label "Detail"');
+    // Sibling restriction-bearing block stays byte-identical.
+    expect(blockUnchanged(original, out, ':DrawingSheet').equal).toBe(true);
+    // Output is valid Turtle.
+    const reparsed = await parseRdfToGraph(out, { path: 'reparse.ttl' });
+    expect(reparsed.store).toBeTruthy();
   });
 });
 
