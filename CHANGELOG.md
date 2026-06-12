@@ -1,3 +1,15 @@
+## [1.14.3](https://github.com/alelom/OntoCanvas/compare/v1.14.2...v1.14.3) (2026-06-12)
+
+
+### Bug Fixes
+
+* e2e warmup, Image mock, edit-modal identifier-on-open ([5084721](https://github.com/alelom/OntoCanvas/commit/50847214065a13e981f9f4a3d821af6327bdf94b))
+* **serializer:** inline newly-added restrictions (Phase 1b) ([6d7d16b](https://github.com/alelom/OntoCanvas/commit/6d7d16b51d88ec6cff503f6392c9e45dd0bd8951))
+* **serializer:** make custom TTL save produce minimal atomic diffs ([38c7592](https://github.com/alelom/OntoCanvas/commit/38c7592417cacd490963282318f5e22d6c5d8daa))
+* **serializer:** preserve multi-line subClassOf lists on append (Phase 1c) ([f39c282](https://github.com/alelom/OntoCanvas/commit/f39c282f6181890dae568a250cc22759fe23d411))
+* **serializer:** preserve rdf:type on property additions (Phase 1a) ([6432f92](https://github.com/alelom/OntoCanvas/commit/6432f92a26563d2b56d6bf321c027cf0b2bb4235))
+* **serializer:** preserve section-divider comments on block edits (Phase 2) ([5cc23cb](https://github.com/alelom/OntoCanvas/commit/5cc23cb44888653739497dfbbec62c6dd5bb2782))
+
 ## [1.14.2](https://github.com/alelom/OntoCanvas/compare/v1.14.1...v1.14.2) (2026-03-18)
 
 
