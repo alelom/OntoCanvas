@@ -92,12 +92,13 @@ describe('Group E — object-property edges', () => {
     ).toBe(true);
   });
 
-  it.skip('E4 (known limitation): adding an edge to a class with an existing restriction should not reflow its subClassOf list', async () => {
-    // CURRENT BEHAVIOUR: editing a class that already carries an inline owl:Restriction
-    // re-serializes the whole block, collapsing its multi-line rdfs:subClassOf list onto one
-    // line and re-ordering restriction properties. Correctness is fine (valid, re-parseable),
-    // but it is not a minimal diff. Fixing requires per-property preservation within edited
-    // restriction-bearing blocks. Tracked as future work.
+  it.skip('E4 (known limitation): appending a restriction to a class with a MULTI-LINE subClassOf list should not reflow that list', async () => {
+    // NARROWED after Phase 1: rdf:type is preserved, the new restriction is inlined, domain/range
+    // is updated, and sibling blocks are untouched. The only remaining non-minimal behaviour is
+    // that a class whose ORIGINAL rdfs:subClassOf list spans MULTIPLE lines (one item per line)
+    // gets that list collapsed onto a single line when a new item is appended (output is valid &
+    // re-parseable). Fixing requires per-LIST-ITEM preservation: keep each existing item's
+    // original line text and only append the new "[ … ]". Tracked as future work.
     const { original, store, serialize } = await load(AEC);
     addEdgeToStore(store, 'Detail', 'Note', 'contains', { minCardinality: 0, maxCardinality: 1 });
     const out = await serialize();
