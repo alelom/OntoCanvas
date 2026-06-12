@@ -1628,6 +1628,10 @@ async function serializeBlockToTurtle(
       // Check if original text has inline blank nodes (not explicit _: references)
       const hasInlineBlanks = block.originalText && /\[[\s\S]*?\]/.test(block.originalText);
       const hasExplicitBlanks = block.originalText && /_\:[a-zA-Z0-9_-]+\s+[a-z]/.test(block.originalText);
+      // Also inline when the serialized output itself contains blank-node references — this covers
+      // a block that GAINED its first restriction (the original had no inline blanks, so the gate
+      // above would otherwise skip inlining and leave an expanded "_:n3-0 …" chain).
+      const outputHasBlankRefs = /_:df_\d+_\d+/.test(result) || /_:n3-\d+/.test(result);
       
       /**
        * BLANK NODE INLINING ATTEMPTS - DOCUMENTED FOR FUTURE REFERENCE
@@ -1657,7 +1661,7 @@ async function serializeBlockToTurtle(
        */
       
       let processedResult = result;
-      if (hasInlineBlanks && !hasExplicitBlanks) {
+      if (!hasExplicitBlanks && (hasInlineBlanks || outputHasBlankRefs)) {
         // Approach 1: Build inline forms directly from block.quads (using original blank node IDs)
         // This is more robust because N3 Writer might not serialize blank node quads as separate blocks
         // when they're only used as objects

@@ -121,17 +121,19 @@ describe('Group L — data-property restriction on a class', () => {
     expect(changedLineCount(original, out), `add+remove restriction drifted:\n${formatDiff(original, out)}`).toBe(0);
   });
 
-  it.skip('L1-MINIMAL (KNOWN BUG): adding a restriction should inline it and not reflow/rewrite the class block', async () => {
-    // Currently the class block is re-serialized: rdf:type->a and the new restriction is emitted
-    // as an un-inlined "_:n3-0 ..." chain instead of "rdfs:subClassOf [ ... ]". Valid but not minimal.
+  it('L1-MINIMAL: adding a restriction inlines it and does not reflow/rewrite the class block', async () => {
     const { original, store, serialize } = await setup();
     addDataPropertyRestrictionToClass(store, 'Zone', 'hasArea', { minCardinality: 1, maxCardinality: null });
     const out = await serialize();
-    expect(out).toContain(':Zone rdf:type owl:Class');
+    expect(out).toContain(':Zone rdf:type owl:Class'); // rdf:type preserved (not "a")
     expect(out).not.toMatch(/:Zone\s+a\s+owl:Class/);
-    expect(out).toMatch(/rdfs:subClassOf \[ /); // inline restriction
-    expect(out).not.toMatch(/_:n3-\d+ /); // no expanded blank node
-    expect(changedLineCount(original, out)).toBeLessThanOrEqual(2);
+    expect(out).toMatch(/rdfs:subClassOf \[ /); // restriction inlined
+    expect(out).not.toMatch(/_:n3-\d+ /); // no expanded blank-node chain
+    // Minimal diff: previous last property's terminator flips '.'→';' and one inline line is added.
+    const d = meaningfulLineDiff(original, out);
+    expect(d.removed, `unexpected:\n${formatDiff(original, out)}`).toEqual(['rdfs:comment "A subdivision of a site." .']);
+    expect(d.added).toHaveLength(2);
+    expect(d.added.some((l) => l.includes('rdfs:subClassOf [') && l.includes('owl:onProperty :hasArea'))).toBe(true);
   });
 });
 
