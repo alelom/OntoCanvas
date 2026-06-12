@@ -29,7 +29,7 @@ import {
   updateDataPropertyDomainsInStore,
   type SerializerType,
 } from '../../../src/parser';
-import { changedLineCount, formatDiff, blockUnchanged } from './minimalDiff';
+import { formatDiff, blockUnchanged, meaningfulLineDiff } from './minimalDiff';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MDP = join(__dirname, '../../fixtures/minimal-diff-properties-fixture.ttl');
@@ -87,7 +87,7 @@ describe('Group H — object-property edits', () => {
     expect(await reparses(out)).toBe(true);
   });
 
-  it.skip('H-MINIMAL (KNOWN BUG): editing hasPart must not delete the following section divider', async () => {
+  it('H-MINIMAL: editing hasPart must not delete the following section divider', async () => {
     const { original, store, serialize } = await setup();
     updateObjectPropertyCommentInStore(store, 'hasPart', 'Has-a relationship.');
     const out = await serialize();
@@ -95,7 +95,10 @@ describe('Group H — object-property edits', () => {
     expect(out, `divider lost:\n${formatDiff(original, out)}`).toContain('#    Data properties');
     // And no other block may change.
     expect(blockUnchanged(original, out, ':hasArea').equal).toBe(true);
-    expect(changedLineCount(original, out)).toBeLessThanOrEqual(1);
+    // Only the comment line changes (1 removed + 1 added).
+    const d = meaningfulLineDiff(original, out);
+    expect(d.removed, `unexpected:\n${formatDiff(original, out)}`).toEqual(['rdfs:comment "Composition relationship." ;']);
+    expect(d.added).toEqual(['rdfs:comment "Has-a relationship." ;']);
   });
 });
 
@@ -135,13 +138,16 @@ describe('Group I — data-property edits', () => {
     expect(await reparses(out)).toBe(true);
   });
 
-  it.skip('I-MINIMAL (KNOWN BUG): editing hasArea must not delete the following section divider', async () => {
+  it('I-MINIMAL: editing hasArea must not delete the following section divider', async () => {
     const { original, store, serialize } = await setup();
     updateDataPropertyRangeInStore(store, 'hasArea', XSD + 'double');
     const out = await serialize();
     // The "# Classes" divider immediately follows :hasArea and must survive.
     expect(out, `divider lost:\n${formatDiff(original, out)}`).toContain('#    Classes');
     expect(blockUnchanged(original, out, ':Site').equal).toBe(true);
-    expect(changedLineCount(original, out)).toBeLessThanOrEqual(1);
+    // Only the range line changes (1 removed + 1 added).
+    const d = meaningfulLineDiff(original, out);
+    expect(d.removed, `unexpected:\n${formatDiff(original, out)}`).toEqual(['rdfs:range xsd:decimal ;']);
+    expect(d.added).toEqual(['rdfs:range xsd:double ;']);
   });
 });

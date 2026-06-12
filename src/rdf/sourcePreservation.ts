@@ -237,8 +237,10 @@ export async function parseTurtleWithPositions(
     
     // Skip regular comments (they're part of the block they're associated with)
     if (trimmed.startsWith('#') && !trimmed.startsWith('##')) {
-      // Comment line - if we have a current block, it's part of it
-      if (currentBlock) {
+      // Comment line - if we have a current OPEN block, it's part of it. Do NOT re-extend a
+      // block that already terminated at its '.', otherwise a trailing section-divider comment
+      // would be absorbed into the preceding block (and then lost on re-serialization).
+      if (currentBlock && !currentBlock.originalText) {
         currentBlock.position.end = lineEnd;
         currentBlock.position.endLine = lineNumber;
       }
@@ -326,8 +328,9 @@ export async function parseTurtleWithPositions(
       
       currentSection.blocks.push(currentBlock);
       
-    } else if (currentBlock && trimmed !== '') {
-      // Continuation of current block (indented line or property continuation); do not extend over blank lines
+    } else if (currentBlock && !currentBlock.originalText && trimmed !== '') {
+      // Continuation of the current OPEN block (indented line or property continuation); do not
+      // extend over blank lines, and never re-extend a block that already terminated at its '.'.
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
     }
@@ -348,9 +351,14 @@ export async function parseTurtleWithPositions(
       !lines[nextContentIndex].trim().startsWith(' ') &&
       !lines[nextContentIndex].trim().startsWith('\t') &&
       !lines[nextContentIndex].trim().startsWith('#');
+    // A top-level '.' definitively ends a Turtle statement, so the block also ends when the next
+    // non-empty content is a comment (e.g. a section divider). Treating that as a block end keeps
+    // the divider in the inter-block gap instead of absorbing it into the preceding block.
+    const nextContentIsComment = nextContentIndex < lines.length &&
+      lines[nextContentIndex].trim().startsWith('#');
     const isLastLine = i === lines.length - 1;
 
-    if (endsWithPeriod && (nextLineIsStatement || nextContentIsStatement || isLastLine) && currentBlock) {
+    if (endsWithPeriod && (nextLineIsStatement || nextContentIsStatement || nextContentIsComment || isLastLine) && currentBlock && !currentBlock.originalText) {
       // Block ends here (at the period; blank lines after this are not part of the block)
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
@@ -911,11 +919,11 @@ export async function reconstructFromOriginalText(
       }
       finalNewText += cache.formattingStyle.lineEnding;
       
-      // Preserve blank lines after the block (from original)
-      for (let i = 0; i < blankLinesCount; i++) {
-        finalNewText += cache.formattingStyle.lineEnding;
-      }
-      
+      // Do NOT synthesize blank lines here. The suffix (sliced at endPos below) already
+      // contains the original blank lines AND any section-divider comments that follow this
+      // block; re-adding blank lines used to go hand-in-hand with slicing from the next block's
+      // start, which dropped those dividers.
+
       // DEBUG: Log position calculations for DrawingSheet block
       if (block.subject && block.subject.includes('DrawingSheet')) {
         debugLog('[reconstructFromOriginalText] DrawingSheet block position calculation:');
@@ -937,58 +945,12 @@ export async function reconstructFromOriginalText(
       // Calculate original block length
       const originalLength = block.position.end - block.position.start + cache.formattingStyle.lineEnding.length;
       
-      // Find the next block after this one in the cache
-      const nextBlock = cache.statementBlocks
-        .filter(b => b.position.start > block.position.end)
-        .sort((a, b) => a.position.start - b.position.start)[0];
-      
-      if (nextBlock) {
-        // We're processing blocks in reverse order (by position.end), so when we replace this block,
-        // blocks after it have already been replaced. The next block's start in the current result
-        // is still nextBlock.position.start (replacing a block only shifts content after that block).
-        // So we slice from nextBlock.position.start to get the next block and everything after it.
-        let nextContentStart: number;
-        if (blankLinesCount === 0) {
-          nextContentStart = endPos;
-        } else {
-          // Has blank lines: skip this block's newline and blank lines by starting at the next block
-          nextContentStart = nextBlock.position.start;
-        }
-        
-        // DEBUG: Log nextContentStart calculation for DrawingSheet block
-        if (block.subject && block.subject.includes('DrawingSheet')) {
-          debugLog('[reconstructFromOriginalText] DrawingSheet nextContentStart calculation:');
-          debugLog('  block.position.start:', block.position.start);
-          debugLog('  block.position.end:', block.position.end);
-          debugLog('  endPos:', endPos);
-          debugLog('  finalNewText.length:', finalNewText.length);
-          debugLog('  calculated nextContentStart:', nextContentStart);
-          debugLog('  result.length:', result.length);
-          debugLog('  result.slice(nextContentStart) (first 100 chars):', result.slice(nextContentStart).substring(0, 100));
-        }
-        
-        // SAFETY CHECK: Verify nextContentStart is within bounds
-        if (nextContentStart < block.position.start || nextContentStart > result.length) {
-          debugError('[reconstructFromOriginalText] Invalid nextContentStart:', nextContentStart, 'for block:', block.subject, 'result length:', result.length);
-          // Use fallback: original end + blank lines
-          const fallbackNextContentStart = endPos + (blankLinesCount * cache.formattingStyle.lineEnding.length);
-          result = result.slice(0, block.position.start) + 
-                   finalNewText + 
-                   result.slice(fallbackNextContentStart);
-        } else {
-          // Replace the block: everything before + new text + everything after
-          result = result.slice(0, block.position.start) + 
-                   finalNewText + 
-                   result.slice(nextContentStart);
-        }
-      } else {
-        // No next block - this is the last block, preserve everything after
-        // Use the original calculation
-        const nextContentStart = endPos + (blankLinesCount * cache.formattingStyle.lineEnding.length);
-        result = result.slice(0, block.position.start) + 
-                 finalNewText + 
-                 result.slice(nextContentStart);
-      }
+      // Replace ONLY this block's own text; keep everything after it verbatim by slicing the
+      // suffix at endPos (just past the block's terminating newline). That suffix contains the
+      // original blank lines, any section-divider comments, and the already-processed later
+      // blocks — all preserved exactly. This is position-safe because blocks are processed in
+      // reverse order, so content at positions <= block.position.end is unchanged in `result`.
+      result = result.slice(0, block.position.start) + finalNewText + result.slice(endPos);
       
       // Track length change for this block
       const newLength = finalNewText.length;
