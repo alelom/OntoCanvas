@@ -83,16 +83,19 @@ describe('Group K — example images', () => {
     expect(reparsed.store).toBeTruthy();
   });
 
-  it.skip('K2-MINIMAL (KNOWN BUG): adding an example image must not rewrite rdf:type to "a"', async () => {
-    // Adding a property is not detected as a property-level change, so the block goes through
-    // block-level serialization which (for this block) emits ":Zone a owl:Class". The
-    // rdf:type->a restoration should run but does not in this path. Fix in implementation phase.
+  it('K2-MINIMAL: adding an example image preserves rdf:type and only touches the append site', async () => {
     const { original, store, serialize } = await setup();
     setExampleImageUrisForClass(store, 'Zone', ['https://example.org/img/zone.png'], BASE);
     const out = await serialize();
+    // rdf:type must be preserved (not rewritten to "a").
     expect(out).toContain(':Zone rdf:type owl:Class');
     expect(out).not.toMatch(/:Zone\s+a\s+owl:Class/);
-    expect(changedLineCount(original, out)).toBeLessThanOrEqual(2);
+    // Minimal diff: the previous last property's terminator flips '.'→';' and the new line is added.
+    const d = meaningfulLineDiff(original, out);
+    expect(d.removed, `unexpected:\n${formatDiff(original, out)}`).toEqual(['rdfs:comment "A subdivision of a site." .']);
+    expect(d.added.sort()).toEqual(
+      ['rdfs:comment "A subdivision of a site." ;', ':exampleImage <https://example.org/img/zone.png> .'].sort()
+    );
   });
 });
 

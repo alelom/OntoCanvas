@@ -2078,9 +2078,12 @@ async function serializeBlockToTurtle(
       }
       
       // CRITICAL: Apply style fixes to match original format (e.g., convert "a" to "rdf:type")
-      // This ensures that when we serialize, we match the original style
-      // Check if original uses "rdf:type" instead of "a"
-      if (block.originalText && block.originalText.includes('rdf:type') && !block.originalText.match(/\s+a\s+/)) {
+      // This ensures that when we serialize, we match the original style.
+      // Decide based on the original block's TYPE declaration, not on raw text: strip string
+      // literals first so a stray word "a" inside a comment/label (e.g. "of a site") does not
+      // look like the `a` keyword and suppress the conversion.
+      const originalNoStrings = (block.originalText ?? '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
+      if (block.originalText && originalNoStrings.includes('rdf:type') && !originalNoStrings.match(/\s+a\s+/)) {
         // Original uses rdf:type, so convert "a" to "rdf:type" in serialized output
         formatted = formatted.replace(/\s+a\s+(owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
         formatted = formatted.replace(/\s+a\s+:/g, ' rdf:type :');
