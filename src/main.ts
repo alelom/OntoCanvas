@@ -42,7 +42,6 @@ import {
   updateAnnotationPropertyCommentInStore,
   updateAnnotationPropertyIsBooleanInStore,
   updateAnnotationPropertyRangeInStore,
-  removeAnnotationPropertyFromStore,
   storeToTurtle,
   extractLocalName,
 } from './parser';
@@ -103,7 +102,6 @@ import {
   estimateNodeDimensions,
   resolveOverlaps,
   matchesSearch,
-  COLORS,
   getLayoutAlgorithm,
 } from './graph';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
@@ -174,7 +172,6 @@ import {
   BORDER_LINE_OPTIONS,
   borderLineTypeToVis,
   renderLineTypeSvg,
-  renderLineTypeDropdown,
   renderEdgeLineTypeDropdown,
   getEdgeStyleConfig,
   updateEdgeColorsLegend,
@@ -191,6 +188,14 @@ import {
   validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
+import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
+import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
+import {
+  initAnnotationPropsMenu,
+  getAnnotationStyleConfig,
+  applyAnnotationStyleConfigToDom,
+  type AnnotationPropsMenuDeps,
+} from './ui/annotationPropertiesMenu';
 import { updateAddRelTypeIdentifierAndValidation as updateAddRelTypeIdentifierAndValidationFromModal } from './ui/objectPropertyModal';
 import { updateAddDataPropIdentifierAndValidation as updateAddDataPropIdentifierAndValidationFromModal } from './ui/dataPropertyModal';
 import './style.css';
@@ -237,7 +242,8 @@ function collectDisplayConfig(): DisplayConfig | null {
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical03',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
-    annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent) : undefined,
+    annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, annotationProperties) : undefined,
+    annotationPropertyOrder: annotationProperties.map((ap) => ap.name),
     viewState: network
       ? { scale: network.getScale(), position: network.getViewPosition() }
       : undefined,
@@ -2408,7 +2414,7 @@ function initEditAnnotationPropertyHandlers(): void {
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     const annotationPropsContent = document.getElementById('annotationPropsContent');
-    if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
+    if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
     document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
   });
   document.getElementById('editAnnotationPropertyModal')?.addEventListener('keydown', (e) => {
@@ -2640,7 +2646,7 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       const content = document.getElementById('annotationPropsContent');
-      if (content) initAnnotationPropsMenu(content, applyFilter);
+      if (content) initAnnotationPropsMenu(content, getAnnotationPropsMenuDeps());
     }
     document.getElementById('addAnnotationPropertyModal')!.style.display = 'none';
   });
@@ -2717,392 +2723,50 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
   });
 }
 
-interface AnnotationStyleConfig {
-  booleanProps: Record<
-    string,
-    {
-      whenTrue: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean };
-      whenFalse: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean };
-      whenUndefined: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean };
-    }
-  >;
-  textProps: Record<string, { rules: { regex: string; fillColor: string; borderColor: string; borderLineType: BorderLineType }[] }>;
+/** Property local names in priority order (highest first) for annotation styling. */
+function annotationPriorityOrder(): string[] {
+  return annotationProperties.map((ap) => ap.name);
 }
 
-const DEFAULT_BOOL_COLORS = {
-  whenTrue: { fill: '#2ecc71', border: '#000000', lineType: 'solid' as BorderLineType },
-  whenFalse: { fill: '#b8b8b8', border: '#000000', lineType: 'dashed' as BorderLineType },
-  whenUndefined: { fill: '#95a5a6', border: '#000000', lineType: 'dashed' as BorderLineType },
-};
-const DEFAULT_TEXT_COLOR = { fill: '#3498db', border: '#2980b9', lineType: 'solid' as BorderLineType };
-
-let annotationPropsMenuClickAbort: AbortController | null = null;
-
-function initAnnotationPropsMenu(
-  container: HTMLElement,
-  onApply: () => void
-): void {
-  annotationPropsMenuClickAbort?.abort();
-  annotationPropsMenuClickAbort = new AbortController();
-  const signal = annotationPropsMenuClickAbort.signal;
-
-  container.innerHTML = '';
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-  
-  // Helper to format property name with prefix
-  const formatPropName = (ap: AnnotationPropertyInfo): string => {
-    const prefix = getPrefixForUri(ap.uri, ap.isDefinedBy, externalOntologyReferences, mainBase);
-    return prefix ? `${prefix}:${ap.name}` : ap.name;
-  };
-  
-  const boolProps = annotationProperties.filter((ap) => ap.isBoolean);
-  const textProps = annotationProperties.filter((ap) => !ap.isBoolean);
-
-  if (boolProps.length > 0) {
-    const boolSection = document.createElement('div');
-    boolSection.style.marginBottom = '12px';
-    boolSection.innerHTML = '<strong style="font-size: 11px;">Boolean properties</strong>';
-    boolProps.forEach((ap) => {
-      const row = document.createElement('div');
-      row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
-      const propDisplayName = formatPropName(ap);
-      const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }) => {
-        const dataVal = val === 'undefined' ? 'undefined' : val;
-        return `
-          <div>
-            <span>When ${val}:</span>
-            <label><input type="checkbox" class="ap-bool-show" data-prop="${ap.name}" data-val="${dataVal}" checked> Show</label>
-            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-              <div><span style="font-size: 10px;">Fill:</span> <input type="color" class="ap-bool-fill" data-prop="${ap.name}" data-val="${dataVal}" value="${defaults.fill}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
-              <div><span style="font-size: 10px;">Border:</span> <input type="color" class="ap-bool-border" data-prop="${ap.name}" data-val="${dataVal}" value="${defaults.border}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
-              <div><span style="font-size: 10px;">B. Line:</span> ${renderLineTypeDropdown(ap.name, dataVal, defaults.lineType, 'ap-bool-linetype')}</div>
-            </div>
-          </div>`;
-      };
-      row.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${propDisplayName}</div>
-          <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
-          <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
-        </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px;">
-          ${renderBoolBlock('true', DEFAULT_BOOL_COLORS.whenTrue)}
-          ${renderBoolBlock('false', DEFAULT_BOOL_COLORS.whenFalse)}
-          ${renderBoolBlock('undefined', DEFAULT_BOOL_COLORS.whenUndefined)}
-        </div>
-      `;
-      boolSection.appendChild(row);
-    });
-    container.appendChild(boolSection);
-  }
-
-  if (textProps.length > 0) {
-    const textSection = document.createElement('div');
-    textSection.innerHTML = '<strong style="font-size: 11px;">Text properties (regex)</strong>';
-    textProps.forEach((ap) => {
-      const row = document.createElement('div');
-      row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
-      const propDisplayName = formatPropName(ap);
-      row.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${propDisplayName}</div>
-          <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
-          <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
-        </div>
-        <div class="ap-text-rules" data-prop="${ap.name}"></div>
-        <button type="button" class="ap-add-rule" data-prop="${ap.name}" style="font-size: 11px; margin-top: 4px;">+ Add regex rule</button>
-      `;
-      const rulesDiv = row.querySelector('.ap-text-rules')!;
-      const addRule = (regex = '', fillColor = DEFAULT_TEXT_COLOR.fill, borderColor = DEFAULT_TEXT_COLOR.border, borderLineType = DEFAULT_TEXT_COLOR.lineType) => {
-        const ruleEl = document.createElement('div');
-        ruleEl.style.cssText = 'display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap;';
-        ruleEl.innerHTML = `
-          <input type="text" class="ap-regex" placeholder="regex" value="${regex}" style="flex: 1; min-width: 80px; font-size: 11px; padding: 4px;">
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <div><span style="font-size: 10px;">Fill:</span> <input type="color" class="ap-regex-fill" value="${fillColor}" style="width: 24px; height: 18px;"></div>
-            <div><span style="font-size: 10px;">Border:</span> <input type="color" class="ap-regex-border" value="${borderColor}" style="width: 24px; height: 18px;"></div>
-            <div><span style="font-size: 10px;">B. Line:</span> ${renderLineTypeDropdown(ap.name, '', borderLineType, 'ap-regex-linetype')}</div>
-          </div>
-          <button type="button" class="ap-remove-rule" style="font-size: 11px;">×</button>
-        `;
-        ruleEl.querySelector('.ap-remove-rule')!.addEventListener('click', () => {
-          ruleEl.remove();
-          onApply();
-        });
-        [...ruleEl.querySelectorAll('.ap-regex, .ap-regex-fill, .ap-regex-border')].forEach((el) =>
-          el.addEventListener('change', onApply)
-        );
-        ruleEl.querySelector('.ap-regex')!.addEventListener('input', onApply);
-        rulesDiv.appendChild(ruleEl);
-      };
-      addRule();
-      row.querySelector('.ap-add-rule')!.addEventListener('click', () => {
-        addRule();
-        onApply();
-      });
-      textSection.appendChild(row);
-    });
-    container.appendChild(textSection);
-  }
-
-  // Add event listeners for edit and delete buttons
-  container.querySelectorAll('.annotation-prop-edit-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      showEditAnnotationPropertyModal(name);
-    }, { signal });
-  });
-  container.querySelectorAll('.annotation-prop-delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      if (!confirm(`Delete annotation property "${name}"?`)) return;
-      if (!ttlStore) return;
-      
-      // Save all quads for this property for undo
-      const propUri = 'http://example.org/aec-drawing-ontology#' + name;
-      const allQuads = Array.from(ttlStore.getQuads(propUri as any, null, null, null));
-      const ap = annotationProperties.find((p) => p.name === name);
-      
-      if (removeAnnotationPropertyFromStore(ttlStore, name)) {
-        annotationProperties = annotationProperties.filter((ap) => ap.name !== name);
-        
-        // Add undo action
-        pushUndoable(
-          () => {
-            // Undo: restore the property
-            if (ttlStore) {
-              for (const q of allQuads) {
-                ttlStore.addQuad(q.subject, q.predicate, q.object, q.graph);
-              }
-            }
-            if (ap) {
-              annotationProperties.push(ap);
-              annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
-            }
-            initAnnotationPropsMenu(container, onApply);
-            hasUnsavedChanges = true;
-            updateSaveButtonVisibility();
-          },
-          () => {
-            // Redo: delete again
-            if (ttlStore) {
-              removeAnnotationPropertyFromStore(ttlStore, name);
-            }
-            annotationProperties = annotationProperties.filter((ap) => ap.name !== name);
-            initAnnotationPropsMenu(container, onApply);
-            hasUnsavedChanges = true;
-            updateSaveButtonVisibility();
-          }
-        );
-        
-        hasUnsavedChanges = true;
-        updateSaveButtonVisibility();
-        initAnnotationPropsMenu(container, onApply);
-      }
-    }, { signal });
-  });
-
-  if (boolProps.length === 0 && textProps.length === 0) {
-    container.innerHTML = '<span style="font-size: 11px; color: #888;">No annotation properties in ontology</span>';
-  }
-
-  container.querySelectorAll('.ap-bool-show, .ap-bool-fill, .ap-bool-border').forEach((el) =>
-    el.addEventListener('change', onApply, { signal })
-  );
-
-  container.querySelectorAll('.ap-linetype-trigger').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const dropdown = btn.closest('.ap-linetype-dropdown');
-      const panel = dropdown?.querySelector('.ap-linetype-panel') as HTMLElement;
-      const isOpen = panel?.style.display === 'block';
-      container.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
-      if (panel && !isOpen) panel.style.display = 'block';
-    });
-  });
-  container.querySelectorAll('.ap-linetype-option').forEach((opt) => {
-    opt.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const value = (opt as HTMLElement).dataset.value as BorderLineType;
-      const dropdown = opt.closest('.ap-linetype-dropdown');
-      const hiddenInput = dropdown?.querySelector('.ap-bool-linetype, .ap-regex-linetype') as HTMLInputElement;
-      const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
-      if (hiddenInput && trigger && value) {
-        hiddenInput.value = value;
-        const selectedOpt = BORDER_LINE_OPTIONS.find((o) => o.value === value);
-        if (selectedOpt) {
-          trigger.innerHTML = `${renderLineTypeSvg(selectedOpt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
-        }
-        (dropdown?.querySelector('.ap-linetype-panel') as HTMLElement).style.display = 'none';
-        onApply();
-      }
-    });
-  });
-  document.addEventListener(
-    'click',
-    () => {
-      container.querySelectorAll('.ap-linetype-panel').forEach((p) => ((p as HTMLElement).style.display = 'none'));
+/** Build the dependency bundle the annotation-properties menu needs (injected, so the menu
+ * module stays decoupled from main.ts globals). */
+function getAnnotationPropsMenuDeps(): AnnotationPropsMenuDeps {
+  return {
+    getAnnotationProperties: () => annotationProperties,
+    setAnnotationProperties: (props) => {
+      annotationProperties = props;
     },
-    { signal }
-  );
-}
-
-function getAnnotationStyleConfig(container: HTMLElement | null): AnnotationStyleConfig {
-  const config: AnnotationStyleConfig = { booleanProps: {}, textProps: {} };
-  if (!container) return config;
-  annotationProperties.forEach((ap) => {
-    if (ap.isBoolean) {
-      const showTrue = container.querySelector(
-        `.ap-bool-show[data-prop="${ap.name}"][data-val="true"]`
-      ) as HTMLInputElement | null;
-      const showFalse = container.querySelector(
-        `.ap-bool-show[data-prop="${ap.name}"][data-val="false"]`
-      ) as HTMLInputElement | null;
-      const fillTrue = container.querySelector(
-        `.ap-bool-fill[data-prop="${ap.name}"][data-val="true"]`
-      ) as HTMLInputElement | null;
-      const borderTrue = container.querySelector(
-        `.ap-bool-border[data-prop="${ap.name}"][data-val="true"]`
-      ) as HTMLInputElement | null;
-      const fillFalse = container.querySelector(
-        `.ap-bool-fill[data-prop="${ap.name}"][data-val="false"]`
-      ) as HTMLInputElement | null;
-      const borderFalse = container.querySelector(
-        `.ap-bool-border[data-prop="${ap.name}"][data-val="false"]`
-      ) as HTMLInputElement | null;
-      const linetypeTrue = container.querySelector(
-        `.ap-bool-linetype[data-prop="${ap.name}"][data-val="true"]`
-      ) as HTMLInputElement | null;
-      const linetypeFalse = container.querySelector(
-        `.ap-bool-linetype[data-prop="${ap.name}"][data-val="false"]`
-      ) as HTMLInputElement | null;
-      const showUndefined = container.querySelector(
-        `.ap-bool-show[data-prop="${ap.name}"][data-val="undefined"]`
-      ) as HTMLInputElement | null;
-      const fillUndefined = container.querySelector(
-        `.ap-bool-fill[data-prop="${ap.name}"][data-val="undefined"]`
-      ) as HTMLInputElement | null;
-      const borderUndefined = container.querySelector(
-        `.ap-bool-border[data-prop="${ap.name}"][data-val="undefined"]`
-      ) as HTMLInputElement | null;
-      const linetypeUndefined = container.querySelector(
-        `.ap-bool-linetype[data-prop="${ap.name}"][data-val="undefined"]`
-      ) as HTMLInputElement | null;
-      config.booleanProps[ap.name] = {
-        whenTrue: {
-          fillColor: fillTrue?.value ?? DEFAULT_BOOL_COLORS.whenTrue.fill,
-          borderColor: borderTrue?.value ?? DEFAULT_BOOL_COLORS.whenTrue.border,
-          borderLineType: (linetypeTrue?.value as BorderLineType) ?? DEFAULT_BOOL_COLORS.whenTrue.lineType,
-          show: showTrue?.checked ?? true,
-        },
-        whenFalse: {
-          fillColor: fillFalse?.value ?? DEFAULT_BOOL_COLORS.whenFalse.fill,
-          borderColor: borderFalse?.value ?? DEFAULT_BOOL_COLORS.whenFalse.border,
-          borderLineType: (linetypeFalse?.value as BorderLineType) ?? DEFAULT_BOOL_COLORS.whenFalse.lineType,
-          show: showFalse?.checked ?? true,
-        },
-        whenUndefined: {
-          fillColor: fillUndefined?.value ?? DEFAULT_BOOL_COLORS.whenUndefined.fill,
-          borderColor: borderUndefined?.value ?? DEFAULT_BOOL_COLORS.whenUndefined.border,
-          borderLineType: (linetypeUndefined?.value as BorderLineType) ?? DEFAULT_BOOL_COLORS.whenUndefined.lineType,
-          show: showUndefined?.checked ?? true,
-        },
-      };
-    } else {
-      const rulesDiv = container.querySelector(`.ap-text-rules[data-prop="${ap.name}"]`);
-      const rules: { regex: string; fillColor: string; borderColor: string; borderLineType: BorderLineType }[] = [];
-      rulesDiv?.querySelectorAll(':scope > div').forEach((ruleEl) => {
-        const regexInput = ruleEl.querySelector('.ap-regex') as HTMLInputElement | null;
-        const fillInput = ruleEl.querySelector('.ap-regex-fill') as HTMLInputElement | null;
-        const borderInput = ruleEl.querySelector('.ap-regex-border') as HTMLInputElement | null;
-        const linetypeInput = ruleEl.querySelector('.ap-regex-linetype') as HTMLInputElement | null;
-        if (regexInput && regexInput.value.trim()) {
-          rules.push({
-            regex: regexInput.value.trim(),
-            fillColor: fillInput?.value ?? DEFAULT_TEXT_COLOR.fill,
-            borderColor: borderInput?.value ?? DEFAULT_TEXT_COLOR.border,
-            borderLineType: (linetypeInput?.value as BorderLineType) ?? DEFAULT_TEXT_COLOR.lineType,
-          });
-        }
-      });
-      config.textProps[ap.name] = { rules };
-    }
-  });
-  return config;
+    getTtlStore: () => ttlStore,
+    getExternalRefs: () => externalOntologyReferences,
+    onApply: () => applyFilter(),
+    showEditModal: (name) => showEditAnnotationPropertyModal(name),
+    markUnsaved: () => {
+      hasUnsavedChanges = true;
+      updateSaveButtonVisibility();
+    },
+    scheduleSave: () => scheduleDisplayConfigSave(),
+    pushUndoable: (undo, redo) => pushUndoable(undo, redo),
+  };
 }
 
 function shouldShowNodeByAnnotations(
   node: GraphNode,
   config: AnnotationStyleConfig
 ): boolean {
-  const ann = node.annotations ?? {};
-  for (const [propName, boolConfig] of Object.entries(config.booleanProps)) {
-    const val = ann[propName];
-    if (val === true) {
-      if (!boolConfig.whenTrue.show) return false;
-    } else if (val === false) {
-      if (!boolConfig.whenFalse.show) return false;
-    } else if (val == null) {
-      // when null/undefined: respect whenUndefined.show if configured
-      if (boolConfig.whenUndefined && boolConfig.whenUndefined.show === false) return false;
-    }
-  }
-  return true;
+  return resolveNodeAnnotationStyle(node.annotations, config, annotationPriorityOrder()).show;
 }
 
 function getNodeStyleFromAnnotations(
   node: GraphNode,
   config: AnnotationStyleConfig
 ): { background: string; border: string; shapeProperties?: { borderDashes: false | true | number[] } } {
-  const ann = node.annotations ?? {};
-  for (const [propName, boolConfig] of Object.entries(config.booleanProps)) {
-    const val = ann[propName];
-    if (val === true) {
-      const dashes = borderLineTypeToVis(boolConfig.whenTrue.borderLineType);
-      return {
-        background: boolConfig.whenTrue.fillColor,
-        border: boolConfig.whenTrue.borderColor,
-        shapeProperties: dashes !== false ? { borderDashes: dashes } : undefined,
-      };
-    }
-    if (val === false) {
-      const dashes = borderLineTypeToVis(boolConfig.whenFalse.borderLineType);
-      return {
-        background: boolConfig.whenFalse.fillColor,
-        border: boolConfig.whenFalse.borderColor,
-        shapeProperties: dashes !== false ? { borderDashes: dashes } : undefined,
-      };
-    }
-    if (val == null) {
-      const dashes = borderLineTypeToVis(boolConfig.whenUndefined.borderLineType);
-      return {
-        background: boolConfig.whenUndefined.fillColor,
-        border: boolConfig.whenUndefined.borderColor,
-        shapeProperties: dashes !== false ? { borderDashes: dashes } : undefined,
-      };
-    }
-  }
-  for (const [propName, textConfig] of Object.entries(config.textProps)) {
-    const val = ann[propName];
-    if (val == null || typeof val !== 'string') continue;
-    for (const rule of textConfig.rules) {
-      if (!rule.regex) continue;
-      try {
-        const re = new RegExp(rule.regex);
-        if (re.test(val)) {
-          const dashes = borderLineTypeToVis(rule.borderLineType);
-          return {
-            background: rule.fillColor,
-            border: rule.borderColor,
-            shapeProperties: dashes !== false ? { borderDashes: dashes } : undefined,
-          };
-        }
-      } catch {
-        // invalid regex: skip
-      }
-    }
-  }
-  return { background: COLORS.default, border: '#2c3e50' };
+  const resolved = resolveNodeAnnotationStyle(node.annotations, config, annotationPriorityOrder());
+  const dashes = borderLineTypeToVis(resolved.borderLineType);
+  return {
+    background: resolved.background,
+    border: resolved.border,
+    shapeProperties: dashes !== false ? { borderDashes: dashes } : undefined,
+  };
 }
 
 /**
@@ -7322,7 +6986,7 @@ async function loadTtlAndRender(
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
     const dataPropsContent = document.getElementById('dataPropsContent');
     if (dataPropsContent) initDataPropsMenu(dataPropsContent);
-    if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, applyFilter);
+    if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
     initAddRelationshipTypeHandlers(edgeStylesContent);
     initAddDataPropertyHandlers(dataPropsContent ?? undefined);
     initAddAnnotationPropertyHandlers(annotationPropsContent ?? undefined);
@@ -7330,7 +6994,20 @@ async function loadTtlAndRender(
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     // Skip IndexedDB operations in test mode for faster execution
     const displayConfig = skipSlowOperationsForTests ? null : await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
-    
+
+    // Apply the saved annotation-property priority order (drives styling precedence) and restore
+    // saved per-property colours into the freshly rendered menu. The menu was rendered above with
+    // alphabetical order + default colours; this overrides both from the saved display config.
+    if (displayConfig && annotationPropsContent) {
+      annotationProperties = applyAnnotationPropertyOrder(annotationProperties, displayConfig.annotationPropertyOrder);
+      initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
+      applyAnnotationStyleConfigToDom(
+        annotationPropsContent,
+        displayConfig.annotationStyleConfig as AnnotationStyleConfig | undefined,
+        annotationProperties
+      );
+    }
+
     // Set lastLayoutMode BEFORE applying config to prevent clearing positions
     // Get layout mode from config or default
     const configLayoutMode = displayConfig?.layoutMode || 'hierarchical03';
@@ -7481,7 +7158,7 @@ function applyFilter(preserveView = false): void {
     searchQuery: searchEl?.value ?? '',
     includeNeighbors: neighborsEl?.checked ?? true,
     edgeStyleConfig: mergedEdgeStyleConfig,
-    annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent),
+    annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent, annotationProperties),
     layoutMode,
   };
 
@@ -8202,7 +7879,7 @@ function setupEventListeners(): void {
         }
         const annotationPropsContent = document.getElementById('annotationPropsContent');
         if (annotationPropsContent) {
-          initAnnotationPropsMenu(annotationPropsContent);
+          initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
         }
         // Rebuild the graph to update class node labels
         applyFilter(true);
