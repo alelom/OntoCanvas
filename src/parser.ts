@@ -1764,8 +1764,20 @@ export function updateAnnotationPropertyRangeInStore(
 /**
  * Remove an annotation property from the store.
  */
+/**
+ * Resolve an annotation property name to its full URI from the store.
+ * Annotation properties loaded from a file (or imported) keep their own namespace, which is
+ * usually NOT the default BASE_IRI, so we must look up the real URI rather than concatenating.
+ */
+export function getAnnotationPropertyUriFromStore(store: Store, name: string): string {
+  if (name.startsWith('http://') || name.startsWith('https://')) return name;
+  const aps = getAnnotationProperties(store);
+  const ap = aps.find((p) => p.name === name || p.uri === name);
+  return ap?.uri ?? BASE_IRI + name;
+}
+
 export function removeAnnotationPropertyFromStore(store: Store, propertyName: string): boolean {
-  const propUri = BASE_IRI + propertyName;
+  const propUri = getAnnotationPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const quads = store.getQuads(subject, null, null, null);
   if (quads.length === 0) return false;
