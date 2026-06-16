@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm run test:*)",
+      "Bash(npm run test:*)"
+    ]
+  }
+}
