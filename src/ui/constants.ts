@@ -36,6 +36,23 @@ export const DEFAULT_TEXT_COLOR = {
   lineType: 'solid' as BorderLineType,
 };
 
+/**
+ * Distinct default fill colours assigned to annotation properties by position, so that two
+ * properties don't share the same colour out of the box. Index 0 is the historic default green.
+ */
+export const ANNOTATION_FILL_PALETTE: string[] = [
+  '#2ecc71', // green
+  '#3498db', // blue
+  '#e67e22', // orange
+  '#9b59b6', // purple
+  '#e74c3c', // red
+  '#1abc9c', // teal
+  '#f39c12', // amber
+  '#e84393', // pink
+  '#16a085', // dark teal
+  '#2c3e50', // slate
+];
+
 export type AnnotationStyleConfig = {
   booleanProps: Record<
     string,

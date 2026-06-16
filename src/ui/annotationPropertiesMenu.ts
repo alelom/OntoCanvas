@@ -18,7 +18,7 @@ import { renderLineTypeDropdown, renderLineTypeSvg } from './edgeStyleUtils';
 import { getPrefixForUri } from './externalRefs';
 import { getMainOntologyBase, removeAnnotationPropertyFromStore, getAnnotationPropertyUriFromStore } from '../parser';
 import type { ExternalOntologyReference } from '../storage';
-import { reorderAnnotationProperty } from '../lib/annotationStyle';
+import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotationStyle';
 
 /** Everything the menu needs from the host app, injected so this module stays decoupled. */
 export interface AnnotationPropsMenuDeps {
@@ -54,9 +54,16 @@ export function initAnnotationPropsMenu(
   const ttlStore = deps.getTtlStore();
   const externalRefs = deps.getExternalRefs();
 
+  // Distinct default fill per property (by position) so two properties never share a colour
+  // out of the box. Keyed by name; preservation below keeps a property's colour stable on reorder.
+  const colourIndexByName = new Map(annotationProperties.map((ap, i) => [ap.name, i] as const));
+  const defaultFillFor = (name: string): string => defaultAnnotationFill(colourIndexByName.get(name) ?? 0);
+
   // Snapshot the colours/visibility currently shown so a re-render (after reorder/delete/undo)
-  // does not reset the user's picks back to defaults. Re-applied at the end.
-  const preserved = getAnnotationStyleConfig(container, annotationProperties);
+  // does not reset the user's picks. Only when controls already exist — on the first render there
+  // is nothing to preserve and we must keep the fresh per-property defaults rendered below.
+  const hadExistingControls = !!container.querySelector('.ap-bool-fill, .ap-regex-fill');
+  const preserved = hadExistingControls ? getAnnotationStyleConfig(container, annotationProperties) : null;
 
   container.innerHTML = '';
   const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
@@ -112,7 +119,7 @@ export function initAnnotationPropsMenu(
           ${rowHeaderControls(ap, i === 0, i === boolProps.length - 1)}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px;">
-          ${renderBoolBlock('true', DEFAULT_BOOL_COLORS.whenTrue)}
+          ${renderBoolBlock('true', { ...DEFAULT_BOOL_COLORS.whenTrue, fill: defaultFillFor(ap.name) })}
           ${renderBoolBlock('false', DEFAULT_BOOL_COLORS.whenFalse)}
           ${renderBoolBlock('undefined', DEFAULT_BOOL_COLORS.whenUndefined)}
         </div>
@@ -136,7 +143,7 @@ export function initAnnotationPropsMenu(
         <button type="button" class="ap-add-rule" data-prop="${ap.name}" style="font-size: 11px; margin-top: 4px;">+ Add regex rule</button>
       `;
       const rulesDiv = row.querySelector('.ap-text-rules')!;
-      const addRule = (regex = '', fillColor = DEFAULT_TEXT_COLOR.fill, borderColor = DEFAULT_TEXT_COLOR.border, borderLineType = DEFAULT_TEXT_COLOR.lineType) => {
+      const addRule = (regex = '', fillColor = defaultFillFor(ap.name), borderColor = DEFAULT_TEXT_COLOR.border, borderLineType = DEFAULT_TEXT_COLOR.lineType) => {
         const ruleEl = document.createElement('div');
         ruleEl.style.cssText = 'display: flex; align-items: center; gap: 6px; margin: 4px 0; flex-wrap: wrap;';
         ruleEl.innerHTML = `
@@ -277,8 +284,9 @@ export function initAnnotationPropsMenu(
     { signal }
   );
 
-  // Restore the snapshotted colours/visibility into the freshly rendered inputs.
-  applyAnnotationStyleConfigToDom(container, preserved, annotationProperties);
+  // Restore the snapshotted colours/visibility into the freshly rendered inputs (only when a
+  // prior render existed; otherwise the per-property defaults rendered above stand).
+  if (preserved) applyAnnotationStyleConfigToDom(container, preserved, annotationProperties);
 }
 
 /** Read the current annotation styling config from the menu DOM. */

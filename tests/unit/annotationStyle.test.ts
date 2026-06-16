@@ -3,8 +3,10 @@ import {
   resolveNodeAnnotationStyle,
   applyAnnotationPropertyOrder,
   reorderAnnotationProperty,
+  defaultAnnotationFill,
   DEFAULT_NODE_STYLE,
 } from '../../src/lib/annotationStyle';
+import { ANNOTATION_FILL_PALETTE } from '../../src/ui/constants';
 import type { AnnotationStyleConfig, BorderLineType } from '../../src/ui/constants';
 
 // --- helpers ---------------------------------------------------------------
@@ -277,5 +279,30 @@ describe('reorderAnnotationProperty', () => {
 
   it('returns a copy when the name is not found', () => {
     expect(reorderAnnotationProperty(bools, 'missing', 1).map((p) => p.name)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('defaultAnnotationFill', () => {
+  it('keeps the first property green (historic default)', () => {
+    expect(defaultAnnotationFill(0)).toBe('#2ecc71');
+  });
+
+  it('gives the second property a different colour than the first', () => {
+    expect(defaultAnnotationFill(1)).not.toBe(defaultAnnotationFill(0));
+  });
+
+  it('assigns distinct colours across the whole palette', () => {
+    const colours = ANNOTATION_FILL_PALETTE.map((_, i) => defaultAnnotationFill(i));
+    expect(new Set(colours).size).toBe(ANNOTATION_FILL_PALETTE.length);
+  });
+
+  it('wraps around after the palette is exhausted', () => {
+    expect(defaultAnnotationFill(ANNOTATION_FILL_PALETTE.length)).toBe(defaultAnnotationFill(0));
+    expect(defaultAnnotationFill(ANNOTATION_FILL_PALETTE.length + 1)).toBe(defaultAnnotationFill(1));
+  });
+
+  it('handles negative and non-integer indices without throwing', () => {
+    expect(typeof defaultAnnotationFill(-1)).toBe('string');
+    expect(defaultAnnotationFill(2.7)).toBe(defaultAnnotationFill(2));
   });
 });

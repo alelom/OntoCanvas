@@ -188,6 +188,16 @@ describe('annotationPropertiesMenu - config read/write', () => {
     expect(read.booleanProps.flagA.whenFalse.fillColor).toBe('#778899');
   });
 
+  it('gives two boolean properties distinct default "when true" fills', () => {
+    const props = [boolProp('a'), boolProp('b')];
+    const { deps } = makeDeps(props, makeStore(['a', 'b']));
+    initAnnotationPropsMenu(container, deps);
+
+    const cfg = getAnnotationStyleConfig(container, props);
+    expect(cfg.booleanProps.a.whenTrue.fillColor).toBe('#2ecc71'); // first stays green
+    expect(cfg.booleanProps.b.whenTrue.fillColor).not.toBe(cfg.booleanProps.a.whenTrue.fillColor);
+  });
+
   it('preserves the user picked colour across a reorder re-render', () => {
     const { deps } = makeDeps([boolProp('a'), boolProp('b')], makeStore(['a', 'b']));
     initAnnotationPropsMenu(container, deps);

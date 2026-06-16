@@ -9,7 +9,18 @@
  * per the project's testing-priority rule.
  */
 import type { AnnotationStyleConfig, BorderLineType } from '../ui/constants';
-import { COLORS } from '../ui/constants';
+import { COLORS, ANNOTATION_FILL_PALETTE } from '../ui/constants';
+
+/**
+ * Default fill colour for the annotation property at the given position. Wraps around the
+ * palette when there are more properties than colours. Used so each property starts with a
+ * distinct fill (e.g. the first is green, the second is not).
+ */
+export function defaultAnnotationFill(index: number): string {
+  const palette = ANNOTATION_FILL_PALETTE;
+  const i = ((Math.trunc(index) % palette.length) + palette.length) % palette.length;
+  return palette[i];
+}
 
 /** A single annotation-property state's styling (whenTrue / whenFalse / whenUndefined). */
 interface BoolStateStyle {

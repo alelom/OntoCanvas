@@ -17,8 +17,9 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const FIXTURE = join(__dirname, '../fixtures/two-boolean-annotations.ttl');
 
-// Defaults from src/ui/constants.ts
-const WHEN_TRUE = '#2ecc71';
+// Defaults from src/ui/constants.ts (ANNOTATION_FILL_PALETTE + DEFAULT_BOOL_COLORS).
+const PALETTE_0 = '#2ecc71'; // first property's "when true" fill (green)
+const PALETTE_1 = '#3498db'; // second property's "when true" fill (blue) - distinct from green
 const WHEN_UNDEFINED = '#95a5a6';
 
 let browser: Browser;
@@ -77,16 +78,19 @@ function nodeBackgrounds(p: Page, ids: string[]): Promise<Record<string, string 
 }
 
 describe('Annotation Properties menu (E2E)', () => {
-  it('colours each boolean property\'s own nodes (multi-property regression)', async () => {
+  it('colours each boolean property\'s own nodes with distinct defaults (multi-property regression)', async () => {
     expect(existsSync(FIXTURE)).toBe(true);
     await loadFixture(page);
 
     const colors = await nodeBackgrounds(page, ['ClassA', 'ClassB', 'ClassC']);
 
-    // ClassA carries flagA=true, ClassB carries flagB=true -> both get the "when true" colour.
-    // The bug returned flagA's "when undefined" (grey) for ClassB; assert it is the true colour.
-    expect(colors.ClassA).toBe(WHEN_TRUE);
-    expect(colors.ClassB).toBe(WHEN_TRUE);
+    // ClassA carries flagA=true, ClassB carries flagB=true. Each property has a distinct default
+    // "when true" fill, so the two nodes are coloured differently. The original bug returned
+    // flagA's "when undefined" (grey) for ClassB; assert ClassB got flagB's own colour instead.
+    expect(colors.ClassA).toBe(PALETTE_0);
+    expect(colors.ClassB).toBe(PALETTE_1);
+    expect(colors.ClassB).not.toBe(colors.ClassA);
+    expect(colors.ClassB).not.toBe(WHEN_UNDEFINED);
     // ClassC carries neither -> falls back to the top-priority property's "when undefined".
     expect(colors.ClassC).toBe(WHEN_UNDEFINED);
   });
