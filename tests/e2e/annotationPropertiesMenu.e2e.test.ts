@@ -17,10 +17,10 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const FIXTURE = join(__dirname, '../fixtures/two-boolean-annotations.ttl');
 
-// Defaults from src/ui/constants.ts (ANNOTATION_FILL_PALETTE + DEFAULT_BOOL_COLORS).
+// Defaults from src/ui/constants.ts (ANNOTATION_FILL_PALETTE + DEFAULT_NODE_FALLBACK).
 const PALETTE_0 = '#2ecc71'; // first property's "when true" fill (green)
 const PALETTE_1 = '#3498db'; // second property's "when true" fill (blue) - distinct from green
-const WHEN_UNDEFINED = '#95a5a6';
+const DEFAULT_FILL = '#bdc3c7'; // "no property applies" default (when false/undefined are inactive)
 
 let browser: Browser;
 let page: Page;
@@ -86,13 +86,13 @@ describe('Annotation Properties menu (E2E)', () => {
 
     // ClassA carries flagA=true, ClassB carries flagB=true. Each property has a distinct default
     // "when true" fill, so the two nodes are coloured differently. The original bug returned
-    // flagA's "when undefined" (grey) for ClassB; assert ClassB got flagB's own colour instead.
+    // flagA's "when undefined" for ClassB; assert ClassB got flagB's own colour instead.
     expect(colors.ClassA).toBe(PALETTE_0);
     expect(colors.ClassB).toBe(PALETTE_1);
     expect(colors.ClassB).not.toBe(colors.ClassA);
-    expect(colors.ClassB).not.toBe(WHEN_UNDEFINED);
-    // ClassC carries neither -> falls back to the top-priority property's "when undefined".
-    expect(colors.ClassC).toBe(WHEN_UNDEFINED);
+    // ClassC carries neither, and "when undefined" is inactive by default -> the configurable
+    // default style applies.
+    expect(colors.ClassC).toBe(DEFAULT_FILL);
   });
 
   it('deletes an annotation property via the trash-bin control', async () => {
@@ -123,9 +123,9 @@ describe('Annotation Properties menu (E2E)', () => {
     expect(after).not.toContain('flagA');
     expect(after).toContain('flagB');
 
-    // ClassA was coloured by flagA=true; after deletion it has no governing property and falls
-    // back to the (now top) flagB's "when undefined" colour.
+    // ClassA was coloured by flagA=true; after deletion it has no governing property (it doesn't
+    // carry flagB), so it falls back to the configurable default style.
     const colors = await nodeBackgrounds(page, ['ClassA']);
-    expect(colors.ClassA).toBe(WHEN_UNDEFINED);
+    expect(colors.ClassA).toBe(DEFAULT_FILL);
   });
 });

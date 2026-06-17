@@ -13,7 +13,7 @@
 import { DataFactory, type Store } from 'n3';
 import type { AnnotationPropertyInfo, BorderLineType } from '../types';
 import type { AnnotationStyleConfig } from './constants';
-import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, BORDER_LINE_OPTIONS } from './constants';
+import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, BORDER_LINE_OPTIONS, DEFAULT_NODE_FALLBACK } from './constants';
 import { renderLineTypeDropdown, renderLineTypeSvg } from './edgeStyleUtils';
 import { getPrefixForUri } from './externalRefs';
 import { getMainOntologyBase, removeAnnotationPropertyFromStore, getAnnotationPropertyUriFromStore } from '../parser';
@@ -62,11 +62,24 @@ export function initAnnotationPropsMenu(
   // Snapshot the colours/visibility currently shown so a re-render (after reorder/delete/undo)
   // does not reset the user's picks. Only when controls already exist — on the first render there
   // is nothing to preserve and we must keep the fresh per-property defaults rendered below.
-  const hadExistingControls = !!container.querySelector('.ap-bool-fill, .ap-regex-fill');
+  const hadExistingControls = !!container.querySelector('.ap-default-fill, .ap-bool-fill, .ap-regex-fill');
   const preserved = hadExistingControls ? getAnnotationStyleConfig(container, annotationProperties) : null;
 
   container.innerHTML = '';
   const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+
+  // Default style for nodes that no annotation property governs (configurable). Always shown,
+  // since with "when false"/"when undefined" off by default most nodes land here.
+  const defaultSection = document.createElement('div');
+  defaultSection.style.cssText = 'margin-bottom: 12px; padding: 8px; background: #eef1f3; border-radius: 4px;';
+  defaultSection.innerHTML = `
+    <strong style="font-size: 11px;">Default (no property applies)</strong>
+    <div style="display: flex; gap: 12px; margin-top: 4px; align-items: center; font-size: 11px;">
+      <div><span style="font-size: 10px;">Fill:</span> <input type="color" class="ap-default-fill" value="${DEFAULT_NODE_FALLBACK.fill}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
+      <div><span style="font-size: 10px;">Border:</span> <input type="color" class="ap-default-border" value="${DEFAULT_NODE_FALLBACK.border}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
+      <div><span style="font-size: 10px;">B. Line:</span> ${renderLineTypeDropdown('__default__', '', DEFAULT_NODE_FALLBACK.lineType, 'ap-default-linetype')}</div>
+    </div>`;
+  container.appendChild(defaultSection);
 
   const formatPropName = (ap: AnnotationPropertyInfo): string => {
     const prefix = getPrefixForUri(ap.uri, ap.isDefinedBy, externalRefs, mainBase);
@@ -101,11 +114,14 @@ export function initAnnotationPropsMenu(
     boolProps.forEach((ap, i) => {
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
-      const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }) => {
+      const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }, activatable: boolean) => {
         const dataVal = val === 'undefined' ? 'undefined' : val;
+        const activeToggle = activatable
+          ? `<input type="checkbox" class="ap-bool-active" data-prop="${ap.name}" data-val="${dataVal}" title="Apply this colour. If off, a lower-priority property decides this node's colour."> `
+          : '';
         return `
           <div>
-            <span>When ${val}:</span>
+            <span>${activeToggle}When ${val}:</span>
             <label><input type="checkbox" class="ap-bool-show" data-prop="${ap.name}" data-val="${dataVal}" checked> Show</label>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
               <div><span style="font-size: 10px;">Fill:</span> <input type="color" class="ap-bool-fill" data-prop="${ap.name}" data-val="${dataVal}" value="${defaults.fill}" style="width: 24px; height: 18px; vertical-align: middle;"></div>
@@ -119,9 +135,9 @@ export function initAnnotationPropsMenu(
           ${rowHeaderControls(ap, i === 0, i === boolProps.length - 1)}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px;">
-          ${renderBoolBlock('true', { ...DEFAULT_BOOL_COLORS.whenTrue, fill: defaultFillFor(ap.name) })}
-          ${renderBoolBlock('false', DEFAULT_BOOL_COLORS.whenFalse)}
-          ${renderBoolBlock('undefined', DEFAULT_BOOL_COLORS.whenUndefined)}
+          ${renderBoolBlock('true', { ...DEFAULT_BOOL_COLORS.whenTrue, fill: defaultFillFor(ap.name) }, false)}
+          ${renderBoolBlock('false', DEFAULT_BOOL_COLORS.whenFalse, true)}
+          ${renderBoolBlock('undefined', DEFAULT_BOOL_COLORS.whenUndefined, true)}
         </div>
       `;
       boolSection.appendChild(row);
@@ -176,8 +192,9 @@ export function initAnnotationPropsMenu(
   }
 
   if (boolProps.length === 0 && textProps.length === 0) {
-    container.innerHTML = '<span style="font-size: 11px; color: #888;">No annotation properties in ontology</span>';
-    return;
+    const note = document.createElement('div');
+    note.innerHTML = '<span style="font-size: 11px; color: #888;">No annotation properties in ontology</span>';
+    container.appendChild(note);
   }
 
   // Reorder: move a property up/down in priority (within its Boolean/Text section).
@@ -244,7 +261,7 @@ export function initAnnotationPropsMenu(
     }, { signal });
   });
 
-  container.querySelectorAll('.ap-bool-show, .ap-bool-fill, .ap-bool-border').forEach((el) =>
+  container.querySelectorAll('.ap-bool-show, .ap-bool-fill, .ap-bool-border, .ap-bool-active, .ap-default-fill, .ap-default-border').forEach((el) =>
     el.addEventListener('change', deps.onApply, { signal })
   );
 
@@ -263,7 +280,7 @@ export function initAnnotationPropsMenu(
       e.stopPropagation();
       const value = (opt as HTMLElement).dataset.value as BorderLineType;
       const dropdown = opt.closest('.ap-linetype-dropdown');
-      const hiddenInput = dropdown?.querySelector('.ap-bool-linetype, .ap-regex-linetype') as HTMLInputElement;
+      const hiddenInput = dropdown?.querySelector('.ap-bool-linetype, .ap-regex-linetype, .ap-default-linetype') as HTMLInputElement;
       const trigger = dropdown?.querySelector('.ap-linetype-trigger') as HTMLElement;
       if (hiddenInput && trigger && value) {
         hiddenInput.value = value;
@@ -303,6 +320,8 @@ export function getAnnotationStyleConfig(
       const showTrue = q('ap-bool-show', 'true');
       const showFalse = q('ap-bool-show', 'false');
       const showUndefined = q('ap-bool-show', 'undefined');
+      const activeFalse = q('ap-bool-active', 'false');
+      const activeUndefined = q('ap-bool-active', 'undefined');
       const fillTrue = q('ap-bool-fill', 'true');
       const borderTrue = q('ap-bool-border', 'true');
       const fillFalse = q('ap-bool-fill', 'false');
@@ -318,18 +337,21 @@ export function getAnnotationStyleConfig(
           borderColor: borderTrue?.value ?? DEFAULT_BOOL_COLORS.whenTrue.border,
           borderLineType: (linetypeTrue?.value as BorderLineType) ?? DEFAULT_BOOL_COLORS.whenTrue.lineType,
           show: showTrue?.checked ?? true,
+          active: true, // whenTrue is always active
         },
         whenFalse: {
           fillColor: fillFalse?.value ?? DEFAULT_BOOL_COLORS.whenFalse.fill,
           borderColor: borderFalse?.value ?? DEFAULT_BOOL_COLORS.whenFalse.border,
           borderLineType: (linetypeFalse?.value as BorderLineType) ?? DEFAULT_BOOL_COLORS.whenFalse.lineType,
           show: showFalse?.checked ?? true,
+          active: activeFalse?.checked ?? false,
         },
         whenUndefined: {
           fillColor: fillUndefined?.value ?? DEFAULT_BOOL_COLORS.whenUndefined.fill,
           borderColor: borderUndefined?.value ?? DEFAULT_BOOL_COLORS.whenUndefined.border,
           borderLineType: (linetypeUndefined?.value as BorderLineType) ?? DEFAULT_BOOL_COLORS.whenUndefined.lineType,
           show: showUndefined?.checked ?? true,
+          active: activeUndefined?.checked ?? false,
         },
       };
     } else {
@@ -352,6 +374,19 @@ export function getAnnotationStyleConfig(
       config.textProps[ap.name] = { rules };
     }
   });
+
+  // Default style for nodes no property governs.
+  const defFill = container.querySelector('.ap-default-fill') as HTMLInputElement | null;
+  const defBorder = container.querySelector('.ap-default-border') as HTMLInputElement | null;
+  const defLine = container.querySelector('.ap-default-linetype') as HTMLInputElement | null;
+  if (defFill || defBorder || defLine) {
+    config.defaultStyle = {
+      fillColor: defFill?.value ?? DEFAULT_NODE_FALLBACK.fill,
+      borderColor: defBorder?.value ?? DEFAULT_NODE_FALLBACK.border,
+      borderLineType: (defLine?.value as BorderLineType) ?? DEFAULT_NODE_FALLBACK.lineType,
+    };
+  }
+
   return config;
 }
 
@@ -378,6 +413,10 @@ export function applyAnnotationStyleConfigToDom(
         const el = container.querySelector(`.ap-bool-show[data-prop="${ap.name}"][data-val="${val}"]`) as HTMLInputElement | null;
         if (el) el.checked = checked;
       };
+      const setActive = (val: string, active: boolean) => {
+        const el = container.querySelector(`.ap-bool-active[data-prop="${ap.name}"][data-val="${val}"]`) as HTMLInputElement | null;
+        if (el) el.checked = active;
+      };
       const setLineType = (val: string, lineType: BorderLineType) => {
         const dropdown = (container.querySelector(`.ap-bool-linetype[data-prop="${ap.name}"][data-val="${val}"]`) as HTMLInputElement | null)?.closest('.ap-linetype-dropdown');
         const hidden = dropdown?.querySelector('.ap-bool-linetype') as HTMLInputElement | null;
@@ -386,11 +425,12 @@ export function applyAnnotationStyleConfigToDom(
         const opt = BORDER_LINE_OPTIONS.find((o) => o.value === lineType);
         if (trigger && opt) trigger.innerHTML = `${renderLineTypeSvg(opt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
       };
-      const apply = (val: 'true' | 'false' | 'undefined', state: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean }) => {
+      const apply = (val: 'true' | 'false' | 'undefined', state: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean; active?: boolean }) => {
         set('ap-bool-fill', val, state.fillColor);
         set('ap-bool-border', val, state.borderColor);
         setShow(val, state.show);
         setLineType(val, state.borderLineType);
+        setActive(val, state.active ?? false); // no-op for 'true' (no active checkbox)
       };
       apply('true', boolCfg.whenTrue);
       apply('false', boolCfg.whenFalse);
@@ -416,4 +456,18 @@ export function applyAnnotationStyleConfigToDom(
       });
     }
   });
+
+  // Default style for nodes no property governs.
+  if (config.defaultStyle) {
+    const dFill = container.querySelector('.ap-default-fill') as HTMLInputElement | null;
+    const dBorder = container.querySelector('.ap-default-border') as HTMLInputElement | null;
+    if (dFill) dFill.value = config.defaultStyle.fillColor;
+    if (dBorder) dBorder.value = config.defaultStyle.borderColor;
+    const dDropdown = (container.querySelector('.ap-default-linetype') as HTMLInputElement | null)?.closest('.ap-linetype-dropdown');
+    const dHidden = dDropdown?.querySelector('.ap-default-linetype') as HTMLInputElement | null;
+    const dTrigger = dDropdown?.querySelector('.ap-linetype-trigger') as HTMLElement | null;
+    if (dHidden) dHidden.value = config.defaultStyle.borderLineType;
+    const dOpt = BORDER_LINE_OPTIONS.find((o) => o.value === config.defaultStyle!.borderLineType);
+    if (dTrigger && dOpt) dTrigger.innerHTML = `${renderLineTypeSvg(dOpt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
+  }
 }

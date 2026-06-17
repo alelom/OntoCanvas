@@ -53,14 +53,43 @@ export const ANNOTATION_FILL_PALETTE: string[] = [
   '#2c3e50', // slate
 ];
 
+/** Style applied to nodes that no annotation property governs. */
+export const DEFAULT_NODE_FALLBACK = {
+  fill: '#bdc3c7',
+  border: '#000000',
+  lineType: 'solid' as BorderLineType,
+};
+
+/** Styling for one boolean-property state (when true / false / undefined). */
+export type AnnotationBoolState = {
+  fillColor: string;
+  borderColor: string;
+  borderLineType: BorderLineType;
+  show: boolean;
+  /**
+   * Whether this state claims (governs) a node. `whenTrue` is always treated as active;
+   * `whenFalse` / `whenUndefined` default to inactive, so a property only colours its true
+   * nodes unless the user opts in. An inactive state lets lower-priority properties decide.
+   */
+  active?: boolean;
+};
+
+/** Styling for nodes that no annotation property governs (configurable in the menu). */
+export type AnnotationDefaultStyle = {
+  fillColor: string;
+  borderColor: string;
+  borderLineType: BorderLineType;
+};
+
 export type AnnotationStyleConfig = {
   booleanProps: Record<
     string,
     {
-      whenTrue: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean };
-      whenFalse: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean };
-      whenUndefined: { fillColor: string; borderColor: string; borderLineType: BorderLineType; show: boolean };
+      whenTrue: AnnotationBoolState;
+      whenFalse: AnnotationBoolState;
+      whenUndefined: AnnotationBoolState;
     }
   >;
   textProps: Record<string, { rules: { regex: string; fillColor: string; borderColor: string; borderLineType: BorderLineType }[] }>;
+  defaultStyle?: AnnotationDefaultStyle;
 };

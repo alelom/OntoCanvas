@@ -198,6 +198,81 @@ describe('annotationPropertiesMenu - config read/write', () => {
     expect(cfg.booleanProps.b.whenTrue.fillColor).not.toBe(cfg.booleanProps.a.whenTrue.fillColor);
   });
 
+  it('renders active toggles only on the false/undefined states, plus a default-style control', () => {
+    const props = [boolProp('a')];
+    const { deps } = makeDeps(props, makeStore(['a']));
+    initAnnotationPropsMenu(container, deps);
+
+    // active checkbox exists for false + undefined, not for true.
+    expect(container.querySelector('.ap-bool-active[data-prop="a"][data-val="true"]')).toBeNull();
+    expect(container.querySelector('.ap-bool-active[data-prop="a"][data-val="false"]')).not.toBeNull();
+    expect(container.querySelector('.ap-bool-active[data-prop="a"][data-val="undefined"]')).not.toBeNull();
+    // default-style control exists.
+    expect(container.querySelector('.ap-default-fill')).not.toBeNull();
+  });
+
+  it('defaults false/undefined active flags to false and reflects toggling them', () => {
+    const props = [boolProp('a')];
+    const { deps } = makeDeps(props, makeStore(['a']));
+    initAnnotationPropsMenu(container, deps);
+
+    let cfg = getAnnotationStyleConfig(container, props);
+    expect(cfg.booleanProps.a.whenTrue.active).toBe(true);
+    expect(cfg.booleanProps.a.whenFalse.active).toBe(false);
+    expect(cfg.booleanProps.a.whenUndefined.active).toBe(false);
+
+    (container.querySelector('.ap-bool-active[data-prop="a"][data-val="false"]') as HTMLInputElement).checked = true;
+    cfg = getAnnotationStyleConfig(container, props);
+    expect(cfg.booleanProps.a.whenFalse.active).toBe(true);
+  });
+
+  it('reads and round-trips the configurable default style', () => {
+    const props = [boolProp('a')];
+    const { deps } = makeDeps(props, makeStore(['a']));
+    initAnnotationPropsMenu(container, deps);
+
+    // Default reads the neutral grey fallback initially.
+    expect(getAnnotationStyleConfig(container, props).defaultStyle?.fillColor).toBe('#bdc3c7');
+
+    applyAnnotationStyleConfigToDom(
+      container,
+      {
+        booleanProps: {},
+        textProps: {},
+        defaultStyle: { fillColor: '#123456', borderColor: '#654321', borderLineType: 'dashed' },
+      },
+      props
+    );
+    const cfg = getAnnotationStyleConfig(container, props);
+    expect(cfg.defaultStyle?.fillColor).toBe('#123456');
+    expect(cfg.defaultStyle?.borderColor).toBe('#654321');
+    expect(cfg.defaultStyle?.borderLineType).toBe('dashed');
+  });
+
+  it('round-trips the false-state active flag through applyAnnotationStyleConfigToDom', () => {
+    const props = [boolProp('a')];
+    const { deps } = makeDeps(props, makeStore(['a']));
+    initAnnotationPropsMenu(container, deps);
+
+    applyAnnotationStyleConfigToDom(
+      container,
+      {
+        booleanProps: {
+          a: {
+            whenTrue: { fillColor: '#0a0', borderColor: '#000', borderLineType: 'solid', show: true, active: true },
+            whenFalse: { fillColor: '#a00', borderColor: '#000', borderLineType: 'solid', show: true, active: true },
+            whenUndefined: { fillColor: '#00a', borderColor: '#000', borderLineType: 'solid', show: true, active: false },
+          },
+        },
+        textProps: {},
+      },
+      props
+    );
+    const cfg = getAnnotationStyleConfig(container, props);
+    expect(cfg.booleanProps.a.whenFalse.active).toBe(true);
+    expect(cfg.booleanProps.a.whenUndefined.active).toBe(false);
+  });
+
   it('preserves the user picked colour across a reorder re-render', () => {
     const { deps } = makeDeps([boolProp('a'), boolProp('b')], makeStore(['a', 'b']));
     initAnnotationPropsMenu(container, deps);

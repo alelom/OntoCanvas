@@ -9,7 +9,7 @@
  * per the project's testing-priority rule.
  */
 import type { AnnotationStyleConfig, BorderLineType } from '../ui/constants';
-import { COLORS, ANNOTATION_FILL_PALETTE } from '../ui/constants';
+import { ANNOTATION_FILL_PALETTE, DEFAULT_NODE_FALLBACK } from '../ui/constants';
 
 /**
  * Default fill colour for the annotation property at the given position. Wraps around the
@@ -38,11 +38,11 @@ export interface ResolvedNodeStyle {
   show: boolean;
 }
 
-/** Default node styling when no annotation property governs a node. */
+/** Built-in fallback when no annotation property governs a node and no default style is set. */
 export const DEFAULT_NODE_STYLE: ResolvedNodeStyle = {
-  background: COLORS.default,
-  border: '#2c3e50',
-  borderLineType: 'solid',
+  background: DEFAULT_NODE_FALLBACK.fill,
+  border: DEFAULT_NODE_FALLBACK.border,
+  borderLineType: DEFAULT_NODE_FALLBACK.lineType,
   show: true,
 };
 
@@ -60,16 +60,15 @@ function styleFromBoolState(state: BoolStateStyle): ResolvedNodeStyle {
  *
  * Rules:
  * - Properties are evaluated in `order` (highest priority first).
- * - A **boolean** property *governs* a node when the node carries a concrete `true`/`false`
- *   value for it → returns that state's styling immediately.
- * - A **text** property *governs* when the node's string value matches one of its regex rules
- *   → returns that rule's styling.
- * - Properties the node does not carry (boolean value `undefined`/`null`, or text with no
- *   matching rule) are skipped — they never short-circuit a lower-priority property. This is
- *   the fix for the multi-property bug where the first property's `whenUndefined` colour
- *   used to claim every node.
- * - Fallback for nodes that no property governs: the **top-priority boolean property's**
- *   `whenUndefined` styling (the catch-all), or the default node style if there is none.
+ * - A **boolean** property *governs* a node when:
+ *     - the node's value is `true` (`whenTrue` is always active); or
+ *     - the value is `false` and `whenFalse.active`; or
+ *     - the value is absent/`null` and `whenUndefined.active`.
+ *   `whenFalse` / `whenUndefined` default to inactive, so by default a property only colours
+ *   its `true` nodes and a node falls through to the next priority's `whenTrue`.
+ * - A **text** property *governs* when the node's string value matches one of its regex rules.
+ * - Nodes that no property governs get `config.defaultStyle` (configurable), or the built-in
+ *   DEFAULT_NODE_STYLE when none is configured.
  *
  * @param annotations The node's annotation values, keyed by property local name.
  * @param config Boolean + text property styling, keyed by property local name.
@@ -81,18 +80,15 @@ export function resolveNodeAnnotationStyle(
   order: string[]
 ): ResolvedNodeStyle {
   const ann = annotations ?? {};
-  let topBoolUndefined: ResolvedNodeStyle | null = null;
 
   for (const name of order) {
     const boolConfig = config.booleanProps[name];
     if (boolConfig) {
-      if (topBoolUndefined === null) {
-        topBoolUndefined = styleFromBoolState(boolConfig.whenUndefined);
-      }
       const val = ann[name];
       if (val === true) return styleFromBoolState(boolConfig.whenTrue);
-      if (val === false) return styleFromBoolState(boolConfig.whenFalse);
-      // value undefined/null → property not carried by this node; keep looking.
+      if (val === false && boolConfig.whenFalse.active) return styleFromBoolState(boolConfig.whenFalse);
+      if (val == null && boolConfig.whenUndefined.active) return styleFromBoolState(boolConfig.whenUndefined);
+      // not governed by this property → keep looking.
       continue;
     }
 
@@ -119,7 +115,15 @@ export function resolveNodeAnnotationStyle(
     }
   }
 
-  return topBoolUndefined ?? DEFAULT_NODE_STYLE;
+  if (config.defaultStyle) {
+    return {
+      background: config.defaultStyle.fillColor,
+      border: config.defaultStyle.borderColor,
+      borderLineType: config.defaultStyle.borderLineType,
+      show: true,
+    };
+  }
+  return DEFAULT_NODE_STYLE;
 }
 
 /**

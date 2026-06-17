@@ -11,22 +11,30 @@ import type { AnnotationStyleConfig, BorderLineType } from '../../src/ui/constan
 
 // --- helpers ---------------------------------------------------------------
 
-function boolState(fill: string, opts: { border?: string; lineType?: BorderLineType; show?: boolean } = {}) {
+function boolState(
+  fill: string,
+  opts: { border?: string; lineType?: BorderLineType; show?: boolean; active?: boolean } = {}
+) {
   return {
     fillColor: fill,
     borderColor: opts.border ?? '#000000',
     borderLineType: opts.lineType ?? ('solid' as BorderLineType),
     show: opts.show ?? true,
+    active: opts.active,
   };
 }
 
-/** A boolean prop with distinct, recognisable colours per state. */
-function boolProp(name: string) {
+/**
+ * A boolean prop with distinct, recognisable colours per state. By default whenFalse/whenUndefined
+ * are INACTIVE (the production default) so the property only claims its true nodes; pass
+ * activeFalse/activeUndef to opt those states in.
+ */
+function boolProp(name: string, opts: { activeFalse?: boolean; activeUndef?: boolean } = {}) {
   return {
     [name]: {
-      whenTrue: boolState(`#${name}-true`),
-      whenFalse: boolState(`#${name}-false`),
-      whenUndefined: boolState(`#${name}-undef`),
+      whenTrue: boolState(`#${name}-true`, { active: true }),
+      whenFalse: boolState(`#${name}-false`, { active: opts.activeFalse ?? false }),
+      whenUndefined: boolState(`#${name}-undef`, { active: opts.activeUndef ?? false }),
     },
   };
 }
@@ -35,53 +43,61 @@ function cfg(parts: Partial<AnnotationStyleConfig>): AnnotationStyleConfig {
   return { booleanProps: {}, textProps: {}, ...parts };
 }
 
-// --- single boolean property (backward-compatible behaviour) ---------------
+// --- single boolean property -----------------------------------------------
 
 describe('resolveNodeAnnotationStyle - single boolean property', () => {
-  const config = cfg({ booleanProps: { ...boolProp('A') } });
-  const order = ['A'];
-
   it('uses whenTrue for a true value', () => {
-    expect(resolveNodeAnnotationStyle({ A: true }, config, order).background).toBe('#A-true');
+    expect(resolveNodeAnnotationStyle({ A: true }, cfg({ booleanProps: boolProp('A') }), ['A']).background).toBe('#A-true');
   });
 
-  it('uses whenFalse for a false value', () => {
-    expect(resolveNodeAnnotationStyle({ A: false }, config, order).background).toBe('#A-false');
+  it('falls through to default for a false value when whenFalse is inactive (default)', () => {
+    expect(resolveNodeAnnotationStyle({ A: false }, cfg({ booleanProps: boolProp('A') }), ['A'])).toEqual(DEFAULT_NODE_STYLE);
   });
 
-  it('uses whenUndefined when the node does not carry the property', () => {
-    expect(resolveNodeAnnotationStyle({}, config, order).background).toBe('#A-undef');
+  it('uses whenFalse for a false value when whenFalse is active', () => {
+    const config = cfg({ booleanProps: boolProp('A', { activeFalse: true }) });
+    expect(resolveNodeAnnotationStyle({ A: false }, config, ['A']).background).toBe('#A-false');
   });
 
-  it('uses whenUndefined when the value is explicitly null', () => {
-    expect(resolveNodeAnnotationStyle({ A: null }, config, order).background).toBe('#A-undef');
+  it('falls through to default for an absent value when whenUndefined is inactive (default)', () => {
+    expect(resolveNodeAnnotationStyle({}, cfg({ booleanProps: boolProp('A') }), ['A'])).toEqual(DEFAULT_NODE_STYLE);
+  });
+
+  it('uses whenUndefined for an absent/null value when whenUndefined is active', () => {
+    const config = cfg({ booleanProps: boolProp('A', { activeUndef: true }) });
+    expect(resolveNodeAnnotationStyle({}, config, ['A']).background).toBe('#A-undef');
+    expect(resolveNodeAnnotationStyle({ A: null }, config, ['A']).background).toBe('#A-undef');
   });
 });
 
-// --- THE BUG: multiple boolean properties ----------------------------------
+// --- multiple boolean properties (priority + fall-through) ------------------
 
-describe('resolveNodeAnnotationStyle - multiple boolean properties (regression)', () => {
+describe('resolveNodeAnnotationStyle - multiple boolean properties', () => {
   const config = cfg({ booleanProps: { ...boolProp('A'), ...boolProp('B') } });
   const order = ['A', 'B'];
 
-  it('does NOT let property A whenUndefined claim a node that only carries B (the reported bug)', () => {
-    // Node carries B=true but not A. Previously returned A.whenUndefined; must return B.whenTrue.
-    const style = resolveNodeAnnotationStyle({ B: true }, config, order);
-    expect(style.background).toBe('#B-true');
+  it('a node that only carries B=true gets B.whenTrue (A does not claim it)', () => {
+    expect(resolveNodeAnnotationStyle({ B: true }, config, order).background).toBe('#B-true');
   });
 
-  it('colours B=false correctly when A is absent', () => {
-    expect(resolveNodeAnnotationStyle({ B: false }, config, order).background).toBe('#B-false');
+  it('by default a non-true higher-priority property lets a lower-priority whenTrue apply', () => {
+    // A is false (inactive) -> falls through to B=true.
+    expect(resolveNodeAnnotationStyle({ A: false, B: true }, config, order).background).toBe('#B-true');
   });
 
-  it('gives the higher-priority property (A) precedence when both are concrete', () => {
-    const style = resolveNodeAnnotationStyle({ A: true, B: true }, config, order);
-    expect(style.background).toBe('#A-true');
+  it('gives the higher-priority property precedence when both are true', () => {
+    expect(resolveNodeAnnotationStyle({ A: true, B: true }, config, order).background).toBe('#A-true');
   });
 
-  it('falls back to the TOP-priority property whenUndefined when no property governs', () => {
-    const style = resolveNodeAnnotationStyle({}, config, order);
-    expect(style.background).toBe('#A-undef');
+  it('falls through to the default style when no property governs', () => {
+    expect(resolveNodeAnnotationStyle({}, config, order)).toEqual(DEFAULT_NODE_STYLE);
+    expect(resolveNodeAnnotationStyle({ A: false, B: false }, config, order)).toEqual(DEFAULT_NODE_STYLE);
+  });
+
+  it('lets an active whenUndefined on the higher-priority property claim non-A nodes (opt-in)', () => {
+    const cfgActive = cfg({ booleanProps: { ...boolProp('A', { activeUndef: true }), ...boolProp('B') } });
+    // A.whenUndefined active -> A claims the absent-A node before B is considered.
+    expect(resolveNodeAnnotationStyle({ B: true }, cfgActive, order).background).toBe('#A-undef');
   });
 });
 
@@ -94,10 +110,29 @@ describe('resolveNodeAnnotationStyle - priority follows order', () => {
     const style = resolveNodeAnnotationStyle({ A: true, B: true }, config, ['B', 'A']);
     expect(style.background).toBe('#B-true');
   });
+});
 
-  it('the top-priority property owns the undefined fallback (B first => B.whenUndefined)', () => {
-    const style = resolveNodeAnnotationStyle({}, config, ['B', 'A']);
-    expect(style.background).toBe('#B-undef');
+// --- configurable default style --------------------------------------------
+
+describe('resolveNodeAnnotationStyle - configurable default style', () => {
+  it('returns config.defaultStyle when no property governs', () => {
+    const config = cfg({
+      booleanProps: boolProp('A'),
+      defaultStyle: { fillColor: '#default', borderColor: '#dborder', borderLineType: 'dotted' },
+    });
+    const style = resolveNodeAnnotationStyle({ A: false }, config, ['A']);
+    expect(style.background).toBe('#default');
+    expect(style.border).toBe('#dborder');
+    expect(style.borderLineType).toBe('dotted');
+    expect(style.show).toBe(true);
+  });
+
+  it('a governing property still wins over the default style', () => {
+    const config = cfg({
+      booleanProps: boolProp('A'),
+      defaultStyle: { fillColor: '#default', borderColor: '#dborder', borderLineType: 'solid' },
+    });
+    expect(resolveNodeAnnotationStyle({ A: true }, config, ['A']).background).toBe('#A-true');
   });
 });
 
