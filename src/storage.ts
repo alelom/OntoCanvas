@@ -26,6 +26,8 @@ export interface DisplayConfig {
   searchQuery: string;
   includeNeighbors: boolean;
   annotationStyleConfig?: unknown;
+  /** Annotation property local names in priority order (highest first); drives styling precedence. */
+  annotationPropertyOrder?: string[];
   viewState?: { scale: number; position: { x: number; y: number } };
   /** Whether to show nodes from external ontologies (referenced by object property domain/range). */
   displayExternalReferences?: boolean;

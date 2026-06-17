@@ -1,0 +1,30 @@
+@prefix : <http://example.org/twobool#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Two boolean annotation properties, used on different classes, to exercise
+# multi-property colour precedence and the delete control.
+:flagA rdf:type owl:AnnotationProperty ;
+    rdfs:range xsd:boolean .
+
+:flagB rdf:type owl:AnnotationProperty ;
+    rdfs:range xsd:boolean .
+
+:Root rdf:type owl:Class ;
+    rdfs:label "Root" .
+
+:ClassA rdf:type owl:Class ;
+    rdfs:label "ClassA" ;
+    rdfs:subClassOf :Root ;
+    :flagA "true"^^xsd:boolean .
+
+:ClassB rdf:type owl:Class ;
+    rdfs:label "ClassB" ;
+    rdfs:subClassOf :Root ;
+    :flagB "true"^^xsd:boolean .
+
+:ClassC rdf:type owl:Class ;
+    rdfs:label "ClassC" ;
+    rdfs:subClassOf :Root .
