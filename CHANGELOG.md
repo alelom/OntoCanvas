@@ -1,3 +1,17 @@
+# [1.15.0](https://github.com/alelom/OntoCanvas/compare/v1.14.3...v1.15.0) (2026-06-17)
+
+
+### Bug Fixes
+
+* **annotations:** delete by resolved URI instead of BASE_IRI ([a1eed5c](https://github.com/alelom/OntoCanvas/commit/a1eed5c1ac33ebb5576eb98c77f7db24e5d920d0))
+
+
+### Features
+
+* **annotations:** active toggles for false/undefined + configurable default style ([0a0d03f](https://github.com/alelom/OntoCanvas/commit/0a0d03f202315336b3f9b8fc3b5e5db683a77701))
+* **annotations:** distinct default fill colour per property ([a7f655a](https://github.com/alelom/OntoCanvas/commit/a7f655a065b14d06f5d4fe65c90ebb8caf8d5ea6))
+* **annotations:** pure styling resolver with priority-by-list-order ([5604a95](https://github.com/alelom/OntoCanvas/commit/5604a9519bd2ec1d1f980c54898633826b917e4c))
+
 ## [1.14.3](https://github.com/alelom/OntoCanvas/compare/v1.14.2...v1.14.3) (2026-06-12)
 
 
