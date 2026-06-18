@@ -149,15 +149,28 @@ export function initExampleImagesSection(
       }
     };
 
-    urlInput.addEventListener('blur', validateAndAdd);
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.textContent = 'Add';
+    addButton.title = 'Add this image URL';
+    addButton.style.cssText = 'padding: 4px 10px; font-size: 11px; cursor: pointer; white-space: nowrap;';
+    addButton.addEventListener('click', () => {
+      void validateAndAdd();
+    });
+
+    // Enter adds the image WITHOUT closing the modal: stopPropagation prevents the modal-level
+    // Enter handler (which calls confirmRename) from firing. blur still adds when clicking away.
     urlInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        validateAndAdd();
+        e.stopPropagation();
+        void validateAndAdd();
       }
     });
+    urlInput.addEventListener('blur', validateAndAdd);
 
     inputRow.appendChild(urlInput);
+    inputRow.appendChild(addButton);
     addRow.appendChild(inputRow);
     addRow.appendChild(errorMsg);
     container.appendChild(addRow);
