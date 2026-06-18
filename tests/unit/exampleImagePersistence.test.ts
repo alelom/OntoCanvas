@@ -133,14 +133,15 @@ describe('Example Image Persistence', () => {
     const baseUriWithSlash = baseUriWithoutHash + (baseUriWithoutHash.endsWith('/') ? '' : '/');
     const exampleImageUri1 = baseUriWithSlash + 'img/example1.png';
     const exampleImageUri2 = baseUriWithSlash + 'img/example2.png';
+    const exampleImageUri = (baseIri.endsWith('#') ? baseIri : baseIri + '#') + 'exampleImage';
     const formData = {
       comment: 'Test comment',
-      exampleImageUris: [exampleImageUri1, exampleImageUri2],
       annotationValues: {},
+      textualAnnotationValues: { exampleImage: [exampleImageUri1, exampleImageUri2] },
       dataPropertyRestrictions: [],
     };
-
-    applyNodeFormToStore(nodeId, formData, store, myClassNode as GraphNode, baseIri, []);
+    const exampleImageAp = { name: 'exampleImage', isBoolean: false, uri: exampleImageUri };
+    applyNodeFormToStore(nodeId, formData, store, myClassNode as GraphNode, baseIri, [exampleImageAp]);
 
     // Verify the images are in the store
     const uris = getExampleImageUrisForClass(store, nodeId, baseIri);
@@ -205,14 +206,15 @@ describe('Example Image Persistence', () => {
     expect(initialUris).toContain('img/existing.png');
 
     // Remove all images using applyNodeFormToStore
+    const exampleImagePropUri = (baseIri.endsWith('#') ? baseIri : baseIri + '#') + 'exampleImage';
     const formData = {
       comment: '',
-      exampleImageUris: [], // Empty array should remove all images
       annotationValues: {},
+      textualAnnotationValues: { exampleImage: [] }, // Empty array should remove all images
       dataPropertyRestrictions: [],
     };
-
-    applyNodeFormToStore(nodeId, formData, store, classNode as GraphNode, baseIri, []);
+    const exampleImageAp = { name: 'exampleImage', isBoolean: false, uri: exampleImagePropUri };
+    applyNodeFormToStore(nodeId, formData, store, classNode as GraphNode, baseIri, [exampleImageAp]);
 
     // Verify images are removed
     const urisAfterRemove = getExampleImageUrisForClass(store, nodeId, baseIri);

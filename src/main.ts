@@ -46,7 +46,7 @@ import {
   extractLocalName,
 } from './parser';
 import type { OriginalFileCache } from './rdf/sourcePreservation';
-import { initExampleImagesSection } from './ui/exampleImagesSection';
+import { getAnnotationValuesForClass } from './lib/annotationValues';
 import {
   isDuplicateIdentifierForRename,
   ADD_NODE_DUPLICATE_MESSAGE,
@@ -494,12 +494,42 @@ let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: str
 let renameModalInitialDataProps: DataPropertyRestriction[] | null = null;
 /** Current data property restrictions while editing in rename modal (single-node mode). */
 let renameModalDataPropertyRestrictions: DataPropertyRestriction[] = [];
-/** Example image URIs while editing in rename modal (single-node mode). */
-let renameModalExampleImageUris: string[] = [];
-/** Example image URIs while adding a new node (custom tab). */
-let addNodeExampleImageUris: string[] = [];
+/** Textual annotation property values (by property name) while editing in the rename modal. */
+let renameModalAnnotationValues: Record<string, string[]> = {};
+/** Textual annotation property values (by property name) while adding a new node (custom tab). */
+let addNodeAnnotationValues: Record<string, string[]> = {};
 /** Data property restrictions while adding a new node (custom tab). */
 let addNodeDataPropertyRestrictions: DataPropertyRestriction[] = [];
+
+/**
+ * Build the dependency bundle the annotation-properties list needs to render textual properties
+ * as multi-value editors. `nodeId` is the class being edited (null for a new node, so initial
+ * values are empty). `valuesMap` is seeded with each property's current values and updated on edit.
+ */
+function buildAnnotationPropsDeps(
+  nodeId: string | null,
+  valuesMap: Record<string, string[]>
+): nodeModalFormUi.AnnotationPropsListDeps {
+  return {
+    isLocal: !!fileHandle,
+    getInitialValues: (ap) => {
+      if (!ttlStore || !nodeId) {
+        valuesMap[ap.name] = [];
+        return [];
+      }
+      const propUri = ap.uri ?? BASE_IRI.replace(/#?$/, '#') + ap.name;
+      const values = getAnnotationValuesForClass(ttlStore, nodeId, propUri);
+      valuesMap[ap.name] = [...values];
+      return values;
+    },
+    onTextualValuesChange: (name, values) => {
+      valuesMap[name] = values;
+    },
+    onOpenLink: (value) => {
+      window.open(value, '_blank', 'noopener,noreferrer');
+    },
+  };
+}
 
 type UndoableAction = { undo: () => void; redo: () => void };
 let undoStack: UndoableAction[] = [];
@@ -4199,67 +4229,7 @@ function showRenameModal(
   const renameIdentifier = document.getElementById('renameIdentifier');
   if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = '';
   if (renameIdentifier) (renameIdentifier as HTMLElement).style.display = '';
-  renameModalExampleImageUris = node?.exampleImages ?? [];
-  const exampleImagesContainer = document.getElementById('renameExampleImagesSection');
-  if (exampleImagesContainer && ttlStore) {
-    exampleImagesContainer.style.display = 'block';
-    // Get ontology base IRI for resolving relative URLs
-    // Always try to use the ontology base IRI first, as it's more reliable
-    const mainBase = getMainOntologyBase(ttlStore);
-    const classNs = getClassNamespace(ttlStore);
-    const ontologyBase = classNs ?? mainBase;
-    
-    // Extract base URL from ontology IRI (remove # and filename if present)
-    let ontologyLocationForImages: string | null = null;
-    
-    // First, try to use ontology base IRI
-    if (ontologyBase) {
-      const baseWithoutHash = ontologyBase.endsWith('#') ? ontologyBase.slice(0, -1) : ontologyBase;
-      try {
-        const baseUrl = new URL(baseWithoutHash);
-        // Remove filename from pathname to get directory
-        const pathname = baseUrl.pathname;
-        const lastSlashIndex = pathname.lastIndexOf('/');
-        if (lastSlashIndex >= 0) {
-          baseUrl.pathname = pathname.substring(0, lastSlashIndex + 1);
-        } else {
-          baseUrl.pathname = '/';
-        }
-        ontologyLocationForImages = baseUrl.toString();
-      } catch {
-        // Not a valid URL, try loadedFilePath as fallback
-      }
-    }
-    
-    // Fallback to loadedFilePath if it's a valid URL
-    if (!ontologyLocationForImages && loadedFilePath) {
-      try {
-        // Check if loadedFilePath is a valid URL
-        new URL(loadedFilePath);
-        ontologyLocationForImages = loadedFilePath;
-      } catch {
-        // Not a valid URL, keep as null
-      }
-    }
-    initExampleImagesSection(exampleImagesContainer, {
-      nodeId,
-      isLocal: !!fileHandle,
-      initialUris: renameModalExampleImageUris,
-      ontologyLocation: ontologyLocationForImages,
-      onAddImage: async (_url: string) => {
-        // Just add the URL directly, no file operations
-        // The URL is already validated by the component and added to the list
-      },
-      onDelete: () => {},
-      onOpen: (uri: string) => {
-        // Open URL in new tab
-        window.open(uri, '_blank', 'noopener,noreferrer');
-      },
-      onUrisChange: (uris: string[]) => { renameModalExampleImageUris = uris; },
-    });
-  } else if (exampleImagesContainer) {
-    exampleImagesContainer.style.display = 'none';
-  }
+  renameModalAnnotationValues = {};
   setRenameModalTipButtonVisible(!fileHandle);
 
   // Render annotation properties
@@ -4269,7 +4239,13 @@ function showRenameModal(
       annotPropsSection.style.display = 'none';
     } else {
       annotPropsSection.style.display = 'block';
-      nodeModalFormUi.renderRenameModalAnnotationPropsList(nodeId, node, annotationProperties);
+      renameModalAnnotationValues = {};
+      nodeModalFormUi.renderRenameModalAnnotationPropsList(
+        nodeId,
+        node,
+        annotationProperties,
+        buildAnnotationPropsDeps(nodeId, renameModalAnnotationValues)
+      );
     }
   }
   
@@ -4311,8 +4287,6 @@ function showMultiEditModal(nodeIds: string[]): void {
   if (annotPropsSection) annotPropsSection.style.display = 'none';
   const dataPropsSection = document.getElementById('renameDataPropsSection');
   if (dataPropsSection) dataPropsSection.style.display = 'none';
-  const exampleImagesSection = document.getElementById('renameExampleImagesSection');
-  if (exampleImagesSection) exampleImagesSection.style.display = 'none';
   const renameIdentifierLabel = document.getElementById('renameIdentifierLabel');
   const renameIdentifier = document.getElementById('renameIdentifier');
   if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = 'none';
@@ -4401,7 +4375,7 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
   if (dupErr) { dupErr.style.display = 'none'; dupErr.textContent = ''; }
   if (extDupErr) { extDupErr.style.display = 'none'; extDupErr.textContent = ''; }
-  addNodeExampleImageUris = [];
+  addNodeAnnotationValues = {};
   addNodeDataPropertyRestrictions = [];
   const addNodeAnnotationPropsSection = document.getElementById('addNodeAnnotationPropsSection');
   if (addNodeAnnotationPropsSection) {
@@ -4409,7 +4383,11 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
       addNodeAnnotationPropsSection.style.display = 'none';
     } else {
       addNodeAnnotationPropsSection.style.display = 'block';
-      nodeModalFormUi.renderAddNodeAnnotationPropsList(annotationProperties);
+      addNodeAnnotationValues = {};
+      nodeModalFormUi.renderAddNodeAnnotationPropsList(
+        annotationProperties,
+        buildAnnotationPropsDeps(null, addNodeAnnotationValues)
+      );
     }
   }
   const addNodeDataPropsSection = document.getElementById('addNodeDataPropsSection');
@@ -4420,64 +4398,6 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
       addNodeDataPropsSection.style.display = 'block';
       nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
     }
-  }
-  const addNodeExampleImagesContainer = document.getElementById('addNodeExampleImagesSection');
-  if (addNodeExampleImagesContainer && ttlStore) {
-    addNodeExampleImagesContainer.style.display = 'block';
-    // Get ontology base IRI for resolving relative URLs
-    // Always try to use the ontology base IRI first, as it's more reliable
-    const mainBase = getMainOntologyBase(ttlStore);
-    const classNs = getClassNamespace(ttlStore);
-    const ontologyBase = classNs ?? mainBase;
-    
-    // Extract base URL from ontology IRI (remove # and filename if present)
-    let ontologyLocationForImages: string | null = null;
-    
-    // First, try to use ontology base IRI
-    if (ontologyBase) {
-      const baseWithoutHash = ontologyBase.endsWith('#') ? ontologyBase.slice(0, -1) : ontologyBase;
-      try {
-        const baseUrl = new URL(baseWithoutHash);
-        // Remove filename from pathname to get directory
-        const pathname = baseUrl.pathname;
-        const lastSlashIndex = pathname.lastIndexOf('/');
-        if (lastSlashIndex >= 0) {
-          baseUrl.pathname = pathname.substring(0, lastSlashIndex + 1);
-        } else {
-          baseUrl.pathname = '/';
-        }
-        ontologyLocationForImages = baseUrl.toString();
-      } catch {
-        // Not a valid URL, try loadedFilePath as fallback
-      }
-    }
-    
-    // Fallback to loadedFilePath if it's a valid URL
-    if (!ontologyLocationForImages && loadedFilePath) {
-      try {
-        // Check if loadedFilePath is a valid URL
-        new URL(loadedFilePath);
-        ontologyLocationForImages = loadedFilePath;
-      } catch {
-        // Not a valid URL, keep as null
-      }
-    }
-    initExampleImagesSection(addNodeExampleImagesContainer, {
-      nodeId: '__new',
-      isLocal: !!fileHandle,
-      initialUris: [],
-      ontologyLocation: ontologyLocationForImages,
-      onAddImage: async (_url: string) => {
-        // Just add the URL directly, no file operations
-        // The URL is already validated by the component and added to the list
-      },
-      onDelete: () => {},
-      onOpen: (uri: string) => {
-        // Open URL in new tab
-        window.open(uri, '_blank', 'noopener,noreferrer');
-      },
-      onUrisChange: (uris: string[]) => { addNodeExampleImageUris = uris; },
-    });
   }
   const resultsDiv = document.getElementById('addNodeExternalResults');
   const descDiv = document.getElementById('addNodeExternalDescription');
@@ -4495,7 +4415,7 @@ function hideAddNodeModalWithCleanup(): void {
   addNodeMode = false;
   addNodeModalShowing = false;
   selectedExternalClass = null;
-  addNodeExampleImageUris = [];
+  addNodeAnnotationValues = {};
   addNodeDataPropertyRestrictions = [];
   if (addNodeSearchTimeout) {
     clearTimeout(addNodeSearchTimeout);
@@ -4677,15 +4597,12 @@ function confirmAddNode(): void {
       if (ap.isBoolean) {
         const checkbox = document.getElementById(`addNodeAnnotProp_${ap.name}`) as HTMLInputElement;
         annotationValues[ap.name] = checkbox ? (checkbox.indeterminate ? null : checkbox.checked) : null;
-      } else {
-        const inputEl = document.getElementById(`addNodeAnnotProp_${ap.name}`) as HTMLInputElement;
-        annotationValues[ap.name] = inputEl?.value?.trim() || null;
       }
     });
     const addNodeFormData: NodeFormData = {
       comment: newComment,
-      exampleImageUris: addNodeExampleImageUris,
       annotationValues,
+      textualAnnotationValues: { ...addNodeAnnotationValues },
       dataPropertyRestrictions: addNodeDataPropertyRestrictions,
     };
     const baseIri = getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI;
@@ -5773,33 +5690,32 @@ function confirmRename(): void {
 
   const labelChanged = node.label !== newLabel;
   
-  // Collect annotation property changes
+  // Collect annotation property changes. Boolean properties use a checkbox; textual properties
+  // use the multi-value editor (values tracked in renameModalAnnotationValues).
   const oldAnnotationValues: Record<string, boolean | string | null> = {};
   const newAnnotationValues: Record<string, boolean | string | null> = {};
+  const oldTextualValues: Record<string, string[]> = {};
+  const newTextualValues: Record<string, string[]> = {};
   let annotationPropsChanged = false;
-  
+
   annotationProperties.forEach((ap) => {
-    const oldValue = node.annotations?.[ap.name] ?? null;
-    oldAnnotationValues[ap.name] = oldValue;
-    
     if (ap.isBoolean) {
+      const oldValue = (node.annotations?.[ap.name] ?? null) as boolean | null;
+      oldAnnotationValues[ap.name] = oldValue;
       const checkbox = document.getElementById(`renameAnnotProp_${ap.name}`) as HTMLInputElement;
       if (checkbox) {
         const newValue = checkbox.indeterminate ? null : checkbox.checked;
         newAnnotationValues[ap.name] = newValue;
-        if (oldValue !== newValue) {
-          annotationPropsChanged = true;
-        }
+        if (oldValue !== newValue) annotationPropsChanged = true;
       }
     } else {
-      const inputEl = document.getElementById(`renameAnnotProp_${ap.name}`) as HTMLInputElement;
-      if (inputEl) {
-        const newValue = inputEl.value.trim() || null;
-        newAnnotationValues[ap.name] = newValue;
-        if (oldValue !== newValue) {
-          annotationPropsChanged = true;
-        }
-      }
+      const propUri = ap.uri ?? BASE_IRI.replace(/#?$/, '#') + ap.name;
+      const oldVals = ttlStore ? getAnnotationValuesForClass(ttlStore, nodeId, propUri) : [];
+      const newVals = renameModalAnnotationValues[ap.name] ?? oldVals;
+      oldTextualValues[ap.name] = oldVals;
+      newTextualValues[ap.name] = newVals;
+      const equal = oldVals.length === newVals.length && oldVals.every((v, i) => v === newVals[i]);
+      if (!equal) annotationPropsChanged = true;
     }
   });
 
@@ -5814,14 +5730,7 @@ function confirmRename(): void {
     currentDataProps.every((b) => initialDataProps.some((a) => a.propertyName === b.propertyName));
   const dataPropsChanged = !dataPropsEqual;
 
-  const oldExampleImages = node.exampleImages ?? [];
-  const newExampleImages = renameModalExampleImageUris;
-  const exampleImagesEqual =
-    oldExampleImages.length === newExampleImages.length &&
-    oldExampleImages.every((u, i) => u === newExampleImages[i]);
-  const exampleImagesChanged = !exampleImagesEqual;
-
-  if (!labelChanged && !annotationPropsChanged && !commentChanged && !dataPropsChanged && !exampleImagesChanged) {
+  if (!labelChanged && !annotationPropsChanged && !commentChanged && !dataPropsChanged) {
     hideRenameModal();
     return;
   }
@@ -5832,17 +5741,19 @@ function confirmRename(): void {
 
   const newFormData: NodeFormData = {
     comment: newComment,
-    exampleImageUris: newExampleImages,
     annotationValues: {},
+    textualAnnotationValues: newTextualValues,
     dataPropertyRestrictions: currentDataProps,
   };
   annotationProperties.forEach((ap) => {
-    newFormData.annotationValues[ap.name] = newAnnotationValues[ap.name] ?? oldAnnotationValues[ap.name] ?? null;
+    if (ap.isBoolean) {
+      newFormData.annotationValues[ap.name] = newAnnotationValues[ap.name] ?? oldAnnotationValues[ap.name] ?? null;
+    }
   });
   const oldFormData: NodeFormData = {
     comment: oldComment,
-    exampleImageUris: oldExampleImages,
     annotationValues: oldAnnotationValuesCopy,
+    textualAnnotationValues: oldTextualValues,
     dataPropertyRestrictions: oldDataProps,
   };
 
@@ -5877,7 +5788,7 @@ function confirmRename(): void {
       node.label = newLabel;
     }
     node.comment = newFormData.comment.trim() || undefined;
-    node.exampleImages = newFormData.exampleImageUris.length > 0 ? newFormData.exampleImageUris : undefined;
+    node.exampleImages = newFormData.textualAnnotationValues?.exampleImage?.length ? [...newFormData.textualAnnotationValues.exampleImage] : undefined;
     node.dataPropertyRestrictions = [...currentDataProps];
   }
 
@@ -5891,7 +5802,7 @@ function confirmRename(): void {
         applyNodeFormToStore(nodeId, oldFormData, ttlStore, node, baseIri, annotationProperties);
       } else {
         node.comment = oldFormData.comment.trim() || undefined;
-        node.exampleImages = oldFormData.exampleImageUris.length > 0 ? oldFormData.exampleImageUris : undefined;
+        node.exampleImages = oldFormData.textualAnnotationValues?.exampleImage?.length ? [...oldFormData.textualAnnotationValues.exampleImage] : undefined;
         node.dataPropertyRestrictions = [...oldDataProps];
       }
     },
@@ -5904,7 +5815,7 @@ function confirmRename(): void {
         applyNodeFormToStore(nodeId, newFormData, ttlStore, node, baseIri, annotationProperties);
       } else {
         node.comment = newFormData.comment.trim() || undefined;
-        node.exampleImages = newFormData.exampleImageUris.length > 0 ? newFormData.exampleImageUris : undefined;
+        node.exampleImages = newFormData.textualAnnotationValues?.exampleImage?.length ? [...newFormData.textualAnnotationValues.exampleImage] : undefined;
         node.dataPropertyRestrictions = [...currentDataProps];
       }
     }
@@ -6173,7 +6084,7 @@ function renderApp(): void {
           <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
           <textarea id="renameComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
         </label>
-        <div id="renameExampleImagesSection"></div>
+        
         <div id="renameAnnotationPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
           <strong style="font-size: 12px;">Set annotation properties</strong>
           <div id="renameAnnotationPropsList" style="margin-top: 8px;"></div>
@@ -6217,7 +6128,7 @@ function renderApp(): void {
             <span style="font-size: 11px; color: #666;">Comment (rdfs:comment)</span>
             <textarea id="addNodeComment" rows="3" placeholder="Optional description" style="width: 100%; margin-top: 4px; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; resize: vertical;"></textarea>
           </label>
-          <div id="addNodeExampleImagesSection"></div>
+          
           <div id="addNodeAnnotationPropsSection" style="display: none; margin-top: 12px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
             <strong style="font-size: 12px;">Set annotation properties</strong>
             <div id="addNodeAnnotationPropsList" style="margin-top: 8px;"></div>

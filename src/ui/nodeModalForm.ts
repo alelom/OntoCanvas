@@ -15,10 +15,7 @@ import {
   removeDataPropertyRestrictionFromClass,
   getDataPropertyRestrictionsForClass,
 } from '../parser';
-import {
-  ensureExampleImageAnnotationProperty,
-  setExampleImageUrisForClass,
-} from '../lib/exampleImageStore';
+import { setAnnotationValuesForClass } from '../lib/annotationValues';
 import type { GraphNode, DataPropertyRestriction, AnnotationPropertyInfo } from '../types';
 
 export const ADD_NODE_DUPLICATE_MESSAGE = 'A node with the same identifier already exists.';
@@ -90,11 +87,13 @@ export function isDuplicateIdentifierForRename(
   return isDuplicateIdentifier(label, others);
 }
 
-/** Form data for a node (comment, example images, annotation values, data property restrictions). */
+/** Form data for a node (comment, annotation values, data property restrictions). */
 export interface NodeFormData {
   comment: string;
-  exampleImageUris: string[];
+  /** Boolean annotation property values, keyed by property local name. */
   annotationValues: Record<string, boolean | string | null>;
+  /** Textual (non-boolean) annotation property values — one or more per property. */
+  textualAnnotationValues?: Record<string, string[]>;
   dataPropertyRestrictions: DataPropertyRestriction[];
 }
 
@@ -113,23 +112,25 @@ export function applyNodeFormToStore(
   node.comment = formData.comment.trim() || undefined;
   updateCommentInStore(store, nodeId, formData.comment.trim() || null);
 
-  if (formData.exampleImageUris.length > 0) {
-    ensureExampleImageAnnotationProperty(store, baseIri);
-    setExampleImageUrisForClass(store, nodeId, formData.exampleImageUris, baseIri);
-    node.exampleImages = formData.exampleImageUris;
-  } else {
-    setExampleImageUrisForClass(store, nodeId, [], baseIri);
-    node.exampleImages = undefined;
-  }
-
   for (const ap of annotationProperties) {
-    const newValue = formData.annotationValues[ap.name] ?? null;
     if (!node.annotations) node.annotations = {};
-    node.annotations[ap.name] = newValue;
-    if (ap.name === 'labellableRoot') {
-      node.labellableRoot = typeof newValue === 'boolean' ? newValue : null;
+    if (ap.isBoolean) {
+      const newValue = formData.annotationValues[ap.name] ?? null;
+      node.annotations[ap.name] = newValue;
+      if (ap.name === 'labellableRoot') {
+        node.labellableRoot = typeof newValue === 'boolean' ? newValue : null;
+      }
+      updateAnnotationPropertyValueInStore(store, nodeId, ap.name, newValue, true);
+    } else {
+      // Textual annotation property: one or more values (URL-like stored as IRIs, else literals).
+      const values = formData.textualAnnotationValues?.[ap.name] ?? [];
+      const propUri = ap.uri ?? baseIri.replace(/#?$/, '#') + ap.name;
+      setAnnotationValuesForClass(store, nodeId, propUri, values);
+      node.annotations[ap.name] = values[0] ?? null;
+      if (ap.name === 'exampleImage') {
+        node.exampleImages = values.length > 0 ? [...values] : undefined;
+      }
     }
-    updateAnnotationPropertyValueInStore(store, nodeId, ap.name, newValue, ap.isBoolean);
   }
 
   const current = getDataPropertyRestrictionsForClass(store, nodeId);
