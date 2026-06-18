@@ -33,6 +33,8 @@ export interface AnnotationPropertyInfo {
   uri?: string;
   /** rdfs:isDefinedBy (URI of defining ontology). If set, property is imported. */
   isDefinedBy?: string | null;
+  /** rdfs:comment of the property, used e.g. as the value-input placeholder in the editor. */
+  comment?: string | null;
 }
 
 export interface ObjectPropertyInfo {
