@@ -3146,6 +3146,22 @@ function matchQuadsToProperty(
       }
     }
     
+    // Fallback for IRI objects written as RELATIVE IRIs in the source (e.g. <img/foo.png>) that
+    // the parser resolved to an absolute URI against the document @base. The angle-bracket path is
+    // a suffix of the resolved absolute URI, so match on that (or an exact absolute <...> match).
+    if (objectValue && !valueMatches && quad.object.termType === 'NamedNode') {
+      const uri = (quad.object as { value: string }).value;
+      for (const m of valueText.matchAll(/<([^>]*)>/g)) {
+        const iri = m[1];
+        if (!iri) continue;
+        const isRelative = !/^[a-z][a-z0-9+.-]*:/i.test(iri);
+        if (iri === uri || (isRelative && uri.endsWith(iri))) {
+          valueMatches = true;
+          break;
+        }
+      }
+    }
+
     // Only add to matches if value matches (for blank nodes, this means value text has brackets)
     if (valueMatches) {
       // Calculate proximity score
@@ -3801,6 +3817,13 @@ export function isSimplePropertyChange(
 ): boolean {
   // Multi-line properties are complex (e.g., restrictions)
   if (propertyLine.isMultiLine) {
+    return false;
+  }
+
+  // Multi-valued predicates (e.g. several :exampleImage values on one class) cannot be
+  // represented by the single-line targeted replacement, which only renders newQuads[0].
+  // Route these through block-level reconstruction so every value is serialized.
+  if (changeSet.newQuads.length > 1) {
     return false;
   }
   
