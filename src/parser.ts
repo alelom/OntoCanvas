@@ -212,8 +212,12 @@ export function getAnnotationProperties(
     if (isDefinedByQuad?.object?.termType === 'NamedNode') {
       isDefinedBy = (isDefinedByQuad.object as { value: string }).value;
     }
-    
-    result.push({ name, isBoolean, range, uri: subjUri, isDefinedBy: isDefinedBy ?? undefined });
+
+    // Extract rdfs:comment (used as the value-input placeholder in the editor)
+    const commentQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'comment'), null, null)[0];
+    const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
+
+    result.push({ name, isBoolean, range, uri: subjUri, isDefinedBy: isDefinedBy ?? undefined, comment });
   }
   return result;
 }

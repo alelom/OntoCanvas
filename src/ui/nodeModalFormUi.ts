@@ -11,8 +11,69 @@ import {
   ADD_NODE_DUPLICATE_MESSAGE,
 } from './nodeModalForm';
 import type { DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, GraphNode } from '../types';
+import { initAnnotationValuesSection } from './annotationValuesSection';
 
 export { ADD_NODE_DUPLICATE_MESSAGE };
+
+/** Host hooks for rendering textual (multi-value) annotation properties in a node modal. */
+export interface AnnotationPropsListDeps {
+  /** Whether the ontology is editable locally (controls add/delete affordances). */
+  isLocal: boolean;
+  /** Initial values for a textual annotation property (read from the store; [] for a new node). */
+  getInitialValues: (ap: AnnotationPropertyInfo) => string[];
+  /** Report a textual property's edited values so the host can persist them on confirm. */
+  onTextualValuesChange: (propName: string, values: string[]) => void;
+  /** Open a link value (e.g. in a new tab). */
+  onOpenLink: (value: string) => void;
+}
+
+/** Render one annotation property row: boolean -> checkbox; textual -> multi-value section. */
+function renderAnnotationPropItem(
+  listEl: HTMLElement,
+  ap: AnnotationPropertyInfo,
+  currentBooleanValue: boolean | string | null | undefined,
+  idPrefix: string,
+  deps: AnnotationPropsListDeps
+): void {
+  const item = document.createElement('div');
+
+  if (ap.isBoolean) {
+    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
+    const label = document.createElement('span');
+    label.style.cssText = 'font-size: 11px; min-width: 120px;';
+    label.textContent = ap.name;
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `${idPrefix}${ap.name}`;
+    checkbox.checked = currentBooleanValue === true;
+    checkbox.indeterminate = currentBooleanValue === null || currentBooleanValue === undefined;
+    checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
+    item.appendChild(label);
+    item.appendChild(checkbox);
+    listEl.appendChild(item);
+    return;
+  }
+
+  item.style.cssText = 'margin-bottom: 10px; padding: 4px;';
+  const label = document.createElement('div');
+  label.style.cssText = 'font-size: 11px; font-weight: bold; margin-bottom: 4px;';
+  label.textContent = ap.name + ':';
+  if (ap.comment) label.title = ap.comment;
+  item.appendChild(label);
+
+  const valuesContainer = document.createElement('div');
+  item.appendChild(valuesContainer);
+  listEl.appendChild(item);
+
+  initAnnotationValuesSection(valuesContainer, {
+    propertyName: ap.name,
+    comment: ap.comment,
+    isLocal: deps.isLocal,
+    initialValues: deps.getInitialValues(ap),
+    onChange: (values) => deps.onTextualValuesChange(ap.name, values),
+    onOpen: deps.onOpenLink,
+  });
+}
 
 export function updateRenameDataPropAddButtonState(): void {
   const selectEl = document.getElementById('renameDataPropSelect') as HTMLSelectElement;
@@ -73,58 +134,25 @@ export function renderRenameModalDataPropsList(
 export function renderRenameModalAnnotationPropsList(
   nodeId: string,
   node: GraphNode | undefined,
-  annotationProperties: AnnotationPropertyInfo[]
+  annotationProperties: AnnotationPropertyInfo[],
+  deps: AnnotationPropsListDeps
 ): void {
   const listEl = document.getElementById('renameAnnotationPropsList');
   if (!listEl) return;
-
   listEl.innerHTML = '';
-
   if (annotationProperties.length === 0) {
     listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
     return;
   }
-
   annotationProperties.forEach((ap) => {
-    const currentValue = node?.annotations?.[ap.name];
-    const item = document.createElement('div');
-    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
-
-    if (ap.isBoolean) {
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name;
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `renameAnnotProp_${ap.name}`;
-      checkbox.checked = currentValue === true;
-      checkbox.indeterminate = currentValue === null || currentValue === undefined;
-      checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
-
-      item.appendChild(label);
-      item.appendChild(checkbox);
-    } else {
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name + ':';
-
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.id = `renameAnnotProp_${ap.name}`;
-      input.value = typeof currentValue === 'string' ? currentValue : '';
-      input.placeholder = 'Enter value';
-      input.style.cssText = 'flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;';
-
-      item.appendChild(label);
-      item.appendChild(input);
-    }
-
-    listEl.appendChild(item);
+    renderAnnotationPropItem(listEl, ap, node?.annotations?.[ap.name], 'renameAnnotProp_', deps);
   });
 }
 
-export function renderAddNodeAnnotationPropsList(annotationProperties: AnnotationPropertyInfo[]): void {
+export function renderAddNodeAnnotationPropsList(
+  annotationProperties: AnnotationPropertyInfo[],
+  deps: AnnotationPropsListDeps
+): void {
   const listEl = document.getElementById('addNodeAnnotationPropsList');
   if (!listEl) return;
   listEl.innerHTML = '';
@@ -133,35 +161,7 @@ export function renderAddNodeAnnotationPropsList(annotationProperties: Annotatio
     return;
   }
   annotationProperties.forEach((ap) => {
-    const currentValue = null;
-    const item = document.createElement('div');
-    item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
-    if (ap.isBoolean) {
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name;
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `addNodeAnnotProp_${ap.name}`;
-      checkbox.checked = currentValue === true;
-      checkbox.indeterminate = currentValue === null || currentValue === undefined;
-      checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
-      item.appendChild(label);
-      item.appendChild(checkbox);
-    } else {
-      const label = document.createElement('span');
-      label.style.cssText = 'font-size: 11px; min-width: 120px;';
-      label.textContent = ap.name + ':';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.id = `addNodeAnnotProp_${ap.name}`;
-      input.value = typeof currentValue === 'string' ? currentValue : '';
-      input.placeholder = 'Enter value';
-      input.style.cssText = 'flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;';
-      item.appendChild(label);
-      item.appendChild(input);
-    }
-    listEl.appendChild(item);
+    renderAnnotationPropItem(listEl, ap, null, 'addNodeAnnotProp_', deps);
   });
 }
 
