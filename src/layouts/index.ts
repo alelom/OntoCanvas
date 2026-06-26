@@ -1,4 +1,5 @@
 import type { GraphEdge, NodeDimensions } from '../types';
+import { computeHierarchical00 } from './hierarchical00';
 import { computeHierarchical01 } from './hierarchical01';
 import { computeHierarchical02 } from './hierarchical02';
 import { computeHierarchical03 } from './hierarchical03';
@@ -17,6 +18,7 @@ export type LayoutAlgorithm = (
  * Registry of all available layout algorithms
  */
 export const LAYOUT_ALGORITHMS: Record<string, LayoutAlgorithm> = {
+  'hierarchical00': computeHierarchical00,
   'hierarchical01': computeHierarchical01,
   'hierarchical02': computeHierarchical02,
   'hierarchical03': computeHierarchical03,
