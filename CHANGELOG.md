@@ -1,3 +1,16 @@
+# [1.16.0](https://github.com/alelom/OntoCanvas/compare/v1.15.0...v1.16.0) (2026-06-26)
+
+
+### Bug Fixes
+
+* **example-images:** add image URL via Enter/button without closing the modal ([60386b4](https://github.com/alelom/OntoCanvas/commit/60386b4ef660595054815f4bd7c3c5d184535fb2))
+* **serializer:** persist example images (relative IRIs + multi-valued) in custom serializer ([4fbd519](https://github.com/alelom/OntoCanvas/commit/4fbd519d405827699b1e7bf69d9c8e1d3c51db61))
+
+
+### Features
+
+* **annotations:** generic multi-value editor for textual annotation properties ([c90fe71](https://github.com/alelom/OntoCanvas/commit/c90fe712dfc9d597e1bb93fa82a8b0a5297d6d86))
+
 # [1.15.0](https://github.com/alelom/OntoCanvas/compare/v1.14.3...v1.15.0) (2026-06-17)
 
 
