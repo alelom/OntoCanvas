@@ -226,10 +226,11 @@ export function computeNodeDepths(
 }
 
 // Export layout registry system
-export { 
-  getLayoutAlgorithm, 
+export {
+  getLayoutAlgorithm,
   getAvailableLayoutModes,
-  type LayoutAlgorithm 
+  SELF_CONTAINED_LAYOUT_MODES,
+  type LayoutAlgorithm
 } from './layouts';
 
 // Backward compatibility: export computeWeightedLayout as alias to hierarchical01
