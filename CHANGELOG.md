@@ -1,3 +1,17 @@
+# [1.17.0](https://github.com/alelom/OntoCanvas/compare/v1.16.0...v1.17.0) (2026-07-08)
+
+
+### Features
+
+* **graph:** make Hierarchical 00 the default layout mode ([37ab395](https://github.com/alelom/OntoCanvas/commit/37ab395a4bc6bd63ec63b9e6513242259dd3218c))
+* **graph:** wire relationship-aware modes into the editor, default to DAG ([31b74e3](https://github.com/alelom/OntoCanvas/commit/31b74e3acee206df2bb59054bad9328ef3383391))
+* **layouts:** add graph-distribution quality measure ([f931634](https://github.com/alelom/OntoCanvas/commit/f931634b88e41ad075e20c96a0d3ee0c8cf49674))
+* **layouts:** add Hierarchical 00 layered layout algorithm ([62e81b0](https://github.com/alelom/OntoCanvas/commit/62e81b0f672c4be1ec53bc53c0c1cd64d6bd2782))
+* **layouts:** add Hierarchical DAG / tiers+spring / force-downward modes ([50af097](https://github.com/alelom/OntoCanvas/commit/50af09717173ef32706f627ab565341675d89c60))
+* **layouts:** add layout-mode descriptions metadata ([1b95b86](https://github.com/alelom/OntoCanvas/commit/1b95b866ade00487d29aa2b8b1344974793084f3))
+* **layouts:** add relationship-aware layered ranking model ([5212637](https://github.com/alelom/OntoCanvas/commit/5212637deb236683389ee3de7c05ee44a73113e2))
+* **ui:** add layout-mode hint popup describing each mode ([99bc632](https://github.com/alelom/OntoCanvas/commit/99bc632dfeadfe4ccacaf3662b82c7e67cbf2a9e))
+
 # [1.16.0](https://github.com/alelom/OntoCanvas/compare/v1.15.0...v1.16.0) (2026-06-26)
 
 
