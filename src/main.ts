@@ -103,6 +103,7 @@ import {
   resolveOverlaps,
   matchesSearch,
   getLayoutAlgorithm,
+  SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
 import { persistNodePositionsFromNetwork } from './graph/persistNodePositions';
@@ -239,7 +240,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 70,
     relationshipFontSize: parseInt((document.getElementById('relationshipFontSize') as HTMLInputElement)?.value, 10) || 18,
     dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 12,
-    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical00',
+    layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical-dag',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, annotationProperties) : undefined,
@@ -349,7 +350,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
   // Handle backward compatibility: 'weighted' maps to 'hierarchical01'
-  const layoutMode = config.layoutMode ?? 'hierarchical00';
+  const layoutMode = config.layoutMode ?? 'hierarchical-dag';
   const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
   (document.getElementById('layoutMode') as HTMLSelectElement).value = normalizedLayoutMode;
   const searchQueryEl = document.getElementById('searchQuery') as HTMLInputElement;
@@ -3139,11 +3140,11 @@ function buildNetworkData(
       SPACING,
       nodeDimensions
     );
-    // hierarchical00 is a layered layout that is already overlap-free and tightly
-    // packed; running resolveOverlaps would re-separate interleaved root subtrees and
-    // re-inflate the width into the wide "ribbon" we are avoiding. Skip it for that mode.
+    // The layered / relationship-aware modes produce an already-overlap-free (or
+    // force-managed) layout; running resolveOverlaps would re-separate interleaved root
+    // subtrees and re-inflate the width into the wide "ribbon" we are avoiding. Skip it.
     const resolvedPositions =
-      layoutMode === 'hierarchical00'
+      SELF_CONTAINED_LAYOUT_MODES.has(layoutMode)
         ? computedPositions
         : resolveOverlaps(
             computedPositions,
@@ -5966,6 +5967,9 @@ function renderApp(): void {
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <strong>Display options:</strong>
         <select id="layoutMode">
+          <option value="hierarchical-dag">Hierarchical DAG</option>
+          <option value="hierarchical-tiers-spring">Hierarchical tiers+spring</option>
+          <option value="hierarchical-force-downward">Hierarchical force-downward</option>
           <option value="hierarchical00">Hierarchical 00</option>
           <option value="hierarchical03">Hierarchical 01</option>
           <option value="hierarchical02">Hierarchical 02</option>
@@ -6928,7 +6932,7 @@ async function loadTtlAndRender(
 
     // Set lastLayoutMode BEFORE applying config to prevent clearing positions
     // Get layout mode from config or default
-    const configLayoutMode = displayConfig?.layoutMode || 'hierarchical00';
+    const configLayoutMode = displayConfig?.layoutMode || 'hierarchical-dag';
     const normalizedConfigLayoutMode = configLayoutMode === 'weighted' ? 'hierarchical01' : configLayoutMode;
     lastLayoutMode = normalizedConfigLayoutMode;
     
@@ -7251,7 +7255,8 @@ function applyFilter(preserveView = false): void {
       });
     } else if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'hierarchical00' || layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
+    } else {
+      // Computed (physics-disabled) layouts: fit once positions are applied.
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
   } else {
@@ -7264,7 +7269,8 @@ function applyFilter(preserveView = false): void {
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
       network.once('stabilizationIterationsDone', () => network!.fit());
-    } else if (layoutMode === 'hierarchical00' || layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03') {
+    } else {
+      // Computed (physics-disabled) layouts: fit once positions are applied.
       setTimeout(() => network!.fit({ padding: 20 }), 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
@@ -8105,7 +8111,7 @@ function setupEventListeners(): void {
     }
   }, true);
   document.getElementById('resetView')?.addEventListener('click', () => {
-    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical00';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
@@ -8330,7 +8336,7 @@ function setupEventListeners(): void {
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = '12';
-    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical00';
+    (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
     
@@ -8349,7 +8355,7 @@ function setupEventListeners(): void {
     await deleteDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName).catch(() => {});
     
     // Reset lastLayoutMode to prevent position clearing on first applyFilter
-    lastLayoutMode = 'hierarchical00';
+    lastLayoutMode = 'hierarchical-dag';
     
     // Regenerate layout by applying filter
     applyFilter();
