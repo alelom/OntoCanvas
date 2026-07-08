@@ -55,6 +55,7 @@ import {
 } from './ui/nodeModalForm';
 import { editNodeProperties } from './workflows/editNodeProperties';
 import * as nodeModalFormUi from './ui/nodeModalFormUi';
+import { initLayoutModeHint } from './ui/layoutModeHint';
 import { Store, DataFactory } from 'n3';
 import {
   searchExternalClasses,
@@ -5966,16 +5967,20 @@ function renderApp(): void {
       <div id="vizControls" style="display: none;">
       <div style="display: flex; flex-direction: column; gap: 4px;">
         <strong>Display options:</strong>
-        <select id="layoutMode">
-          <option value="hierarchical-dag">Hierarchical DAG</option>
-          <option value="hierarchical-tiers-spring">Hierarchical tiers+spring</option>
-          <option value="hierarchical-force-downward">Hierarchical force-downward</option>
-          <option value="hierarchical00">Hierarchical 00</option>
-          <option value="hierarchical03">Hierarchical 01</option>
-          <option value="hierarchical02">Hierarchical 02</option>
-          <option value="hierarchical01">Hierarchical 03</option>
-          <option value="force">Force-directed</option>
-        </select>
+        <div id="layoutModeHintWrap" style="position: relative; display: flex; align-items: center; gap: 6px;">
+          <select id="layoutMode">
+            <option value="hierarchical-dag">Hierarchical DAG</option>
+            <option value="hierarchical-tiers-spring">Hierarchical tiers+spring</option>
+            <option value="hierarchical-force-downward">Hierarchical force-downward</option>
+            <option value="hierarchical00">Hierarchical 00</option>
+            <option value="hierarchical03">Hierarchical 01</option>
+            <option value="hierarchical02">Hierarchical 02</option>
+            <option value="hierarchical01">Hierarchical 03</option>
+            <option value="force">Force-directed</option>
+          </select>
+          <button type="button" id="layoutModeHintToggle" title="About the layout modes" aria-label="About the layout modes" style="cursor: pointer; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid #b0b8c0; background: #f4f6f8; color: #2c7be5; font-size: 12px; font-weight: bold; line-height: 1; flex: none;">i</button>
+          <div id="layoutModeHintPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 10px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; width: 340px; max-height: 60vh; overflow-y: auto;"></div>
+        </div>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
         <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
@@ -8008,6 +8013,9 @@ function setupEventListeners(): void {
       textDisplayPopup.style.display = 'none';
     }
   });
+
+  // Layout-mode hint popup (describes the logic of each layout mode).
+  initLayoutModeHint();
 
   document.getElementById('wrapChars')?.addEventListener('input', () => applyFilter());
   document.getElementById('wrapChars')?.addEventListener('change', () => applyFilter());
