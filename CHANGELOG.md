@@ -1,3 +1,19 @@
+# [1.18.0](https://github.com/alelom/OntoCanvas/compare/v1.17.0...v1.18.0) (2026-07-09)
+
+
+### Bug Fixes
+
+* **search:** dim other relationships between the two matched nodes ([56164ab](https://github.com/alelom/OntoCanvas/commit/56164aba8b0a0e0c2f718be82aa7cf55ef2515d4))
+* **search:** fade (not hide) other relationships between the searched pair ([2c29aef](https://github.com/alelom/OntoCanvas/commit/2c29aefb328ef369bb2c9179b0540f573916e3d7))
+* **search:** fill search with relationship local name, not the full URL ([5cd07a5](https://github.com/alelom/OntoCanvas/commit/5cd07a50ca9d28dbf114c5ab25a8137d71f7b2df))
+* **search:** stop edges fanning out of matched nodes showing at full opacity ([3d6c641](https://github.com/alelom/OntoCanvas/commit/3d6c641200e123fe114b55f7ab39589b6e76413c))
+
+
+### Features
+
+* **search:** add "Exact match" toggle (default on) for whole-name matching ([7879b51](https://github.com/alelom/OntoCanvas/commit/7879b516d9d98dda9412055021662a43682f6e27))
+* **search:** add pure search-highlight opacity logic ([b5f7319](https://github.com/alelom/OntoCanvas/commit/b5f73195bf986f4ad6cf392e603eff3f6d7f0ed9))
+
 # [1.17.0](https://github.com/alelom/OntoCanvas/compare/v1.16.0...v1.17.0) (2026-07-08)
 
 
