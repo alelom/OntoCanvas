@@ -3,6 +3,11 @@ import { matchesSearch } from '../graph';
 
 /** Opacity applied to matched nodes/edges (full). */
 export const OPACITY_MATCH = 1.0;
+/**
+ * Opacity for OTHER relationships that join the same two matched nodes as the searched
+ * relationship — faded but clearly visible, so they read as secondary to the searched one.
+ */
+export const OPACITY_RELATED = 0.6;
 /** Opacity applied to first-ring neighbours (only when "include neighbours" is on). */
 export const OPACITY_NEIGHBOR = 0.65;
 /** Opacity applied to everything else (dimmed). */
@@ -90,14 +95,14 @@ export function getNodeSearchOpacity(
 /**
  * Opacity for an edge given the highlight sets.
  *
- * An edge is shown at full opacity only if it directly matched the query, or it joins two
- * nodes that BOTH matched the query by name (e.g. searching a node name). Endpoints that
- * are matched only because they anchor the searched relationship do not count — so if the
- * two nodes of a searched relationship are also joined by another relationship, that other
- * relationship stays dimmed, less visible than the searched one.
- *
- * When includeNeighbors is on, an edge from a matched node to a first-ring neighbour is
- * shown dimmed-but-visible; everything else is fully dimmed.
+ * Opacity tiers (most to least prominent):
+ * - full: the edge matched directly (the searched relationship), or it joins two nodes that
+ *   both matched the query by name (e.g. searching a node name);
+ * - related: an OTHER relationship joining the same two matched nodes as the searched
+ *   relationship — faded but visible, so it reads as secondary to the searched one;
+ * - neighbour (only with includeNeighbors on): an edge from a matched node to a first-ring
+ *   neighbour;
+ * - dim: everything else, including edges departing a matched node toward a non-neighbour.
  */
 export function getEdgeSearchOpacity(
   from: string,
@@ -108,9 +113,10 @@ export function getEdgeSearchOpacity(
 ): number {
   if (sets.matchingEdgeIds.has(edgeKey(from, to, type))) return OPACITY_MATCH;
   if (sets.directNodeMatchIds.has(from) && sets.directNodeMatchIds.has(to)) return OPACITY_MATCH;
+  const fromM = sets.matchingNodeIds.has(from);
+  const toM = sets.matchingNodeIds.has(to);
+  if (fromM && toM) return OPACITY_RELATED;
   if (includeNeighbors) {
-    const fromM = sets.matchingNodeIds.has(from);
-    const toM = sets.matchingNodeIds.has(to);
     const fromN = sets.neighborNodeIds.has(from);
     const toN = sets.neighborNodeIds.has(to);
     if ((fromM && toN) || (toM && fromN)) return OPACITY_NEIGHBOR;

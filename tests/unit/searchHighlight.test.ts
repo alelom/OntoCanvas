@@ -11,6 +11,7 @@ import {
   getNodeSearchOpacity,
   getEdgeSearchOpacity,
   OPACITY_MATCH,
+  OPACITY_RELATED,
   OPACITY_NEIGHBOR,
   OPACITY_DIM,
 } from '../../src/lib/searchHighlight';
@@ -97,13 +98,17 @@ describe('other relationships between the two matched nodes', () => {
     edge('A', 'C', 'rel2'),
   ];
 
-  it('keeps the searched relationship full and dims the other one between the same nodes', () => {
+  it('keeps the searched relationship full and fades (not hides) the other one between the same nodes', () => {
     const sets = computeSearchSets(nodes, edges, 'hasRevision', false);
     // Both endpoints are matched (as relationship anchors), but neither matched by name.
     expect(sets.matchingNodeIds).toEqual(new Set(['A', 'B']));
     expect(sets.directNodeMatchIds.size).toBe(0);
     expect(edgeOp(sets, edge('A', 'B', 'hasRevision'), false)).toBe(OPACITY_MATCH); // searched
-    expect(edgeOp(sets, edge('B', 'A', 'isRevisionOf'), false)).toBe(OPACITY_DIM); // other rel -> dimmed
+    // Other relationship between the SAME two matched nodes: faded but visible.
+    expect(edgeOp(sets, edge('B', 'A', 'isRevisionOf'), false)).toBe(OPACITY_RELATED);
+    expect(OPACITY_RELATED).toBeGreaterThan(OPACITY_DIM);
+    expect(OPACITY_RELATED).toBeLessThan(OPACITY_MATCH);
+    // An edge to a different, non-matched node is still fully dimmed.
     expect(edgeOp(sets, edge('A', 'C', 'rel2'), false)).toBe(OPACITY_DIM);
     // The two nodes themselves remain fully highlighted.
     expect(nodeOp(sets, 'A')).toBe(OPACITY_MATCH);
