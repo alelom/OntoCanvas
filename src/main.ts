@@ -248,6 +248,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical-dag',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
     includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? false,
+    exactMatch: (document.getElementById('searchExactMatch') as HTMLInputElement)?.checked ?? true,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, annotationProperties) : undefined,
     annotationPropertyOrder: annotationProperties.map((ap) => ap.name),
     viewState: network
@@ -368,6 +369,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
     });
   }
   (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? false;
+  (document.getElementById('searchExactMatch') as HTMLInputElement).checked = config.exactMatch ?? true;
   
   // Store the loaded edge style config so it can be merged when building the filter
   // This ensures edge types that don't have checkboxes yet are still applied
@@ -2837,6 +2839,7 @@ function buildNetworkData(
     dataPropertyFontSize?: number;
     searchQuery: string;
     includeNeighbors: boolean;
+    exactMatch: boolean;
     edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
     annotationStyleConfig: AnnotationStyleConfig;
     layoutMode: string;
@@ -2911,7 +2914,8 @@ function buildNetworkData(
     filteredNodes,
     filteredEdges,
     searchQuery,
-    filter.includeNeighbors
+    filter.includeNeighbors,
+    filter.exactMatch
   );
   const { matchingNodeIds, neighborNodeIds } = searchSets;
 
@@ -6003,6 +6007,9 @@ function renderApp(): void {
         <label style="font-size: 11px; margin-left: 4px;">
           <input type="checkbox" id="searchIncludeNeighbors"> Include neighbors
         </label>
+        <label style="font-size: 11px; margin-left: 4px;" title="Match whole names instead of substrings (e.g. 'hasRevision' won't match 'hasRevisionTable')">
+          <input type="checkbox" id="searchExactMatch" checked> Exact match
+        </label>
       </div>
       <span id="undoRedoGroup" style="gap: 4px; align-items: center; display: inline-flex; flex-direction: column;">
         <button type="button" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
@@ -7018,6 +7025,9 @@ function applyFilter(preserveView = false): void {
   const neighborsEl = document.getElementById(
     'searchIncludeNeighbors'
   ) as HTMLInputElement;
+  const exactMatchEl = document.getElementById(
+    'searchExactMatch'
+  ) as HTMLInputElement;
   const edgeStylesContent = document.getElementById('edgeStylesContent')!;
 
   const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -7049,6 +7059,7 @@ function applyFilter(preserveView = false): void {
     dataPropertyFontSize,
     searchQuery: searchEl?.value ?? '',
     includeNeighbors: neighborsEl?.checked ?? false,
+    exactMatch: exactMatchEl?.checked ?? true,
     edgeStyleConfig: mergedEdgeStyleConfig,
     annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent, annotationProperties),
     layoutMode,
@@ -7995,6 +8006,9 @@ function setupEventListeners(): void {
   document
     .getElementById('searchIncludeNeighbors')
     ?.addEventListener('change', () => applyFilter());
+  document
+    .getElementById('searchExactMatch')
+    ?.addEventListener('change', () => applyFilter());
   document.getElementById('undoBtn')?.addEventListener('click', performUndo);
   document.getElementById('redoBtn')?.addEventListener('click', performRedo);
   document.getElementById('editEdgeCancel')?.addEventListener('click', hideEditEdgeModalWithCleanup);
@@ -8091,6 +8105,7 @@ function setupEventListeners(): void {
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
+    (document.getElementById('searchExactMatch') as HTMLInputElement).checked = true;
     document.getElementById('searchAutocomplete')?.classList.remove('visible');
     textDisplayPopup && (textDisplayPopup.style.display = 'none');
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
@@ -8312,7 +8327,8 @@ function setupEventListeners(): void {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
-    
+    (document.getElementById('searchExactMatch') as HTMLInputElement).checked = true;
+
     // Clear loaded edge style config (so it doesn't override DOM checkboxes)
     loadedEdgeStyleConfig = null;
     

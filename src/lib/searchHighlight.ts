@@ -40,7 +40,8 @@ export function computeSearchSets(
   nodes: GraphNode[],
   edges: GraphEdge[],
   query: string,
-  includeNeighbors: boolean
+  includeNeighbors: boolean,
+  exactMatch = false
 ): SearchHighlightSets {
   const matchingNodeIds = new Set<string>();
   const directNodeMatchIds = new Set<string>();
@@ -50,13 +51,13 @@ export function computeSearchSets(
   if (!q) return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds };
 
   for (const n of nodes) {
-    if (matchesSearch(n, null, q)) {
+    if (matchesSearch(n, null, q, exactMatch)) {
       matchingNodeIds.add(n.id);
       directNodeMatchIds.add(n.id);
     }
   }
   for (const e of edges) {
-    if (matchesSearch(null, e, q)) {
+    if (matchesSearch(null, e, q, exactMatch)) {
       matchingNodeIds.add(e.from);
       matchingNodeIds.add(e.to);
       matchingEdgeIds.add(edgeKey(e.from, e.to, e.type));

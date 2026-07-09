@@ -25,6 +25,8 @@ export interface DisplayConfig {
   layoutMode: string;
   searchQuery: string;
   includeNeighbors: boolean;
+  /** When true (default), search matches whole names rather than substrings. */
+  exactMatch?: boolean;
   annotationStyleConfig?: unknown;
   /** Annotation property local names in priority order (highest first); drives styling precedence. */
   annotationPropertyOrder?: string[];

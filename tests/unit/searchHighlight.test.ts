@@ -14,6 +14,7 @@ import {
   OPACITY_NEIGHBOR,
   OPACITY_DIM,
 } from '../../src/lib/searchHighlight';
+import { matchesSearch } from '../../src/graph';
 import type { GraphEdge, GraphNode } from '../../src/types';
 
 const node = (id: string, label = id): GraphNode => ({ id, label, labellableRoot: null });
@@ -119,6 +120,40 @@ describe('edge between two matched nodes', () => {
     expect(sets.matchingNodeIds).toEqual(new Set(['A', 'B']));
     expect(edgeOp(sets, edge('A', 'B', 'rel1'), false)).toBe(OPACITY_MATCH);
     expect(edgeOp(sets, edge('A', 'C', 'rel2'), false)).toBe(OPACITY_DIM);
+  });
+});
+
+describe('exact match mode', () => {
+  const nodes = ['A', 'B', 'C'].map((id) => node(id));
+  // hasRevision (searched) vs hasRevisionTable (substring superset).
+  const edges = [edge('A', 'B', 'hasRevision'), edge('A', 'C', 'hasRevisionTable')];
+
+  it('substring mode matches the superset relationship too (the old behaviour)', () => {
+    const sets = computeSearchSets(nodes, edges, 'hasRevision', false, false);
+    expect(sets.matchingEdgeIds.has('A->B:hasRevision')).toBe(true);
+    expect(sets.matchingEdgeIds.has('A->C:hasRevisionTable')).toBe(true);
+  });
+
+  it('exact mode matches only the whole-name relationship', () => {
+    const sets = computeSearchSets(nodes, edges, 'hasRevision', false, true);
+    expect(sets.matchingEdgeIds.has('A->B:hasRevision')).toBe(true);
+    expect(sets.matchingEdgeIds.has('A->C:hasRevisionTable')).toBe(false);
+    expect(sets.matchingNodeIds).toEqual(new Set(['A', 'B']));
+  });
+
+  it('exact mode matches a prefixed edge type by its local name or full type', () => {
+    const uriEdges = [edge('A', 'B', 'https://ex.org/o#hasRevision')];
+    expect(matchesSearch(null, uriEdges[0], 'hasRevision', true)).toBe(true); // local name
+    expect(matchesSearch(null, uriEdges[0], 'https://ex.org/o#hasRevision', true)).toBe(true); // full
+    expect(matchesSearch(null, uriEdges[0], 'hasRev', true)).toBe(false); // partial -> no
+  });
+
+  it('exact mode matches nodes by whole label/id, not substrings', () => {
+    const n = node('DrawingSheet', 'Drawing Sheet');
+    expect(matchesSearch(n, null, 'DrawingSheet', true)).toBe(true); // id
+    expect(matchesSearch(n, null, 'Drawing Sheet', true)).toBe(true); // label
+    expect(matchesSearch(n, null, 'Drawing', true)).toBe(false); // partial -> no
+    expect(matchesSearch(n, null, 'Drawing', false)).toBe(true); // substring still works
   });
 });
 
