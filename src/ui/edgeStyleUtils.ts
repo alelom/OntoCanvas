@@ -220,6 +220,32 @@ function canDisplayEdgeType(
 }
 
 /**
+ * Extract the local name of a relationship type: the part after '#', else after the last
+ * '/', else the type itself (e.g. an already-local name like "hasNote").
+ */
+export function extractRelationshipLocalName(type: string): string {
+  if (type.includes('#')) return type.split('#').pop() || type;
+  if (type.includes('/')) return type.split('/').pop() || type;
+  return type;
+}
+
+/**
+ * Compute what to put in the search box when a relationship legend entry is clicked.
+ *
+ * Uses just the local name (the '#' fragment) for brevity, unless another displayed
+ * relationship shares that local name (a clash from imported external relations) — in which
+ * case the full type is used so the search still uniquely identifies the relationship.
+ * Exported for unit tests.
+ */
+export function computeLegendSearchTerm(type: string, allDisplayedTypes: string[]): string {
+  const localName = extractRelationshipLocalName(type);
+  const clashes = allDisplayedTypes.some(
+    (other) => other !== type && extractRelationshipLocalName(other) === localName
+  );
+  return clashes ? type : localName;
+}
+
+/**
  * Compute which config keys (edge types) should appear in the legend given displayed edge types.
  * Prefers op.name over full URI so each relationship appears once.
  * Used by updateEdgeColorsLegend; exported for unit tests.
@@ -270,8 +296,10 @@ export function updateEdgeColorsLegend(
   // Create clickable edge entries with hover underline
   const edgeEntries = types.map((t) => {
     const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-    // Use the full URI (t) directly as the data-edge-type value
-    return `<span style="color: ${config[t].color}">●</span> <a href="#" class="edge-legend-link" data-edge-type="${t.replace(/"/g, '&quot;')}" style="color: inherit; text-decoration: none; cursor: pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${label}</a>`;
+    // data-edge-type keeps the full type; data-search-term is the concise value the search
+    // box is filled with (local '#' name unless it clashes with another displayed relation).
+    const searchTerm = computeLegendSearchTerm(t, types);
+    return `<span style="color: ${config[t].color}">●</span> <a href="#" class="edge-legend-link" data-edge-type="${t.replace(/"/g, '&quot;')}" data-search-term="${searchTerm.replace(/"/g, '&quot;')}" style="color: inherit; text-decoration: none; cursor: pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${label}</a>`;
   }).join(' ');
   
   legendEl.innerHTML = 'Edges: ' + edgeEntries;
@@ -280,11 +308,13 @@ export function updateEdgeColorsLegend(
   legendEl.querySelectorAll('.edge-legend-link').forEach((link) => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      const edgeType = (link as HTMLElement).getAttribute('data-edge-type');
-      if (edgeType) {
+      const el = link as HTMLElement;
+      // Prefer the concise search term; fall back to the full type.
+      const term = el.getAttribute('data-search-term') || el.getAttribute('data-edge-type');
+      if (term) {
         const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
         if (searchInput) {
-          searchInput.value = edgeType;
+          searchInput.value = term;
           // Trigger input event to update search and styling
           searchInput.dispatchEvent(new Event('input', { bubbles: true }));
           // Focus the search input to show the outline

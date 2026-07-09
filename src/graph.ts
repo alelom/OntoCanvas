@@ -426,20 +426,45 @@ export function resolveOverlaps(
   return result;
 }
 
+/** Local name of a term: the part after '#', else after the last '/', else the term. */
+function searchLocalName(s: string): string {
+  if (s.includes('#')) return s.split('#').pop() || s;
+  if (s.includes('/')) return s.split('/').pop() || s;
+  return s;
+}
+
+/**
+ * Whether a node or edge matches the search query.
+ *
+ * When exactMatch is true, the query must equal the whole name (case-insensitive): a node's
+ * label or id (or the local name of a prefixed id), or an edge's full type or its local
+ * name. This prevents e.g. "hasRevision" from also matching "hasRevisionTable". When false,
+ * a case-insensitive substring match is used.
+ */
 export function matchesSearch(
   node: GraphNode | null,
   edge: GraphEdge | null,
-  query: string
+  query: string,
+  exactMatch = false
 ): boolean {
   if (!query || query.trim() === '') return true;
   const q = query.trim().toLowerCase();
   if (node) {
-    const matchLabel = (node.label || '').toLowerCase().includes(q);
-    const matchId = (node.id || '').toLowerCase().includes(q);
-    if (matchLabel || matchId) return true;
+    const label = (node.label || '').toLowerCase();
+    const id = (node.id || '').toLowerCase();
+    if (exactMatch) {
+      if (label === q || id === q || searchLocalName(id) === q) return true;
+    } else if (label.includes(q) || id.includes(q)) {
+      return true;
+    }
   }
   if (edge) {
-    if ((edge.type || '').toLowerCase().includes(q)) return true;
+    const type = (edge.type || '').toLowerCase();
+    if (exactMatch) {
+      if (type === q || searchLocalName(type) === q) return true;
+    } else if (type.includes(q)) {
+      return true;
+    }
   }
   return false;
 }
