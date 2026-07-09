@@ -11,6 +11,12 @@ export const OPACITY_DIM = 0.08;
 export interface SearchHighlightSets {
   /** Nodes that match the query directly (or are endpoints of a matched relationship). */
   matchingNodeIds: Set<string>;
+  /**
+   * Nodes whose own label/id matched the query (a subset of matchingNodeIds). Endpoints
+   * that are only matched because they anchor a matched relationship are NOT included, so
+   * other relationships between those endpoints do not inherit full opacity.
+   */
+  directNodeMatchIds: Set<string>;
   /** First-ring neighbours of matched nodes (empty unless includeNeighbors). */
   neighborNodeIds: Set<string>;
   /** Edges whose type matches the query directly. */
@@ -37,13 +43,17 @@ export function computeSearchSets(
   includeNeighbors: boolean
 ): SearchHighlightSets {
   const matchingNodeIds = new Set<string>();
+  const directNodeMatchIds = new Set<string>();
   const neighborNodeIds = new Set<string>();
   const matchingEdgeIds = new Set<string>();
   const q = (query || '').trim();
-  if (!q) return { matchingNodeIds, neighborNodeIds, matchingEdgeIds };
+  if (!q) return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds };
 
   for (const n of nodes) {
-    if (matchesSearch(n, null, q)) matchingNodeIds.add(n.id);
+    if (matchesSearch(n, null, q)) {
+      matchingNodeIds.add(n.id);
+      directNodeMatchIds.add(n.id);
+    }
   }
   for (const e of edges) {
     if (matchesSearch(null, e, q)) {
@@ -62,7 +72,7 @@ export function computeSearchSets(
     }
   }
 
-  return { matchingNodeIds, neighborNodeIds, matchingEdgeIds };
+  return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds };
 }
 
 /** Opacity for a node given the highlight sets. */
@@ -79,11 +89,14 @@ export function getNodeSearchOpacity(
 /**
  * Opacity for an edge given the highlight sets.
  *
- * An edge is shown at full opacity only if it directly matched the query or connects two
- * matched nodes. When includeNeighbors is on, an edge from a matched node to a first-ring
- * neighbour is shown dimmed-but-visible; everything else (including edges that merely
- * *depart from* a matched node toward a non-neighbour, and any edge among neighbours) is
- * fully dimmed. This is the fix for edges fanning out of matched nodes at full opacity.
+ * An edge is shown at full opacity only if it directly matched the query, or it joins two
+ * nodes that BOTH matched the query by name (e.g. searching a node name). Endpoints that
+ * are matched only because they anchor the searched relationship do not count — so if the
+ * two nodes of a searched relationship are also joined by another relationship, that other
+ * relationship stays dimmed, less visible than the searched one.
+ *
+ * When includeNeighbors is on, an edge from a matched node to a first-ring neighbour is
+ * shown dimmed-but-visible; everything else is fully dimmed.
  */
 export function getEdgeSearchOpacity(
   from: string,
@@ -93,10 +106,10 @@ export function getEdgeSearchOpacity(
   includeNeighbors: boolean
 ): number {
   if (sets.matchingEdgeIds.has(edgeKey(from, to, type))) return OPACITY_MATCH;
-  const fromM = sets.matchingNodeIds.has(from);
-  const toM = sets.matchingNodeIds.has(to);
-  if (fromM && toM) return OPACITY_MATCH;
+  if (sets.directNodeMatchIds.has(from) && sets.directNodeMatchIds.has(to)) return OPACITY_MATCH;
   if (includeNeighbors) {
+    const fromM = sets.matchingNodeIds.has(from);
+    const toM = sets.matchingNodeIds.has(to);
     const fromN = sets.neighborNodeIds.has(from);
     const toN = sets.neighborNodeIds.has(to);
     if ((fromM && toN) || (toM && fromN)) return OPACITY_NEIGHBOR;

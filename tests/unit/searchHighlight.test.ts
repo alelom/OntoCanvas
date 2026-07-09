@@ -87,6 +87,29 @@ describe('node-name search behaves the same way', () => {
   });
 });
 
+describe('other relationships between the two matched nodes', () => {
+  // A and B are joined by hasRevision (searched) AND isRevisionOf (a second relationship).
+  const nodes = ['A', 'B', 'C'].map((id) => node(id));
+  const edges = [
+    edge('A', 'B', 'hasRevision'),
+    edge('B', 'A', 'isRevisionOf'),
+    edge('A', 'C', 'rel2'),
+  ];
+
+  it('keeps the searched relationship full and dims the other one between the same nodes', () => {
+    const sets = computeSearchSets(nodes, edges, 'hasRevision', false);
+    // Both endpoints are matched (as relationship anchors), but neither matched by name.
+    expect(sets.matchingNodeIds).toEqual(new Set(['A', 'B']));
+    expect(sets.directNodeMatchIds.size).toBe(0);
+    expect(edgeOp(sets, edge('A', 'B', 'hasRevision'), false)).toBe(OPACITY_MATCH); // searched
+    expect(edgeOp(sets, edge('B', 'A', 'isRevisionOf'), false)).toBe(OPACITY_DIM); // other rel -> dimmed
+    expect(edgeOp(sets, edge('A', 'C', 'rel2'), false)).toBe(OPACITY_DIM);
+    // The two nodes themselves remain fully highlighted.
+    expect(nodeOp(sets, 'A')).toBe(OPACITY_MATCH);
+    expect(nodeOp(sets, 'B')).toBe(OPACITY_MATCH);
+  });
+});
+
 describe('edge between two matched nodes', () => {
   it('is full opacity even without include neighbours', () => {
     // "al" matches labels Alpha and Alpha2 -> both A and B match as nodes.
