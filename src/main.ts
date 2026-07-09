@@ -102,10 +102,14 @@ import {
   computeNodeDepths,
   estimateNodeDimensions,
   resolveOverlaps,
-  matchesSearch,
   getLayoutAlgorithm,
   SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
+import {
+  computeSearchSets,
+  getNodeSearchOpacity as getSearchOpacity,
+  getEdgeSearchOpacity,
+} from './lib/searchHighlight';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
 import { persistNodePositionsFromNetwork } from './graph/persistNodePositions';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
@@ -243,7 +247,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 12,
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical-dag',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
-    includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? true,
+    includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? false,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, annotationProperties) : undefined,
     annotationPropertyOrder: annotationProperties.map((ap) => ap.name),
     viewState: network
@@ -363,7 +367,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
       searchQueryEl.dispatchEvent(new Event('input', { bubbles: true }));
     });
   }
-  (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? true;
+  (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? false;
   
   // Store the loaded edge style config so it can be merged when building the filter
   // This ensures edge types that don't have checkboxes yet are still applied
@@ -2824,16 +2828,6 @@ function applyOpacityToColor(color: string, opacity: number): string {
  * @param neighborIds Set of neighbor node IDs
  * @returns Opacity value: 1.0 for matching, 0.65 for neighbors, 0.08 for others (minimum 5%)
  */
-function getSearchOpacity(nodeId: string, matchingIds: Set<string>, neighborIds: Set<string>): number {
-  if (matchingIds.has(nodeId)) {
-    return 1.0; // 100% opacity for matching
-  }
-  if (neighborIds.has(nodeId)) {
-    return 0.65; // 60-70% opacity for neighbors (using 65%)
-  }
-  return 0.08; // 8% opacity for others (increased transparency distance, minimum 5%)
-}
-
 function buildNetworkData(
   filter: {
     wrapChars: number;
@@ -2911,44 +2905,19 @@ function buildNetworkData(
   }
 
   const searchQuery = (filter.searchQuery || '').trim();
-  // Track search categories for transparency styling
-  let matchingNodeIds = new Set<string>();
-  let neighborNodeIds = new Set<string>();
-  let matchingEdgeIds = new Set<string>();
-  let neighborEdgeIds = new Set<string>();
-  
+  // Search highlighting sets (matching nodes/edges + first-ring neighbours). Neighbours are
+  // only populated when includeNeighbors is on, and the traversal stops at the first ring.
+  const searchSets = computeSearchSets(
+    filteredNodes,
+    filteredEdges,
+    searchQuery,
+    filter.includeNeighbors
+  );
+  const { matchingNodeIds, neighborNodeIds } = searchSets;
+
   if (searchQuery) {
-    // Find matching nodes and edges
-    filteredNodes.forEach((n) => {
-      if (matchesSearch(n, null, searchQuery)) matchingNodeIds.add(n.id);
-    });
-    filteredEdges.forEach((e) => {
-      if (matchesSearch(null, e, searchQuery)) {
-        matchingNodeIds.add(e.from);
-        matchingNodeIds.add(e.to);
-        matchingEdgeIds.add(`${e.from}->${e.to}:${e.type}`);
-      }
-    });
-    
-    // Find neighbor nodes and edges (if includeNeighbors is enabled)
-    if (filter.includeNeighbors) {
-      filteredEdges.forEach((e) => {
-        const fromMatches = matchingNodeIds.has(e.from);
-        const toMatches = matchingNodeIds.has(e.to);
-        if (fromMatches || toMatches) {
-          // Add neighbor nodes (connected to matching nodes but not matching themselves)
-          if (!matchingNodeIds.has(e.from)) neighborNodeIds.add(e.from);
-          if (!matchingNodeIds.has(e.to)) neighborNodeIds.add(e.to);
-          // Add neighbor edges (connected to matching nodes but not matching themselves)
-          const edgeId = `${e.from}->${e.to}:${e.type}`;
-          if (!matchingEdgeIds.has(edgeId)) neighborEdgeIds.add(edgeId);
-        }
-      });
-    }
-    
-    // Keep ALL nodes and edges - don't filter them out
-    // All nodes remain in filteredNodes, all edges remain in filteredEdges
-    // We'll apply opacity styling based on their category
+    // Keep ALL nodes and edges - don't filter them out.
+    // We apply opacity styling based on their category (matching / neighbour / other).
   }
 
   // edgeStyleConfig is already defined above at the start of the function
@@ -3606,20 +3575,16 @@ function buildNetworkData(
     let edgeFontColor = '#2c3e50';
     
     if (searchQuery) {
-      const edgeId = `${e.from}->${e.to}:${e.type}`;
-      // Determine edge opacity based on whether it's matching, neighbor, or other
-      let edgeOpacity = 1.0;
-      if (matchingEdgeIds.has(edgeId)) {
-        edgeOpacity = 1.0; // Matching edge
-      } else if (neighborEdgeIds.has(edgeId)) {
-        edgeOpacity = 0.65; // Neighbor edge
-      } else {
-        // Check if either endpoint is matching or neighbor
-        const fromOpacity = getSearchOpacity(e.from, matchingNodeIds, neighborNodeIds);
-        const toOpacity = getSearchOpacity(e.to, matchingNodeIds, neighborNodeIds);
-        edgeOpacity = Math.max(fromOpacity, toOpacity); // Use the higher opacity of the two endpoints
-      }
-      
+      // An edge is full-opacity only when it matched directly or joins two matched nodes.
+      // Edges merely departing from a matched node toward a non-neighbour are dimmed; edges
+      // to first-ring neighbours are shown dimmed-but-visible only when includeNeighbors is on.
+      const edgeOpacity = getEdgeSearchOpacity(
+        e.from,
+        e.to,
+        e.type,
+        searchSets,
+        filter.includeNeighbors
+      );
       if (edgeOpacity < 1.0) {
         edgeColor = applyOpacityToColor(style.color, edgeOpacity);
         edgeFontColor = applyOpacityToColor('#2c3e50', edgeOpacity);
@@ -6036,7 +6001,7 @@ function renderApp(): void {
           <div id="searchAutocomplete"></div>
         </div>
         <label style="font-size: 11px; margin-left: 4px;">
-          <input type="checkbox" id="searchIncludeNeighbors" checked> Include neighbors
+          <input type="checkbox" id="searchIncludeNeighbors"> Include neighbors
         </label>
       </div>
       <span id="undoRedoGroup" style="gap: 4px; align-items: center; display: inline-flex; flex-direction: column;">
@@ -7083,7 +7048,7 @@ function applyFilter(preserveView = false): void {
     relationshipFontSize,
     dataPropertyFontSize,
     searchQuery: searchEl?.value ?? '',
-    includeNeighbors: neighborsEl?.checked ?? true,
+    includeNeighbors: neighborsEl?.checked ?? false,
     edgeStyleConfig: mergedEdgeStyleConfig,
     annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent, annotationProperties),
     layoutMode,
@@ -8125,7 +8090,7 @@ function setupEventListeners(): void {
     (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
-    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
+    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
     document.getElementById('searchAutocomplete')?.classList.remove('visible');
     textDisplayPopup && (textDisplayPopup.style.display = 'none');
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
@@ -8346,7 +8311,7 @@ function setupEventListeners(): void {
     (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = '12';
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
-    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = true;
+    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
     
     // Clear loaded edge style config (so it doesn't override DOM checkboxes)
     loadedEdgeStyleConfig = null;
