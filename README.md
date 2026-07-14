@@ -8,7 +8,7 @@
 </div>
 
 
-_**OntoCanvas**_ is an intuitive ontology editor and visualizer with multi-format RDF support that runs directly in your browser.
+_**OntoCanvas**_ is an intuitive ontology editor and visualizer that runs directly in your browser.
 
 <img width="1309" height="866" alt="image" src="https://github.com/user-attachments/assets/d2bdf23e-37bf-404c-bdf8-070fbeded487" />
 
