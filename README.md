@@ -7,20 +7,27 @@
   ![E2E Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=E2E%20Tests&branch=main)
 </div>
 
-Interactive ontology editor and visualizer with multi-format RDF support.
 
-## What is OntoCanvas?
+_**OntoCanvas**_ is an ontology editor and visualizer with multi-format RDF support, for designing and viewing ontologies in an intuitive way.
 
-OntoCanvas is a visual tool for thinking clearly about complex domains and designing or visualising Ontologies in a intuitive visual way. 
-
-In this context, an ontology is a structured map of meaning, shaped like a graph: it defines the important kinds of things in a domain -- like “Person” and "Name" and "Address" -- and the relationships between them, so people and software share the same understanding. Ontologies are useful as mind maps or for complex tasks involving graph databases or Neural Networks.
-
-OntoCanvas helps you design and explore these maps in an intuitive, visual way, so you can discuss and refine how your world is organised without needing to touch code or learn formal ontology logic. 
+<img width="1309" height="866" alt="image" src="https://github.com/user-attachments/assets/d2bdf23e-37bf-404c-bdf8-070fbeded487" />
 
 
-## Why use Ontocanvas?
 
-If you want a good hierarchical (taxonomical) view of ontologies, rather than a messy graph; if you want an intuitive, quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything.
+
+## Why use _OntoCanvas_?
+
+Find a [comparison with other editors/viewers below](#comparison-with-other-ontology-editors-and-visualisers). Essentially:
+- other editors are less user-friendly (although they can be more powerful)
+- other editors require installation on your machine
+- other viewers do not offer customisable styling for displaying the ontology,
+- other viewers do not allow you to view the ontology with a clear taxonomical view, if present
+
+Therefore, good reasons to use _Ontocanvas_ are: if you want a good hierarchical (taxonomical) view of ontologies, rather than a messy graph; if you want an intuitive, quick, visual way to browse and tweak an ontology (especially class hierarchies and relationships) without installing anything.
+
+> _In this context, an [ontology](https://en.wikipedia.org/wiki/Ontology_(information_science)) is a structured map of meaning, shaped like a graph: it defines the important kinds of things in a domain -- like “Person” and "Name" and "Address" -- and the relationships between them, so people and software share the same understanding. Ontologies are useful as mind maps or for complex tasks involving graph databases or Neural Networks._
+> 
+> _OntoCanvas helps you design and explore these maps in an intuitive, visual way, so you can discuss and refine how your world is organised without needing to touch code or learn formal ontology logic._ 
 
 
 ## Features
