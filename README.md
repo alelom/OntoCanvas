@@ -10,7 +10,7 @@
 
 _**OntoCanvas**_ is an intuitive ontology editor and visualizer that runs directly in your browser.
 
-<img width="1309" height="866" alt="image" src="https://github.com/user-attachments/assets/d2bdf23e-37bf-404c-bdf8-070fbeded487" />
+<img width="1343" height="923" alt="image" src="https://github.com/user-attachments/assets/503a2aa8-885f-43f9-bc2b-9ddda0847ea6" />
 
 
 
