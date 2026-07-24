@@ -10,9 +10,8 @@ import { renderLayoutModeHint } from '../../src/ui/layoutModeHint';
 describe('layout mode info', () => {
   it('has a description for every selectable registry mode (and force)', () => {
     const infoIds = new Set(LAYOUT_MODE_INFO.map((m) => m.id));
-    // Every registry key except the backward-compat alias must be documented.
+    // Every registry key must be documented.
     for (const key of Object.keys(LAYOUT_ALGORITHMS)) {
-      if (key === 'weighted') continue;
       expect(infoIds.has(key), `missing hint for registry mode "${key}"`).toBe(true);
     }
     // The physics mode is not in the registry but is in the dropdown.

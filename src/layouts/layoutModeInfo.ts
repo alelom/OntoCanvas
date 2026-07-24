@@ -35,30 +35,6 @@ export const LAYOUT_MODE_INFO: LayoutModeInfo[] = [
       'A force simulation (nodes repel, edges attract) with a per-step downward pull toward each node\'s tier. Organic 2-D clusters while keeping roots near the top and leaves near the bottom.',
   },
   {
-    id: 'hierarchical00',
-    label: 'Hierarchical 00',
-    description:
-      'Layered by subClassOf/contains ONLY, tightly packed. Compact, but classes that have no taxonomy relationship (only object properties) all pile onto one row.',
-  },
-  {
-    id: 'hierarchical03',
-    label: 'Hierarchical 01',
-    description:
-      'Legacy: ultra-vertical layered layout using subClassOf/contains only — minimal horizontal, generous vertical spacing. Re-lays-out shared subtrees per parent, so it spreads very wide on graphs with multiple inheritance.',
-  },
-  {
-    id: 'hierarchical02',
-    label: 'Hierarchical 02',
-    description:
-      'Legacy: adaptive layered layout (subClassOf/contains only) with dynamic per-tier spacing. Same wide-spread limitation as the other legacy modes.',
-  },
-  {
-    id: 'hierarchical01',
-    label: 'Hierarchical 03',
-    description:
-      'Legacy: the original layered layout (subClassOf/contains only). Kept for comparison; superseded by the relationship-aware modes above.',
-  },
-  {
     id: 'force',
     label: 'Force-directed',
     description:

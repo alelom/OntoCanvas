@@ -103,6 +103,7 @@ import {
   estimateNodeDimensions,
   resolveOverlaps,
   getLayoutAlgorithm,
+  resolveLayoutMode,
   SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
 import {
@@ -355,9 +356,9 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 70);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
-  // Handle backward compatibility: 'weighted' maps to 'hierarchical01'
-  const layoutMode = config.layoutMode ?? 'hierarchical-dag';
-  const normalizedLayoutMode = layoutMode === 'weighted' ? 'hierarchical01' : layoutMode;
+  // Fall back to the default DAG layout when the config's mode no longer exists
+  // (removed numbered modes, the 'weighted' alias, or any unknown value). See issue #19.
+  const normalizedLayoutMode = resolveLayoutMode(config.layoutMode);
   (document.getElementById('layoutMode') as HTMLSelectElement).value = normalizedLayoutMode;
   const searchQueryEl = document.getElementById('searchQuery') as HTMLInputElement;
   if (searchQueryEl) {
@@ -5941,10 +5942,6 @@ function renderApp(): void {
             <option value="hierarchical-dag">Hierarchical DAG</option>
             <option value="hierarchical-tiers-spring">Hierarchical tiers+spring</option>
             <option value="hierarchical-force-downward">Hierarchical force-downward</option>
-            <option value="hierarchical00">Hierarchical 00</option>
-            <option value="hierarchical03">Hierarchical 01</option>
-            <option value="hierarchical02">Hierarchical 02</option>
-            <option value="hierarchical01">Hierarchical 03</option>
             <option value="force">Force-directed</option>
           </select>
           <button type="button" id="layoutModeHintToggle" title="About the layout modes" aria-label="About the layout modes" style="cursor: pointer; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid #b0b8c0; background: #f4f6f8; color: #2c7be5; font-size: 12px; font-weight: bold; line-height: 1; flex: none;">i</button>
@@ -6907,11 +6904,9 @@ async function loadTtlAndRender(
       );
     }
 
-    // Set lastLayoutMode BEFORE applying config to prevent clearing positions
-    // Get layout mode from config or default
-    const configLayoutMode = displayConfig?.layoutMode || 'hierarchical-dag';
-    const normalizedConfigLayoutMode = configLayoutMode === 'weighted' ? 'hierarchical01' : configLayoutMode;
-    lastLayoutMode = normalizedConfigLayoutMode;
+    // Set lastLayoutMode BEFORE applying config to prevent clearing positions.
+    // Resolve to the default DAG layout when the config's mode no longer exists (issue #19).
+    lastLayoutMode = resolveLayoutMode(displayConfig?.layoutMode);
     
     if (displayConfig) {
       // Debug logging (only in debug mode)

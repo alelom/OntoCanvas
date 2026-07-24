@@ -1,8 +1,4 @@
 import type { GraphEdge, NodeDimensions } from '../types';
-import { computeHierarchical00 } from './hierarchical00';
-import { computeHierarchical01 } from './hierarchical01';
-import { computeHierarchical02 } from './hierarchical02';
-import { computeHierarchical03 } from './hierarchical03';
 import { computeHierarchicalDag } from './hierarchicalDag';
 import { computeHierarchicalTiersSpring } from './hierarchicalTiersSpring';
 import { computeHierarchicalForceDownward } from './hierarchicalForceDownward';
@@ -24,18 +20,14 @@ export const LAYOUT_ALGORITHMS: Record<string, LayoutAlgorithm> = {
   'hierarchical-dag': computeHierarchicalDag,
   'hierarchical-tiers-spring': computeHierarchicalTiersSpring,
   'hierarchical-force-downward': computeHierarchicalForceDownward,
-  'hierarchical00': computeHierarchical00,
-  'hierarchical01': computeHierarchical01,
-  'hierarchical02': computeHierarchical02,
-  'hierarchical03': computeHierarchical03,
-  // Backward compatibility: 'weighted' maps to hierarchical01
-  'weighted': computeHierarchical01,
 };
+
+/** Default layout mode, used when a requested mode does not exist (issue #19). */
+export const DEFAULT_LAYOUT_MODE = 'hierarchical-dag';
 
 /** Layout modes that produce an already-overlap-free / force-managed layout and therefore
  *  must NOT be post-processed by resolveOverlaps (its root-separation pass re-inflates them). */
 export const SELF_CONTAINED_LAYOUT_MODES = new Set([
-  'hierarchical00',
   'hierarchical-dag',
   'hierarchical-tiers-spring',
   'hierarchical-force-downward',
@@ -55,4 +47,19 @@ export function getLayoutAlgorithm(mode: string): LayoutAlgorithm | null {
  */
 export function getAvailableLayoutModes(): string[] {
   return Object.keys(LAYOUT_ALGORITHMS);
+}
+
+/**
+ * Resolve a requested layout mode to one that actually exists.
+ *
+ * Loaded styling configs may reference removed/legacy modes — the old numbered
+ * hierarchical00/01/02/03 layouts or the 'weighted' alias — as well as unknown values.
+ * When no match is found we fall back to the default DAG layout (issue #19).
+ * 'force' is a valid physics mode even though it is not in the algorithm registry.
+ */
+export function resolveLayoutMode(mode: string | null | undefined): string {
+  if (mode && (mode in LAYOUT_ALGORITHMS || mode === 'force')) {
+    return mode;
+  }
+  return DEFAULT_LAYOUT_MODE;
 }

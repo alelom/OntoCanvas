@@ -18,10 +18,8 @@ export function getNetworkOptions(layoutMode: string): Record<string, unknown> {
       multiselect: true,
     },
   };
-  // Hierarchical layouts (hierarchical00, hierarchical01, hierarchical02, hierarchical03, weighted for backward compatibility) don't use physics
-  if (layoutMode === 'hierarchical00' || layoutMode === 'hierarchical01' || layoutMode === 'hierarchical02' || layoutMode === 'hierarchical03' || layoutMode === 'weighted') {
-    base.physics = { enabled: false };
-  } else if (layoutMode === 'force') {
+  // Only the force-directed mode uses physics; every hierarchical layout is precomputed.
+  if (layoutMode === 'force') {
     base.physics = {
       enabled: true,
       barnesHut: {

@@ -229,13 +229,11 @@ export function computeNodeDepths(
 export {
   getLayoutAlgorithm,
   getAvailableLayoutModes,
+  resolveLayoutMode,
+  DEFAULT_LAYOUT_MODE,
   SELF_CONTAINED_LAYOUT_MODES,
   type LayoutAlgorithm
 } from './layouts';
-
-// Backward compatibility: export computeWeightedLayout as alias to hierarchical01
-import { computeHierarchical01 } from './layouts/hierarchical01';
-export const computeWeightedLayout = computeHierarchical01;
 
 const NODE_MARGIN = 10;
 const CHAR_WIDTH_RATIO = 0.62;

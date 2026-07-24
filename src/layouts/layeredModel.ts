@@ -4,9 +4,9 @@ import type { GraphEdge, NodeDimensions } from '../types';
  * Shared layered model for the relationship-aware hierarchical layouts
  * (Hierarchical DAG / tiers+spring / force-downward).
  *
- * Unlike hierarchical00 — which levels nodes using only subClassOf/contains and so
- * collapses every "entity" class into one top row — this model ranks using the full
- * structural relationship graph:
+ * Rather than levelling nodes using only subClassOf/contains — which collapses every
+ * "entity" class into one top row — this model ranks using the full structural
+ * relationship graph:
  *   - subClassOf:  superclass (edge.to) is the parent, subclass (edge.from) the child;
  *   - everything else (contains + object properties): edge.from is the parent.
  *
