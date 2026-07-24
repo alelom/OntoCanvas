@@ -1,7 +1,7 @@
 /**
  * Central application state. Shared across modules.
  */
-import type { GraphData, GraphNode } from './types';
+import type { GraphData } from './types';
 import type { Network } from 'vis-network/esnext';
 import type { Store } from 'n3';
 

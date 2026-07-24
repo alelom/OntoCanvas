@@ -9,9 +9,9 @@ describe('ontologyValidation', () => {
   describe('validateOntologyStructure', () => {
     it('detects circular reference in simple cycle', () => {
       const nodes: GraphNode[] = [
-        { id: 'A', label: 'Class A' },
-        { id: 'B', label: 'Class B' },
-        { id: 'C', label: 'Class C' },
+        { id: 'A', label: 'Class A', labellableRoot: null },
+        { id: 'B', label: 'Class B', labellableRoot: null },
+        { id: 'C', label: 'Class C', labellableRoot: null },
       ];
       const edges: GraphEdge[] = [
         { from: 'A', to: 'B', type: 'subClassOf' },
@@ -27,7 +27,7 @@ describe('ontologyValidation', () => {
 
     it('detects self-referential class', () => {
       const nodes: GraphNode[] = [
-        { id: 'SelfRef', label: 'Self Referencing' },
+        { id: 'SelfRef', label: 'Self Referencing', labellableRoot: null },
       ];
       const edges: GraphEdge[] = [
         { from: 'SelfRef', to: 'SelfRef', type: 'subClassOf' },
@@ -41,7 +41,7 @@ describe('ontologyValidation', () => {
 
     it('detects missing class references', () => {
       const nodes: GraphNode[] = [
-        { id: 'Existing', label: 'Existing Class' },
+        { id: 'Existing', label: 'Existing Class', labellableRoot: null },
       ];
       const edges: GraphEdge[] = [
         { from: 'Existing', to: 'Missing', type: 'subClassOf' },
@@ -55,8 +55,8 @@ describe('ontologyValidation', () => {
 
     it('passes validation for valid ontology', () => {
       const nodes: GraphNode[] = [
-        { id: 'Parent', label: 'Parent Class' },
-        { id: 'Child', label: 'Child Class' },
+        { id: 'Parent', label: 'Parent Class', labellableRoot: null },
+        { id: 'Child', label: 'Child Class', labellableRoot: null },
       ];
       const edges: GraphEdge[] = [
         { from: 'Child', to: 'Parent', type: 'subClassOf' },

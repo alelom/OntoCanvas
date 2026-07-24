@@ -30,6 +30,7 @@
     "@semantic-release/github": "^9.2.6",
     "@semantic-release/npm": "^13.1.4",
     "@semantic-release/release-notes-generator": "^12.1.0",
+    "@types/n3": "^1.26.1",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.1.8",
     "jsdom": "^28.0.0",

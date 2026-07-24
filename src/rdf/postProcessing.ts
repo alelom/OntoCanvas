@@ -19,7 +19,7 @@ export interface PostProcessingContext {
  * Step 1: Add section dividers
  * Adds section dividers (#####################################) between ontology sections.
  */
-export function addSectionDividersStep(input: string, context?: PostProcessingContext): string {
+export function addSectionDividersStep(input: string, _context?: PostProcessingContext): string {
   const SECTION_DIVIDER = '#################################################################';
   const SECTION_ORDER = [
     { type: 'Ontology', label: 'Ontology' },
@@ -113,7 +113,7 @@ export function addSectionDividersStep(input: string, context?: PostProcessingCo
   }
 
   // Sort blocks within each section by subject
-  for (const [sectionType, sectionBlocks] of blocksBySection.entries()) {
+  for (const [, sectionBlocks] of blocksBySection.entries()) {
     sectionBlocks.sort((a, b) => {
       const aSubj = a.subject || '';
       const bSubj = b.subject || '';
@@ -168,7 +168,7 @@ export function addSectionDividersStep(input: string, context?: PostProcessingCo
  * Step 2: Apply formatting style fixes
  * Converts 'a' to 'rdf:type' and normalizes boolean literals.
  */
-export function applyFormattingStyleStep(input: string, context?: PostProcessingContext): string {
+export function applyFormattingStyleStep(input: string, _context?: PostProcessingContext): string {
   let output = input;
   // Convert 'a' to 'rdf:type' (but not inside URIs or strings)
   output = output.replace(/ a (owl|rdf|rdfs|xsd|xml):/g, ' rdf:type $1:');
@@ -204,7 +204,7 @@ export function applyFormattingStyleStep(input: string, context?: PostProcessing
  * to avoid syntax errors - owl:imports should be handled by rdflib itself or by
  * the existing post-processing pipeline.
  */
-export function addOwlImportsStep(input: string, context?: PostProcessingContext): string {
+export function addOwlImportsStep(input: string, _context?: PostProcessingContext): string {
   // TEMPORARILY DISABLED: This step was causing "Expected entity but got ;" parsing errors.
   // The issue is that the regex replacement was creating invalid Turtle syntax.
   // TODO: Re-implement using the robust addOwlImports function from turtlePostProcess.ts

@@ -8,6 +8,7 @@
  * Format is detected from path (URL or filename) or contentType.
  */
 import { rdfParser } from 'rdf-parse';
+import type { ParseOptions } from 'rdf-parse';
 import { stringToStream } from './stringToStream';
 import type { Quad } from '@rdfjs/types';
 
@@ -38,7 +39,9 @@ export async function parseRdfToQuads(
   if (contentType) parseOptions.contentType = contentType;
   if (baseIRI) parseOptions.baseIRI = baseIRI;
 
-  const quadStream = rdfParser.parse(stream, parseOptions);
+  // parseOptions always contains a `path` or `contentType` at runtime (the caller
+  // supplies at least one for format detection), matching the ParseOptions union.
+  const quadStream = rdfParser.parse(stream, parseOptions as ParseOptions);
   const quads: Quad[] = [];
 
   return new Promise((resolve, reject) => {

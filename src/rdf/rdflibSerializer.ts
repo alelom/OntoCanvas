@@ -5,7 +5,7 @@ import { serialize, Store as RdflibStore } from 'rdflib';
 import type { Store } from 'n3';
 import { convertN3QuadsToRdflibStatements } from './n3ToRdflib';
 import { applyFormattingStyleStep, type PostProcessingContext } from './postProcessing';
-import { addSectionDividers, addOwlImports, addAttribution } from '../turtlePostProcess';
+import { addOwlImports, addAttribution } from '../turtlePostProcess';
 
 export interface SerializeStoreOptions {
   /** Prefix map for @prefix declarations */
@@ -86,7 +86,7 @@ export async function serializeStoreWithRdflib(
     // We pass null for base and handle prefixes manually instead
     // This ensures all URIs remain absolute
     return new Promise<string>((resolve, reject) => {
-      serialize(null, kb, null, 'text/turtle', (err: Error | null, result?: string) => {
+      serialize(null, kb, null, 'text/turtle', (err: Error | null | undefined, result?: string) => {
         if (err) {
           reject(new Error(`Failed to serialize with rdflib: ${err.message}`));
           return;

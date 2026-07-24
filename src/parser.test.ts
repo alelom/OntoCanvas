@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
+import type { Quad } from 'n3';
 import {
   parseTtlToGraph,
   parseRdfToGraph,
@@ -118,7 +119,7 @@ describe('parseTtlToGraph (load)', () => {
   it('quadsToParseResult reproduces same graph from store quads', async () => {
     const ttl = loadOntologyAsString();
     const { store, graphData } = await parseTtlToGraph(ttl);
-    const quads = [...store];
+    const quads = [...store] as Quad[];
     const result = quadsToParseResult(quads);
     expectGraphDataEqual(result.graphData, graphData);
   });
@@ -219,7 +220,7 @@ describe('parseTtlToGraph (load)', () => {
 describe('updateLabelInStore (edit)', () => {
   it('updates label for existing class', async () => {
     const ttl = loadOntologyAsString();
-    const { graphData, store } = await parseTtlToGraph(ttl);
+    const { store } = await parseTtlToGraph(ttl);
 
     const updated = updateLabelInStore(store, 'FacadeCladding', 'Facade Cladding Updated');
     expect(updated).toBe(true);
@@ -308,7 +309,7 @@ describe('updateLabelInStore (edit)', () => {
       (e) => e.from === 'Layout' && e.to === 'DrawingElement' && (e.type === 'contains' || e.type.includes('contains'))
     );
     expect(layoutToDrawing).toHaveLength(1);
-    expect(graphData.edges.every((e, i, arr) => {
+    expect(graphData.edges.every((e, _i, arr) => {
       const same = arr.filter((x) => x.from === e.from && x.to === e.to && x.type === e.type);
       return same.length === 1;
     })).toBe(true);
@@ -523,7 +524,7 @@ describe('storeToTurtle (save)', () => {
 describe('addObjectPropertyToStore', () => {
   it('adds new object property with hasCardinality and round-trips', async () => {
     const ttl = loadOntologyAsString();
-    const { store, objectProperties: beforeProps } = await parseTtlToGraph(ttl);
+    const { store } = await parseTtlToGraph(ttl);
 
     const name = addObjectPropertyToStore(store, 'references', false);
     expect(name).toBe('references');

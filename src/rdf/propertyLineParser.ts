@@ -3,7 +3,6 @@
  * Handles quoted strings, brackets, URIs, language tags, datatypes with minimal regex.
  */
 
-import type { TextPosition } from './sourcePreservation';
 import { debugLog } from '../utils/debug';
 
 /**
@@ -53,8 +52,7 @@ export function parsePropertyLinesWithStateMachine(
   blockStartLine: number
 ): PropertyLineMatch[] {
   const matches: PropertyLineMatch[] = [];
-  const lines = blockText.split(/\r?\n/);
-  
+
   let state: ParserState = ParserState.START;
   let currentMatch: Partial<PropertyLineMatch> | null = null;
   let bracketDepth = 0;
@@ -62,16 +60,13 @@ export function parsePropertyLinesWithStateMachine(
   let stringEscape = false;
   let inUri = false;
   
-  let charIndex = 0;
   let lineIndex = 0;
-  let lineStartChar = 0;
   let predicateStart = -1;
   let predicateEnd = -1;
   let valueStart = -1;
   let valueEnd = -1;
   let fullStart = -1;
   let currentLineNumbers: number[] = [];
-  let isFirstContentLine = true; // Track if we're on the first line with content (subject line)
   let subjectSkipped = false; // Track if we've skipped the subject
   
   const resetMatch = () => {
@@ -113,18 +108,10 @@ export function parsePropertyLinesWithStateMachine(
   // Process character by character
   for (let i = 0; i < blockText.length; i++) {
     const char = blockText[i];
-    const prevChar = i > 0 ? blockText[i - 1] : '';
-    const nextChar = i < blockText.length - 1 ? blockText[i + 1] : '';
-    
+
     // Track line numbers
     if (char === '\n') {
       lineIndex++;
-      lineStartChar = i + 1;
-      // Only set isFirstContentLine to false if we've already skipped the subject
-      // Otherwise, keep it true so we can skip the subject on the next non-empty line
-      if (subjectSkipped) {
-        isFirstContentLine = false;
-      }
       // Track line numbers for current match (if we're in the middle of parsing a property)
       // After incrementing lineIndex, we're now on the new line, so use blockStartLine + lineIndex
       if (state !== ParserState.START && state !== ParserState.END) {
@@ -200,7 +187,6 @@ export function parsePropertyLinesWithStateMachine(
               // Found content after subject (could be on same line or next line) - skip to it
               i = j - 1; // -1 because loop will increment
               subjectSkipped = true;
-              isFirstContentLine = false; // We've processed the first content line
               continue;
             }
           }

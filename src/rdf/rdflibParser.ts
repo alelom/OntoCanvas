@@ -3,6 +3,7 @@
  * Converts rdflib statements to RDF/JS quads for compatibility
  */
 import { parse, Store, NamedNode, Statement } from 'rdflib';
+import type { Formula } from 'rdflib';
 import type { Quad } from '@rdfjs/types';
 import { DataFactory } from 'n3';
 
@@ -68,7 +69,9 @@ export async function parseRdfToRdflibStatements(
   // Signature: parse(content, doc, kb, contentType, callback)
   // doc must be a string URI, not a NamedNode
   return new Promise<Statement[]>((resolve, reject) => {
-    parse(content, docUri, kb, detectedContentType, (err: Error | null) => {
+    // Casts preserve the existing (runtime-unchanged) argument values while
+    // satisfying rdflib's declared parse(str, kb, base, contentType, callback) types.
+    parse(content, docUri as unknown as Formula, kb as unknown as string, detectedContentType, (err: Error | null) => {
       if (err) {
         reject(new Error(`Failed to parse RDF with rdflib: ${err.message}`));
         return;
@@ -89,12 +92,17 @@ export async function parseRdfToRdflibStatements(
  * Convert rdflib Statement to RDF/JS Quad
  */
 function rdflibStatementToQuad(statement: Statement): Quad {
-  const subject = convertRdflibTerm(statement.subject);
+  // A statement subject is always a NamedNode or BlankNode at runtime (never a Literal).
+  const subject = convertRdflibTerm(statement.subject) as
+    | ReturnType<typeof DataFactory.namedNode>
+    | ReturnType<typeof DataFactory.blankNode>;
   const predicate = convertRdflibTerm(statement.predicate) as ReturnType<typeof DataFactory.namedNode>;
   const object = convertRdflibTerm(statement.object);
-  const graph = statement.why ? convertRdflibTerm(statement.why) : DataFactory.defaultGraph();
+  const graph = statement.why
+    ? convertRdflibTerm(statement.why as unknown as Statement['subject'])
+    : DataFactory.defaultGraph();
 
-  return DataFactory.quad(subject, predicate, object, graph);
+  return DataFactory.quad(subject, predicate, object, graph as ReturnType<typeof DataFactory.namedNode>);
 }
 
 /**

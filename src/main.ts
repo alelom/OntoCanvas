@@ -2,11 +2,8 @@ import { DataSet } from 'vis-data/esnext';
 import { Network } from 'vis-network/esnext';
 import 'vis-network/styles/vis-network.css';
 import {
-  parseTtlToGraph,
   updateLabelInStore,
-  updateLabellableInStore,
   updateCommentInStore,
-  updateEdgeInStore,
   addEdgeToStore,
   addRestrictionToStore,
   removeEdgeFromStore,
@@ -40,7 +37,6 @@ import {
   addAnnotationPropertyToStore,
   updateAnnotationPropertyLabelInStore,
   updateAnnotationPropertyCommentInStore,
-  updateAnnotationPropertyIsBooleanInStore,
   updateAnnotationPropertyRangeInStore,
   storeToTurtle,
   extractLocalName,
@@ -56,7 +52,7 @@ import {
 import { editNodeProperties } from './workflows/editNodeProperties';
 import * as nodeModalFormUi from './ui/nodeModalFormUi';
 import { initLayoutModeHint } from './ui/layoutModeHint';
-import { Store, DataFactory } from 'n3';
+import { DataFactory, type Term } from 'n3';
 import {
   searchExternalClasses,
   searchExternalObjectProperties,
@@ -66,13 +62,12 @@ import {
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
+import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
   type ExternalNodeLayout,
   type SerializerType,
-  type SerializerConfig,
   loadDisplayConfigFromIndexedDB,
   saveDisplayConfigToIndexedDB,
   deleteDisplayConfigFromIndexedDB,
@@ -135,9 +130,7 @@ import {
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import { clearOntologyParamsFromAddressBar } from './utils/urlParams';
 import {
-  extractExternalRefsFromStore,
   extractUsedNamespaceRefsFromStore,
-  extractPrefixesFromTtl,
   formatNodeLabelWithPrefix,
   formatRelationshipLabelWithPrefix,
   renderExternalRefsList,
@@ -179,7 +172,6 @@ import {
   BORDER_LINE_OPTIONS,
   borderLineTypeToVis,
   renderLineTypeSvg,
-  renderEdgeLineTypeDropdown,
   getEdgeStyleConfig,
   updateEdgeColorsLegend,
 } from './ui/edgeStyleUtils';
@@ -641,37 +633,6 @@ function clearUndoRedo(): void {
   updateUndoRedoButtons();
 }
 
-function addNewNodeAtPosition(
-  x?: number,
-  y?: number,
-  label = 'New class'
-): { id: string; label: string; x?: number; y?: number } | null {
-  if (!ttlStore) return null;
-  const displayLabel = label.trim() || 'New class';
-  const id = addNodeToStore(ttlStore, displayLabel);
-  if (!id) return null;
-  const node: GraphNode = {
-    id,
-    label: displayLabel,
-    labellableRoot: null,
-    ...(x != null && y != null && { x, y }),
-  };
-  rawData.nodes.push(node);
-  pushUndoable(
-    () => {
-      removeNodeFromStore(ttlStore!, id);
-      const i = rawData.nodes.findIndex((n) => n.id === id);
-      if (i >= 0) rawData.nodes.splice(i, 1);
-    },
-    () => {
-      addNodeToStore(ttlStore!, displayLabel, id);
-      rawData.nodes.push(node);
-    }
-  );
-  hasUnsavedChanges = true;
-  updateSaveButtonVisibility();
-  return { id, label: displayLabel, x, y };
-}
 
 function updateUndoRedoButtons(): void {
   const undoBtn = document.getElementById('undoBtn') as HTMLButtonElement | null;
@@ -1358,7 +1319,7 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
   if (isImported && headerIcons) {
-    const ontologyUrl = hasValidDefinedBy ? op.isDefinedBy : (op.uri ? getDefiningOntologyFromUri(op.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = hasValidDefinedBy ? op?.isDefinedBy : (op?.uri ? getDefiningOntologyFromUri(op.uri, externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This object property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -1905,9 +1866,6 @@ function updateDataPropEditableState(): void {
   const header = modalContent?.querySelector('.modal-header') as HTMLElement;
   const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-  const hasValidDefinedBy = newDefinedBy && (newDefinedBy.startsWith('http://') || newDefinedBy.startsWith('https://'));
-  const isImportedWithValidUrl = isImported && hasValidDefinedBy;
-  
   if (isImported && headerIcons) {
     const ontologyUrl = newDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This data property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
@@ -2296,10 +2254,9 @@ function showEditDataPropertyModal(name: string): void {
   const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
   const hasValidDefinedBy = dp?.isDefinedBy && (dp.isDefinedBy.startsWith('http://') || dp.isDefinedBy.startsWith('https://'));
-  const isImportedWithValidUrl = isImported && hasValidDefinedBy;
   
   if (isImported && headerIcons) {
-    const ontologyUrl = hasValidDefinedBy ? dp.isDefinedBy : (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = hasValidDefinedBy ? dp?.isDefinedBy : (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This data property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -2504,9 +2461,9 @@ function showEditAnnotationPropertyModal(name: string): void {
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
   const hasValidDefinedBy = ap?.isDefinedBy && (ap.isDefinedBy.startsWith('http://') || ap.isDefinedBy.startsWith('https://'));
   const isImportedWithValidUrl = isImported && hasValidDefinedBy;
-  
+
   if (isImportedWithValidUrl && headerIcons) {
-    const ontologyUrl = ap.isDefinedBy || (ap.uri ? getDefiningOntologyFromUri(ap.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = ap?.isDefinedBy || (ap?.uri ? getDefiningOntologyFromUri(ap.uri, externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This annotation property is defined in the external ontology ${ontologyUrl !== 'an external ontology' ? ontologyUrl : ''}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -2846,7 +2803,7 @@ function buildNetworkData(
     layoutMode: string;
   },
   graphData?: GraphData
-): { nodes: DataSet; edges: DataSet } {
+): { nodes: DataSet<any>; edges: DataSet<any> } {
   const data = graphData ?? rawData;
   let filteredNodes = data.nodes.filter((n) =>
     shouldShowNodeByAnnotations(n, filter.annotationStyleConfig)
@@ -3357,12 +3314,10 @@ function buildNetworkData(
     const baseYOffset = classNodeHeight / 2 + 20; // Start below the node
     
     let propIndex = 0;
-    let currentX = classPos.x - (classNodeWidth / 2) - 50; // Start 50px to the left of node edge
     let currentY = classPos.y + baseYOffset;
     let rowIndex = 0;
     
     dataProps.forEach((dataProp) => {
-      const propWidth = estimateDataPropWidth(dataProp.label);
       
       // Check if we need to start a new row
       if (propIndex > 0 && propertiesPerRow.length > 0) {
@@ -3373,40 +3328,16 @@ function buildNetworkData(
         if (propIndex >= propsInPreviousRows + propertiesPerRow[rowIndex]) {
           // Move to next row
           rowIndex++;
-          currentX = classPos.x - (classNodeWidth / 2) - 50; // Reset X position
           currentY = classPos.y + baseYOffset + (rowIndex * (verticalOffset * 2)); // Alternate Y position
         }
       }
       
-      // Calculate X position (centered within available width if row is not full)
-      const propsInCurrentRow = propertiesPerRow[rowIndex] || 1;
-      const totalRowWidth = dataProps
-        .slice(propIndex, propIndex + propsInCurrentRow)
-        .reduce((sum, p) => sum + estimateDataPropWidth(p.label) + horizontalSpacing, 0) - horizontalSpacing;
-      
-      // Center the row if it's shorter than available width
-      const rowStartX = classPos.x - (classNodeWidth / 2) - 50;
-      const rowCenterOffset = (availableWidth - totalRowWidth) / 2;
-      const adjustedRowStartX = rowStartX + rowCenterOffset;
-      
-      // Calculate position for this property
-      let xOffset = 0;
-      for (let i = 0; i < propIndex - (rowIndex > 0 ? propertiesPerRow.slice(0, rowIndex).reduce((a, b) => a + b, 0) : 0); i++) {
-        xOffset += estimateDataPropWidth(dataProps[propIndex - (propIndex - i - 1)]?.label || '') + horizontalSpacing;
-      }
-      
-      // Simpler approach: just position sequentially
-      const dataPropPos: { x: number; y: number } = {
-        x: adjustedRowStartX + (propIndex - (rowIndex > 0 ? propertiesPerRow.slice(0, rowIndex).reduce((a, b) => a + b, 0) : 0)) * (propWidth + horizontalSpacing),
-        y: currentY + (rowIndex % 2 === 0 ? 0 : verticalOffset), // Alternate up/down
-      };
       
       // Actually, let me recalculate this more simply
       let rowStartIndex = 0;
       for (let i = 0; i < rowIndex; i++) {
         rowStartIndex += propertiesPerRow[i];
       }
-      const positionInRow = propIndex - rowStartIndex;
       
       // Calculate total width of current row
       let rowTotalWidth = 0;
@@ -4156,12 +4087,11 @@ function showRenameModal(
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const isExternal = node?.isExternal && node?.externalOntologyUrl;
   const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-  const isImported = isExternal || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, externalOntologyReferences, mainBase));
+  const isImported = !!(isExternal || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, externalOntologyReferences, mainBase)));
   
   // Add/update warning icon if imported - place it in header aligned with h3
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
-  const h3 = modalContent?.querySelector('h3') as HTMLElement;
-  
+
   // Use the existing rename-modal-header structure (the HTML already has this)
   let header = modalContent?.querySelector('.rename-modal-header') as HTMLElement;
   // The header already exists in the HTML, so we don't need to create it
@@ -4849,7 +4779,7 @@ function openEditModalForNode(nodeId: string): void {
   if (nodeId.startsWith('__dataproprestrict__')) {
     const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);
     if (match) {
-      const [, classId, propertyName] = match;
+      const [, classId] = match;
       showEditEdgeModal(nodeId, classId, 'dataprop');
       return;
     }
@@ -4858,7 +4788,7 @@ function openEditModalForNode(nodeId: string): void {
   if (nodeId.startsWith('__dataprop__')) {
     const match = nodeId.match(/^__dataprop__(.+)__(.+)$/);
     if (match) {
-      const [, classId, propertyName] = match;
+      const [, , propertyName] = match;
       showEditDataPropertyModal(propertyName);
       return;
     }
@@ -4904,7 +4834,6 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   }
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
-  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
   const cardWrap = document.getElementById('editEdgeCardinalityWrap')!;
   const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
@@ -4919,7 +4848,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       match = edgeFrom.match(/^__dataprop__(.+)__(.+)$/);
       // For normal data properties (not restrictions), open the "Edit Data Property" modal instead
       if (match) {
-        const [, classId, propertyName] = match;
+        const [, , propertyName] = match;
         hideEditEdgeModalWithCleanup();
         showEditDataPropertyModal(propertyName);
         return;
@@ -5157,7 +5086,6 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   const modal = document.getElementById('editEdgeModal')!;
   const fromSel = document.getElementById('editEdgeFrom') as HTMLSelectElement;
   const toSel = document.getElementById('editEdgeTo') as HTMLSelectElement;
-  const typeSel = document.getElementById('editEdgeType') as HTMLSelectElement;
   const cardWrap = document.getElementById('editEdgeCardinalityWrap')!;
   const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
@@ -6650,7 +6578,7 @@ async function loadTtlAndRender(
       let labellableRoot: boolean | null = node.labellableRoot;
       const annotations: Record<string, string | boolean | null> = { ...(node.annotations || {}) };
       
-      const outQuads = store.getQuads(subj, null, null, null);
+      const outQuads = store.getQuads(subj as unknown as Term, null, null, null);
       for (const oq of outQuads) {
         const predName = extractLocalName((oq.predicate as { value: string }).value);
         const isAnnotation = annotationProps.some((ap) => ap.name === predName);
@@ -6780,7 +6708,7 @@ async function loadTtlAndRender(
     }, 0);
 
     if (handle && fileName) {
-      saveLastFileToIndexedDB(handle, fileName, pathHint ?? fileName).catch(() => {});
+      saveLastFileToIndexedDB(handle, pathHint ?? fileName).catch(() => {});
     }
     updateSaveButtonVisibility();
 
@@ -6960,7 +6888,6 @@ async function loadTtlAndRender(
 function applyFilter(preserveView = false): void {
   // Don't return early - we need to initialize the network even with no nodes
   // so that Add node/Add edge buttons and double-click work
-  const hasNodes = rawData.nodes.length > 0;
 
   let savedScale: number | null = null;
   let savedPosition: { x: number; y: number } | null = null;
@@ -7233,7 +7160,7 @@ function applyFilter(preserveView = false): void {
       network.once('stabilizationIterationsDone', () => network!.fit());
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
-      setTimeout(() => network!.fit({ padding: 20 }), 100);
+      setTimeout(() => network!.fit(), 100);
     }
   } else {
     const opts = {
@@ -7247,7 +7174,7 @@ function applyFilter(preserveView = false): void {
       network.once('stabilizationIterationsDone', () => network!.fit());
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
-      setTimeout(() => network!.fit({ padding: 20 }), 100);
+      setTimeout(() => network!.fit(), 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
     const resizeNetwork = () => {
@@ -7272,7 +7199,7 @@ function applyFilter(preserveView = false): void {
         networkContainer,
         ttlStore,
         rawData,
-        (addedEdges, failedEdges) => {
+        (addedEdges, _failedEdges) => {
           // On paste callback - add to undo stack
           if (addedEdges.length > 0) {
             pushUndoable(
@@ -7369,7 +7296,7 @@ function applyFilter(preserveView = false): void {
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
     });
-    setupDragCoupling(network, {
+    setupDragCoupling(network as unknown as Parameters<typeof setupDragCoupling>[0], {
       onDragEnd: () => {
         if (!network) return;
         persistNodePositionsFromNetwork(network, rawData, scheduleDisplayConfigSave);
@@ -7648,9 +7575,14 @@ async function loadLastOpenedFile(): Promise<void> {
     }
     showLoadingModal();
     try {
-      const perm = await stored.handle.queryPermission({ mode: 'readwrite' });
+      // The File System Access permission API is not yet in the TS DOM lib.
+      const handleWithPerms = stored.handle as unknown as {
+        queryPermission(descriptor: { mode: string }): Promise<PermissionState>;
+        requestPermission(descriptor: { mode: string }): Promise<PermissionState>;
+      };
+      const perm = await handleWithPerms.queryPermission({ mode: 'readwrite' });
       if (perm !== 'granted') {
-        const requested = await stored.handle.requestPermission({ mode: 'readwrite' });
+        const requested = await handleWithPerms.requestPermission({ mode: 'readwrite' });
         if (requested !== 'granted') {
           hideLoadingModal();
           const errorMsg = document.getElementById('errorMsg') as HTMLElement;

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   validateRelationship,
   validateAllRelationships,
-  type ValidationResult,
 } from './ontologyValidator';
 import { Store, DataFactory } from 'n3';
 import type { CopiedRelationship } from './relationshipClipboard';

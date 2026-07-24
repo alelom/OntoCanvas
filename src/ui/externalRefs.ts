@@ -413,8 +413,6 @@ export function formatNodeLabelWithPrefix(
 ): string {
   const prefix = getNodePrefix(node, externalOntologyReferences);
   if (prefix) {
-    // Extract local name from node ID or label
-    const localName = node.id.includes(':') ? node.id.split(':').pop() || node.id : node.id;
     return `${prefix}: ${node.label}`;
   }
   return node.label;

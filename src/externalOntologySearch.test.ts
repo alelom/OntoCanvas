@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Store, DataFactory } from 'n3';
-import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalClassInfo, type ExternalOntologyReference } from './externalOntologySearch';
+import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalOntologyReference } from './externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 // const OWL = 'http://www.w3.org/2002/07/owl#'; // Unused - kept for reference
@@ -30,25 +30,6 @@ describe('externalOntologySearch', () => {
     });
 
     it('should search case-insensitively', async () => {
-      // Variable defined but not used - kept for test structure/documentation
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const mockClasses: ExternalClassInfo[] = [
-        {
-          uri: 'https://w3id.org/dano#AxisLine',
-          localName: 'AxisLine',
-          label: 'Axis Line',
-          ontologyUrl: 'https://w3id.org/dano',
-          prefix: 'dano',
-        },
-        {
-          uri: 'https://w3id.org/dano#Composite',
-          localName: 'Composite',
-          label: 'Composite',
-          ontologyUrl: 'https://w3id.org/dano',
-          prefix: 'dano',
-        },
-      ];
-
       // Mock fetch to return empty (we'll test with mock data)
       (global.fetch as any).mockResolvedValue({
         ok: true,

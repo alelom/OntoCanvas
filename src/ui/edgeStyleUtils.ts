@@ -91,7 +91,7 @@ export function getEdgeStyleConfig(
   edgeStylesContent: HTMLElement,
   rawData: GraphData,
   objectProperties: ObjectPropertyInfo[],
-  externalOntologyReferences: ExternalOntologyReference[]
+  _externalOntologyReferences: ExternalOntologyReference[]
 ): Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> {
   const config: Record<string, { show: boolean; showLabel: boolean; color: string; lineType: BorderLineType }> = {};
   
@@ -180,43 +180,6 @@ export function getEdgeStyleConfig(
   });
 
   return config;
-}
-
-/**
- * Check if an edge type can be displayed in the canvas.
- * 
- * An edge can be displayed if:
- * 1. It's subClassOf (always displayable, not an object property)
- * 2. It appears in rawData.edges (meaning it has both domain and range AND classes exist, OR a restriction exists)
- * 3. It appears in displayedEdges (e.g. from expandWithExternalRefs), so domain/range edges to external nodes are shown in the legend
- * 
- * According to parser.ts, edges are only created when:
- * - Both domain and range exist AND the classes exist in the ontology (domain/range edge)
- * - OR a restriction exists using that property (restriction edge)
- * 
- * If an edge type doesn't appear in rawData.edges or displayedEdges, it means either:
- * - Domain or range is missing (e.g., "depicts" has domain but no range)
- * - The classes don't exist
- * - No restriction exists
- * 
- * In all these cases, the edge cannot be displayed, so it shouldn't be in the legend.
- */
-function canDisplayEdgeType(
-  edgeType: string,
-  rawData: GraphData,
-  objectProperties: ObjectPropertyInfo[],
-  displayedEdges?: GraphEdge[]
-): boolean {
-  // subClassOf is always displayable (it's not an object property)
-  if (edgeType === 'subClassOf') {
-    return true;
-  }
-  
-  // Check rawData.edges (parser output + user-added)
-  if (rawData.edges.some((e) => e.type === edgeType)) return true;
-  // Check displayed edges (includes expandWithExternalRefs domain/range edges with full URI type)
-  if (displayedEdges?.some((e) => e.type === edgeType)) return true;
-  return false;
 }
 
 /**

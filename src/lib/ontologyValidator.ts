@@ -3,7 +3,6 @@ import { DataFactory } from 'n3';
 import type { CopiedRelationship } from './relationshipClipboard';
 import type { GraphData } from '../types';
 
-const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';

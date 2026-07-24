@@ -71,15 +71,14 @@ export function getOntologyUrlCandidates(url: string): string[] {
 export async function fetchOntologyFromUrl(url: string): Promise<string> {
   const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
   const candidates = getOntologyUrlCandidates(url);
-  let lastError: Error | null = null;
   for (const candidate of candidates) {
     try {
       const ttl = await fetchExternalOntologyTtl(candidate, { throwOnCors: true });
       if (ttl && ttl.trim()) {
         return ttl;
       }
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+    } catch {
+      // Try the next candidate; the original URL is reported in the error below.
     }
   }
   // Always throw an error with the original URL in the message, not the candidate URL

@@ -24,8 +24,8 @@ describe('relationshipUtils', () => {
   beforeEach(() => {
     rawData = {
       nodes: [
-        { id: 'NodeA', label: 'Node A' },
-        { id: 'NodeB', label: 'Node B' },
+        { id: 'NodeA', label: 'Node A', labellableRoot: null },
+        { id: 'NodeB', label: 'Node B', labellableRoot: null },
       ],
       edges: [
         { from: 'NodeA', to: 'NodeB', type: 'subClassOf' },
@@ -165,6 +165,8 @@ describe('relationshipUtils', () => {
         uri: 'https://w3id.org/dano#hasPart',
         label: 'Has Part',
         hasCardinality: false,
+        localName: 'hasPart',
+        ontologyUrl: 'https://w3id.org/dano',
       };
       const hasCard = getPropertyHasCardinality('https://w3id.org/dano#hasPart', objectProperties, externalProp);
       expect(hasCard).toBe(false);

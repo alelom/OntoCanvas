@@ -9,10 +9,11 @@ import type { Quad } from '@rdfjs/types';
  * Convert a single N3 quad to rdflib Statement
  */
 export function convertN3QuadToRdflibStatement(quad: Quad): Statement {
-  const subject = convertTerm(quad.subject);
+  // A subject is always a NamedNode or BlankNode at runtime (never a Literal).
+  const subject = convertTerm(quad.subject) as NamedNode | BlankNode;
   const predicate = convertTerm(quad.predicate) as NamedNode;
   const object = convertTerm(quad.object);
-  
+
   return new Statement(subject, predicate, object);
 }
 

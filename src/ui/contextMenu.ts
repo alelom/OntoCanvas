@@ -8,7 +8,6 @@ import {
 } from '../lib/relationshipClipboard';
 import {
   validateAllRelationships,
-  type ValidationResult,
 } from '../lib/ontologyValidator';
 import type { GraphData } from '../types';
 import type { Store } from 'n3';
@@ -65,7 +64,6 @@ let onCopyCallback: OnCopyCallback | null = null;
 let onEditNodeCallback: ((nodeId: string) => void) | null = null;
 let onEditEdgeCallback: ((edgeId: string) => void) | null = null;
 let onSelectionChangedCallback: OnSelectionChangedCallback | null = null;
-let currentTargetNodeId: string | null = null;
 
 function normalizeUrl(u: string): string {
   let s = u.endsWith('#') ? u.slice(0, -1) : u;
@@ -77,7 +75,7 @@ function normalizeUrl(u: string): string {
  */
 export function initContextMenu(
   network: Network,
-  container: HTMLElement,
+  _container: HTMLElement,
   store: Store,
   rawData: GraphData,
   onPaste: OnPasteCallback,
@@ -199,8 +197,6 @@ export function showContextMenu(
           return at != null ? String(at) : null;
         })();
 
-  currentTargetNodeId = resolvedNodeId;
-
   // Update menu items based on what was clicked
   updateContextMenuItems(resolvedNodeId, resolvedEdgeId);
 
@@ -217,7 +213,6 @@ export function hideContextMenu(): void {
   if (contextMenuElement) {
     contextMenuElement.style.display = 'none';
   }
-  currentTargetNodeId = null;
 }
 
 /**

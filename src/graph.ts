@@ -1,5 +1,5 @@
 // import type { DataSet } from 'vis-network'; // Unused - kept for reference
-import type { GraphEdge, GraphNode } from './types';
+import type { GraphEdge, GraphNode, NodeDimensions } from './types';
 
 export const COLORS = {
   labellable: '#2ecc71',
@@ -238,11 +238,6 @@ export {
 const NODE_MARGIN = 10;
 const CHAR_WIDTH_RATIO = 0.62;
 const LINE_HEIGHT_RATIO = 1.35;
-
-export interface NodeDimensions {
-  width: number;
-  height: number;
-}
 
 export function estimateNodeDimensions(
   label: string,

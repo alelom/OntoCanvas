@@ -5,7 +5,7 @@
  */
 import type { Network } from 'vis-network/esnext';
 import type { Store } from 'n3';
-import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo } from '../types';
+import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo, AnnotationPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { parseEdgeId } from '../utils/edgeId';
 
@@ -29,7 +29,7 @@ export interface EditorTestDeps {
   showAddNodeModal: (x: number, y: number) => void;
   showEditDataPropertyModal: (name: string) => void;
   getDataProperties: () => DataPropertyInfo[];
-  getAnnotationProperties: () => Array<{ name: string; isBoolean: boolean; range: string | null | undefined; uri?: string; isDefinedBy?: string }>;
+  getAnnotationProperties: () => AnnotationPropertyInfo[];
   getTtlStore: () => Store | null;
   storeToTurtle: (store: Store, externalOntologyReferences?: ExternalOntologyReference[], originalTtlString?: string) => Promise<string>;
   applyFilter: (preservePositions: boolean) => void;
@@ -288,7 +288,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       if (!dp) return null;
       return { domains: dp.domains ?? [], uri: dp.uri };
     },
-    getAnnotationProperties: (): Array<{ name: string; isBoolean: boolean; range: string | null | undefined; uri?: string; isDefinedBy?: string }> => {
+    getAnnotationProperties: (): AnnotationPropertyInfo[] => {
       return getAnnotationProperties();
     },
     getSerializedTurtle: async (): Promise<string | null> => {

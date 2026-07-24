@@ -8,8 +8,7 @@ import {
   type CopiedRelationship,
 } from './relationshipClipboard';
 import { Store, DataFactory } from 'n3';
-import { addEdgeToStore } from '../parser';
-import type { GraphData, GraphEdge } from '../types';
+import type { GraphData } from '../types';
 
 describe('relationshipClipboard', () => {
   let store: Store;
@@ -166,7 +165,6 @@ describe('relationshipClipboard', () => {
       const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
       const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
       const OWL = 'http://www.w3.org/2002/07/owl#';
-      const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 
       // Add classes to store
       const graph = DataFactory.defaultGraph();

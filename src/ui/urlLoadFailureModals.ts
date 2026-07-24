@@ -159,7 +159,7 @@ export function showCorsFailureModal(
 /**
  * Show the generic URL load failure modal (non-CORS): show error and suggest download-then-open as an option.
  */
-export function showGenericUrlLoadFailureModal(url: string, errorMessage: string): void {
+export function showGenericUrlLoadFailureModal(_url: string, errorMessage: string): void {
   const bodyHtml = `The ontology could not be loaded from the URL.<br><br><strong>Error:</strong> ${escapeHtml(errorMessage)}<br><br>You can try downloading the TTL file from the URL and opening it here using <strong>Open file</strong>.`;
   const { overlay, content } = createModalBase('Failed to load ontology from URL', bodyHtml);
 

@@ -1,6 +1,5 @@
 import { Store, DataFactory } from 'n3';
 import { getAnnotationProperties, extractLocalName, getMainOntologyBase, getClassNamespace } from '../parser';
-import type { AnnotationPropertyInfo } from '../types';
 import { getExampleImageUrisForClass } from '../lib/exampleImageStore';
 import { resolveImageUrl, isImageUrlReachable } from '../lib/exampleImageUrlValidation';
 

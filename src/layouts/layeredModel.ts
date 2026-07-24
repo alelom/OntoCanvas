@@ -1,4 +1,4 @@
-import type { GraphEdge, NodeDimensions } from '../types';
+import type { GraphEdge } from '../types';
 
 /**
  * Shared layered model for the relationship-aware hierarchical layouts

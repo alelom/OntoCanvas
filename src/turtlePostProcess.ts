@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Turtle post-processing: style fixes, @base, section dividers, and blank node inlining.
  * All Turtle output formatting is centralized here.
  */
@@ -324,102 +324,6 @@ function topologicalSortBlanks(
   return order;
 }
 
-function removeBlankBlocks(raw: string, blankIds: Set<string>): string {
-  if (blankIds.size === 0) return raw;
-  
-  let output = raw;
-  let lastOutput = '';
-  let iterations = 0;
-  
-  // Remove blank node blocks iteratively until no more are found
-  while (output !== lastOutput && iterations < 10) {
-    lastOutput = output;
-    
-    // Find all blank node blocks - match any format: _:df_0_0, _:n3-0, etc.
-    const matches: Array<{ start: number; end: number; blankNodeId: string }> = [];
-    let match;
-    const pattern = /(^|\n)(\s*)_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+)\s+/gm;
-    
-    while ((match = pattern.exec(output)) !== null) {
-      const start = match.index;
-      const blankNodeIdInString = match[3]; // e.g., "df_0_0" or "n3-0"
-      const fullRef = `_:${blankNodeIdInString}`;
-      
-      // Check if this blank node is in our set to remove
-      let shouldRemove = false;
-      for (const id of blankIds) {
-        const normalizedId = id.replace(/^_:/, '');
-        if (blankNodeIdInString === normalizedId || 
-            blankNodeIdInString.includes(normalizedId) || 
-            normalizedId.includes(blankNodeIdInString) ||
-            id === fullRef || id.includes(blankNodeIdInString) || fullRef.includes(id.replace(/^_:/, ''))) {
-          shouldRemove = true;
-          break;
-        }
-      }
-      
-      if (!shouldRemove) continue;
-      
-      const blankNodeRef = match[0]; // e.g., "\n    _:df_0_0 "
-      
-      // Find where this blank node block ends (period at end of line)
-      let end = start + blankNodeRef.length;
-      let foundPeriod = false;
-      let inString = false;
-      let stringChar = '';
-      
-      while (end < output.length) {
-        const char = output[end];
-        const prevChar = end > 0 ? output[end - 1] : '';
-        
-        // Track string literals
-        if ((char === '"' || char === "'") && prevChar !== '\\') {
-          if (!inString) {
-            inString = true;
-            stringChar = char;
-          } else if (char === stringChar) {
-            inString = false;
-            stringChar = '';
-          }
-        }
-        
-        if (!inString && char === '.' && /\.\s*(\n|$)/.test(output.substring(end))) {
-          // Found period at end of statement
-          const newlineIndex = output.indexOf('\n', end);
-          end = newlineIndex === -1 ? output.length : newlineIndex + 1; // Include the newline
-          foundPeriod = true;
-          break;
-        }
-        
-        end++;
-        if (end - start > 2000) break; // Safety limit
-      }
-      
-      if (foundPeriod || end > start + blankNodeRef.length) {
-        matches.push({
-          start,
-          end: foundPeriod ? end : start + blankNodeRef.length,
-          blankNodeId: blankNodeIdInString
-        });
-      }
-    }
-    
-    // Remove matches in reverse order to preserve indices
-    for (let i = matches.length - 1; i >= 0; i--) {
-      const m = matches[i];
-      // Preserve the newline before the block if it exists
-      const before = output.substring(0, m.start);
-      const after = output.substring(m.end);
-      const replacement = m.start > 0 && output[m.start] === '\n' ? '\n' : '';
-      output = before + replacement + after;
-    }
-    
-    iterations++;
-  }
-  
-  return output;
-}
-
 export function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>): string {
   let output = raw;
   
@@ -469,8 +373,7 @@ export function replaceBlankRefs(raw: string, inlineBlanks: Map<string, string>)
     // Replace ALL blank node references that appear in object position, in order
     // Match blank nodes after predicates (rdfs:subClassOf, owl:onClass, etc.) or after commas
     // Use a single pattern that matches both cases
-    const blankNodeRefPattern = /(_:(df_\d+_\d+|n3-\d+|[a-zA-Z0-9_-]+))(?=[.,;\s]|$)/g;
-    
+
     // First, find all blank node references in object position contexts
     const matches: Array<{ index: number; match: string; isAfterPredicate: boolean; isAfterComma: boolean }> = [];
     let match;
@@ -804,7 +707,7 @@ export function addSectionDividers(raw: string): string {
   }
   
   // Sort blocks within each section by subject (alphabetically)
-  for (const [sectionType, sectionBlocks] of blocksBySection.entries()) {
+  for (const sectionBlocks of blocksBySection.values()) {
     sectionBlocks.sort((a, b) => {
       const aSubj = a.subject || '';
       const bSubj = b.subject || '';
@@ -979,212 +882,6 @@ function addAttributionCommentLine(raw: string, attributionText: string): string
   return `${before}${newline}${commentLine}\n${after}`;
 }
 
-/**
- * Add rdfs:comment to ontology declaration.
- */
-function addAttributionRdfsComment(raw: string, attributionText: string): string {
-  // First, remove ALL existing attribution comments from the entire output
-  // This prevents duplicates regardless of where they appear
-  let output = raw;
-  
-  // Remove ALL attribution strings - use simple, direct pattern matching
-  // Match the quoted attribution string itself (the pattern will match anywhere)
-  const exactPattern = /"Created\/edited with https:\/\/alelom\.github\.io\/OntoCanvas\/ version [^"]+"/g;
-  output = output.replace(exactPattern, '');
-  
-  // Also match more flexible variations
-  const flexiblePattern = /"[^"]*Created[^"]*\/edited[^"]*with[^"]*https[^"]*:\/\/alelom[^"]*\.github[^"]*\.io[^"]*\/OntoCanvas[^"]*\/[^"]*version[^"]*"/gi;
-  output = output.replace(flexiblePattern, '');
-  
-  // Catch-all for any variation with key identifiers
-  const catchAll = /"[^"]*alelom[^"]*\.github[^"]*\.io[^"]*\/OntoCanvas[^"]*version[^"]*"/gi;
-  let previousOutput = '';
-  let iterations = 0;
-  while (output !== previousOutput && iterations < 10) {
-    previousOutput = output;
-    output = output.replace(catchAll, '');
-    iterations++;
-  }
-  
-  // Clean up commas and formatting issues
-  output = output.replace(/,\s*,+/g, ','); // Multiple commas -> single comma
-  output = output.replace(/,\s*;/g, ';'); // Comma before semicolon -> semicolon
-  output = output.replace(/;\s*,+/g, ';'); // Semicolon before comma -> semicolon
-  output = output.replace(/rdfs:comment\s*,+/g, 'rdfs:comment '); // rdfs:comment followed by comma
-  output = output.replace(/\s*,\s*\./g, ' .'); // Comma before period -> period
-  
-  // Now check if current attribution already exists
-  if (output.includes(`"${attributionText}"`)) {
-    return output; // Already has current attribution
-  }
-  
-  // Find the ontology declaration - match just the start: :Ontology rdf:type owl:Ontology
-  // Match with semicolon or period (or nothing if it's the start of a statement)
-  const ontologyPattern = /(:\w+|<[^>]+>)\s+rdf:type\s+owl:Ontology\s*[;.]?/;
-  const match = output.match(ontologyPattern);
-  
-  if (!match) {
-    // No ontology declaration found, skip adding rdfs:comment
-    return output;
-  }
-  
-  // Found ontology declaration, extract the ontology block
-  const ontologyStart = match.index!;
-  const afterStart = output.slice(ontologyStart);
-  
-  // Find the final period that closes the ontology statement
-  let inString = false;
-  let stringChar = '';
-  let ontologyEnd = ontologyStart;
-  let foundFinalPeriod = false;
-  
-  const candidatePeriods: Array<{ pos: number; afterText: string }> = [];
-  
-  for (let i = 0; i < afterStart.length; i++) {
-    const char = afterStart[i];
-    const prevChar = i > 0 ? afterStart[i - 1] : '';
-    
-    // Track string literals
-    if ((char === '"' || char === "'") && prevChar !== '\\') {
-      if (!inString) {
-        inString = true;
-        stringChar = char;
-      } else if (char === stringChar) {
-        inString = false;
-        stringChar = '';
-      }
-      continue;
-    }
-    
-    // Skip everything inside strings
-    if (inString) continue;
-    
-    // When we find a period, check what comes after it
-    if (char === '.') {
-      const afterPeriod = afterStart.slice(i + 1);
-      const trimmedAfter = afterPeriod.trim();
-      
-      // Check if this period is followed by newline and then a section divider or new statement
-      if (/^\s*[\n\r]/.test(afterPeriod)) {
-        const afterNewline = trimmedAfter;
-        if (afterNewline.startsWith('#################################################################') ||
-            afterNewline.startsWith('#') ||
-            /^[:\<@]/.test(afterNewline)) {
-          candidatePeriods.push({ pos: i, afterText: afterNewline });
-        }
-      }
-    }
-  }
-  
-  // The first candidate period that's followed by a section divider is likely the end of ontology declaration
-  for (const candidate of candidatePeriods) {
-    if (candidate.afterText.startsWith('#################################################################')) {
-      ontologyEnd = ontologyStart + candidate.pos + 1;
-      foundFinalPeriod = true;
-      break;
-    }
-  }
-  
-  // If we didn't find one with a section divider, use the first candidate
-  if (!foundFinalPeriod && candidatePeriods.length > 0) {
-    ontologyEnd = ontologyStart + candidatePeriods[0].pos + 1;
-    foundFinalPeriod = true;
-  }
-  
-  if (!foundFinalPeriod) {
-    // Fallback: look for first period after match that's on its own line
-    const fallbackMatch = afterStart.match(/\.\s*[\n\r]\s*(#|$|[\n\r])/);
-    if (fallbackMatch && fallbackMatch.index != null) {
-      ontologyEnd = ontologyStart + fallbackMatch.index + 1;
-      foundFinalPeriod = true;
-    } else {
-      // Last resort: assume ontology declaration ends within first 500 chars
-      ontologyEnd = ontologyStart + Math.min(500, afterStart.length);
-    }
-  }
-  
-  // Re-extract ontology block from cleaned output
-  const cleanedOntologyStart = output.indexOf(match[0]);
-  const cleanedAfterStart = output.slice(cleanedOntologyStart);
-  
-  // Find the end of the ontology block in the cleaned output
-  let cleanedOntologyEnd = cleanedOntologyStart;
-  let foundEnd = false;
-  const cleanedCandidatePeriods: Array<{ pos: number; afterText: string }> = [];
-  
-  let inString2 = false;
-  let stringChar2 = '';
-  for (let i = 0; i < cleanedAfterStart.length; i++) {
-    const char = cleanedAfterStart[i];
-    const prevChar = i > 0 ? cleanedAfterStart[i - 1] : '';
-    
-    if ((char === '"' || char === "'") && prevChar !== '\\') {
-      if (!inString2) {
-        inString2 = true;
-        stringChar2 = char;
-      } else if (char === stringChar2) {
-        inString2 = false;
-        stringChar2 = '';
-      }
-      continue;
-    }
-    if (inString2) continue;
-    
-    if (char === '.') {
-      const afterPeriod = cleanedAfterStart.slice(i + 1);
-      const trimmedAfter = afterPeriod.trim();
-      if (/^\s*[\n\r]/.test(afterPeriod)) {
-        const afterNewline = trimmedAfter;
-        if (afterNewline.startsWith('#################################################################') ||
-            afterNewline.startsWith('#') ||
-            /^[:\<@]/.test(afterNewline)) {
-          cleanedCandidatePeriods.push({ pos: i, afterText: afterNewline });
-        }
-      }
-    }
-  }
-  
-  for (const candidate of cleanedCandidatePeriods) {
-    if (candidate.afterText.startsWith('#################################################################')) {
-      cleanedOntologyEnd = cleanedOntologyStart + candidate.pos + 1;
-      foundEnd = true;
-      break;
-    }
-  }
-  
-  if (!foundEnd && cleanedCandidatePeriods.length > 0) {
-    cleanedOntologyEnd = cleanedOntologyStart + cleanedCandidatePeriods[0].pos + 1;
-    foundEnd = true;
-  }
-  
-  if (!foundEnd) {
-    const fallbackMatch = cleanedAfterStart.match(/\.\s*[\n\r]\s*(#|$|[\n\r])/);
-    if (fallbackMatch && fallbackMatch.index != null) {
-      cleanedOntologyEnd = cleanedOntologyStart + fallbackMatch.index + 1;
-    } else {
-      cleanedOntologyEnd = cleanedOntologyStart + Math.min(500, cleanedAfterStart.length);
-    }
-  }
-  
-  const ontologyBlock = output.slice(cleanedOntologyStart, cleanedOntologyEnd);
-  const before = output.slice(0, cleanedOntologyStart);
-  const after = output.slice(cleanedOntologyEnd);
-  
-  // Check if it already has properties (contains semicolon)
-  const hasSemicolon = ontologyBlock.includes(';');
-  const rdfsComment = `    rdfs:comment "${attributionText}"`;
-  
-  if (hasSemicolon) {
-    // Add rdfs:comment before the final period
-    const blockWithoutPeriod = ontologyBlock.replace(/\s*\.\s*$/, '');
-    return `${before}${blockWithoutPeriod} ;\n${rdfsComment} .\n${after}`;
-  } else {
-    // Replace period with semicolon and add rdfs:comment
-    const blockWithoutPeriod = ontologyBlock.replace(/\s*\.\s*$/, '');
-    return `${before}${blockWithoutPeriod} ;\n${rdfsComment} .\n${after}`;
-  }
-}
-
 // --- Main export ---
 
 /**
@@ -1234,14 +931,14 @@ function convertFullUrisToColonNotation(
   // Pattern to match full URIs like <http://example.org/test#ClassName>
   // Convert to :ClassName if it matches the main ontology base
   const fullUriPattern = new RegExp(`<${baseIri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[#>]([^>]+)>`, 'g');
-  output = output.replace(fullUriPattern, (match, localName) => {
+  output = output.replace(fullUriPattern, (_match, localName) => {
     // Only convert if it's not already in colon notation and matches our base
     return `:${localName}`;
   });
   
   // Also handle cases where the URI might have a trailing # or /
   const fullUriPattern2 = new RegExp(`<${baseIri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:#|/)([^>]+)>`, 'g');
-  output = output.replace(fullUriPattern2, (match, localName) => {
+  output = output.replace(fullUriPattern2, (_match, localName) => {
     return `:${localName}`;
   });
   
@@ -1333,7 +1030,7 @@ export function postProcessTurtle(
   }
   
   // Only add @base if not using colon notation
-  output = ensureBase(output, useColonNotation, mainOntologyBase);
+  output = ensureBase(output, useColonNotation);
   
   // Use colon notation in blank node inlining if that was the original format
   // CRITICAL: This must remove ALL blank node blocks that appear as subjects
@@ -1342,7 +1039,7 @@ export function postProcessTurtle(
   // N3 Writer doesn't serialize blank node blocks when they're only used as objects,
   // so we need the original quads to build inline forms
   const storeQuads = store ? [...store] : undefined;
-  output = convertBlanksToInline(output, externalRefs, useColonNotation, storeQuads);
+  output = convertBlanksToInline(output, externalRefs, useColonNotation, storeQuads as unknown as Quad[] | undefined);
   
   // Final safety check: Remove ANY remaining blank node blocks
   // Use line-by-line approach to be absolutely sure we catch them
@@ -1402,8 +1099,7 @@ export function postProcessTurtle(
     for (let i = 0; i < fixed.length; i++) {
       const char = fixed[i];
       const prevChar = i > 0 ? fixed[i - 1] : '';
-      const nextChar = i < fixed.length - 1 ? fixed[i + 1] : '';
-      
+
       // Track URIs and strings
       if (char === '<' && !inString && prevChar !== '\\') inUri = true;
       if (char === '>' && !inString && prevChar !== '\\') inUri = false;
@@ -1635,8 +1331,7 @@ export function addOwlImports(raw: string, externalRefs: Array<{ url: string; us
   // We can't easily extract the full URL from prefix notation, so we'll rely on
   // the externalRefs normalization to prevent duplicates
   const prefixImportPattern = /owl:imports\s+([^.\s,;<>]+)/g;
-  let prefixMatch;
-  while ((prefixMatch = prefixImportPattern.exec(output)) !== null) {
+  while (prefixImportPattern.exec(output) !== null) {
     // For prefix notation, we can't determine the exact URL without the prefix map
     // But we'll mark that imports exist, and the normalization logic will handle it
     existingImports.add('PREFIX_NOTATION'); // Marker that imports exist

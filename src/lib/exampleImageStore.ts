@@ -1,4 +1,5 @@
 import { DataFactory, Store } from 'n3';
+import type { NamedNode } from 'n3';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -20,12 +21,12 @@ function extractLocalName(uri: string): string {
   return uri;
 }
 
-function findClassSubjectByLocalName(store: Store, classLocalName: string): { value: string } | null {
+function findClassSubjectByLocalName(store: Store, classLocalName: string): NamedNode | null {
   const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
   for (const q of classQuads) {
     if (q.subject.termType !== 'NamedNode') continue;
-    const uri = (q.subject as { value: string }).value;
-    if (extractLocalName(uri) === classLocalName) return q.subject as { value: string };
+    const uri = q.subject.value;
+    if (extractLocalName(uri) === classLocalName) return q.subject as NamedNode;
   }
   return null;
 }

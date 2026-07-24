@@ -5,6 +5,7 @@
  */
 
 import { Parser, Writer, Store, DataFactory } from 'n3';
+import type { Quad } from 'n3';
 import type { Quad as N3Quad } from '@rdfjs/types';
 import { buildInlineForms, replaceBlankRefs, convertBlanksToInline } from '../turtlePostProcess';
 import { debugLog, debugWarn, debugError } from '../utils/debug';
@@ -837,7 +838,7 @@ export async function reconstructFromOriginalText(
       // If we found the original block and current quads match original quads, use original text
       // BUT: If block has blank node quads, we must serialize to ensure blank node IDs match current store
       if (originalBlock && originalBlock.quads.length > 0 && block.quads.length > 0 && !hasBlankNodeQuads) {
-        const quadsMatch = !quadsAreDifferent(originalBlock.quads, block.quads);
+        const quadsMatch = !quadsAreDifferent(originalBlock.quads as unknown as Quad[], block.quads as unknown as Quad[]);
         if (quadsMatch && originalBlock.originalText) {
           debugLog('[reconstructFromOriginalText] Quads match original, using original text to preserve property order for:', block.subject);
           // Use original text - no need to serialize
@@ -1197,7 +1198,7 @@ function tryAppendSubClassOfItems(
     if (item.named !== undefined) {
       newItemTexts.push(toPrefixed(item.named));
     } else {
-      if (!inlineForms) inlineForms = buildInlineForms(curQuads, externalRefs, true);
+      if (!inlineForms) inlineForms = buildInlineForms(curQuads as unknown as Quad[], externalRefs, true);
       const form = inlineForms.get(item.blankId!) ?? inlineForms.get(`_:${item.blankId!}`);
       if (!form) return null; // couldn't build inline form — fall back
       newItemTexts.push(form);
@@ -1475,7 +1476,6 @@ async function serializeBlockToTurtle(
 
   // Serialize quads using N3 Writer with prefix map to preserve prefixed names
   return new Promise((resolve, reject) => {
-    // @ts-expect-error - N3 Writer constructor accepts options but TypeScript definitions are incorrect
     const writer = new Writer({
       format: 'text/turtle',
       prefixes: prefixMap, // Use prefix map from cache to preserve prefixed names
@@ -1871,8 +1871,8 @@ async function serializeBlockToTurtle(
             // Build inline forms from block.quads (which includes blank node quads)
             // Pass externalRefs so shortenIri can use prefixed names
             const inlineFormsFromQuads = buildInlineForms(
-              block.quads, 
-              externalRefsForInlineForms.length > 0 ? externalRefsForInlineForms : undefined, 
+              block.quads as unknown as Quad[],
+              externalRefsForInlineForms.length > 0 ? externalRefsForInlineForms : undefined,
               true
             );
             debugLog('[serializeBlockToTurtle] Built', inlineFormsFromQuads.size, 'inline forms');
@@ -1939,7 +1939,6 @@ async function serializeBlockToTurtle(
                   // to block.quads blank node IDs, then use inline forms
                   
                   // Step 1: Parse N3 Writer output to get blank node structures
-                  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
                   const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
                   let outputQuads: N3Quad[] = [];
                   let structureBasedMatchingWorked = false;
@@ -2285,7 +2284,7 @@ function inlineBlankNodesFromQuads(
   _prefixMap: Record<string, string>
 ): string {
   // Step 1: Build inline forms from block.quads (using original blank node IDs)
-  const inlineFormsFromQuads = buildInlineForms(blockQuads, undefined, true);
+  const inlineFormsFromQuads = buildInlineForms(blockQuads as unknown as Quad[], undefined, true);
   
   if (inlineFormsFromQuads.size === 0) {
     return n3Output; // No blank nodes to inline
@@ -2293,7 +2292,6 @@ function inlineBlankNodesFromQuads(
   
   // Step 2: Parse N3 Writer output to get quads (with new blank node IDs)
   // If parsing fails or takes too long, fall back to convertBlanksToInline
-  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'text/turtle', blankNodePrefix: '_:' });
   let outputQuads: N3Quad[];
   try {
@@ -2652,7 +2650,6 @@ export function parseRdfXmlWithPositions(content: string): {
   // Return structure compatible with Turtle version
   debugWarn('[sourcePreservation] RDF/XML position tracking not yet implemented');
   
-  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'application/rdf+xml' });
   let quads: N3Quad[];
   try {
@@ -2694,7 +2691,6 @@ export function parseJsonLdWithPositions(content: string): {
   // Return structure compatible with Turtle version
   debugWarn('[sourcePreservation] JSON-LD position tracking not yet implemented');
   
-  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'application/ld+json' });
   let quads: N3Quad[];
   try {
@@ -2736,7 +2732,6 @@ export function parseNTriplesWithPositions(content: string): {
   // Return structure compatible with Turtle version
   debugWarn('[sourcePreservation] N-Triples position tracking not yet implemented');
   
-  // @ts-expect-error - N3 Parser constructor accepts options but TypeScript definitions are incorrect
   const parser = new Parser({ format: 'application/n-triples' });
   let quads: N3Quad[];
   try {
@@ -2810,8 +2805,8 @@ export function reconstructFromOriginalJsonLd(
 function extractSubProperties(
   propertyMatch: PropertyLineMatch,
   blockQuads: N3Quad[],
-  prefixMap: Map<string, string>,
-  blockStartLine: number
+  _prefixMap: Map<string, string>,
+  _blockStartLine: number
 ): PropertyLine[] | undefined {
   // Extract the value text (everything after predicate)
   const valueText = propertyMatch.rawText.slice(
@@ -2973,7 +2968,7 @@ function extractStringValueFromTurtleLiteral(literalText: string): string | null
 function matchQuadsToProperty(
   propertyMatch: PropertyLineMatch,
   blockQuads: N3Quad[],
-  blockSubject: string,
+  _blockSubject: string,
   prefixMap: Map<string, string>,
   blockStartLine: number
 ): {
@@ -3123,9 +3118,9 @@ function matchQuadsToProperty(
         
         // Also check against full formatted value (with quotes, datatypes, etc.)
         if (!valueMatches) {
-          valueMatches = valueText.includes(objectValue) || 
+          valueMatches = Boolean(valueText.includes(objectValue) ||
                          (objectValueSimple && valueText.includes(`"${objectValueSimple}"`)) ||
-                         (objectValueSimple && valueText.includes(objectValueSimple));
+                         (objectValueSimple && valueText.includes(objectValueSimple)));
         }
         
         // Also check against individual comma-separated values
@@ -3219,7 +3214,7 @@ function matchQuadsToProperty(
 function calculateProximity(
   propertyPosition: TextPosition,
   expectedQuadPosition: number,
-  quad: N3Quad,
+  _quad: N3Quad,
   blockStartLine: number
 ): number {
   // Character distance
@@ -3703,8 +3698,6 @@ export function detectPropertyLevelChanges(
         // Extract blank node quads from block.quads for original
         for (const q of originalQuads) {
           if (q.object.termType === 'BlankNode') {
-            const blankId = (q.object as { id?: string; value?: string }).id || (q.object as { id?: string; value?: string }).value || '';
-            const blankQuads = getBlankNodeQuads(blankId, block.quads);
             const structSig = createQuadSignature(q, block.quads);
             if (!originalBlanks.has(structSig)) {
               originalBlanks.set(structSig, []);
@@ -3867,7 +3860,7 @@ export function performTargetedLineReplacement(
   debugLog('[performTargetedLineReplacement] Starting with', changedPropertyLines.size, 'property changes');
   try {
     for (const [propLine, changeSet] of changedPropertyLines.entries()) {
-      debugLog('[performTargetedLineReplacement] Change:', propLine.predicate, 'newQuads:', changeSet?.newQuads?.length ?? 0, 'oldQuads:', changeSet?.oldQuads?.length ?? 0);
+      debugLog('[performTargetedLineReplacement] Change:', propLine.predicate, 'newQuads:', changeSet?.newQuads?.length ?? 0, 'removedQuads:', changeSet?.removedQuads?.length ?? 0);
     }
   } catch (error) {
     console.error('[performTargetedLineReplacement] Error in initial loop:', error);
@@ -3942,8 +3935,7 @@ export function performTargetedLineReplacement(
       // Check the original property line to see if it had a datatype
       const originalValue = propertyLine.originalLineText;
       const hasDatatypeInOriginal = originalValue.includes('^^');
-      const hasLanguageInOriginal = originalValue.includes('@') && !originalValue.includes('^^');
-      
+
       if (lit.language) {
         newValue = `"${value}"@${lit.language}`;
       } else if (lit.datatype && hasDatatypeInOriginal) {

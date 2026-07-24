@@ -9,7 +9,6 @@ import {
   extractPrefixesFromTtl,
   getNodeOntologyUrl,
   getNodePrefix,
-  getObjectPropertyPrefix,
   formatNodeLabelWithPrefix,
   formatRelationshipLabelWithPrefix,
   sortExternalRefsByUrl,
@@ -240,6 +239,7 @@ describe('externalRefs', () => {
   describe('getNodeOntologyUrl', () => {
     it('should extract ontology URL from comment', () => {
       const node: GraphNode = {
+        labellableRoot: null,
         id: 'test',
         label: 'Test',
         comment: 'Some comment (Imported from https://w3id.org/dano)',
@@ -250,6 +250,7 @@ describe('externalRefs', () => {
     
     it('should return null if no import comment', () => {
       const node: GraphNode = {
+        labellableRoot: null,
         id: 'test',
         label: 'Test',
         comment: 'Regular comment',
@@ -262,6 +263,7 @@ describe('externalRefs', () => {
   describe('getNodePrefix', () => {
     it('should return prefix for node from external ontology', () => {
       const node: GraphNode = {
+        labellableRoot: null,
         id: 'test',
         label: 'Test',
         comment: '(Imported from https://w3id.org/dano)',
@@ -275,6 +277,7 @@ describe('externalRefs', () => {
     
     it('should return null if no matching reference', () => {
       const node: GraphNode = {
+        labellableRoot: null,
         id: 'test',
         label: 'Test',
         comment: '(Imported from https://example.org)',
@@ -290,6 +293,7 @@ describe('externalRefs', () => {
   describe('formatNodeLabelWithPrefix', () => {
     it('should format label with prefix', () => {
       const node: GraphNode = {
+        labellableRoot: null,
         id: 'test',
         label: 'Test Node',
         comment: '(Imported from https://w3id.org/dano)',
@@ -303,6 +307,7 @@ describe('externalRefs', () => {
     
     it('should return original label if no prefix', () => {
       const node: GraphNode = {
+        labellableRoot: null,
         id: 'test',
         label: 'Test Node',
       };

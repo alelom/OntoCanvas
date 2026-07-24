@@ -1,3 +1,9 @@
+/** Rendered width/height of a node's box, used by the layout algorithms. */
+export interface NodeDimensions {
+  width: number;
+  height: number;
+}
+
 /** Data property restriction on a class (min/max cardinality). */
 export interface DataPropertyRestriction {
   propertyName: string;

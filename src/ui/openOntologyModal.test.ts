@@ -32,7 +32,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
 
       // Modal element should be created
       const modal = document.getElementById('openOntologyModal');
@@ -44,10 +44,10 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
       const firstModal = document.getElementById('openOntologyModal');
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
       const secondModal = document.getElementById('openOntologyModal');
 
       expect(firstModal).toBe(secondModal);
@@ -60,7 +60,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
       // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 50));
       
@@ -80,7 +80,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
       // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 50));
       
@@ -102,7 +102,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
       showOpenOntologyModal();
 
       // Find and click the file button
@@ -174,7 +174,7 @@ describe('openOntologyModal', () => {
         return originalCreateElement(tagName);
       });
 
-      initOpenOntologyModal(onFile, onUrl, onLast);
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
       showOpenOntologyModal();
 
       const modal = document.getElementById('openOntologyModal');

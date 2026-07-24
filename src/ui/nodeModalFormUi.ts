@@ -132,7 +132,7 @@ export function renderRenameModalDataPropsList(
 }
 
 export function renderRenameModalAnnotationPropsList(
-  nodeId: string,
+  _nodeId: string,
   node: GraphNode | undefined,
   annotationProperties: AnnotationPropertyInfo[],
   deps: AnnotationPropsListDeps

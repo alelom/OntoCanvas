@@ -1,4 +1,4 @@
-import { DataFactory, Parser, Store, BlankNode } from 'n3';
+import { DataFactory, Store } from 'n3';
 import type { Quad as N3Quad } from 'n3';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
@@ -175,8 +175,8 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
 
 export function getAnnotationProperties(
   store: Store,
-  externalOntologyReferences?: Array<{ url: string }>,
-  mainOntologyBase?: string | null
+  _externalOntologyReferences?: Array<{ url: string }>,
+  _mainOntologyBase?: string | null
 ): AnnotationPropertyInfo[] {
   const result: AnnotationPropertyInfo[] = [];
   const seen = new Set<string>();
@@ -189,7 +189,8 @@ export function getAnnotationProperties(
     const obj = q.object as { value?: string; id?: string };
     const rangeVal = obj?.value ?? obj?.id;
     if (typeof rangeVal === 'string') {
-      const subjUri = (q.subject as { value: string }).value ?? (q.subject as { id: string }).id;
+      const subj = q.subject as { value?: string; id?: string };
+      const subjUri = subj?.value ?? subj?.id;
       if (subjUri) {
         rangeMap.set(subjUri, rangeVal);
       }
@@ -287,7 +288,7 @@ function buildParseResultFromStore(
       if (apInfo?.isBoolean) {
         const val = obj.value;
         const str = String(val).toLowerCase();
-        const b = val === true || str === 'true' ? true : val === false || str === 'false' ? false : null;
+        const b = str === 'true' ? true : str === 'false' ? false : null;
         annotations[predName] = b;
         if (predName === 'labellableRoot') labellableRoot = b;
       } else {
@@ -841,7 +842,7 @@ function buildParseResultFromStore(
         // If no isDefinedBy, check if URI doesn't belong to main ontology
         const mainBase = getMainOntologyBase(store);
         const mainBaseNormalized = mainBase ? (mainBase.endsWith('#') ? mainBase.slice(0, -1) : mainBase) : null;
-        if (mainBaseNormalized && !propUri.startsWith(mainBaseNormalized) && !propUri.startsWith(mainBase)) {
+        if (mainBaseNormalized && !propUri.startsWith(mainBaseNormalized) && !propUri.startsWith(mainBase!)) {
           // Extract base URL from property URI
           const uriBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.substring(0, propUri.lastIndexOf('/'));
           if (uriBase && uriBase !== mainBaseNormalized && uriBase !== mainBase) {
@@ -877,7 +878,7 @@ function buildParseResultFromStore(
  * RDF/JS quads from rdf-parse are compatible with N3 Store at runtime.
  */
 export function quadsToParseResult(quads: N3Quad[], originalFileCache?: OriginalFileCache): ParseResult {
-  return buildParseResultFromStore(new Store(quads as Iterable<N3Quad>), undefined, originalFileCache);
+  return buildParseResultFromStore(new Store(quads), undefined, originalFileCache);
 }
 
 /**
@@ -1190,14 +1191,6 @@ export function updateAnnotationPropertyValueInStore(
   return true;
 }
 
-const TURTLE_PREFIXES: Record<string, string> = {
-  '': 'http://example.org/aec-drawing-ontology#',
-  owl: 'http://www.w3.org/2002/07/owl#',
-  rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-  xml: 'http://www.w3.org/XML/1998/namespace',
-  xsd: 'http://www.w3.org/2001/XMLSchema#',
-  rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
-};
 
 function toClassUri(localName: string): string {
   return BASE_IRI + localName;
@@ -1415,8 +1408,8 @@ export function addObjectPropertyToStore(
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   const OWL_THING_URI = OWL + 'Thing';
-  const domainUri = (options?.domain?.trim() ?? '') ? resolveClassUri(store, options.domain!.trim()) : OWL_THING_URI;
-  const rangeUri = (options?.range?.trim() ?? '') ? resolveClassUri(store, options.range!.trim()) : OWL_THING_URI;
+  const domainUri = (options?.domain?.trim() ?? '') ? resolveClassUri(store, options!.domain!.trim()) : OWL_THING_URI;
+  const rangeUri = (options?.range?.trim() ?? '') ? resolveClassUri(store, options!.range!.trim()) : OWL_THING_URI;
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'ObjectProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(domainUri), graph);
@@ -2623,9 +2616,8 @@ export function storeToTurtle(
 async function reconstructFromCache(
   store: Store,
   cache: OriginalFileCache,
-  externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>
+  _externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>
 ): Promise<string> {
-  const startTime = Date.now();
   debugLog('[reconstructFromCache] Starting reconstruction, cache has', cache.statementBlocks.length, 'blocks');
   debugLog('[PERF] reconstructFromCache START');
   
@@ -2638,7 +2630,7 @@ async function reconstructFromCache(
     if (quad.subject.termType === 'NamedNode') {
       const subjectUri = (quad.subject as { value: string }).value;
       const list = currentQuadsBySubject.get(subjectUri) || [];
-      list.push(quad);
+      list.push(quad as N3Quad);
       currentQuadsBySubject.set(subjectUri, list);
     }
   }
@@ -2792,7 +2784,6 @@ async function reconstructFromCache(
           if (block.quads && block.quads.length > 0) {
             for (const origQuad of block.quads) {
               if (origQuad.object && (origQuad.object as { termType?: string }).termType === 'BlankNode') {
-                const origBlankId = ((origQuad.object as { id: string }).id);
                 // Try to find a matching blank node in current store by checking all subClassOf quads
                 // This is a fallback to ensure we don't lose blank nodes when IDs change
                 for (const subClassQuad of subClassOfQuads) {
@@ -2970,11 +2961,11 @@ async function reconstructFromCache(
               const originalBlankNodeIds = new Set<string>();
               for (const q of block.quads) {
                 if (q.object.termType === 'BlankNode') {
-                  const origBlankId = (q.object as { id: string }).id;
+                  const origBlankId = (q.object as unknown as { id: string }).id;
                   originalBlankNodeIds.add(origBlankId);
                 }
                 if (q.subject.termType === 'BlankNode') {
-                  const origBlankId = (q.subject as { id: string }).id;
+                  const origBlankId = (q.subject as unknown as { id: string }).id;
                   originalBlankNodeIds.add(origBlankId);
                 }
               }
@@ -3086,7 +3077,7 @@ async function reconstructFromCache(
     // Compare quads - check if they're different
     // IMPORTANT: Compare BEFORE updating block.quads, otherwise isModified will always be false
     const originalQuads = [...block.quads]; // Create a copy to avoid mutation issues
-    const isModified = quadsAreDifferent(originalQuads, currentQuads);
+    const isModified = quadsAreDifferent(originalQuads as N3Quad[], currentQuads);
     
     if (block.subject && (block.subject.includes('DrawingElement') || block.subject.includes('Drawing'))) {
       debugLog('[reconstructFromCache] DrawingElement block check:', {
@@ -3130,7 +3121,7 @@ async function reconstructFromCache(
     // Use a blank-node-identity-insensitive structural comparison instead, so only blocks
     // that actually changed are re-serialized; unchanged blocks keep their original text.
     const changed = hasBlankNodeQuads
-      ? blockStructurallyChanged(originalQuads, currentQuads)
+      ? blockStructurallyChanged(originalQuads as N3Quad[], currentQuads)
       : isModified;
 
     if (changed) {
@@ -3224,7 +3215,7 @@ async function reconstructFromCache(
   }
   debugLog('[reconstructFromCache] detectPropertyLevelChanges returned', propertyLevelChanges.size, 'changes');
   if (propertyLevelChanges.size > 0) {
-    for (const [propLine, changeSet] of propertyLevelChanges.entries()) {
+    for (const [propLine] of propertyLevelChanges.entries()) {
       debugLog('[reconstructFromCache] Property change:', propLine.predicate, 'at line', propLine.lineNumbers[0]);
     }
   }
@@ -3429,7 +3420,7 @@ export function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolea
     if (!currentSignatures.has(sig)) {
       debugLog('[quadsAreDifferent] Missing signature in current:', sig);
       // Log what's different
-      const [subj, pred, obj] = sig.split('|');
+      const [, pred, obj] = sig.split('|');
       if (pred.includes('label')) {
         debugLog('[quadsAreDifferent] Label quad difference detected - original:', obj, 'current labels:', Array.from(currentSignatures).filter(s => s.split('|')[1].includes('label')).map(s => s.split('|')[2]));
       }
