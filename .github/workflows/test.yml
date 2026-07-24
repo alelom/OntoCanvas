@@ -1,17 +1,18 @@
 name: Tests
 
+# Tests (unit + E2E) run only on pull requests. Direct pushes to main assume the
+# PR already passed and skip straight to Release (see release.yml). workflow_dispatch
+# is kept so the full suite can still be run manually against any ref.
 on:
   pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Cancel an in-progress run for the same PR when a new commit is pushed to it.
 concurrency:
-  group: test-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
