@@ -128,7 +128,7 @@ import {
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar } from './utils/urlParams';
 import {
   extractUsedNamespaceRefsFromStore,
   formatNodeLabelWithPrefix,
@@ -7534,6 +7534,7 @@ async function loadFromUrl(url: string): Promise<void> {
     }
 
     await loadTtlAndRender(ttl, fileName, null, url);
+    setOntologyUrlParamInAddressBar(url);
 
     if (urlDisplayConfig) {
       loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;

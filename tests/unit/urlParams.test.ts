@@ -7,6 +7,7 @@ import {
   getAllDisplayFileUrls,
   convertOntologyUrlToHtmlUrl,
   clearOntologyParamsFromAddressBar,
+  setOntologyUrlParamInAddressBar,
 } from '../../src/utils/urlParams';
 
 describe('urlParams', () => {
@@ -79,6 +80,84 @@ describe('urlParams', () => {
       clearOntologyParamsFromAddressBar();
 
       expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/?foo=bar#section');
+    });
+  });
+
+  describe('setOntologyUrlParamInAddressBar', () => {
+    let replaceStateSpy: ReturnType<typeof vi.spyOn>;
+    const originalLocation = window.location;
+
+    beforeEach(() => {
+      replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+    });
+
+    afterEach(() => {
+      replaceStateSpy.mockRestore();
+      Object.defineProperty(window, 'location', { value: originalLocation, configurable: true });
+    });
+
+    function mockLocation(href: string): void {
+      const url = new URL(href);
+      Object.defineProperty(window, 'location', {
+        value: {
+          ...originalLocation,
+          href,
+          pathname: url.pathname,
+          search: url.search,
+          hash: url.hash,
+        },
+        configurable: true,
+      });
+    }
+
+    it('adds the onto param to the address bar for a URL opened via the modal', () => {
+      mockLocation('https://alelom.github.io/OntoCanvas/');
+
+      setOntologyUrlParamInAddressBar(
+        'https://raw.githubusercontent.com/BuroHappoldMachineLearning/ADIRO/c9f16c912f445226dd0aaaadf3ae04e477d53aab/docs/aec_titleblock.ttl'
+      );
+
+      expect(replaceStateSpy).toHaveBeenCalledWith(
+        null,
+        '',
+        '/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2FBuroHappoldMachineLearning%2FADIRO%2Fc9f16c912f445226dd0aaaadf3ae04e477d53aab%2Fdocs%2Faec_titleblock.ttl'
+      );
+    });
+
+    it('replaces an existing onto param rather than duplicating it', () => {
+      mockLocation('https://example.com/?onto=https://old.org/ontology.ttl');
+
+      setOntologyUrlParamInAddressBar('https://new.org/ontology.ttl');
+
+      expect(replaceStateSpy).toHaveBeenCalledWith(
+        null,
+        '',
+        '/?onto=https%3A%2F%2Fnew.org%2Fontology.ttl'
+      );
+    });
+
+    it('removes the localFile param, since the loaded ontology is now URL-based', () => {
+      mockLocation('https://example.com/?localFile=abc123');
+
+      setOntologyUrlParamInAddressBar('https://example.org/ontology.ttl');
+
+      expect(replaceStateSpy).toHaveBeenCalledWith(
+        null,
+        '',
+        '/?onto=https%3A%2F%2Fexample.org%2Fontology.ttl'
+      );
+    });
+
+    it('preserves other query params and hash', () => {
+      mockLocation('https://example.com/path?foo=bar#section');
+
+      setOntologyUrlParamInAddressBar('https://example.org/ontology.ttl');
+
+      expect(replaceStateSpy).toHaveBeenCalledWith(
+        null,
+        '',
+        '/path?foo=bar&onto=https%3A%2F%2Fexample.org%2Fontology.ttl#section'
+      );
     });
   });
 

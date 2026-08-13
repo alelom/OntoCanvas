@@ -20,6 +20,20 @@ export function clearOntologyParamsFromAddressBar(): void {
 }
 
 /**
+ * Set the 'onto' URL parameter in the address bar to the given ontology URL.
+ * Use when the user opens an ontology from a URL (e.g. via the "Open ontology from URL"
+ * dialog or "Load last opened URL") so the address bar reflects what is loaded, matching
+ * the behavior of loading via the 'onto' URL parameter directly.
+ */
+export function setOntologyUrlParamInAddressBar(ontologyUrl: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('localFile');
+  url.searchParams.set('onto', ontologyUrl);
+  const newUrl = url.pathname + url.search + url.hash;
+  window.history.replaceState(null, '', newUrl);
+}
+
+/**
  * Get the local file token from the 'localFile' URL parameter.
  * 
  * @returns The token if present, or null if not found
