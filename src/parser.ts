@@ -30,6 +30,45 @@ function isBlankNode(term: { termType: string }): boolean {
   return term.termType === 'BlankNode';
 }
 
+type RdfTerm = { termType: string; value?: string };
+
+/** Walk an RDF collection (rdf:first/rdf:rest) starting at listHead, returning its member terms in order. */
+function readRdfList(store: Store, listHead: RdfTerm): RdfTerm[] {
+  const items: RdfTerm[] = [];
+  const seen = new Set<string>();
+  let current = listHead;
+  while (current.termType === 'BlankNode' && current.value && !seen.has(current.value)) {
+    seen.add(current.value);
+    const firstQuad = store.getQuads(current as Parameters<Store['getQuads']>[0], DataFactory.namedNode(RDF + 'first'), null, null)[0];
+    const restQuad = store.getQuads(current as Parameters<Store['getQuads']>[0], DataFactory.namedNode(RDF + 'rest'), null, null)[0];
+    if (firstQuad) items.push(firstQuad.object as RdfTerm);
+    if (!restQuad) break;
+    current = restQuad.object as RdfTerm;
+  }
+  return items;
+}
+
+/**
+ * Resolve an rdfs:domain (or rdfs:range) object to the class URIs it denotes.
+ * Handles plain NamedNode domains as well as owl:unionOf class expressions
+ * (a blank node with `owl:unionOf ( :A :B ... )`), which real-world ontologies
+ * use to express "applies to any of these classes".
+ */
+function resolveDomainClassUris(store: Store, domainObj: RdfTerm): string[] {
+  if (domainObj.termType === 'NamedNode' && domainObj.value) {
+    return [domainObj.value];
+  }
+  if (domainObj.termType === 'BlankNode' && domainObj.value) {
+    const unionOfQuad = store.getQuads(domainObj as Parameters<Store['getQuads']>[0], DataFactory.namedNode(OWL + 'unionOf'), null, null)[0];
+    if (unionOfQuad) {
+      return readRdfList(store, unionOfQuad.object as RdfTerm)
+        .filter((term) => term.termType === 'NamedNode' && term.value)
+        .map((term) => term.value!);
+    }
+  }
+  return [];
+}
+
 function parseCardinalityFromRestriction(
   minQual: import('n3').Quad | undefined,
   maxQual: import('n3').Quad | undefined,
@@ -982,9 +1021,8 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
     const domains: string[] = [];
     for (const domainQuad of domainQuads) {
-      const domainObj = domainQuad.object;
-      if (domainObj.termType === 'NamedNode') {
-        const domainUri = (domainObj as { value: string }).value;
+      const domainUris = resolveDomainClassUris(store, domainQuad.object as RdfTerm);
+      for (const domainUri of domainUris) {
         // If domain is owl:Thing, it means all classes (empty array)
         if (domainUri !== OWL_THING) {
           const domainName = extractLocalName(domainUri);
