@@ -87,11 +87,14 @@ describe('Context menu Select all children / parents E2E', () => {
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
 
-    // Edge-style-test: ClassA -> ClassB -> ClassC (subClassOf / hasProperty). Children = subclasses.
-    // Class C is the top (superclass); its children are ClassB and ClassA. Select Class C, Select all children.
+    // Edge-style-test: ClassA -subClassOf-> ClassB -contains-> ClassC (plus ClassA -hasProperty-> ClassB).
+    // Children follow subClassOf target->domain (subclasses) and any other property edge
+    // domain->target (a known class's own property targets). Class B is ClassA's superclass
+    // (so ClassA is pulled in) and is itself the domain of the `contains` edge to ClassC
+    // (so ClassC is pulled in too). Select Class B, Select all children.
     const selectedByLabel = await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { selectNodeByLabel: (l: string) => boolean } }).__EDITOR_TEST__;
-      return testHook?.selectNodeByLabel('Class C') ?? false;
+      return testHook?.selectNodeByLabel('Class B') ?? false;
     });
     expect(selectedByLabel).toBe(true);
     await page.waitForTimeout(100);
@@ -133,10 +136,13 @@ describe('Context menu Select all children / parents E2E', () => {
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
 
-    // Class A is the bottom (subclass); its parents are ClassB and ClassC. Select Class A, Select all parents.
+    // Parents are the mirror: subClassOf domain->target (superclasses) and any other property
+    // edge target->domain (a known class's own referencing classes). Class C is the `contains`
+    // target of ClassB (so ClassB is pulled in), and ClassB is in turn the `hasProperty` target
+    // of ClassA (so ClassA is pulled in too). Select Class C, Select all parents.
     const selectedByLabel = await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { selectNodeByLabel: (l: string) => boolean } }).__EDITOR_TEST__;
-      return testHook?.selectNodeByLabel('Class A') ?? false;
+      return testHook?.selectNodeByLabel('Class C') ?? false;
     });
     expect(selectedByLabel).toBe(true);
     await page.waitForTimeout(100);
