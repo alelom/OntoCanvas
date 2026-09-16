@@ -1,4 +1,5 @@
-import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB } from '../storage';
+import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB, getRecentlyOpenedFromIndexedDB, type RecentlyOpenedEntry } from '../storage';
+import { EXAMPLE_ONTOLOGIES } from './exampleOntologies';
 
 /**
  * Callback type for loading an ontology from a file.
@@ -20,11 +21,52 @@ export type OnLoadLastOpenedFileCallback = () => Promise<void>;
  */
 export type OnLoadLastOpenedUrlCallback = () => Promise<void>;
 
+/**
+ * Callback type for re-opening an entry from the "Previously opened" history.
+ */
+export type OnOpenRecentEntryCallback = (entry: RecentlyOpenedEntry) => Promise<void>;
+
 let modalElement: HTMLElement | null = null;
 let onLoadFromFile: OnLoadFromFileCallback | null = null;
 let onLoadFromUrl: OnLoadFromUrlCallback | null = null;
 let onLoadLastOpenedFile: OnLoadLastOpenedFileCallback | null = null;
 let onLoadLastOpenedUrl: OnLoadLastOpenedUrlCallback | null = null;
+let onOpenRecentEntry: OnOpenRecentEntryCallback | null = null;
+
+/**
+ * Create a left-aligned row button matching the modal's "recent item" style.
+ */
+function createRowButton(mainText: string, titleText?: string): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.style.cssText = `
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: left;
+  `;
+  btn.textContent = mainText;
+  if (titleText) btn.title = titleText;
+  return btn;
+}
+
+/**
+ * Create a collapsible <details> section with the given summary label and content container.
+ */
+function createCollapsibleSection(summaryText: string, contentContainer: HTMLElement): HTMLDetailsElement {
+  const details = document.createElement('details');
+  details.style.cssText = 'margin-top: 4px;';
+  const summary = document.createElement('summary');
+  summary.textContent = summaryText;
+  summary.style.cssText = 'cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0;';
+  contentContainer.style.cssText = 'display: flex; flex-direction: column; gap: 6px; margin-top: 8px;';
+  details.appendChild(summary);
+  details.appendChild(contentContainer);
+  return details;
+}
 
 /**
  * Initialize the open ontology modal.
@@ -33,12 +75,14 @@ export function initOpenOntologyModal(
   onFile: OnLoadFromFileCallback,
   onUrl: OnLoadFromUrlCallback,
   onLastFile: OnLoadLastOpenedFileCallback,
-  onLastUrl: OnLoadLastOpenedUrlCallback
+  onLastUrl: OnLoadLastOpenedUrlCallback,
+  onRecentEntry: OnOpenRecentEntryCallback
 ): void {
   onLoadFromFile = onFile;
   onLoadFromUrl = onUrl;
   onLoadLastOpenedFile = onLastFile;
   onLoadLastOpenedUrl = onLastUrl;
+  onOpenRecentEntry = onRecentEntry;
 
   // Create modal element if it doesn't exist
   if (!modalElement) {
@@ -175,8 +219,29 @@ export function initOpenOntologyModal(
     buttonContainer.appendChild(lastOpenedFileBtn);
     buttonContainer.appendChild(lastOpenedUrlBtn);
 
+    // "Previously opened" collapsible history (populated on show/init from IndexedDB).
+    const recentList = document.createElement('div');
+    recentList.id = 'openOntologyRecentList';
+    const recentSection = createCollapsibleSection('Previously opened', recentList);
+
+    // "Example ontologies" collapsible section (static list, different domains).
+    const examplesList = document.createElement('div');
+    EXAMPLE_ONTOLOGIES.forEach((example) => {
+      const btn = createRowButton(`${example.label} — ${example.domain}`, example.url);
+      btn.addEventListener('click', async () => {
+        if (onLoadFromUrl) {
+          await onLoadFromUrl(example.url);
+          hideModal();
+        }
+      });
+      examplesList.appendChild(btn);
+    });
+    const examplesSection = createCollapsibleSection('Example ontologies', examplesList);
+
     modalContent.appendChild(title);
     modalContent.appendChild(buttonContainer);
+    modalContent.appendChild(recentSection);
+    modalContent.appendChild(examplesSection);
     modalElement.appendChild(modalContent);
 
     // Close modal when clicking outside
@@ -198,9 +263,12 @@ export function initOpenOntologyModal(
     document.body.appendChild(modalElement);
   }
 
-  // Update last opened buttons (non-blocking)
+  // Update last opened buttons and recently-opened history (non-blocking)
   updateLastOpenedButtons().catch(() => {
     // Silently handle errors - buttons will just show "(none)"
+  });
+  updateRecentlyOpenedList().catch(() => {
+    // Silently handle errors - the section will just show "(none yet)".
   });
 }
 
@@ -210,6 +278,9 @@ export function initOpenOntologyModal(
 export function showOpenOntologyModal(): void {
   if (!modalElement) return;
   updateLastOpenedButtons();
+  updateRecentlyOpenedList().catch(() => {
+    // Silently handle errors - the section will just show "(none yet)".
+  });
   modalElement.style.display = 'flex';
 }
 
@@ -219,6 +290,39 @@ export function showOpenOntologyModal(): void {
 export function hideOpenOntologyModal(): void {
   if (!modalElement) return;
   modalElement.style.display = 'none';
+}
+
+/**
+ * Populate the "Previously opened" collapsible section from IndexedDB history
+ * (most-recently-opened first, capped at MAX_RECENTLY_OPENED entries).
+ */
+async function updateRecentlyOpenedList(): Promise<void> {
+  const container = document.getElementById('openOntologyRecentList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const entries = await getRecentlyOpenedFromIndexedDB();
+  if (entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.textContent = '(none yet)';
+    empty.style.cssText = 'font-size: 12px; color: #999; padding: 4px 0;';
+    container.appendChild(empty);
+    return;
+  }
+
+  for (const entry of entries) {
+    const label = entry.kind === 'url' ? entry.name : (entry.pathHint ?? entry.name);
+    const titleText = entry.kind === 'url' ? entry.url : (entry.pathHint ?? entry.name);
+    const icon = entry.kind === 'url' ? '🔗' : '📄';
+    const btn = createRowButton(`${icon} ${label}`, titleText);
+    btn.addEventListener('click', async () => {
+      if (onOpenRecentEntry) {
+        await onOpenRecentEntry(entry);
+        hideModal();
+      }
+    });
+    container.appendChild(btn);
+  }
 }
 
 /**

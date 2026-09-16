@@ -77,6 +77,8 @@ import {
   saveLastFileToIndexedDB,
   getLastUrlFromIndexedDB,
   saveLastUrlToIndexedDB,
+  addRecentlyOpenedToIndexedDB,
+  type RecentlyOpenedEntry,
   loadSerializerConfigFromIndexedDB,
   saveSerializerConfigToIndexedDB,
   DISPLAY_CONFIG_VERSION,
@@ -6709,6 +6711,13 @@ async function loadTtlAndRender(
 
     if (handle && fileName) {
       saveLastFileToIndexedDB(handle, pathHint ?? fileName).catch(() => {});
+      addRecentlyOpenedToIndexedDB({
+        kind: 'file',
+        handle,
+        pathHint: pathHint ?? fileName,
+        name: fileName,
+        openedAt: Date.now(),
+      }).catch(() => {});
     }
     updateSaveButtonVisibility();
 
@@ -7520,6 +7529,7 @@ async function loadFromUrl(url: string): Promise<void> {
     const fileName = pathParts[pathParts.length - 1] || 'ontology.ttl';
 
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
+    addRecentlyOpenedToIndexedDB({ kind: 'url', url, name: fileName, openedAt: Date.now() }).catch(() => {});
 
     const { getAllDisplayFileUrls } = await import('./utils/urlParams');
     const displayUrls = getAllDisplayFileUrls(url);
@@ -7563,67 +7573,87 @@ async function loadFromUrl(url: string): Promise<void> {
 }
 
 /**
+ * Load an ontology from a previously-granted file handle (requesting permission again if
+ * needed), and apply its sibling .display.json config if present. Shared by "Load last opened
+ * file" and reopening an entry from the "Previously opened" history.
+ */
+async function loadOntologyFromFileHandle(handle: FileSystemFileHandle, storedPathHint?: string): Promise<void> {
+  showLoadingModal();
+  try {
+    // The File System Access permission API is not yet in the TS DOM lib.
+    const handleWithPerms = handle as unknown as {
+      queryPermission(descriptor: { mode: string }): Promise<PermissionState>;
+      requestPermission(descriptor: { mode: string }): Promise<PermissionState>;
+    };
+    const perm = await handleWithPerms.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      const requested = await handleWithPerms.requestPermission({ mode: 'readwrite' });
+      if (requested !== 'granted') {
+        hideLoadingModal();
+        const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+        errorMsg.textContent = 'Permission to access file was denied.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+    }
+    const file = await handle.getFile();
+    const ttl = await file.text();
+    const pathHint = (file as File & { path?: string }).path ?? storedPathHint ?? file.name;
+    await loadTtlAndRender(ttl, file.name, handle, pathHint);
+
+    // Try to load display config from sibling .display.json file
+    const localDisplayConfig = await loadDisplayConfigFromLocalFile(handle, file.name);
+    if (localDisplayConfig) {
+      loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          applyDisplayConfig(localDisplayConfig);
+          applyFilter();
+          if (network && localDisplayConfig.viewState) {
+            network.moveTo({
+              scale: localDisplayConfig.viewState.scale,
+              position: localDisplayConfig.viewState.position,
+              animation: false,
+            });
+          }
+          saveDisplayConfigToIndexedDB(localDisplayConfig, pathHint, file.name).catch(() => {});
+        });
+      });
+    }
+
+    hideLoadingModal();
+  } catch (err) {
+    hideLoadingModal();
+    const errorMsg = document.getElementById('errorMsg') as HTMLElement;
+    errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
+    errorMsg.style.display = 'block';
+  }
+}
+
+/**
  * Load the last opened file.
  */
 async function loadLastOpenedFile(): Promise<void> {
-    hideOpenOntologyModal();
-    const stored = await getLastFileFromIndexedDB();
-    if (!stored) {
+  hideOpenOntologyModal();
+  const stored = await getLastFileFromIndexedDB();
+  if (!stored) {
     const errorMsg = document.getElementById('errorMsg') as HTMLElement;
     errorMsg.textContent = 'No previously opened file found.';
     errorMsg.style.display = 'block';
-      return;
-    }
-    showLoadingModal();
-    try {
-      // The File System Access permission API is not yet in the TS DOM lib.
-      const handleWithPerms = stored.handle as unknown as {
-        queryPermission(descriptor: { mode: string }): Promise<PermissionState>;
-        requestPermission(descriptor: { mode: string }): Promise<PermissionState>;
-      };
-      const perm = await handleWithPerms.queryPermission({ mode: 'readwrite' });
-      if (perm !== 'granted') {
-        const requested = await handleWithPerms.requestPermission({ mode: 'readwrite' });
-        if (requested !== 'granted') {
-          hideLoadingModal();
-          const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-          errorMsg.textContent = 'Permission to access file was denied.';
-          errorMsg.style.display = 'block';
-          return;
-        }
-      }
-      const file = await stored.handle.getFile();
-      const ttl = await file.text();
-      const pathHint = (file as File & { path?: string }).path ?? stored.pathHint ?? file.name;
-      await loadTtlAndRender(ttl, file.name, stored.handle, pathHint);
-      
-      // Try to load display config from sibling .display.json file
-      const localDisplayConfig = await loadDisplayConfigFromLocalFile(stored.handle, file.name);
-      if (localDisplayConfig) {
-        loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            applyDisplayConfig(localDisplayConfig);
-            applyFilter();
-            if (network && localDisplayConfig.viewState) {
-              network.moveTo({
-                scale: localDisplayConfig.viewState.scale,
-                position: localDisplayConfig.viewState.position,
-                animation: false,
-              });
-            }
-            saveDisplayConfigToIndexedDB(localDisplayConfig, pathHint, file.name).catch(() => {});
-          });
-        });
-      }
-      
-      hideLoadingModal();
-    } catch (err) {
-      hideLoadingModal();
-      const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-      errorMsg.textContent = `Failed to load file: ${err instanceof Error ? err.message : String(err)}`;
-      errorMsg.style.display = 'block';
-    }
+    return;
+  }
+  await loadOntologyFromFileHandle(stored.handle, stored.pathHint);
+}
+
+/**
+ * Reopen an entry from the "Previously opened" history (file or URL).
+ */
+async function loadFromRecentEntry(entry: RecentlyOpenedEntry): Promise<void> {
+  if (entry.kind === 'url') {
+    await loadFromUrl(entry.url);
+  } else {
+    await loadOntologyFromFileHandle(entry.handle, entry.pathHint);
+  }
 }
 
 /**
@@ -7671,7 +7701,8 @@ function setupEventListeners(): void {
         loadFromFile,
         loadFromUrl,
         loadLastOpenedFile,
-        loadLastOpenedUrl
+        loadLastOpenedUrl,
+        loadFromRecentEntry
       );
 
   // File input change handler (for fallback when showOpenFilePicker is not available)

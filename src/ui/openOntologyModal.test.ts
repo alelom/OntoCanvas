@@ -8,11 +8,13 @@ import {
 // Use jsdom environment for DOM tests
 // @vitest-environment jsdom
 
-// Mock storage (default: no last file)
+// Mock storage (default: no last file, no history)
 const mockGetLastFile = vi.fn().mockResolvedValue(null);
+const mockGetRecentlyOpened = vi.fn().mockResolvedValue([]);
 vi.mock('../storage', () => ({
   getLastFileFromIndexedDB: (...args: unknown[]) => mockGetLastFile(...args),
   getLastUrlFromIndexedDB: vi.fn().mockResolvedValue(null),
+  getRecentlyOpenedFromIndexedDB: (...args: unknown[]) => mockGetRecentlyOpened(...args),
 }));
 
 describe('openOntologyModal', () => {
@@ -20,6 +22,8 @@ describe('openOntologyModal', () => {
     // Clear DOM
     document.body.innerHTML = '';
     vi.clearAllMocks();
+    mockGetLastFile.mockResolvedValue(null);
+    mockGetRecentlyOpened.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -32,7 +36,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
 
       // Modal element should be created
       const modal = document.getElementById('openOntologyModal');
@@ -44,10 +48,10 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
       const firstModal = document.getElementById('openOntologyModal');
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
       const secondModal = document.getElementById('openOntologyModal');
 
       expect(firstModal).toBe(secondModal);
@@ -60,7 +64,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
       // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 50));
       
@@ -80,7 +84,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
       // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 50));
       
@@ -102,7 +106,7 @@ describe('openOntologyModal', () => {
       const onUrl = vi.fn();
       const onLast = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
       showOpenOntologyModal();
 
       // Find and click the file button
@@ -132,7 +136,7 @@ describe('openOntologyModal', () => {
       const onLast = vi.fn();
       const onLastUrl = vi.fn();
 
-      initOpenOntologyModal(onFile, onUrl, onLast, onLastUrl);
+      initOpenOntologyModal(onFile, onUrl, onLast, onLastUrl, vi.fn());
       showOpenOntologyModal();
 
       const lastFileBtn = document.getElementById('openOntologyLoadLastFile') as HTMLButtonElement | null;
@@ -174,7 +178,7 @@ describe('openOntologyModal', () => {
         return originalCreateElement(tagName);
       });
 
-      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn());
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
       showOpenOntologyModal();
 
       const modal = document.getElementById('openOntologyModal');
@@ -189,6 +193,68 @@ describe('openOntologyModal', () => {
         // Note: The actual URL dialog is complex, so we're just checking the button exists
         expect(urlBtn).toBeTruthy();
       }
+    });
+  });
+
+  describe('Example ontologies section', () => {
+    it('lists all example ontologies and opens the clicked one via onUrl', async () => {
+      const onFile = vi.fn();
+      const onUrl = vi.fn().mockResolvedValue(undefined);
+      const onLast = vi.fn();
+
+      initOpenOntologyModal(onFile, onUrl, onLast, vi.fn(), vi.fn());
+      showOpenOntologyModal();
+
+      const modal = document.getElementById('openOntologyModal');
+      const buttons = Array.from(modal?.querySelectorAll('button') || []);
+      const pizzaBtn = buttons.find((btn) => btn.textContent?.startsWith('Pizza'));
+      expect(pizzaBtn).toBeTruthy();
+
+      pizzaBtn!.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(onUrl).toHaveBeenCalledWith(
+        'https://raw.githubusercontent.com/owlcs/pizza-ontology/refs/heads/master/pizza.owl'
+      );
+    });
+  });
+
+  describe('Previously opened section', () => {
+    it('shows a placeholder when there is no history', async () => {
+      mockGetRecentlyOpened.mockResolvedValue([]);
+      initOpenOntologyModal(vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn());
+      showOpenOntologyModal();
+
+      const list = document.getElementById('openOntologyRecentList');
+      await vi.waitFor(() => {
+        expect(list?.textContent).toContain('(none yet)');
+      });
+    });
+
+    it('lists recent entries and reopens the clicked one via onRecentEntry', async () => {
+      mockGetRecentlyOpened.mockResolvedValue([
+        { kind: 'url', url: 'https://example.com/a.ttl', name: 'a.ttl', openedAt: 1 },
+      ]);
+      const onRecentEntry = vi.fn().mockResolvedValue(undefined);
+      initOpenOntologyModal(vi.fn(), vi.fn(), vi.fn(), vi.fn(), onRecentEntry);
+      showOpenOntologyModal();
+
+      const list = document.getElementById('openOntologyRecentList');
+      const entryBtn = await vi.waitFor(() => {
+        const btn = Array.from(list?.querySelectorAll('button') || []).find((b) =>
+          b.textContent?.includes('a.ttl')
+        );
+        expect(btn).toBeTruthy();
+        return btn!;
+      });
+
+      entryBtn.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(onRecentEntry).toHaveBeenCalledWith({
+        kind: 'url',
+        url: 'https://example.com/a.ttl',
+        name: 'a.ttl',
+        openedAt: 1,
+      });
     });
   });
 });
