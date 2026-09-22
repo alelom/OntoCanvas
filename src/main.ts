@@ -190,7 +190,8 @@ import {
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
 import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
-import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
+import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
+import { readableTextColor } from './lib/textContrast';
 import {
   initAnnotationPropsMenu,
   getAnnotationStyleConfig,
@@ -3132,7 +3133,7 @@ function buildNetworkData(
     let nodeOpacity = baseOpacity;
     let backgroundColor = style.background;
     let borderColor = style.border;
-    let fontColor = '#2c3e50';
+    let fontColor = readableTextColor(style.background);
     
     if (searchQuery) {
       const searchOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
@@ -3140,12 +3141,12 @@ function buildNetworkData(
       if (nodeOpacity < 1.0) {
         backgroundColor = applyOpacityToColor(style.background, nodeOpacity);
         borderColor = applyOpacityToColor(style.border, nodeOpacity);
-        fontColor = applyOpacityToColor('#2c3e50', nodeOpacity);
+        fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: nodeOpacity }), nodeOpacity);
       }
     } else if (isExternal) {
       backgroundColor = applyOpacityToColor(style.background, baseOpacity);
       borderColor = applyOpacityToColor(style.border, baseOpacity);
-      fontColor = applyOpacityToColor('#2c3e50', baseOpacity);
+      fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: baseOpacity }), baseOpacity);
     }
     
     const node: Record<string, unknown> = {
@@ -3381,24 +3382,24 @@ function buildNetworkData(
       // Apply search transparency if search query is active
       // Data property nodes use imported opacity if applicable, otherwise inherit from class node
       let dataPropNodeOpacity = baseDataPropOpacity;
-      let dataPropBackgroundColor = '#e8f4f8';
+      let dataPropBackgroundColor = DATA_PROPERTY_FILL;
       let dataPropBorderColor = '#4a90a4';
-      let dataPropFontColor = '#2c3e50';
+      let dataPropFontColor = readableTextColor(DATA_PROPERTY_FILL);
       
       if (searchQuery) {
         // Use the class node's opacity category, but multiply by base opacity if imported
         const searchOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
         dataPropNodeOpacity = isDataPropImported ? searchOpacity * baseDataPropOpacity : searchOpacity;
         if (dataPropNodeOpacity < 1.0) {
-          dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', dataPropNodeOpacity);
+          dataPropBackgroundColor = applyOpacityToColor(DATA_PROPERTY_FILL, dataPropNodeOpacity);
           dataPropBorderColor = applyOpacityToColor('#4a90a4', dataPropNodeOpacity);
-          dataPropFontColor = applyOpacityToColor('#2c3e50', dataPropNodeOpacity);
+          dataPropFontColor = applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: dataPropNodeOpacity }), dataPropNodeOpacity);
         }
       } else if (isDataPropImported) {
         // Apply imported opacity
-        dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', baseDataPropOpacity);
+        dataPropBackgroundColor = applyOpacityToColor(DATA_PROPERTY_FILL, baseDataPropOpacity);
         dataPropBorderColor = applyOpacityToColor('#4a90a4', baseDataPropOpacity);
-        dataPropFontColor = applyOpacityToColor('#2c3e50', baseDataPropOpacity);
+        dataPropFontColor = applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: baseDataPropOpacity }), baseDataPropOpacity);
       }
       
       // Get prefix for data property if it's imported

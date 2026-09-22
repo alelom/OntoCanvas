@@ -1,0 +1,37 @@
+@prefix : <http://example.org/darkpalette#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Reproduces https://github.com/alelom/OntoCanvas/issues/23: :labellableRoot is the tenth
+# annotation property in alphabetical order, so its default "when true" fill lands on the last
+# ANNOTATION_FILL_PALETTE entry (the dark slate that the node label used to be hardcoded to).
+# The nine filler properties exist only to push :labellableRoot onto that palette slot.
+:aFiller01 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller02 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller03 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller04 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller05 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller06 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller07 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller08 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+:aFiller09 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
+
+:labellableRoot rdf:type owl:AnnotationProperty ;
+    rdfs:label "Labellable root" ;
+    rdfs:range xsd:boolean .
+
+:DrawingSheet rdf:type owl:Class ;
+    rdfs:label "Drawing Sheet" ;
+    :labellableRoot "false"^^xsd:boolean .
+
+:Titleblock rdf:type owl:Class ;
+    rdfs:label "Titleblock" ;
+    rdfs:subClassOf :DrawingSheet ;
+    :labellableRoot "true"^^xsd:boolean .
+
+:Legend rdf:type owl:Class ;
+    rdfs:label "Legend" ;
+    rdfs:subClassOf :DrawingSheet ;
+    :labellableRoot "true"^^xsd:boolean .
