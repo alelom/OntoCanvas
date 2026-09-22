@@ -1980,9 +1980,13 @@ export function updateDataPropertyRangeInStore(
 ): boolean {
   const propUri = getDataPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
+  // An unknown name resolves to BASE_IRI + name, so without this the writer would assert a range on
+  // a subject the ontology has never heard of and report success for it.
+  const subjectQuads = store.getQuads(subject, null, null, null);
+  if (subjectQuads.length === 0) return false;
   const rangePred = DataFactory.namedNode(RDFS + 'range');
   const rangeQuads = store.getQuads(subject, rangePred, null, null);
-  const graph = rangeQuads[0]?.graph ?? store.getQuads(subject, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
+  const graph = rangeQuads[0]?.graph ?? subjectQuads[0]?.graph ?? DataFactory.defaultGraph();
   for (const rq of rangeQuads) store.removeQuad(rq);
   if (rangeUri) {
     store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
