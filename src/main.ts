@@ -202,7 +202,7 @@ import {
   UNATTACHED_DOMAIN_NOTE,
   unattachedDataPropertyNodeId,
 } from './lib/dataPropertyDisplay';
-import { boundsOf, layoutUnattachedNodes } from './graph/unattachedDataPropertyLayout';
+import { boundsOf, layoutUnattachedNodes, rowSpacingFor } from './graph/unattachedDataPropertyLayout';
 import {
   initAnnotationPropsMenu,
   getAnnotationStyleConfig,
@@ -3529,8 +3529,17 @@ function buildNetworkData(
     const classPositions = filteredNodes
       .map((n) => (n.x != null && n.y != null ? { x: n.x, y: n.y } : nodePositions[n.id]))
       .filter((p): p is { x: number; y: number } => !!p);
-    const widths = entries.map((e) => Math.max(60, e.label.length * dataPropertyFontSize * 0.62 + 38));
-    const positions = layoutUnattachedNodes(widths, boundsOf(classPositions));
+    // Measure the label as it is drawn - wrapped - not by its raw character count. A label wrapping
+    // to three lines was being laid out as one long, one-line-tall box, which both inflated the
+    // widths (forcing rows earlier than needed) and let the rows it created overlap vertically.
+    const dimensions = entries.map((e) =>
+      estimateNodeDimensions(e.label, wrapChars, dataPropertyFontSize)
+    );
+    const positions = layoutUnattachedNodes(
+      dimensions.map((d) => d.width),
+      boundsOf(classPositions),
+      { rowSpacing: rowSpacingFor(dimensions.map((d) => d.height)) }
+    );
 
     entries.forEach((entry, i) => {
       const pos = positions[i];

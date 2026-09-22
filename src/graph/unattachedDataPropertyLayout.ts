@@ -47,6 +47,19 @@ export interface UnattachedLayoutOptions {
 }
 
 /**
+ * Centre-to-centre row spacing that keeps band rows clear of each other.
+ *
+ * Rows are spaced by a single distance, so it has to clear the tallest item: a label that wraps to
+ * three lines is roughly three times as tall as one that does not, and spacing the rows by less than
+ * that draws them on top of each other. Heights come from the label as it is actually rendered
+ * (wrapped), not from its raw character count.
+ */
+export function rowSpacingFor(heights: number[], gap = 12): number {
+  const tallest = heights.reduce((max, h) => (Number.isFinite(h) && h > max ? h : max), 0);
+  return tallest + gap;
+}
+
+/**
  * Lay the given item widths out as a centred, wrapping row band below `bounds`.
  *
  * Returns one centre point per item, in input order. With no bounds (an ontology of nothing but

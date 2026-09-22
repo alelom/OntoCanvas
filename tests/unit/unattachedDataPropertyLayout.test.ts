@@ -2,7 +2,7 @@
  * Unit tests for the placement band used by data properties that assert no rdfs:domain.
  */
 import { describe, it, expect } from 'vitest';
-import { boundsOf, layoutUnattachedNodes } from '../../src/graph/unattachedDataPropertyLayout';
+import { boundsOf, layoutUnattachedNodes, rowSpacingFor } from '../../src/graph/unattachedDataPropertyLayout';
 
 describe('boundsOf', () => {
   it('returns null for no positions', () => {
@@ -75,5 +75,41 @@ describe('layoutUnattachedNodes', () => {
     const points = layoutUnattachedNodes([100, 100], null, { horizontalSpacing: 20 });
     const centre = (points[0].x + points[1].x) / 2;
     expect(centre).toBeCloseTo(0, 5);
+  });
+});
+
+describe('rowSpacingFor', () => {
+  it('clears the tallest item, not the average', () => {
+    // A three-line label is ~3x as tall as a one-line one; spacing by anything less overlaps.
+    expect(rowSpacingFor([40, 40, 92], 12)).toBe(104);
+  });
+
+  it('leaves a gap above the tallest item', () => {
+    expect(rowSpacingFor([40], 12)).toBe(52);
+    expect(rowSpacingFor([40], 0)).toBe(40);
+  });
+
+  it('ignores non-finite heights rather than collapsing the band', () => {
+    expect(rowSpacingFor([40, NaN, Infinity], 12)).toBe(52);
+  });
+
+  it('is the gap alone when there are no items', () => {
+    expect(rowSpacingFor([], 12)).toBe(12);
+  });
+
+  it('spaces rows so that laid-out rows do not overlap', () => {
+    const heights = [40, 92, 40];
+    const widths = [300, 300, 300];
+    const spacing = rowSpacingFor(heights);
+    const points = layoutUnattachedNodes(widths, { minX: 0, minY: 0, maxX: 400, maxY: 0 }, {
+      rowSpacing: spacing,
+      maxRowWidth: 400,
+    });
+    const rows = [...new Set(points.map((p) => p.y))].sort((a, b) => a - b);
+    expect(rows.length).toBeGreaterThan(1);
+    for (let i = 1; i < rows.length; i++) {
+      // Each row's top edge clears the previous row's bottom edge, for the tallest possible item.
+      expect(rows[i] - rows[i - 1]).toBeGreaterThanOrEqual(Math.max(...heights));
+    }
   });
 });
