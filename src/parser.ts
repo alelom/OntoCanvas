@@ -1598,7 +1598,7 @@ function resolveClassUri(store: Store, localName: string): string {
  * Whether the user typed owl:Thing (in any of the forms the class field accepts) to assert the
  * universal domain or range deliberately, as opposed to leaving the field blank.
  */
-function namesOwlThing(value: string): boolean {
+export function namesOwlThing(value: string): boolean {
   const v = value.trim();
   return v === 'Thing' || v === 'owl:Thing' || v === OWL_THING_URI;
 }

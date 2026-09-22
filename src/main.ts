@@ -15,6 +15,7 @@ import {
   updateObjectPropertyLabelInStore,
   updateObjectPropertyCommentInStore,
   updateObjectPropertyDomainRangeInStore,
+  namesOwlThing,
   updateObjectPropertySubPropertyOfInStore,
   updateObjectPropertyIsDefinedByInStore,
   getMainOntologyBase,
@@ -1256,8 +1257,10 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
       );
       const o = objectProperties.find((p) => p.name === effectiveType);
       if (o) {
-        o.hasGlobalDomain = newDomain === 'owl:Thing' || newDomain === 'Thing';
-        o.hasGlobalRange = newRange === 'owl:Thing' || newRange === 'Thing';
+        // Same predicate the store writer uses, so the in-memory view cannot disagree with what
+        // was written: the class field also accepts the full owl#Thing URI.
+        o.hasGlobalDomain = namesOwlThing(newDomain);
+        o.hasGlobalRange = namesOwlThing(newRange);
         o.domain = o.hasGlobalDomain ? undefined : newDomain || undefined;
         o.range = o.hasGlobalRange ? undefined : newRange || undefined;
       }

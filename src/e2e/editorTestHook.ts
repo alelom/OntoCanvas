@@ -283,6 +283,19 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     openEditDataPropertyModal: (name: string): void => {
       showEditDataPropertyModal(name);
     },
+    getObjectPropertyByName: (
+      name: string
+    ): { domain?: string; range?: string; hasGlobalDomain?: boolean; hasGlobalRange?: boolean; uri?: string } | null => {
+      const op = getObjectProperties().find((p) => p.name === name);
+      if (!op) return null;
+      return {
+        domain: op.domain,
+        range: op.range,
+        hasGlobalDomain: op.hasGlobalDomain,
+        hasGlobalRange: op.hasGlobalRange,
+        uri: op.uri,
+      };
+    },
     getDataPropertyByName: (name: string): { domains: string[]; uri?: string } | null => {
       const dp = getDataProperties().find((p) => p.name === name);
       if (!dp) return null;
