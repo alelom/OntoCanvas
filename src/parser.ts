@@ -6,6 +6,7 @@ import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPro
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
+import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
 import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
@@ -2766,47 +2767,23 @@ async function reconstructFromCache(
     }
   }
   
-  // Extract prefix map for resolving prefixed names
+  // Every prefix the file declares, from every header block. Missing one is not cosmetic: a
+  // subject whose prefix cannot be resolved looks absent from the document and gets appended again.
   const prefixMap = new Map<string, string>();
   if (cache.headerSection) {
     for (const block of cache.headerSection.blocks) {
-      if (block.originalText) {
-        const prefixMatch = block.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
-        if (prefixMatch) {
-          prefixMap.set(prefixMatch[1], prefixMatch[2]);
-        }
-        const emptyPrefixMatch = block.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
-        if (emptyPrefixMatch) {
-          prefixMap.set('', emptyPrefixMatch[1]);
-        }
-      }
+      if (block.originalText) parseTurtlePrefixes(block.originalText, prefixMap);
     }
   }
   
   const resolvePrefixedName = (prefixedName: string): string | null => {
-    if (prefixedName.startsWith('<') && prefixedName.endsWith('>')) {
-      return prefixedName.slice(1, -1);
+    const resolved = resolveTurtlePrefixedName(prefixedName, prefixMap);
+    if (resolved === null) {
+      debugWarn('[reconstructFromCache] Failed to resolve prefixed name:', prefixedName);
+      return null;
     }
-    if (prefixedName.startsWith(':')) {
-      const baseUri = prefixMap.get('');
-      if (baseUri) {
-        const resolved = baseUri + prefixedName.slice(1);
-        debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
-        return resolved;
-      }
-      debugWarn('[reconstructFromCache] Failed to resolve prefixed name (no base URI):', prefixedName);
-    } else if (prefixedName.includes(':')) {
-      const [prefix, localName] = prefixedName.split(':', 2);
-      const baseUri = prefixMap.get(prefix);
-      if (baseUri) {
-        const resolved = baseUri + localName;
-        debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
-        return resolved;
-      }
-      debugWarn('[reconstructFromCache] Failed to resolve prefixed name (prefix not found):', prefixedName, 'prefix:', prefix);
-    }
-    debugWarn('[reconstructFromCache] Failed to resolve prefixed name (no match):', prefixedName);
-    return null;
+    debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
+    return resolved;
   };
   
   // Detect modifications by comparing current store with cache

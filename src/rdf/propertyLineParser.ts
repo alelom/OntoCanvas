@@ -44,12 +44,17 @@ export interface PropertyLineMatch {
  * @param blockText The text content of the block
  * @param blockStartPosition Character position where block starts in full content
  * @param blockStartLine Line number where block starts
+ * @param subject The subject the block opens with, exactly as written in the source (e.g.
+ * `prov:Agent`). Given it, that token is skipped precisely; without it only `:Local` and `<uri>`
+ * subjects can be recognised, since a prefixed subject is indistinguishable from a leading
+ * predicate. Omit it when passing text that already starts at a predicate.
  * @returns Array of property line matches with positions
  */
 export function parsePropertyLinesWithStateMachine(
   blockText: string,
   blockStartPosition: number,
-  blockStartLine: number
+  blockStartLine: number,
+  subject?: string | null
 ): PropertyLineMatch[] {
   const matches: PropertyLineMatch[] = [];
 
@@ -154,37 +159,31 @@ export function parsePropertyLinesWithStateMachine(
         // On first content line, skip subject (everything up to first predicate)
         // Subject can be on any line, but we only skip it once
         if (!subjectSkipped) {
-          // Skip subject - subject is typically at the start of the line, followed by whitespace and then a predicate
-          // Pattern: :SubjectName whitespace predicate
-          // Subject must start with : or < (not just any alphanumeric - that would match predicates too)
-          // But only if we're at the start of a line (after whitespace/newline) or at the very beginning
+          // Skip the subject the block opens with. Only considered at the very start of a line, and
+          // only once, so an indented continuation line's predicate is never mistaken for one.
           const isAtLineStart = i === 0 || (i > 0 && (blockText[i - 1] === '\n' || blockText[i - 1] === '\r'));
-          if (isAtLineStart && (char === ':' || char === '<')) {
-            let j = i;
-            // Read the subject (prefixed name or URI)
-            // For URIs, read until closing >
-            if (char === '<') {
-              j++;
-              while (j < blockText.length && blockText[j] !== '>') {
-                j++;
-              }
-              if (j < blockText.length) {
-                j++; // Include the closing >
-              }
-            } else {
-              // Prefixed name - read until whitespace or special character
-              while (j < blockText.length && blockText[j] !== ' ' && blockText[j] !== '\t' && blockText[j] !== '\n' && blockText[j] !== ';') {
-                j++;
-              }
+          let subjectLength = 0;
+          if (isAtLineStart) {
+            if (subject && blockText.startsWith(subject, i)) {
+              // The caller knows the subject as written, so skip exactly that. It is the only way
+              // to tell `prov:Agent rdf:type ...` from block text that opens on a predicate, such
+              // as `rdfs:subClassOf [ ... ]` - both are a prefixed name followed by a value.
+              subjectLength = subject.length;
+            } else if (char === ':' || char === '<') {
+              // No subject given: skip only a token that cannot be a predicate written with a
+              // prefix, i.e. the default-prefix or absolute-URI forms.
+              const guessed = /^(<[^>]*>|:[^\s;]*)/.exec(blockText.slice(i));
+              if (guessed) subjectLength = guessed[1].length;
             }
-            // Skip whitespace (including newlines)
+          }
+          if (subjectLength > 0) {
+            let j = i + subjectLength;
+            // Skip whitespace (including newlines) to the first content after the subject
             while (j < blockText.length && (blockText[j] === ' ' || blockText[j] === '\t' || blockText[j] === '\n' || blockText[j] === '\r')) {
               j++;
             }
-            // If there's content after whitespace (including on the next line), the previous token was likely a subject
-            // Skip to the first non-whitespace character after the subject
+            // If there's content after whitespace (including on the next line), the previous token was the subject
             if (j < blockText.length) {
-              // Found content after subject (could be on same line or next line) - skip to it
               i = j - 1; // -1 because loop will increment
               subjectSkipped = true;
               continue;
