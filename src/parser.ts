@@ -1712,11 +1712,12 @@ export function updateObjectPropertyIsDefinedByInStore(
 /**
  * Add a new data property (owl:DatatypeProperty) to the store.
  * Returns the property localName, or null on failure.
+ * @param rangeUri Full URI of the datatype range (e.g. http://www.w3.org/2001/XMLSchema#string). null means no range.
  */
 export function addDataPropertyToStore(
   store: Store,
   label: string,
-  rangeUri: string,
+  rangeUri: string | null,
   localName?: string
 ): string | null {
   const existingNames = new Set(getDataProperties(store).map((dp) => dp.name));
@@ -1732,11 +1733,14 @@ export function addDataPropertyToStore(
   const subjUri = base + name;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
-  const rangeNode = DataFactory.namedNode(rangeUri);
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'DatatypeProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(OWL + 'Thing'), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), rangeNode, graph);
+  // No domain is asserted on creation. A new property applies to nothing in particular yet, and
+  // writing rdfs:domain owl:Thing would state a claim the author never made - the same defect
+  // fixed on the update path, where clearing every domain now removes every domain triple.
+  if (rangeUri != null && rangeUri.trim() !== '') {
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri.trim()), graph);
+  }
   return name;
 }
 

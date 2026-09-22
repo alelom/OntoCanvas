@@ -2649,7 +2649,10 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
   const labelInput = document.getElementById('addDataPropLabel') as HTMLInputElement;
   const rangeSel = document.getElementById('addDataPropRange') as HTMLSelectElement;
   if (rangeSel) {
-    rangeSel.innerHTML = DATA_PROPERTY_RANGE_OPTIONS.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
+    // Consistent with the edit modal and the annotation modal: a new property must be allowed to
+    // assert no range, otherwise the typing-stub pattern cannot be authored here at all.
+    const rangeOptions = [{ value: '', label: 'No range asserted' }, ...DATA_PROPERTY_RANGE_OPTIONS];
+    rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
   }
   if (labelInput) {
     labelInput.addEventListener('input', updateAddDataPropIdentifierAndValidation);
@@ -2681,7 +2684,7 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     const rangeEl = document.getElementById('addDataPropRange') as HTMLSelectElement;
     const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
     const label = li.value.trim();
-    const rangeUri = rangeEl?.value ?? XSD_NS + 'string';
+    const rangeUri = rangeEl?.value ? rangeEl.value : null;
     if (!ttlStore) return;
     const existingNames = new Set(dataProperties.map((dp) => dp.name));
     const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
