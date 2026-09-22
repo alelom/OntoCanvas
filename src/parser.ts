@@ -183,13 +183,19 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
     const rangeQuads = store.getQuads(subj, DataFactory.namedNode(RDFS + 'range'), null, null);
     let domain: string | null = null;
     let range: string | null = null;
+    // An asserted owl:Thing is recorded as such, not folded into "no domain"; otherwise a file
+    // that states the universal domain loses that statement on the next save.
+    let hasGlobalDomain = false;
+    let hasGlobalRange = false;
     if (domainQuads.length > 0 && domainQuads[0].object.termType === 'NamedNode') {
       const domainUri = (domainQuads[0].object as { value: string }).value;
-      if (domainUri !== OWL_THING) domain = extractLocalName(domainUri);
+      if (domainUri === OWL_THING) hasGlobalDomain = true;
+      else domain = extractLocalName(domainUri);
     }
     if (rangeQuads.length > 0 && rangeQuads[0].object.termType === 'NamedNode') {
       const rangeUri = (rangeQuads[0].object as { value: string }).value;
-      if (rangeUri !== OWL_THING) range = extractLocalName(rangeUri);
+      if (rangeUri === OWL_THING) hasGlobalRange = true;
+      else range = extractLocalName(rangeUri);
     }
     const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
     const subPropertyOfQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'subPropertyOf'), null, null)[0];
@@ -204,6 +210,8 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
       comment: comment || undefined,
       domain: domain ?? undefined,
       range: range ?? undefined,
+      hasGlobalDomain,
+      hasGlobalRange,
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
       subPropertyOf: subPropertyOf ?? undefined
@@ -1488,13 +1496,20 @@ export function addObjectPropertyToStore(
   const subjUri = base + name;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
-  const OWL_THING_URI = OWL + 'Thing';
-  const domainUri = (options?.domain?.trim() ?? '') ? resolveClassUri(store, options!.domain!.trim()) : OWL_THING_URI;
-  const rangeUri = (options?.range?.trim() ?? '') ? resolveClassUri(store, options!.range!.trim()) : OWL_THING_URI;
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'ObjectProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(domainUri), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri), graph);
+  // A domain or range is written only when one was given. A blank field asserts nothing, and
+  // filling it with owl:Thing would put a claim in the file the author never made.
+  const domainInput = options?.domain?.trim() ?? '';
+  const rangeInput = options?.range?.trim() ?? '';
+  if (domainInput) {
+    const domainUri = namesOwlThing(domainInput) ? OWL_THING_URI : resolveClassUri(store, domainInput);
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(domainUri), graph);
+  }
+  if (rangeInput) {
+    const rangeUri = namesOwlThing(rangeInput) ? OWL_THING_URI : resolveClassUri(store, rangeInput);
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri), graph);
+  }
   store.addQuad(
     subject,
     DataFactory.namedNode(HAS_CARDINALITY_PROP),
@@ -1580,8 +1595,19 @@ function resolveClassUri(store: Store, localName: string): string {
 }
 
 /**
+ * Whether the user typed owl:Thing (in any of the forms the class field accepts) to assert the
+ * universal domain or range deliberately, as opposed to leaving the field blank.
+ */
+function namesOwlThing(value: string): boolean {
+  const v = value.trim();
+  return v === 'Thing' || v === 'owl:Thing' || v === OWL_THING_URI;
+}
+
+/**
  * Update rdfs:domain and rdfs:range for an object property in the store.
- * domainName/rangeName are class local names; null or empty means owl:Thing.
+ * domainName/rangeName are class local names. Null or empty removes the triple entirely: a blank
+ * field means the ontology asserts nothing, which is not the same as asserting owl:Thing. Pass
+ * "owl:Thing" to assert the universal domain or range on purpose.
  * Returns false for subClassOf or if property not found.
  */
 export function updateObjectPropertyDomainRangeInStore(
@@ -1605,10 +1631,14 @@ export function updateObjectPropertyDomainRangeInStore(
   for (const dq of domainQuads) store.removeQuad(dq);
   for (const rq of rangeQuads) store.removeQuad(rq);
 
-  const domainUri = (domainName?.trim() ?? '') ? resolveClassUri(store, domainName!) : OWL_THING_URI;
-  const rangeUri = (rangeName?.trim() ?? '') ? resolveClassUri(store, rangeName!) : OWL_THING_URI;
-  store.addQuad(subject, domainPred, DataFactory.namedNode(domainUri), graph);
-  store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  if (domainName?.trim()) {
+    const domainUri = namesOwlThing(domainName) ? OWL_THING_URI : resolveClassUri(store, domainName);
+    store.addQuad(subject, domainPred, DataFactory.namedNode(domainUri), graph);
+  }
+  if (rangeName?.trim()) {
+    const rangeUri = namesOwlThing(rangeName) ? OWL_THING_URI : resolveClassUri(store, rangeName);
+    store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  }
   return true;
 }
 

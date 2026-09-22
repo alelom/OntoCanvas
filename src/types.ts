@@ -55,10 +55,20 @@ export interface ObjectPropertyInfo {
   hasCardinality: boolean;
   /** rdfs:comment from the ontology */
   comment?: string | null;
-  /** Domain class local name (rdfs:domain). Empty/null means owl:Thing. */
+  /**
+   * Domain class local name (rdfs:domain), or null/undefined when none is asserted.
+   * An asserted owl:Thing is reported through `hasGlobalDomain` instead, not here.
+   */
   domain?: string | null;
-  /** Range class local name (rdfs:range). Empty/null means owl:Thing. */
+  /** Range class local name (rdfs:range), or null/undefined when none is asserted. */
   range?: string | null;
+  /**
+   * True when rdfs:domain owl:Thing is asserted. Kept apart from an absent domain so that an
+   * ontology asserting the universal domain still says so after a load-and-save round trip.
+   */
+  hasGlobalDomain?: boolean;
+  /** True when rdfs:range owl:Thing is asserted. */
+  hasGlobalRange?: boolean;
   /** Full URI of the property (used to disambiguate when local name is shared, e.g. hasGeometry from GeoSPARQL vs DAnO). */
   uri?: string;
   /** rdfs:isDefinedBy (URI of defining ontology). Read-only in edit. */

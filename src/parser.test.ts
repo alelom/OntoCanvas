@@ -530,7 +530,9 @@ describe('addObjectPropertyToStore', () => {
     expect(name).toBe('references');
 
     const output = await storeToTurtle(store);
-    expect(output).toMatch(/:references\s+rdf:type\s+owl:ObjectProperty/);
+    // `a` is the Turtle shorthand for rdf:type, and rdflib switches to it for short subjects, so
+    // accept either spelling rather than pinning the serializer's layout heuristic.
+    expect(output).toMatch(/:references\s+(?:rdf:type|a)\s+owl:ObjectProperty/);
     expect(output).toMatch(/:hasCardinality\s+"false"/);
 
     const { objectProperties: afterProps } = await parseTtlToGraph(output);

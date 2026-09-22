@@ -1207,8 +1207,8 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     }
     const oldLabel = op.label;
     const oldComment = op.comment ?? '';
-    const oldDomain = op.domain ?? '';
-    const oldRange = op.range ?? '';
+    const oldDomain = op.domain ?? (op.hasGlobalDomain ? 'owl:Thing' : '');
+    const oldRange = op.range ?? (op.hasGlobalRange ? 'owl:Thing' : '');
     const oldSubPropertyOf = op.subPropertyOf ?? '';
     const oldDefinedBy = op.isDefinedBy ?? '';
     const labelChanged = oldLabel !== newLabel;
@@ -1254,8 +1254,10 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
       );
       const o = objectProperties.find((p) => p.name === effectiveType);
       if (o) {
-        o.domain = newDomain || undefined;
-        o.range = newRange || undefined;
+        o.hasGlobalDomain = newDomain === 'owl:Thing' || newDomain === 'Thing';
+        o.hasGlobalRange = newRange === 'owl:Thing' || newRange === 'Thing';
+        o.domain = o.hasGlobalDomain ? undefined : newDomain || undefined;
+        o.range = o.hasGlobalRange ? undefined : newRange || undefined;
       }
     }
     if (subPropertyOfChanged) {
@@ -1382,8 +1384,10 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   
   if (labelInput) labelInput.value = op?.label ?? type;
   if (commentInput) commentInput.value = op?.comment ?? '';
-  if (domainInput) domainInput.value = op?.domain ?? '';
-  if (rangeInput) rangeInput.value = op?.range ?? '';
+  // An asserted owl:Thing is shown as such, so the user can see it and delete it if they want the
+  // property to assert no domain. A blank field means the ontology asserts nothing.
+  if (domainInput) domainInput.value = op?.domain ?? (op?.hasGlobalDomain ? 'owl:Thing' : '');
+  if (rangeInput) rangeInput.value = op?.range ?? (op?.hasGlobalRange ? 'owl:Thing' : '');
   if (subPropertyOfInput) {
     const subUri = op?.subPropertyOf ?? '';
     if (subUri) {
