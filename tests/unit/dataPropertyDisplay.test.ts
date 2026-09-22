@@ -13,6 +13,8 @@ import {
   appliesToClass,
   XSD_NS,
   RDFS_NS,
+  XSD_RANGE_OPTIONS,
+  DATA_PROPERTY_RANGE_OPTIONS,
 } from '../../src/lib/dataPropertyDisplay';
 
 describe('formatRangeUri', () => {
@@ -131,5 +133,25 @@ describe('appliesToClass', () => {
     const dp = { domains: [], hasGlobalDomain: false };
     expect(appliesToClass(dp, 'Event')).toBe(false);
     expect(appliesToClass(dp, 'Concept')).toBe(false);
+  });
+});
+
+describe('range dropdown options', () => {
+  it('offers rdfs:Literal for a data property, which can assert "any literal" on purpose', () => {
+    expect(DATA_PROPERTY_RANGE_OPTIONS.map((o) => o.label)).toContain('rdfs:Literal');
+  });
+
+  it('keeps the XSD-only list free of it, so the annotation dropdowns are unchanged', () => {
+    expect(XSD_RANGE_OPTIONS.map((o) => o.label)).not.toContain('rdfs:Literal');
+    expect(XSD_RANGE_OPTIONS.every((o) => o.value.startsWith(XSD_NS))).toBe(true);
+  });
+
+  it('builds the data-property list from the XSD one, so they cannot drift apart', () => {
+    expect(DATA_PROPERTY_RANGE_OPTIONS.slice(0, XSD_RANGE_OPTIONS.length)).toEqual(XSD_RANGE_OPTIONS);
+    expect(DATA_PROPERTY_RANGE_OPTIONS).toHaveLength(XSD_RANGE_OPTIONS.length + 1);
+  });
+
+  it('still shortens rdfs:Literal on the canvas', () => {
+    expect(formatRangeUri(RDFS_NS + 'Literal')).toBe('rdfs:Literal');
   });
 });

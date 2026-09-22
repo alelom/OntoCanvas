@@ -12,8 +12,13 @@ import type { DataPropertyInfo } from '../types';
 export const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 export const RDFS_NS = 'http://www.w3.org/2000/01/rdf-schema#';
 
-/** Datatypes offered in the range dropdowns, and the short labels used on the canvas. */
-export const DATA_PROPERTY_RANGE_OPTIONS: { value: string; label: string }[] = [
+export interface RangeOption {
+  value: string;
+  label: string;
+}
+
+/** XSD datatypes offered wherever a range is chosen, and the short labels used on the canvas. */
+export const XSD_RANGE_OPTIONS: RangeOption[] = [
   { value: XSD_NS + 'string', label: 'xsd:string' },
   { value: XSD_NS + 'integer', label: 'xsd:integer' },
   { value: XSD_NS + 'decimal', label: 'xsd:decimal' },
@@ -21,6 +26,15 @@ export const DATA_PROPERTY_RANGE_OPTIONS: { value: string; label: string }[] = [
   { value: XSD_NS + 'date', label: 'xsd:date' },
   { value: XSD_NS + 'dateTime', label: 'xsd:dateTime' },
   { value: XSD_NS + 'anyURI', label: 'xsd:anyURI' },
+];
+
+/**
+ * Ranges offered for a *data* property. rdfs:Literal is on the list because OWL lets a datatype
+ * property state "any literal" on purpose, which is a different claim from stating nothing — the
+ * annotation-property dropdowns stay XSD-only.
+ */
+export const DATA_PROPERTY_RANGE_OPTIONS: RangeOption[] = [
+  ...XSD_RANGE_OPTIONS,
   { value: RDFS_NS + 'Literal', label: 'rdfs:Literal' },
 ];
 

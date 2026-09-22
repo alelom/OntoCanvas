@@ -196,6 +196,7 @@ import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type Annot
 import { readableTextColor } from './lib/textContrast';
 import {
   DATA_PROPERTY_RANGE_OPTIONS,
+  XSD_RANGE_OPTIONS,
   appliesToClass,
   describeRange,
   domainAttachment,
@@ -2565,11 +2566,11 @@ function showEditAnnotationPropertyModal(name: string): void {
     }
   }
   
-  // Populate range dropdown
+  // Populate range dropdown (XSD datatypes only - rdfs:Literal is a data-property range)
   if (rangeSel) {
     const rangeOptions = [
       { value: '', label: 'No range (untyped)' },
-      ...DATA_PROPERTY_RANGE_OPTIONS,
+      ...XSD_RANGE_OPTIONS,
     ];
     const currentRange = ap?.range ?? null;
     rangeSel.innerHTML = rangeOptions.map((opt) => 
@@ -2599,7 +2600,7 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
   if (rangeSel) {
     const rangeOptions = [
       { value: '', label: 'No range (untyped)' },
-      ...DATA_PROPERTY_RANGE_OPTIONS,
+      ...XSD_RANGE_OPTIONS,
     ];
     rangeSel.innerHTML = rangeOptions.map((opt) => 
       `<option value="${opt.value}">${opt.label}</option>`
