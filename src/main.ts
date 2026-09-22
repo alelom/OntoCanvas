@@ -198,6 +198,7 @@ import {
   describeRange,
   domainAttachment,
   UNATTACHED_DOMAIN_NOTE,
+  unattachedDataPropertyNodeId,
 } from './lib/dataPropertyDisplay';
 import { boundsOf, layoutUnattachedNodes } from './graph/unattachedDataPropertyLayout';
 import {
@@ -2055,6 +2056,11 @@ function initEditDataPropertyHandlers(): void {
     updateSaveButtonVisibility();
     dataProperties = getDataProperties(ttlStore);
     applyFilter(true);
+    // Deleting the last domain moves the property off its class and into the free-standing band,
+    // which is usually off-screen. Follow it there rather than leaving the user on an empty edit.
+    if (domainsChanged && domainAttachment(dataProperties.find((p) => p.name === name) ?? dp) === 'unattached') {
+      revealNodeInView(unattachedDataPropertyNodeId(name));
+    }
     const dataPropsContent = document.getElementById('dataPropsContent');
     if (dataPropsContent) initDataPropsMenu(dataPropsContent);
     document.getElementById('editDataPropertyModal')!.style.display = 'none';
@@ -2706,6 +2712,9 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
       const content = document.getElementById('dataPropsContent');
       if (content) initDataPropsMenu(content);
       applyFilter(true);
+      // The modal asks for no domain, so the property is always free-standing and lands below the
+      // class graph - outside the viewport applyFilter just restored. Show the user what they made.
+      revealNodeInView(unattachedDataPropertyNodeId(name));
       document.getElementById('addDataPropertyModal')!.style.display = 'none';
     }
   });
@@ -3509,7 +3518,7 @@ function buildNetworkData(
     entries.forEach((entry, i) => {
       const pos = positions[i];
       dataPropertyNodes.push({
-        id: `__dataprop__unattached__${entry.dp.name}`,
+        id: unattachedDataPropertyNodeId(entry.dp.name),
         label: wrapText(entry.label, wrapChars),
         shape: 'box',
         size: 15,
@@ -6932,6 +6941,33 @@ async function loadTtlAndRender(
     errorMsg.textContent = `Parse error: ${err instanceof Error ? err.message : String(err)}`;
     errorMsg.style.display = 'block';
   }
+}
+
+/**
+ * Bring a node into view, keeping the current zoom.
+ *
+ * `applyFilter(true)` deliberately restores the viewport the user was looking at, which is right for
+ * an edit but wrong for something just created off-screen: a data property with no rdfs:domain is
+ * placed in the free-standing band below the class graph, so on any non-trivial ontology the user
+ * confirms the dialog and sees nothing happen.
+ *
+ * applyFilter restores that viewport from a requestAnimationFrame callback, so the reveal is queued
+ * behind it: callbacks run in registration order, and applyFilter registered its own before
+ * returning. Moving the view synchronously here would just be undone a frame later.
+ */
+function revealNodeInView(nodeId: string): void {
+  requestAnimationFrame(() => {
+    if (!network) return;
+    const position = network.getPositions([nodeId])[nodeId];
+    if (!position) return;
+    network.moveTo({
+      position,
+      scale: network.getScale(),
+      animation: skipSlowOperationsForTests
+        ? false
+        : { duration: 400, easingFunction: 'easeInOutQuad' },
+    });
+  });
 }
 
 function applyFilter(preserveView = false): void {

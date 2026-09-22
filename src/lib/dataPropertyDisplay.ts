@@ -140,6 +140,14 @@ export function appliesToClass(
   return dp.domains.includes(classId);
 }
 
+/** Prefix of the graph node id used for a property drawn in the free-standing band. */
+export const UNATTACHED_NODE_ID_PREFIX = '__dataprop__unattached__';
+
+/** Graph node id of the free-standing node that stands for a domainless data property. */
+export function unattachedDataPropertyNodeId(propertyName: string): string {
+  return UNATTACHED_NODE_ID_PREFIX + propertyName;
+}
+
 /** Tooltip sentence explaining why an unattached property floats free of the class graph. */
 export const UNATTACHED_DOMAIN_NOTE =
   'No rdfs:domain asserted in this ontology, so this property is not attached to any class.';
