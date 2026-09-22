@@ -2137,13 +2137,18 @@ function findDataRestrictionBlank(
 
 /**
  * Add a data property restriction to a class (owl:Restriction with owl:onDataRange).
- * Uses the data property's declared range. Returns true on success.
+ *
+ * `onDataRange` is the data range this restriction already asserts, when there is one. A cardinality
+ * edit is implemented as remove-then-re-add, so without it the asserted datatype would be replaced
+ * by one derived from the property's rdfs:range — writing a type the document never stated.
+ * Returns true on success.
  */
 export function addDataPropertyRestrictionToClass(
   store: Store,
   classLocalName: string,
   dataPropName: string,
-  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
+  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null },
+  onDataRange?: string | null
 ): boolean {
   if (findDataRestrictionBlank(store, classLocalName, dataPropName)) return false;
   const dataProps = getDataProperties(store);
@@ -2151,7 +2156,7 @@ export function addDataPropertyRestrictionToClass(
   // owl:onDataRange is mandatory on a qualified restriction, so an unconstrained property has to
   // name some data range. rdfs:Literal is the honest one: it is the OWL meaning of "any literal".
   // Defaulting to xsd:string here would write a datatype the ontology never asserted into the file.
-  const rangeUri = dp?.range ?? RDFS + 'Literal';
+  const rangeUri = onDataRange ?? dp?.range ?? RDFS + 'Literal';
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   const classUri = getClassUriFromStore(store, classLocalName);
   const dataPropQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);

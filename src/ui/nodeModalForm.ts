@@ -154,10 +154,15 @@ export function applyNodeFormToStore(
   );
   for (const r of toRemove) removeDataPropertyRestrictionFromClass(store, nodeId, r.propertyName);
   for (const r of toAdd) {
+    // A cardinality change arrives here as a remove + an add of the same property. The data range
+    // the document asserted is on the entry we just removed, so carry it over rather than letting
+    // it be re-derived from the property's rdfs:range.
+    const asserted =
+      r.onDataRange ?? current.find((i) => i.propertyName === r.propertyName)?.onDataRange;
     addDataPropertyRestrictionToClass(store, nodeId, r.propertyName, {
       minCardinality: r.minCardinality ?? undefined,
       maxCardinality: r.maxCardinality ?? undefined,
-    });
+    }, asserted);
   }
   node.dataPropertyRestrictions = getDataPropertyRestrictionsForClass(store, nodeId);
 }

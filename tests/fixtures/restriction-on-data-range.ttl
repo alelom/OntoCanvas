@@ -1,0 +1,25 @@
+@prefix : <http://example.org/rodr#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/rodr> rdf:type owl:Ontology ;
+    rdfs:label "Restriction onDataRange fixture" .
+
+#### The property declares no rdfs:range — the class-level restriction is the only thing
+#### in the document that says what datatype it takes. ####
+:createdDate rdf:type owl:DatatypeProperty ;
+    rdfs:label "created date" .
+
+:untypedProp rdf:type owl:DatatypeProperty ;
+    rdfs:label "untyped prop" .
+
+:Entity rdf:type owl:Class ;
+    rdfs:label "Entity" ;
+    rdfs:subClassOf [
+        rdf:type owl:Restriction ;
+        owl:onProperty :createdDate ;
+        owl:onDataRange xsd:dateTime ;
+        owl:minCardinality 1
+    ] .

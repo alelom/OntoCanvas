@@ -874,7 +874,7 @@ function performDeleteSelection(): boolean {
     }
     
     dataPropUndoActions.push(() => {
-      addDataPropertyRestrictionToClass(ttlStore!, classId, propertyName, { minCardinality: oldMin ?? undefined, maxCardinality: oldMax ?? undefined });
+      addDataPropertyRestrictionToClass(ttlStore!, classId, propertyName, { minCardinality: oldMin ?? undefined, maxCardinality: oldMax ?? undefined }, restriction.onDataRange);
       const idx = rawData.nodes.findIndex((n) => n.id === classId);
       if (idx >= 0) {
         rawData.nodes[idx].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore!, classId);
@@ -5338,7 +5338,7 @@ function confirmEditEdge(): void {
     
     // Update the restriction in the store
     removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
-    addDataPropertyRestrictionToClass(ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined });
+    addDataPropertyRestrictionToClass(ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined }, restriction.onDataRange);
     
     // Update in rawData
     const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
