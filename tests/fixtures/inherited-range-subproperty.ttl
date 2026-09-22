@@ -1,0 +1,38 @@
+@prefix : <http://example.org/inherited#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Exercises the rdfs:subPropertyOf range inheritance, which resolves only within the loaded
+# document. :recordedAt inherits xsd:dateTime from :timestamp two levels up; :orphan has no
+# super-property at all and must stay rangeless.
+
+:Event rdf:type owl:Class ;
+    rdfs:label "Event" .
+
+:timestamp rdf:type owl:DatatypeProperty ;
+    rdfs:label "timestamp" ;
+    rdfs:range xsd:dateTime ;
+    rdfs:domain :Event .
+
+:loggedAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "loggedAt" ;
+    rdfs:subPropertyOf :timestamp ;
+    rdfs:domain :Event .
+
+:recordedAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "recordedAt" ;
+    rdfs:subPropertyOf :loggedAt ;
+    rdfs:domain :Event .
+
+:orphan rdf:type owl:DatatypeProperty ;
+    rdfs:label "orphan" ;
+    rdfs:domain :Event .
+
+# Super-property declared elsewhere: nothing in this document states its range, so no range may
+# be invented for :externallyTyped either.
+:externallyTyped rdf:type owl:DatatypeProperty ;
+    rdfs:label "externallyTyped" ;
+    rdfs:subPropertyOf <http://www.w3.org/ns/prov#generatedAtTime> ;
+    rdfs:domain :Event .

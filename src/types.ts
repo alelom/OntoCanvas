@@ -9,6 +9,12 @@ export interface DataPropertyRestriction {
   propertyName: string;
   minCardinality?: number | null;
   maxCardinality?: number | null;
+  /**
+   * Full URI of the owl:onDataRange asserted by this restriction. This is a datatype the document
+   * really does state for the property on this class, so it is shown even when the property itself
+   * declares no rdfs:range.
+   */
+  onDataRange?: string;
 }
 
 export interface GraphNode {
@@ -66,10 +72,28 @@ export interface DataPropertyInfo {
   label: string;
   /** rdfs:comment from the ontology */
   comment?: string | null;
-  /** Full URI of the datatype (e.g. http://www.w3.org/2001/XMLSchema#string) */
-  range: string;
-  /** Domain class local names (extracted from rdfs:domain). Empty array means owl:Thing (all classes). */
+  /**
+   * Full URI of the datatype asserted by rdfs:range (e.g. http://www.w3.org/2001/XMLSchema#string).
+   * `null` when the ontology asserts no range. Absence is never filled in with a default: a stub
+   * declared as a name only must stay distinguishable from a property that asserts xsd:string.
+   */
+  range: string | null;
+  /**
+   * Range this property inherits through rdfs:subPropertyOf from a super-property whose range is
+   * declared *in the same loaded document*. Only set when `range` is null. Never resolved by
+   * fetching external ontologies, which would make the view non-deterministic.
+   */
+  inheritedRange?: { range: string; from: string } | null;
+  /**
+   * Domain class local names asserted by rdfs:domain. Empty when the property is global
+   * (`hasGlobalDomain`) or when no domain is asserted at all — see `hasGlobalDomain` to tell those apart.
+   */
   domains: string[];
+  /**
+   * True when rdfs:domain owl:Thing is asserted, i.e. the property explicitly applies to every class.
+   * False with an empty `domains` means no domain was asserted, which is not the same claim.
+   */
+  hasGlobalDomain: boolean;
   /** Full URI of the property (for display and rename). */
   uri?: string;
   /** rdfs:isDefinedBy (URI of defining ontology). If set, label is read-only (imported). */

@@ -837,6 +837,7 @@ function buildParseResultFromStore(
         propertyName: propName,
         minCardinality: minCard ?? undefined,
         maxCardinality: maxCard ?? undefined,
+        onDataRange: (onDataRange.object as { value?: string }).value,
       });
     }
   }
@@ -850,8 +851,9 @@ function buildParseResultFromStore(
       const propQuads = store.getQuads(DataFactory.namedNode(propUri), null, null, null);
       let label = propName;
       let comment: string | undefined = undefined;
-      let range = XSD_NS + 'string';
+      let range: string | null = null;
       let domains: string[] = [];
+      let hasGlobalDomain = false;
       
       for (const q of propQuads) {
         const pred = (q.predicate as { value?: string }).value;
@@ -860,10 +862,12 @@ function buildParseResultFromStore(
         } else if (pred === RDFS + 'comment') {
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'range') {
-          range = (q.object as { value?: string }).value ?? XSD_NS + 'string';
+          range = (q.object as { value?: string }).value ?? null;
         } else if (pred === RDFS + 'domain') {
           const domainUri = (q.object as { value?: string }).value;
-          if (domainUri && domainUri !== OWL + 'Thing') {
+          if (domainUri === OWL + 'Thing') {
+            hasGlobalDomain = true;
+          } else if (domainUri) {
             const domainName = extractLocalName(domainUri);
             if (!domains.includes(domainName)) {
               domains.push(domainName);
@@ -895,7 +899,9 @@ function buildParseResultFromStore(
         label: String(label),
         comment,
         range,
+        inheritedRange: range ? null : findInheritedRange(store, propUri),
         domains,
+        hasGlobalDomain,
         uri: propUri,
         isDefinedBy,
       });
@@ -1012,27 +1018,31 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     const label = labelQuad?.object?.value ?? name;
     const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
+    // No rdfs:range means the ontology asserts no datatype. Record that as null rather than
+    // substituting a default, so a typing stub stays distinguishable from an asserted xsd:string.
     const rangeQuad = store.getQuads(subj, RDFS + 'range', null, null)[0];
     const range = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
       ? (rangeQuad.object as { value: string }).value
-      : XSD_NS + 'string';
+      : null;
     
     // Extract domain(s) - rdfs:domain can appear multiple times
     const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
     const domains: string[] = [];
+    let hasGlobalDomain = false;
     for (const domainQuad of domainQuads) {
       const domainUris = resolveDomainClassUris(store, domainQuad.object as RdfTerm);
       for (const domainUri of domainUris) {
-        // If domain is owl:Thing, it means all classes (empty array)
-        if (domainUri !== OWL_THING) {
-          const domainName = extractLocalName(domainUri);
-          if (!domains.includes(domainName)) {
-            domains.push(domainName);
-          }
+        // An asserted owl:Thing domain means "every class"; keep it apart from asserting nothing.
+        if (domainUri === OWL_THING) {
+          hasGlobalDomain = true;
+          continue;
+        }
+        const domainName = extractLocalName(domainUri);
+        if (!domains.includes(domainName)) {
+          domains.push(domainName);
         }
       }
     }
-    // If no explicit domain or only owl:Thing, domains array is empty (meaning all classes)
     const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
     const isDefinedBy =
       isDefinedByQuad?.object?.termType === 'NamedNode'
@@ -1043,12 +1053,45 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       label: String(label),
       comment: comment || undefined,
       range,
+      inheritedRange: range ? null : findInheritedRange(store, subjUri),
       domains,
+      hasGlobalDomain,
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined
     });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Walk rdfs:subPropertyOf upwards looking for a super-property that declares an rdfs:range
+ * *in this store*. External ontologies are never fetched, so the answer depends only on the
+ * loaded document. Returns null when no ancestor in the document declares a range.
+ */
+export function findInheritedRange(
+  store: Store,
+  propertyUri: string
+): { range: string; from: string } | null {
+  const seen = new Set<string>([propertyUri]);
+  let current = propertyUri;
+
+  // Cycles in subPropertyOf are legal RDF; `seen` keeps the walk finite.
+  for (;;) {
+    const parentQuad = store.getQuads(DataFactory.namedNode(current), RDFS + 'subPropertyOf', null, null)[0];
+    const parentUri = parentQuad?.object?.termType === 'NamedNode'
+      ? (parentQuad.object as { value: string }).value
+      : null;
+    if (!parentUri || seen.has(parentUri)) return null;
+    seen.add(parentUri);
+
+    const rangeQuad = store.getQuads(DataFactory.namedNode(parentUri), RDFS + 'range', null, null)[0];
+    const rangeUri = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
+      ? (rangeQuad.object as { value: string }).value
+      : null;
+    if (rangeUri) return { range: rangeUri, from: extractLocalName(parentUri) };
+
+    current = parentUri;
+  }
 }
 
 /**
@@ -1893,27 +1936,29 @@ export function updateDataPropertyIsDefinedByInStore(
 }
 
 /**
- * Update rdfs:range for a data property in the store (datatype URI).
+ * Update rdfs:range for a data property in the store.
+ * @param rangeUri Full datatype URI, or null to assert no range at all (removes the triple).
  */
 export function updateDataPropertyRangeInStore(
   store: Store,
   propertyName: string,
-  rangeUri: string
+  rangeUri: string | null
 ): boolean {
   const propUri = getDataPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
   const rangePred = DataFactory.namedNode(RDFS + 'range');
   const rangeQuads = store.getQuads(subject, rangePred, null, null);
-  if (rangeQuads.length === 0) return false;
-  const graph = rangeQuads[0]?.graph ?? DataFactory.defaultGraph();
+  const graph = rangeQuads[0]?.graph ?? store.getQuads(subject, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   for (const rq of rangeQuads) store.removeQuad(rq);
-  store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  if (rangeUri) {
+    store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  }
   return true;
 }
 
 /**
  * Update data property domains in the store.
- * If domains array is empty, sets domain to owl:Thing (all classes).
+ * An empty domains array asserts no domain at all (all rdfs:domain triples are removed).
  * Otherwise, removes all existing domain quads and adds new ones for each domain.
  */
 export function updateDataPropertyDomainsInStore(
@@ -1949,9 +1994,10 @@ export function updateDataPropertyDomainsInStore(
     store.removeQuad(dq);
   }
   
-  // If domains array is empty, add owl:Thing (default - all classes)
+  // An empty domain list means the property asserts no domain. Leave it that way rather than
+  // writing rdfs:domain owl:Thing, which would put a claim in the file the user never made.
   if (domains.length === 0) {
-    store.addQuad(subject, domainPred, DataFactory.namedNode(OWL + 'Thing'), graph);
+    return true;
   } else {
     // Add each domain
     for (const domainName of domains) {
@@ -2068,7 +2114,10 @@ export function addDataPropertyRestrictionToClass(
   if (findDataRestrictionBlank(store, classLocalName, dataPropName)) return false;
   const dataProps = getDataProperties(store);
   const dp = dataProps.find((p) => p.name === dataPropName);
-  const rangeUri = dp?.range ?? XSD_NS + 'string';
+  // owl:onDataRange is mandatory on a qualified restriction, so an unconstrained property has to
+  // name some data range. rdfs:Literal is the honest one: it is the OWL meaning of "any literal".
+  // Defaulting to xsd:string here would write a datatype the ontology never asserted into the file.
+  const rangeUri = dp?.range ?? RDFS + 'Literal';
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   const classUri = getClassUriFromStore(store, classLocalName);
   const dataPropQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
@@ -2146,6 +2195,7 @@ export function getDataPropertyRestrictionsForClass(
       propertyName: propName,
       minCardinality: minCard ?? undefined,
       maxCardinality: maxCard ?? undefined,
+      onDataRange: (onDataRange.object as { value?: string }).value,
     });
   }
   return result;

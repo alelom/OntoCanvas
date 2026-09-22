@@ -193,6 +193,14 @@ import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/
 import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
 import { readableTextColor } from './lib/textContrast';
 import {
+  DATA_PROPERTY_RANGE_OPTIONS,
+  appliesToClass,
+  describeRange,
+  domainAttachment,
+  UNATTACHED_DOMAIN_NOTE,
+} from './lib/dataPropertyDisplay';
+import { boundsOf, layoutUnattachedNodes } from './graph/unattachedDataPropertyLayout';
+import {
   initAnnotationPropsMenu,
   getAnnotationStyleConfig,
   applyAnnotationStyleConfigToDom,
@@ -1678,42 +1686,6 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
 }
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
-const DATA_PROPERTY_RANGE_OPTIONS: { value: string; label: string }[] = [
-  { value: XSD_NS + 'string', label: 'xsd:string' },
-  { value: XSD_NS + 'integer', label: 'xsd:integer' },
-  { value: XSD_NS + 'decimal', label: 'xsd:decimal' },
-  { value: XSD_NS + 'boolean', label: 'xsd:boolean' },
-  { value: XSD_NS + 'date', label: 'xsd:date' },
-  { value: XSD_NS + 'dateTime', label: 'xsd:dateTime' },
-  { value: XSD_NS + 'anyURI', label: 'xsd:anyURI' },
-];
-
-/**
- * Format a range URI to short format (e.g., "http://www.w3.org/2001/XMLSchema#string" → "xsd:string").
- * Uses DATA_PROPERTY_RANGE_OPTIONS for known URIs, otherwise extracts local name after '#'.
- */
-function formatRangeUri(rangeUri: string): string {
-  // Check if it's in the known options
-  const knownOption = DATA_PROPERTY_RANGE_OPTIONS.find((opt) => opt.value === rangeUri);
-  if (knownOption) {
-    return knownOption.label;
-  }
-  
-  // Extract local name after '#'
-  const hashIndex = rangeUri.indexOf('#');
-  if (hashIndex !== -1 && hashIndex < rangeUri.length - 1) {
-    const localName = rangeUri.substring(hashIndex + 1);
-    // Try to detect namespace prefix
-    if (rangeUri.startsWith(XSD_NS)) {
-      return `xsd:${localName}`;
-    }
-    // For other namespaces, just return the local name
-    return localName;
-  }
-  
-  // Fallback: return as-is if no '#' found
-  return rangeUri;
-}
 
 function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
@@ -1729,9 +1701,11 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     const propDisplayName = formatPropName(dp);
+    const rangeDisplay = describeRange(dp);
+    const rangeStyle = rangeDisplay.source === 'asserted' ? 'color: #666;' : 'color: #999; font-style: italic;';
     row.innerHTML = `
       <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${propDisplayName}</span>
-      <span style="font-size: 11px; color: #666;">${dp.range.includes('string') ? 'string' : dp.range.includes('integer') ? 'integer' : dp.range.split('#').pop() ?? dp.range}</span>
+      <span style="font-size: 11px; ${rangeStyle}" title="${rangeDisplay.tooltipNote}">${rangeDisplay.menuLabel}</span>
       <button type="button" class="data-prop-edit-btn" data-name="${dp.name}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
       <button type="button" class="data-prop-delete-btn" data-name="${dp.name}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
     `;
@@ -2017,7 +1991,8 @@ function initEditDataPropertyHandlers(): void {
     const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
-    const newRange = rangeSel?.value ?? XSD_NS + 'string';
+    // The empty option is "No range asserted", which must stay null rather than becoming a datatype.
+    const newRange = rangeSel?.value ? rangeSel.value : null;
     const newDefinedBy = definedByInput?.value?.trim() ?? null;
     if (!ttlStore) return;
     let dp = dataProperties.find((p) => p.name === name);
@@ -2154,7 +2129,7 @@ function initEditDataPropertyHandlers(): void {
           dp.domains = [];
         }
         dp.domains.push(className);
-        renderDomainsList(domainsListEl, dp.domains);
+        renderDomainsList(domainsListEl, dp.domains, dp.hasGlobalDomain);
       }
       wrapper.remove();
     });
@@ -2168,18 +2143,22 @@ function initEditDataPropertyHandlers(): void {
   });
 }
 
-function renderDomainsList(domainsListEl: HTMLElement, domains: string[]): void {
+/**
+ * Render the domain list of a data property. An asserted `rdfs:domain owl:Thing` and no asserted
+ * domain at all are different facts, so they get different rows rather than both showing owl:Thing.
+ */
+function renderDomainsList(domainsListEl: HTMLElement, domains: string[], hasGlobalDomain = false): void {
   domainsListEl.innerHTML = '';
   
-  // If no custom domains, show owl:Thing (cannot be deleted)
   if (domains.length === 0) {
-    const thingItem = document.createElement('div');
-    thingItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 4px;';
-    thingItem.innerHTML = `
-      <span style="font-size: 11px; font-family: Consolas, monospace;">owl:Thing</span>
-      <span style="font-size: 10px; color: #999;">(default - all classes)</span>
-    `;
-    domainsListEl.appendChild(thingItem);
+    const emptyItem = document.createElement('div');
+    emptyItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 4px;';
+    emptyItem.innerHTML = hasGlobalDomain
+      ? `<span style="font-size: 11px; font-family: Consolas, monospace;">owl:Thing</span>
+         <span style="font-size: 10px; color: #999;">(asserted - all classes)</span>`
+      : `<span style="font-size: 11px; color: #999; font-style: italic;">No domain asserted</span>
+         <span style="font-size: 10px; color: #999;">(not attached to any class)</span>`;
+    domainsListEl.appendChild(emptyItem);
   } else {
     // Show custom domains with delete buttons
     domains.forEach((domainName) => {
@@ -2207,7 +2186,7 @@ function renderDomainsList(domainsListEl: HTMLElement, domains: string[]): void 
       dp.domains = newDomains;
       
       // Re-render list
-      renderDomainsList(domainsListEl, newDomains);
+      renderDomainsList(domainsListEl, newDomains, dp.hasGlobalDomain);
     });
   });
 }
@@ -2336,18 +2315,21 @@ function showEditDataPropertyModal(name: string): void {
     commentInput.style.opacity = isImported ? '0.5' : '1';
     commentInput.title = isImported ? 'Comment cannot be changed for imported properties.' : '';
   }
-  const rangeOptions = [...DATA_PROPERTY_RANGE_OPTIONS];
+  // "No range asserted" must be selectable, otherwise opening the modal on a typing stub silently
+  // pre-selects xsd:string and saving writes a datatype the ontology never declared.
+  const rangeOptions = [{ value: '', label: 'No range asserted' }, ...DATA_PROPERTY_RANGE_OPTIONS];
   if (dp?.range && !rangeOptions.some((o) => o.value === dp.range)) {
     rangeOptions.push({ value: dp.range, label: dp.range.includes('#') ? dp.range.split('#').pop()! : dp.range });
   }
-  rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${dp?.range === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
+  const selectedRange = dp?.range ?? '';
+  rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${selectedRange === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
   rangeSel.disabled = isImported;
   rangeSel.style.opacity = isImported ? '0.5' : '1';
   rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
   const originalDomains = dp ? [...(dp.domains || [])] : [];
   (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
   if (domainsListEl && dp) {
-    renderDomainsList(domainsListEl, dp.domains || []);
+    renderDomainsList(domainsListEl, dp.domains || [], dp.hasGlobalDomain);
   }
   updateEditDataPropIdentifierAndValidation();
   modal.style.display = 'flex';
@@ -3183,8 +3165,10 @@ function buildNetworkData(
   const dataPropertyNodes: Array<Record<string, unknown>> = [];
   const dataPropertyEdges: Array<Record<string, unknown>> = [];
   
-  // Track which data properties are already displayed as restrictions
+  // Track which data properties are already displayed as restrictions, keyed by class and by
+  // property name on its own (a property placed by any restriction is not floating).
   const displayedAsRestriction = new Set<string>();
+  const restrictedPropertyNames = new Set<string>();
   
   // Calculate node dimensions for proper positioning
   const nodeDimensionsMap = new Map<string, { width: number; height: number }>();
@@ -3201,7 +3185,7 @@ function buildNetworkData(
   });
   
   // Group data properties by their parent class node for better layout
-  const dataPropsByClass = new Map<string, Array<{ id: string; label: string; isRestriction: boolean; propertyName: string }>>();
+  const dataPropsByClass = new Map<string, Array<{ id: string; label: string; isRestriction: boolean; propertyName: string; onDataRange?: string }>>();
   
   // First, collect all data property restrictions
   filteredNodes.forEach((n) => {
@@ -3219,22 +3203,28 @@ function buildNetworkData(
             : '';
         const dataPropNodeId = `__dataproprestrict__${n.id}__${restriction.propertyName}`;
         displayedAsRestriction.add(`${n.id}__${restriction.propertyName}`);
+        restrictedPropertyNames.add(restriction.propertyName);
         dataPropsByClass.get(n.id)!.push({
           id: dataPropNodeId,
           label: label + cardLabel,
           isRestriction: true,
           propertyName: restriction.propertyName,
+          onDataRange: restriction.onDataRange,
         });
       });
     }
   });
   
-  // Then, collect generic data properties
+  // Then, collect generic data properties. Properties that assert no rdfs:domain are not attached
+  // to any class here; they are drawn free-standing further below, unless a restriction already
+  // puts them on a class — that restriction is an assertion, so the node is not floating.
+  const unattachedDataProps = dataProperties.filter(
+    (dp) => domainAttachment(dp) === 'unattached' && !restrictedPropertyNames.has(dp.name)
+  );
   dataProperties.forEach((dp) => {
     filteredNodes.forEach((n) => {
       if (displayedAsRestriction.has(`${n.id}__${dp.name}`)) return;
-      const shouldDisplay = dp.domains.length === 0 || dp.domains.includes(n.id);
-      if (!shouldDisplay) return;
+      if (!appliesToClass(dp, n.id)) return;
       
       if (!dataPropsByClass.has(n.id)) {
         dataPropsByClass.set(n.id, []);
@@ -3368,8 +3358,8 @@ function buildNetworkData(
       
       const dp = dataProperties.find((p) => p.name === dataProp.propertyName);
       
-      // Format the range URI to short format (e.g., "xsd:string")
-      const rangeLabel = dp?.range ? formatRangeUri(dp.range) : 'xsd:string';
+      // An unasserted rdfs:range contributes no suffix, so it cannot be read as a declared datatype.
+      const rangeDisplay = describeRange(dp, dataProp.onDataRange);
       
       // Check if data property is imported and get its opacity
       // Use isDefinedBy if present, otherwise check if URI belongs to external ontology
@@ -3407,10 +3397,13 @@ function buildNetworkData(
       const dataPropDisplayLabel = dataPropPrefix ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
       
       // Format the node label as "prefix:property label (datatype)" - e.g., "dpbase:createdDate (xsd:dateTime)"
-      const nodeLabel = `${dataPropDisplayLabel} (${rangeLabel})`;
+      const nodeLabel = `${dataPropDisplayLabel}${rangeDisplay.labelSuffix}`;
       
       // Build tooltip: include comment if present, and add import hint if imported
       let tooltip = dp?.comment || '';
+      if (rangeDisplay.source !== 'asserted') {
+        tooltip = tooltip ? `${tooltip}\n\n${rangeDisplay.tooltipNote}` : rangeDisplay.tooltipNote;
+      }
       if (isDataPropImported && definingOntologyUrl) {
         const importHint = `(Imported from ${definingOntologyUrl})`;
         tooltip = tooltip ? `${tooltip}\n\n${importHint}` : importHint;
@@ -3485,7 +3478,46 @@ function buildNetworkData(
       }
     });
   });
-  
+
+  // Data properties that assert no rdfs:domain belong to no class, so they get their own band below
+  // the graph with no edge to anything. Drawing them on a class would state a domain the ontology
+  // never asserted - which is how a domainless property used to end up hanging off skos:Concept.
+  if (unattachedDataProps.length > 0) {
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const entries = unattachedDataProps.map((dp) => {
+      const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
+      const rangeDisplay = describeRange(dp);
+      const label = `${prefix ? `${prefix}:${dp.label}` : dp.label}${rangeDisplay.labelSuffix}`;
+      const notes = [rangeDisplay.source === 'asserted' ? null : rangeDisplay.tooltipNote, UNATTACHED_DOMAIN_NOTE];
+      const tooltip = [dp.comment || null, ...notes].filter(Boolean).join('\n\n');
+      return { dp, label, tooltip };
+    });
+
+    const classPositions = filteredNodes
+      .map((n) => (n.x != null && n.y != null ? { x: n.x, y: n.y } : nodePositions[n.id]))
+      .filter((p): p is { x: number; y: number } => !!p);
+    const widths = entries.map((e) => Math.max(60, e.label.length * dataPropertyFontSize * 0.62 + 38));
+    const positions = layoutUnattachedNodes(widths, boundsOf(classPositions));
+
+    entries.forEach((entry, i) => {
+      const pos = positions[i];
+      dataPropertyNodes.push({
+        id: `__dataprop__unattached__${entry.dp.name}`,
+        label: wrapText(entry.label, wrapChars),
+        shape: 'box',
+        size: 15,
+        color: { background: DATA_PROPERTY_FILL, border: '#4a90a4' },
+        font: { size: dataPropertyFontSize, color: readableTextColor(DATA_PROPERTY_FILL) },
+        margin: 4,
+        physics: false,
+        // Dashed border marks these as unattached, matching the absence of a connecting edge.
+        shapeProperties: { borderDashes: [4, 3] },
+        x: pos.x,
+        y: pos.y,
+        ...(entry.tooltip && { title: entry.tooltip }),
+      });
+    });
+  }
 
   // Debug: Check describes edges before mapping to vis-network format (only if they exist)
   const describesEdgesBeforeMapping = filteredEdges.filter((e) => 
