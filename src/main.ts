@@ -106,6 +106,7 @@ import {
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
+  getFreeStandingNodeSearchOpacity,
   getEdgeSearchOpacity,
 } from './lib/searchHighlight';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
@@ -3504,9 +3505,22 @@ function buildNetworkData(
       const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
       const rangeDisplay = describeRange(dp);
       const label = `${prefix ? `${prefix}:${dp.label}` : dp.label}${rangeDisplay.labelSuffix}`;
-      const notes = [rangeDisplay.source === 'asserted' ? null : rangeDisplay.tooltipNote, UNATTACHED_DOMAIN_NOTE];
+      const definingOntologyUrl = dp.isDefinedBy || (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
+      const isImported = isUriFromExternalOntology(dp.uri, dp.isDefinedBy ?? null, externalOntologyReferences, mainBase);
+      const notes = [
+        rangeDisplay.source === 'asserted' ? null : rangeDisplay.tooltipNote,
+        UNATTACHED_DOMAIN_NOTE,
+        isImported && definingOntologyUrl ? `(Imported from ${definingOntologyUrl})` : null,
+      ];
       const tooltip = [dp.comment || null, ...notes].filter(Boolean).join('\n\n');
-      return { dp, label, tooltip };
+      // These nodes stand outside the class graph, so they have no class to take a search category
+      // or an external-ontology fade from - both have to be resolved from the property itself.
+      const importedOpacity = isImported
+        ? getOpacityForExternalOntology(definingOntologyUrl, externalOntologyReferences)
+        : 1.0;
+      const opacity =
+        getFreeStandingNodeSearchOpacity(dp.name, label, searchQuery, filter.exactMatch) * importedOpacity;
+      return { dp, label, tooltip, opacity };
     });
 
     const classPositions = filteredNodes
@@ -3517,19 +3531,29 @@ function buildNetworkData(
 
     entries.forEach((entry, i) => {
       const pos = positions[i];
+      const faded = entry.opacity < 1.0;
       dataPropertyNodes.push({
         id: unattachedDataPropertyNodeId(entry.dp.name),
         label: wrapText(entry.label, wrapChars),
         shape: 'box',
         size: 15,
-        color: { background: DATA_PROPERTY_FILL, border: '#4a90a4' },
-        font: { size: dataPropertyFontSize, color: readableTextColor(DATA_PROPERTY_FILL) },
+        color: {
+          background: faded ? applyOpacityToColor(DATA_PROPERTY_FILL, entry.opacity) : DATA_PROPERTY_FILL,
+          border: faded ? applyOpacityToColor('#4a90a4', entry.opacity) : '#4a90a4',
+        },
+        font: {
+          size: dataPropertyFontSize,
+          color: faded
+            ? applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: entry.opacity }), entry.opacity)
+            : readableTextColor(DATA_PROPERTY_FILL),
+        },
         margin: 4,
         physics: false,
         // Dashed border marks these as unattached, matching the absence of a connecting edge.
         shapeProperties: { borderDashes: [4, 3] },
         x: pos.x,
         y: pos.y,
+        ...(faded && { opacity: entry.opacity }),
         ...(entry.tooltip && { title: entry.tooltip }),
       });
     });

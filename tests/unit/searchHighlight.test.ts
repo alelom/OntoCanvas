@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeSearchSets,
   getNodeSearchOpacity,
+  getFreeStandingNodeSearchOpacity,
   getEdgeSearchOpacity,
   OPACITY_MATCH,
   OPACITY_RELATED,
@@ -168,5 +169,30 @@ describe('empty query', () => {
     expect(sets.matchingNodeIds.size).toBe(0);
     expect(sets.neighborNodeIds.size).toBe(0);
     expect(sets.matchingEdgeIds.size).toBe(0);
+  });
+});
+
+describe('free-standing nodes (data properties with no rdfs:domain)', () => {
+  it('is fully opaque when no search is active', () => {
+    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate (xsd:dateTime)', '')).toBe(OPACITY_MATCH);
+    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate (xsd:dateTime)', '   ')).toBe(OPACITY_MATCH);
+  });
+
+  it('is judged on its own name, not inherited from a class', () => {
+    expect(getFreeStandingNodeSearchOpacity('createdDate', 'prov:createdDate', 'created')).toBe(OPACITY_MATCH);
+    expect(getFreeStandingNodeSearchOpacity('createdDate', 'prov:createdDate', 'Sheet')).toBe(OPACITY_DIM);
+  });
+
+  it('dims a non-match rather than leaving it the brightest thing on the canvas', () => {
+    // The whole point: with a query active, an unmatched free-standing node must dim like any
+    // unmatched class, not stay at full opacity while the classes around it fade.
+    const unmatched = getFreeStandingNodeSearchOpacity('generatedAtTime', 'prov:generatedAtTime', 'Drawing');
+    const unmatchedClass = getNodeSearchOpacity('SomeClass', new Set(['Drawing']), new Set());
+    expect(unmatched).toBe(unmatchedClass);
+  });
+
+  it('honours exact-match mode', () => {
+    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate', 'created', true)).toBe(OPACITY_DIM);
+    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate', 'createdDate', true)).toBe(OPACITY_MATCH);
   });
 });
