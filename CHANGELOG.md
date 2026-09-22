@@ -1,3 +1,22 @@
+## [1.18.1](https://github.com/alelom/OntoCanvas/compare/v1.18.0...v1.18.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* a blank domain or range field asserts nothing, not owl:Thing ([61143fd](https://github.com/alelom/OntoCanvas/commit/61143fd453e7ac8cf2d8a4e93ae201cc93d84b70))
+* a cardinality edit keeps the data range the restriction asserts ([e05e20d](https://github.com/alelom/OntoCanvas/commit/e05e20ddcaa5105a8b8132494638f6afed6177e7))
+* a new data property asserts only what the user chose ([12dce4e](https://github.com/alelom/OntoCanvas/commit/12dce4e9950b6ea0cdfde83c054399422e55b0ce))
+* an empty candidate list never yields an undefined label colour ([aef07af](https://github.com/alelom/OntoCanvas/commit/aef07afa229479934600a2124f24339cb3efdc6c))
+* derive node label colour from the fill so labels stay legible ([b1b0809](https://github.com/alelom/OntoCanvas/commit/b1b08093b8abcc9885deee2ccce662451cc5c4ab)), closes [#2c3e50](https://github.com/alelom/OntoCanvas/issues/2c3e50) [#23](https://github.com/alelom/OntoCanvas/issues/23)
+* do not assert a range on a data property the ontology does not have ([dc24f9d](https://github.com/alelom/OntoCanvas/commit/dc24f9d38863492d0b7b7bf86f7489cbd39057de))
+* free-standing data properties fade with the rest of the graph ([a826ef5](https://github.com/alelom/OntoCanvas/commit/a826ef5768c0cd380e3c276a70a4c5ed8b4730f5))
+* keep rdfs:Literal out of the annotation-property range dropdowns ([d1600f1](https://github.com/alelom/OntoCanvas/commit/d1600f151123af2f133ba2d90c81754ad3a311be))
+* lay the free-standing band out from the label as it is drawn ([ed3ac9d](https://github.com/alelom/OntoCanvas/commit/ed3ac9dd216c226f87755a32c9fbc867ca719aeb))
+* never show an rdfs:range or rdfs:domain the ontology does not assert ([35c2f67](https://github.com/alelom/OntoCanvas/commit/35c2f6717cff5814d3d1f5483c37ff9be908680e)), closes [#25](https://github.com/alelom/OntoCanvas/issues/25)
+* recognise every spelling of owl:Thing in the domain and range fields ([c19682f](https://github.com/alelom/OntoCanvas/commit/c19682fbd1fe1ddf6a2084e78dc967211932ac2d)), closes [owl#Thing](https://github.com/owl/issues/Thing)
+* saving no longer duplicates subjects written with a named prefix ([c21f991](https://github.com/alelom/OntoCanvas/commit/c21f9910b26aa35462ea9684943737bdc3468833))
+* show the user the data property they just created ([4f353c3](https://github.com/alelom/OntoCanvas/commit/4f353c3831f876323575cc80101d7594c0f37b25))
+
 # [1.18.0](https://github.com/alelom/OntoCanvas/compare/v1.17.0...v1.18.0) (2026-07-09)
 
 
