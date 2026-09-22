@@ -115,6 +115,14 @@ describe('readableTextColor', () => {
     expect(readableTextColor('#ffffff', { candidates: ['#111111', '#222222'] })).toBe('#111111');
   });
 
+  it('treats an empty candidate list as no preference, not as a colour', () => {
+    // The readonly string[] signature admits [], and the result goes straight to vis-network as
+    // font.color - so it must never be undefined.
+    expect(readableTextColor('#ffffff', { candidates: [] })).toBe(readableTextColor('#ffffff'));
+    expect(readableTextColor('nonsense', { candidates: [] })).toBe(NODE_LABEL_DARK);
+    expect(readableTextColor('#16a085', { candidates: [] })).toBe('#000000');
+  });
+
   it('escalates to pure black on mid-tones the house slate cannot clear', () => {
     expect(readableTextColor('#16a085')).toBe('#000000');
     expect(readableTextColor('#95a5a6')).toBe('#000000');

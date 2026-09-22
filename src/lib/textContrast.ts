@@ -84,7 +84,10 @@ export interface ReadableTextColorOptions {
   opacity?: number;
   /** Colour the node is drawn on top of. Defaults to the graph canvas colour. */
   canvasBackground?: string;
-  /** Candidate label colours, tried in order; the highest-contrast one wins. Disables escalation. */
+  /**
+   * Candidate label colours, tried in order; the highest-contrast one wins. Disables escalation.
+   * An empty list expresses no preference and behaves as if the option were not given.
+   */
   candidates?: readonly string[];
 }
 
@@ -113,9 +116,13 @@ export function readableTextColor(background: string, options: ReadableTextColor
   const canvas = options.canvasBackground ?? CANVAS_BACKGROUND;
   const effective = blendOverBackground(background, options.opacity ?? 1, canvas);
 
-  if (options.candidates) {
-    if (!effective) return options.candidates[0];
-    return pickBest(options.candidates, rgbToCss(effective)).color;
+  // An empty list expresses no preference, so it falls through to the house colours rather than
+  // returning the missing first element - the result is handed straight to vis-network as
+  // font.color and must never be undefined.
+  const candidates = options.candidates?.length ? options.candidates : null;
+  if (candidates) {
+    if (!effective) return candidates[0];
+    return pickBest(candidates, rgbToCss(effective)).color;
   }
   if (!effective) return NODE_LABEL_DARK;
 
