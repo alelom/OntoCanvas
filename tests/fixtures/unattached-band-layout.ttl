@@ -1,0 +1,41 @@
+@prefix : <http://example.org/band#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/band> rdf:type owl:Ontology ;
+    rdfs:label "Unattached band layout fixture" .
+
+:Anchor rdf:type owl:Class ;
+    rdfs:label "Anchor" .
+
+#### Long labels with no rdfs:domain: they wrap to several lines and fill more than one band row. ####
+:measuredOverallLengthInMillimetres rdf:type owl:DatatypeProperty ;
+    rdfs:label "measured overall length in millimetres" .
+
+:recordedConstructionSequenceIdentifier rdf:type owl:DatatypeProperty ;
+    rdfs:label "recorded construction sequence identifier" .
+
+:approvedRevisionIssueDescription rdf:type owl:DatatypeProperty ;
+    rdfs:label "approved revision issue description" .
+
+:estimatedRemainingServiceLifeYears rdf:type owl:DatatypeProperty ;
+    rdfs:label "estimated remaining service life years" .
+
+:nominalReinforcementCoverDepth rdf:type owl:DatatypeProperty ;
+    rdfs:label "nominal reinforcement cover depth" .
+
+:surveyedSettingOutCoordinateReference rdf:type owl:DatatypeProperty ;
+    rdfs:label "surveyed setting out coordinate reference" .
+
+:certifiedFireResistanceDuration rdf:type owl:DatatypeProperty ;
+    rdfs:label "certified fire resistance duration" .
+
+:declaredThermalTransmittanceValue rdf:type owl:DatatypeProperty ;
+    rdfs:label "declared thermal transmittance value" .
+
+:assignedMaintenanceResponsibilityParty rdf:type owl:DatatypeProperty ;
+    rdfs:label "assigned maintenance responsibility party" .
+
+:observedSurfaceDefectClassification rdf:type owl:DatatypeProperty ;
+    rdfs:label "observed surface defect classification" .

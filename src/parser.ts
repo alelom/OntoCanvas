@@ -6,6 +6,7 @@ import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPro
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
+import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
 import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
@@ -183,13 +184,19 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
     const rangeQuads = store.getQuads(subj, DataFactory.namedNode(RDFS + 'range'), null, null);
     let domain: string | null = null;
     let range: string | null = null;
+    // An asserted owl:Thing is recorded as such, not folded into "no domain"; otherwise a file
+    // that states the universal domain loses that statement on the next save.
+    let hasGlobalDomain = false;
+    let hasGlobalRange = false;
     if (domainQuads.length > 0 && domainQuads[0].object.termType === 'NamedNode') {
       const domainUri = (domainQuads[0].object as { value: string }).value;
-      if (domainUri !== OWL_THING) domain = extractLocalName(domainUri);
+      if (domainUri === OWL_THING) hasGlobalDomain = true;
+      else domain = extractLocalName(domainUri);
     }
     if (rangeQuads.length > 0 && rangeQuads[0].object.termType === 'NamedNode') {
       const rangeUri = (rangeQuads[0].object as { value: string }).value;
-      if (rangeUri !== OWL_THING) range = extractLocalName(rangeUri);
+      if (rangeUri === OWL_THING) hasGlobalRange = true;
+      else range = extractLocalName(rangeUri);
     }
     const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
     const subPropertyOfQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'subPropertyOf'), null, null)[0];
@@ -204,6 +211,8 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
       comment: comment || undefined,
       domain: domain ?? undefined,
       range: range ?? undefined,
+      hasGlobalDomain,
+      hasGlobalRange,
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
       subPropertyOf: subPropertyOf ?? undefined
@@ -837,6 +846,7 @@ function buildParseResultFromStore(
         propertyName: propName,
         minCardinality: minCard ?? undefined,
         maxCardinality: maxCard ?? undefined,
+        onDataRange: (onDataRange.object as { value?: string }).value,
       });
     }
   }
@@ -850,8 +860,9 @@ function buildParseResultFromStore(
       const propQuads = store.getQuads(DataFactory.namedNode(propUri), null, null, null);
       let label = propName;
       let comment: string | undefined = undefined;
-      let range = XSD_NS + 'string';
+      let range: string | null = null;
       let domains: string[] = [];
+      let hasGlobalDomain = false;
       
       for (const q of propQuads) {
         const pred = (q.predicate as { value?: string }).value;
@@ -860,10 +871,12 @@ function buildParseResultFromStore(
         } else if (pred === RDFS + 'comment') {
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'range') {
-          range = (q.object as { value?: string }).value ?? XSD_NS + 'string';
+          range = (q.object as { value?: string }).value ?? null;
         } else if (pred === RDFS + 'domain') {
           const domainUri = (q.object as { value?: string }).value;
-          if (domainUri && domainUri !== OWL + 'Thing') {
+          if (domainUri === OWL + 'Thing') {
+            hasGlobalDomain = true;
+          } else if (domainUri) {
             const domainName = extractLocalName(domainUri);
             if (!domains.includes(domainName)) {
               domains.push(domainName);
@@ -895,7 +908,9 @@ function buildParseResultFromStore(
         label: String(label),
         comment,
         range,
+        inheritedRange: range ? null : findInheritedRange(store, propUri),
         domains,
+        hasGlobalDomain,
         uri: propUri,
         isDefinedBy,
       });
@@ -1012,27 +1027,31 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     const label = labelQuad?.object?.value ?? name;
     const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
+    // No rdfs:range means the ontology asserts no datatype. Record that as null rather than
+    // substituting a default, so a typing stub stays distinguishable from an asserted xsd:string.
     const rangeQuad = store.getQuads(subj, RDFS + 'range', null, null)[0];
     const range = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
       ? (rangeQuad.object as { value: string }).value
-      : XSD_NS + 'string';
+      : null;
     
     // Extract domain(s) - rdfs:domain can appear multiple times
     const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
     const domains: string[] = [];
+    let hasGlobalDomain = false;
     for (const domainQuad of domainQuads) {
       const domainUris = resolveDomainClassUris(store, domainQuad.object as RdfTerm);
       for (const domainUri of domainUris) {
-        // If domain is owl:Thing, it means all classes (empty array)
-        if (domainUri !== OWL_THING) {
-          const domainName = extractLocalName(domainUri);
-          if (!domains.includes(domainName)) {
-            domains.push(domainName);
-          }
+        // An asserted owl:Thing domain means "every class"; keep it apart from asserting nothing.
+        if (domainUri === OWL_THING) {
+          hasGlobalDomain = true;
+          continue;
+        }
+        const domainName = extractLocalName(domainUri);
+        if (!domains.includes(domainName)) {
+          domains.push(domainName);
         }
       }
     }
-    // If no explicit domain or only owl:Thing, domains array is empty (meaning all classes)
     const isDefinedByQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'isDefinedBy'), null, null)[0];
     const isDefinedBy =
       isDefinedByQuad?.object?.termType === 'NamedNode'
@@ -1043,12 +1062,45 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       label: String(label),
       comment: comment || undefined,
       range,
+      inheritedRange: range ? null : findInheritedRange(store, subjUri),
       domains,
+      hasGlobalDomain,
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined
     });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Walk rdfs:subPropertyOf upwards looking for a super-property that declares an rdfs:range
+ * *in this store*. External ontologies are never fetched, so the answer depends only on the
+ * loaded document. Returns null when no ancestor in the document declares a range.
+ */
+export function findInheritedRange(
+  store: Store,
+  propertyUri: string
+): { range: string; from: string } | null {
+  const seen = new Set<string>([propertyUri]);
+  let current = propertyUri;
+
+  // Cycles in subPropertyOf are legal RDF; `seen` keeps the walk finite.
+  for (;;) {
+    const parentQuad = store.getQuads(DataFactory.namedNode(current), RDFS + 'subPropertyOf', null, null)[0];
+    const parentUri = parentQuad?.object?.termType === 'NamedNode'
+      ? (parentQuad.object as { value: string }).value
+      : null;
+    if (!parentUri || seen.has(parentUri)) return null;
+    seen.add(parentUri);
+
+    const rangeQuad = store.getQuads(DataFactory.namedNode(parentUri), RDFS + 'range', null, null)[0];
+    const rangeUri = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
+      ? (rangeQuad.object as { value: string }).value
+      : null;
+    if (rangeUri) return { range: rangeUri, from: extractLocalName(parentUri) };
+
+    current = parentUri;
+  }
 }
 
 /**
@@ -1445,13 +1497,20 @@ export function addObjectPropertyToStore(
   const subjUri = base + name;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
-  const OWL_THING_URI = OWL + 'Thing';
-  const domainUri = (options?.domain?.trim() ?? '') ? resolveClassUri(store, options!.domain!.trim()) : OWL_THING_URI;
-  const rangeUri = (options?.range?.trim() ?? '') ? resolveClassUri(store, options!.range!.trim()) : OWL_THING_URI;
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'ObjectProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(domainUri), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri), graph);
+  // A domain or range is written only when one was given. A blank field asserts nothing, and
+  // filling it with owl:Thing would put a claim in the file the author never made.
+  const domainInput = options?.domain?.trim() ?? '';
+  const rangeInput = options?.range?.trim() ?? '';
+  if (domainInput) {
+    const domainUri = namesOwlThing(domainInput) ? OWL_THING_URI : resolveClassUri(store, domainInput);
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(domainUri), graph);
+  }
+  if (rangeInput) {
+    const rangeUri = namesOwlThing(rangeInput) ? OWL_THING_URI : resolveClassUri(store, rangeInput);
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri), graph);
+  }
   store.addQuad(
     subject,
     DataFactory.namedNode(HAS_CARDINALITY_PROP),
@@ -1537,8 +1596,19 @@ function resolveClassUri(store: Store, localName: string): string {
 }
 
 /**
+ * Whether the user typed owl:Thing (in any of the forms the class field accepts) to assert the
+ * universal domain or range deliberately, as opposed to leaving the field blank.
+ */
+export function namesOwlThing(value: string): boolean {
+  const v = value.trim();
+  return v === 'Thing' || v === 'owl:Thing' || v === OWL_THING_URI;
+}
+
+/**
  * Update rdfs:domain and rdfs:range for an object property in the store.
- * domainName/rangeName are class local names; null or empty means owl:Thing.
+ * domainName/rangeName are class local names. Null or empty removes the triple entirely: a blank
+ * field means the ontology asserts nothing, which is not the same as asserting owl:Thing. Pass
+ * "owl:Thing" to assert the universal domain or range on purpose.
  * Returns false for subClassOf or if property not found.
  */
 export function updateObjectPropertyDomainRangeInStore(
@@ -1562,10 +1632,14 @@ export function updateObjectPropertyDomainRangeInStore(
   for (const dq of domainQuads) store.removeQuad(dq);
   for (const rq of rangeQuads) store.removeQuad(rq);
 
-  const domainUri = (domainName?.trim() ?? '') ? resolveClassUri(store, domainName!) : OWL_THING_URI;
-  const rangeUri = (rangeName?.trim() ?? '') ? resolveClassUri(store, rangeName!) : OWL_THING_URI;
-  store.addQuad(subject, domainPred, DataFactory.namedNode(domainUri), graph);
-  store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  if (domainName?.trim()) {
+    const domainUri = namesOwlThing(domainName) ? OWL_THING_URI : resolveClassUri(store, domainName);
+    store.addQuad(subject, domainPred, DataFactory.namedNode(domainUri), graph);
+  }
+  if (rangeName?.trim()) {
+    const rangeUri = namesOwlThing(rangeName) ? OWL_THING_URI : resolveClassUri(store, rangeName);
+    store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  }
   return true;
 }
 
@@ -1639,11 +1713,12 @@ export function updateObjectPropertyIsDefinedByInStore(
 /**
  * Add a new data property (owl:DatatypeProperty) to the store.
  * Returns the property localName, or null on failure.
+ * @param rangeUri Full URI of the datatype range (e.g. http://www.w3.org/2001/XMLSchema#string). null means no range.
  */
 export function addDataPropertyToStore(
   store: Store,
   label: string,
-  rangeUri: string,
+  rangeUri: string | null,
   localName?: string
 ): string | null {
   const existingNames = new Set(getDataProperties(store).map((dp) => dp.name));
@@ -1659,11 +1734,14 @@ export function addDataPropertyToStore(
   const subjUri = base + name;
   const subject = DataFactory.namedNode(subjUri);
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
-  const rangeNode = DataFactory.namedNode(rangeUri);
   store.addQuad(subject, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'DatatypeProperty'), graph);
   store.addQuad(subject, DataFactory.namedNode(RDFS + 'label'), DataFactory.literal(label || name), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'domain'), DataFactory.namedNode(OWL + 'Thing'), graph);
-  store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), rangeNode, graph);
+  // No domain is asserted on creation. A new property applies to nothing in particular yet, and
+  // writing rdfs:domain owl:Thing would state a claim the author never made - the same defect
+  // fixed on the update path, where clearing every domain now removes every domain triple.
+  if (rangeUri != null && rangeUri.trim() !== '') {
+    store.addQuad(subject, DataFactory.namedNode(RDFS + 'range'), DataFactory.namedNode(rangeUri.trim()), graph);
+  }
   return name;
 }
 
@@ -1893,27 +1971,33 @@ export function updateDataPropertyIsDefinedByInStore(
 }
 
 /**
- * Update rdfs:range for a data property in the store (datatype URI).
+ * Update rdfs:range for a data property in the store.
+ * @param rangeUri Full datatype URI, or null to assert no range at all (removes the triple).
  */
 export function updateDataPropertyRangeInStore(
   store: Store,
   propertyName: string,
-  rangeUri: string
+  rangeUri: string | null
 ): boolean {
   const propUri = getDataPropertyUriFromStore(store, propertyName);
   const subject = DataFactory.namedNode(propUri);
+  // An unknown name resolves to BASE_IRI + name, so without this the writer would assert a range on
+  // a subject the ontology has never heard of and report success for it.
+  const subjectQuads = store.getQuads(subject, null, null, null);
+  if (subjectQuads.length === 0) return false;
   const rangePred = DataFactory.namedNode(RDFS + 'range');
   const rangeQuads = store.getQuads(subject, rangePred, null, null);
-  if (rangeQuads.length === 0) return false;
-  const graph = rangeQuads[0]?.graph ?? DataFactory.defaultGraph();
+  const graph = rangeQuads[0]?.graph ?? subjectQuads[0]?.graph ?? DataFactory.defaultGraph();
   for (const rq of rangeQuads) store.removeQuad(rq);
-  store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  if (rangeUri) {
+    store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
+  }
   return true;
 }
 
 /**
  * Update data property domains in the store.
- * If domains array is empty, sets domain to owl:Thing (all classes).
+ * An empty domains array asserts no domain at all (all rdfs:domain triples are removed).
  * Otherwise, removes all existing domain quads and adds new ones for each domain.
  */
 export function updateDataPropertyDomainsInStore(
@@ -1949,9 +2033,10 @@ export function updateDataPropertyDomainsInStore(
     store.removeQuad(dq);
   }
   
-  // If domains array is empty, add owl:Thing (default - all classes)
+  // An empty domain list means the property asserts no domain. Leave it that way rather than
+  // writing rdfs:domain owl:Thing, which would put a claim in the file the user never made.
   if (domains.length === 0) {
-    store.addQuad(subject, domainPred, DataFactory.namedNode(OWL + 'Thing'), graph);
+    return true;
   } else {
     // Add each domain
     for (const domainName of domains) {
@@ -2057,18 +2142,26 @@ function findDataRestrictionBlank(
 
 /**
  * Add a data property restriction to a class (owl:Restriction with owl:onDataRange).
- * Uses the data property's declared range. Returns true on success.
+ *
+ * `onDataRange` is the data range this restriction already asserts, when there is one. A cardinality
+ * edit is implemented as remove-then-re-add, so without it the asserted datatype would be replaced
+ * by one derived from the property's rdfs:range — writing a type the document never stated.
+ * Returns true on success.
  */
 export function addDataPropertyRestrictionToClass(
   store: Store,
   classLocalName: string,
   dataPropName: string,
-  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null }
+  cardinality?: { minCardinality?: number | null; maxCardinality?: number | null },
+  onDataRange?: string | null
 ): boolean {
   if (findDataRestrictionBlank(store, classLocalName, dataPropName)) return false;
   const dataProps = getDataProperties(store);
   const dp = dataProps.find((p) => p.name === dataPropName);
-  const rangeUri = dp?.range ?? XSD_NS + 'string';
+  // owl:onDataRange is mandatory on a qualified restriction, so an unconstrained property has to
+  // name some data range. rdfs:Literal is the honest one: it is the OWL meaning of "any literal".
+  // Defaulting to xsd:string here would write a datatype the ontology never asserted into the file.
+  const rangeUri = onDataRange ?? dp?.range ?? RDFS + 'Literal';
   const graph = store.getQuads(null, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
   const classUri = getClassUriFromStore(store, classLocalName);
   const dataPropQuads = store.getQuads(null, RDF + 'type', OWL + 'DatatypeProperty', null);
@@ -2146,6 +2239,7 @@ export function getDataPropertyRestrictionsForClass(
       propertyName: propName,
       minCardinality: minCard ?? undefined,
       maxCardinality: maxCard ?? undefined,
+      onDataRange: (onDataRange.object as { value?: string }).value,
     });
   }
   return result;
@@ -2673,47 +2767,23 @@ async function reconstructFromCache(
     }
   }
   
-  // Extract prefix map for resolving prefixed names
+  // Every prefix the file declares, from every header block. Missing one is not cosmetic: a
+  // subject whose prefix cannot be resolved looks absent from the document and gets appended again.
   const prefixMap = new Map<string, string>();
   if (cache.headerSection) {
     for (const block of cache.headerSection.blocks) {
-      if (block.originalText) {
-        const prefixMatch = block.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
-        if (prefixMatch) {
-          prefixMap.set(prefixMatch[1], prefixMatch[2]);
-        }
-        const emptyPrefixMatch = block.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
-        if (emptyPrefixMatch) {
-          prefixMap.set('', emptyPrefixMatch[1]);
-        }
-      }
+      if (block.originalText) parseTurtlePrefixes(block.originalText, prefixMap);
     }
   }
   
   const resolvePrefixedName = (prefixedName: string): string | null => {
-    if (prefixedName.startsWith('<') && prefixedName.endsWith('>')) {
-      return prefixedName.slice(1, -1);
+    const resolved = resolveTurtlePrefixedName(prefixedName, prefixMap);
+    if (resolved === null) {
+      debugWarn('[reconstructFromCache] Failed to resolve prefixed name:', prefixedName);
+      return null;
     }
-    if (prefixedName.startsWith(':')) {
-      const baseUri = prefixMap.get('');
-      if (baseUri) {
-        const resolved = baseUri + prefixedName.slice(1);
-        debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
-        return resolved;
-      }
-      debugWarn('[reconstructFromCache] Failed to resolve prefixed name (no base URI):', prefixedName);
-    } else if (prefixedName.includes(':')) {
-      const [prefix, localName] = prefixedName.split(':', 2);
-      const baseUri = prefixMap.get(prefix);
-      if (baseUri) {
-        const resolved = baseUri + localName;
-        debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
-        return resolved;
-      }
-      debugWarn('[reconstructFromCache] Failed to resolve prefixed name (prefix not found):', prefixedName, 'prefix:', prefix);
-    }
-    debugWarn('[reconstructFromCache] Failed to resolve prefixed name (no match):', prefixedName);
-    return null;
+    debugLog('[reconstructFromCache] Resolved prefixed name:', prefixedName, '->', resolved);
+    return resolved;
   };
   
   // Detect modifications by comparing current store with cache

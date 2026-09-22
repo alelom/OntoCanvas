@@ -93,6 +93,25 @@ export function getNodeSearchOpacity(
 }
 
 /**
+ * Opacity for a node that stands outside the class graph — a data property asserting no
+ * rdfs:domain, drawn in its own band.
+ *
+ * It has no class to inherit a search category from, so it is judged on its own name. Without this
+ * it would keep full opacity while every class dimmed around it, making the nodes least relevant to
+ * the query the most prominent things on the canvas.
+ */
+export function getFreeStandingNodeSearchOpacity(
+  id: string,
+  label: string,
+  query: string,
+  exactMatch = false
+): number {
+  if (!(query || '').trim()) return OPACITY_MATCH;
+  const node = { id, label } as GraphNode;
+  return matchesSearch(node, null, query, exactMatch) ? OPACITY_MATCH : OPACITY_DIM;
+}
+
+/**
  * Opacity for an edge given the highlight sets.
  *
  * Opacity tiers (most to least prominent):

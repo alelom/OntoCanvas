@@ -15,6 +15,7 @@ import {
   updateObjectPropertyLabelInStore,
   updateObjectPropertyCommentInStore,
   updateObjectPropertyDomainRangeInStore,
+  namesOwlThing,
   updateObjectPropertySubPropertyOfInStore,
   updateObjectPropertyIsDefinedByInStore,
   getMainOntologyBase,
@@ -106,6 +107,7 @@ import {
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
+  getFreeStandingNodeSearchOpacity,
   getEdgeSearchOpacity,
 } from './lib/searchHighlight';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
@@ -190,7 +192,18 @@ import {
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
 import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
-import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
+import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
+import { readableTextColor } from './lib/textContrast';
+import {
+  DATA_PROPERTY_RANGE_OPTIONS,
+  XSD_RANGE_OPTIONS,
+  appliesToClass,
+  describeRange,
+  domainAttachment,
+  UNATTACHED_DOMAIN_NOTE,
+  unattachedDataPropertyNodeId,
+} from './lib/dataPropertyDisplay';
+import { boundsOf, layoutUnattachedNodes, rowSpacingFor } from './graph/unattachedDataPropertyLayout';
 import {
   initAnnotationPropsMenu,
   getAnnotationStyleConfig,
@@ -865,7 +878,7 @@ function performDeleteSelection(): boolean {
     }
     
     dataPropUndoActions.push(() => {
-      addDataPropertyRestrictionToClass(ttlStore!, classId, propertyName, { minCardinality: oldMin ?? undefined, maxCardinality: oldMax ?? undefined });
+      addDataPropertyRestrictionToClass(ttlStore!, classId, propertyName, { minCardinality: oldMin ?? undefined, maxCardinality: oldMax ?? undefined }, restriction.onDataRange);
       const idx = rawData.nodes.findIndex((n) => n.id === classId);
       if (idx >= 0) {
         rawData.nodes[idx].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore!, classId);
@@ -1198,8 +1211,8 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     }
     const oldLabel = op.label;
     const oldComment = op.comment ?? '';
-    const oldDomain = op.domain ?? '';
-    const oldRange = op.range ?? '';
+    const oldDomain = op.domain ?? (op.hasGlobalDomain ? 'owl:Thing' : '');
+    const oldRange = op.range ?? (op.hasGlobalRange ? 'owl:Thing' : '');
     const oldSubPropertyOf = op.subPropertyOf ?? '';
     const oldDefinedBy = op.isDefinedBy ?? '';
     const labelChanged = oldLabel !== newLabel;
@@ -1245,8 +1258,12 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
       );
       const o = objectProperties.find((p) => p.name === effectiveType);
       if (o) {
-        o.domain = newDomain || undefined;
-        o.range = newRange || undefined;
+        // Same predicate the store writer uses, so the in-memory view cannot disagree with what
+        // was written: the class field also accepts the full owl#Thing URI.
+        o.hasGlobalDomain = namesOwlThing(newDomain);
+        o.hasGlobalRange = namesOwlThing(newRange);
+        o.domain = o.hasGlobalDomain ? undefined : newDomain || undefined;
+        o.range = o.hasGlobalRange ? undefined : newRange || undefined;
       }
     }
     if (subPropertyOfChanged) {
@@ -1373,8 +1390,10 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   
   if (labelInput) labelInput.value = op?.label ?? type;
   if (commentInput) commentInput.value = op?.comment ?? '';
-  if (domainInput) domainInput.value = op?.domain ?? '';
-  if (rangeInput) rangeInput.value = op?.range ?? '';
+  // An asserted owl:Thing is shown as such, so the user can see it and delete it if they want the
+  // property to assert no domain. A blank field means the ontology asserts nothing.
+  if (domainInput) domainInput.value = op?.domain ?? (op?.hasGlobalDomain ? 'owl:Thing' : '');
+  if (rangeInput) rangeInput.value = op?.range ?? (op?.hasGlobalRange ? 'owl:Thing' : '');
   if (subPropertyOfInput) {
     const subUri = op?.subPropertyOf ?? '';
     if (subUri) {
@@ -1677,42 +1696,6 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
 }
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
-const DATA_PROPERTY_RANGE_OPTIONS: { value: string; label: string }[] = [
-  { value: XSD_NS + 'string', label: 'xsd:string' },
-  { value: XSD_NS + 'integer', label: 'xsd:integer' },
-  { value: XSD_NS + 'decimal', label: 'xsd:decimal' },
-  { value: XSD_NS + 'boolean', label: 'xsd:boolean' },
-  { value: XSD_NS + 'date', label: 'xsd:date' },
-  { value: XSD_NS + 'dateTime', label: 'xsd:dateTime' },
-  { value: XSD_NS + 'anyURI', label: 'xsd:anyURI' },
-];
-
-/**
- * Format a range URI to short format (e.g., "http://www.w3.org/2001/XMLSchema#string" → "xsd:string").
- * Uses DATA_PROPERTY_RANGE_OPTIONS for known URIs, otherwise extracts local name after '#'.
- */
-function formatRangeUri(rangeUri: string): string {
-  // Check if it's in the known options
-  const knownOption = DATA_PROPERTY_RANGE_OPTIONS.find((opt) => opt.value === rangeUri);
-  if (knownOption) {
-    return knownOption.label;
-  }
-  
-  // Extract local name after '#'
-  const hashIndex = rangeUri.indexOf('#');
-  if (hashIndex !== -1 && hashIndex < rangeUri.length - 1) {
-    const localName = rangeUri.substring(hashIndex + 1);
-    // Try to detect namespace prefix
-    if (rangeUri.startsWith(XSD_NS)) {
-      return `xsd:${localName}`;
-    }
-    // For other namespaces, just return the local name
-    return localName;
-  }
-  
-  // Fallback: return as-is if no '#' found
-  return rangeUri;
-}
 
 function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
@@ -1728,9 +1711,11 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     const propDisplayName = formatPropName(dp);
+    const rangeDisplay = describeRange(dp);
+    const rangeStyle = rangeDisplay.source === 'asserted' ? 'color: #666;' : 'color: #999; font-style: italic;';
     row.innerHTML = `
       <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${propDisplayName}</span>
-      <span style="font-size: 11px; color: #666;">${dp.range.includes('string') ? 'string' : dp.range.includes('integer') ? 'integer' : dp.range.split('#').pop() ?? dp.range}</span>
+      <span style="font-size: 11px; ${rangeStyle}" title="${rangeDisplay.tooltipNote}">${rangeDisplay.menuLabel}</span>
       <button type="button" class="data-prop-edit-btn" data-name="${dp.name}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
       <button type="button" class="data-prop-delete-btn" data-name="${dp.name}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
     `;
@@ -2016,7 +2001,8 @@ function initEditDataPropertyHandlers(): void {
     const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
-    const newRange = rangeSel?.value ?? XSD_NS + 'string';
+    // The empty option is "No range asserted", which must stay null rather than becoming a datatype.
+    const newRange = rangeSel?.value ? rangeSel.value : null;
     const newDefinedBy = definedByInput?.value?.trim() ?? null;
     if (!ttlStore) return;
     let dp = dataProperties.find((p) => p.name === name);
@@ -2075,6 +2061,11 @@ function initEditDataPropertyHandlers(): void {
     updateSaveButtonVisibility();
     dataProperties = getDataProperties(ttlStore);
     applyFilter(true);
+    // Deleting the last domain moves the property off its class and into the free-standing band,
+    // which is usually off-screen. Follow it there rather than leaving the user on an empty edit.
+    if (domainsChanged && domainAttachment(dataProperties.find((p) => p.name === name) ?? dp) === 'unattached') {
+      revealNodeInView(unattachedDataPropertyNodeId(name));
+    }
     const dataPropsContent = document.getElementById('dataPropsContent');
     if (dataPropsContent) initDataPropsMenu(dataPropsContent);
     document.getElementById('editDataPropertyModal')!.style.display = 'none';
@@ -2153,7 +2144,7 @@ function initEditDataPropertyHandlers(): void {
           dp.domains = [];
         }
         dp.domains.push(className);
-        renderDomainsList(domainsListEl, dp.domains);
+        renderDomainsList(domainsListEl, dp.domains, dp.hasGlobalDomain);
       }
       wrapper.remove();
     });
@@ -2167,18 +2158,22 @@ function initEditDataPropertyHandlers(): void {
   });
 }
 
-function renderDomainsList(domainsListEl: HTMLElement, domains: string[]): void {
+/**
+ * Render the domain list of a data property. An asserted `rdfs:domain owl:Thing` and no asserted
+ * domain at all are different facts, so they get different rows rather than both showing owl:Thing.
+ */
+function renderDomainsList(domainsListEl: HTMLElement, domains: string[], hasGlobalDomain = false): void {
   domainsListEl.innerHTML = '';
   
-  // If no custom domains, show owl:Thing (cannot be deleted)
   if (domains.length === 0) {
-    const thingItem = document.createElement('div');
-    thingItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 4px;';
-    thingItem.innerHTML = `
-      <span style="font-size: 11px; font-family: Consolas, monospace;">owl:Thing</span>
-      <span style="font-size: 10px; color: #999;">(default - all classes)</span>
-    `;
-    domainsListEl.appendChild(thingItem);
+    const emptyItem = document.createElement('div');
+    emptyItem.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px; margin-bottom: 4px; background: #fff; border: 1px solid #ddd; border-radius: 4px;';
+    emptyItem.innerHTML = hasGlobalDomain
+      ? `<span style="font-size: 11px; font-family: Consolas, monospace;">owl:Thing</span>
+         <span style="font-size: 10px; color: #999;">(asserted - all classes)</span>`
+      : `<span style="font-size: 11px; color: #999; font-style: italic;">No domain asserted</span>
+         <span style="font-size: 10px; color: #999;">(not attached to any class)</span>`;
+    domainsListEl.appendChild(emptyItem);
   } else {
     // Show custom domains with delete buttons
     domains.forEach((domainName) => {
@@ -2206,7 +2201,7 @@ function renderDomainsList(domainsListEl: HTMLElement, domains: string[]): void 
       dp.domains = newDomains;
       
       // Re-render list
-      renderDomainsList(domainsListEl, newDomains);
+      renderDomainsList(domainsListEl, newDomains, dp.hasGlobalDomain);
     });
   });
 }
@@ -2335,18 +2330,21 @@ function showEditDataPropertyModal(name: string): void {
     commentInput.style.opacity = isImported ? '0.5' : '1';
     commentInput.title = isImported ? 'Comment cannot be changed for imported properties.' : '';
   }
-  const rangeOptions = [...DATA_PROPERTY_RANGE_OPTIONS];
+  // "No range asserted" must be selectable, otherwise opening the modal on a typing stub silently
+  // pre-selects xsd:string and saving writes a datatype the ontology never declared.
+  const rangeOptions = [{ value: '', label: 'No range asserted' }, ...DATA_PROPERTY_RANGE_OPTIONS];
   if (dp?.range && !rangeOptions.some((o) => o.value === dp.range)) {
     rangeOptions.push({ value: dp.range, label: dp.range.includes('#') ? dp.range.split('#').pop()! : dp.range });
   }
-  rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${dp?.range === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
+  const selectedRange = dp?.range ?? '';
+  rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}"${selectedRange === opt.value ? ' selected' : ''}>${opt.label}</option>`).join('');
   rangeSel.disabled = isImported;
   rangeSel.style.opacity = isImported ? '0.5' : '1';
   rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
   const originalDomains = dp ? [...(dp.domains || [])] : [];
   (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
   if (domainsListEl && dp) {
-    renderDomainsList(domainsListEl, dp.domains || []);
+    renderDomainsList(domainsListEl, dp.domains || [], dp.hasGlobalDomain);
   }
   updateEditDataPropIdentifierAndValidation();
   modal.style.display = 'flex';
@@ -2568,11 +2566,11 @@ function showEditAnnotationPropertyModal(name: string): void {
     }
   }
   
-  // Populate range dropdown
+  // Populate range dropdown (XSD datatypes only - rdfs:Literal is a data-property range)
   if (rangeSel) {
     const rangeOptions = [
       { value: '', label: 'No range (untyped)' },
-      ...DATA_PROPERTY_RANGE_OPTIONS,
+      ...XSD_RANGE_OPTIONS,
     ];
     const currentRange = ap?.range ?? null;
     rangeSel.innerHTML = rangeOptions.map((opt) => 
@@ -2602,7 +2600,7 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
   if (rangeSel) {
     const rangeOptions = [
       { value: '', label: 'No range (untyped)' },
-      ...DATA_PROPERTY_RANGE_OPTIONS,
+      ...XSD_RANGE_OPTIONS,
     ];
     rangeSel.innerHTML = rangeOptions.map((opt) => 
       `<option value="${opt.value}">${opt.label}</option>`
@@ -2662,7 +2660,10 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
   const labelInput = document.getElementById('addDataPropLabel') as HTMLInputElement;
   const rangeSel = document.getElementById('addDataPropRange') as HTMLSelectElement;
   if (rangeSel) {
-    rangeSel.innerHTML = DATA_PROPERTY_RANGE_OPTIONS.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
+    // Consistent with the edit modal and the annotation modal: a new property must be allowed to
+    // assert no range, otherwise the typing-stub pattern cannot be authored here at all.
+    const rangeOptions = [{ value: '', label: 'No range asserted' }, ...DATA_PROPERTY_RANGE_OPTIONS];
+    rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
   }
   if (labelInput) {
     labelInput.addEventListener('input', updateAddDataPropIdentifierAndValidation);
@@ -2694,7 +2695,7 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     const rangeEl = document.getElementById('addDataPropRange') as HTMLSelectElement;
     const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
     const label = li.value.trim();
-    const rangeUri = rangeEl?.value ?? XSD_NS + 'string';
+    const rangeUri = rangeEl?.value ? rangeEl.value : null;
     if (!ttlStore) return;
     const existingNames = new Set(dataProperties.map((dp) => dp.name));
     const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
@@ -2716,6 +2717,9 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
       const content = document.getElementById('dataPropsContent');
       if (content) initDataPropsMenu(content);
       applyFilter(true);
+      // The modal asks for no domain, so the property is always free-standing and lands below the
+      // class graph - outside the viewport applyFilter just restored. Show the user what they made.
+      revealNodeInView(unattachedDataPropertyNodeId(name));
       document.getElementById('addDataPropertyModal')!.style.display = 'none';
     }
   });
@@ -3132,7 +3136,7 @@ function buildNetworkData(
     let nodeOpacity = baseOpacity;
     let backgroundColor = style.background;
     let borderColor = style.border;
-    let fontColor = '#2c3e50';
+    let fontColor = readableTextColor(style.background);
     
     if (searchQuery) {
       const searchOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
@@ -3140,12 +3144,12 @@ function buildNetworkData(
       if (nodeOpacity < 1.0) {
         backgroundColor = applyOpacityToColor(style.background, nodeOpacity);
         borderColor = applyOpacityToColor(style.border, nodeOpacity);
-        fontColor = applyOpacityToColor('#2c3e50', nodeOpacity);
+        fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: nodeOpacity }), nodeOpacity);
       }
     } else if (isExternal) {
       backgroundColor = applyOpacityToColor(style.background, baseOpacity);
       borderColor = applyOpacityToColor(style.border, baseOpacity);
-      fontColor = applyOpacityToColor('#2c3e50', baseOpacity);
+      fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: baseOpacity }), baseOpacity);
     }
     
     const node: Record<string, unknown> = {
@@ -3182,8 +3186,10 @@ function buildNetworkData(
   const dataPropertyNodes: Array<Record<string, unknown>> = [];
   const dataPropertyEdges: Array<Record<string, unknown>> = [];
   
-  // Track which data properties are already displayed as restrictions
+  // Track which data properties are already displayed as restrictions, keyed by class and by
+  // property name on its own (a property placed by any restriction is not floating).
   const displayedAsRestriction = new Set<string>();
+  const restrictedPropertyNames = new Set<string>();
   
   // Calculate node dimensions for proper positioning
   const nodeDimensionsMap = new Map<string, { width: number; height: number }>();
@@ -3200,7 +3206,7 @@ function buildNetworkData(
   });
   
   // Group data properties by their parent class node for better layout
-  const dataPropsByClass = new Map<string, Array<{ id: string; label: string; isRestriction: boolean; propertyName: string }>>();
+  const dataPropsByClass = new Map<string, Array<{ id: string; label: string; isRestriction: boolean; propertyName: string; onDataRange?: string }>>();
   
   // First, collect all data property restrictions
   filteredNodes.forEach((n) => {
@@ -3218,22 +3224,28 @@ function buildNetworkData(
             : '';
         const dataPropNodeId = `__dataproprestrict__${n.id}__${restriction.propertyName}`;
         displayedAsRestriction.add(`${n.id}__${restriction.propertyName}`);
+        restrictedPropertyNames.add(restriction.propertyName);
         dataPropsByClass.get(n.id)!.push({
           id: dataPropNodeId,
           label: label + cardLabel,
           isRestriction: true,
           propertyName: restriction.propertyName,
+          onDataRange: restriction.onDataRange,
         });
       });
     }
   });
   
-  // Then, collect generic data properties
+  // Then, collect generic data properties. Properties that assert no rdfs:domain are not attached
+  // to any class here; they are drawn free-standing further below, unless a restriction already
+  // puts them on a class — that restriction is an assertion, so the node is not floating.
+  const unattachedDataProps = dataProperties.filter(
+    (dp) => domainAttachment(dp) === 'unattached' && !restrictedPropertyNames.has(dp.name)
+  );
   dataProperties.forEach((dp) => {
     filteredNodes.forEach((n) => {
       if (displayedAsRestriction.has(`${n.id}__${dp.name}`)) return;
-      const shouldDisplay = dp.domains.length === 0 || dp.domains.includes(n.id);
-      if (!shouldDisplay) return;
+      if (!appliesToClass(dp, n.id)) return;
       
       if (!dataPropsByClass.has(n.id)) {
         dataPropsByClass.set(n.id, []);
@@ -3367,8 +3379,8 @@ function buildNetworkData(
       
       const dp = dataProperties.find((p) => p.name === dataProp.propertyName);
       
-      // Format the range URI to short format (e.g., "xsd:string")
-      const rangeLabel = dp?.range ? formatRangeUri(dp.range) : 'xsd:string';
+      // An unasserted rdfs:range contributes no suffix, so it cannot be read as a declared datatype.
+      const rangeDisplay = describeRange(dp, dataProp.onDataRange);
       
       // Check if data property is imported and get its opacity
       // Use isDefinedBy if present, otherwise check if URI belongs to external ontology
@@ -3381,24 +3393,24 @@ function buildNetworkData(
       // Apply search transparency if search query is active
       // Data property nodes use imported opacity if applicable, otherwise inherit from class node
       let dataPropNodeOpacity = baseDataPropOpacity;
-      let dataPropBackgroundColor = '#e8f4f8';
+      let dataPropBackgroundColor = DATA_PROPERTY_FILL;
       let dataPropBorderColor = '#4a90a4';
-      let dataPropFontColor = '#2c3e50';
+      let dataPropFontColor = readableTextColor(DATA_PROPERTY_FILL);
       
       if (searchQuery) {
         // Use the class node's opacity category, but multiply by base opacity if imported
         const searchOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
         dataPropNodeOpacity = isDataPropImported ? searchOpacity * baseDataPropOpacity : searchOpacity;
         if (dataPropNodeOpacity < 1.0) {
-          dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', dataPropNodeOpacity);
+          dataPropBackgroundColor = applyOpacityToColor(DATA_PROPERTY_FILL, dataPropNodeOpacity);
           dataPropBorderColor = applyOpacityToColor('#4a90a4', dataPropNodeOpacity);
-          dataPropFontColor = applyOpacityToColor('#2c3e50', dataPropNodeOpacity);
+          dataPropFontColor = applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: dataPropNodeOpacity }), dataPropNodeOpacity);
         }
       } else if (isDataPropImported) {
         // Apply imported opacity
-        dataPropBackgroundColor = applyOpacityToColor('#e8f4f8', baseDataPropOpacity);
+        dataPropBackgroundColor = applyOpacityToColor(DATA_PROPERTY_FILL, baseDataPropOpacity);
         dataPropBorderColor = applyOpacityToColor('#4a90a4', baseDataPropOpacity);
-        dataPropFontColor = applyOpacityToColor('#2c3e50', baseDataPropOpacity);
+        dataPropFontColor = applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: baseDataPropOpacity }), baseDataPropOpacity);
       }
       
       // Get prefix for data property if it's imported
@@ -3406,10 +3418,13 @@ function buildNetworkData(
       const dataPropDisplayLabel = dataPropPrefix ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
       
       // Format the node label as "prefix:property label (datatype)" - e.g., "dpbase:createdDate (xsd:dateTime)"
-      const nodeLabel = `${dataPropDisplayLabel} (${rangeLabel})`;
+      const nodeLabel = `${dataPropDisplayLabel}${rangeDisplay.labelSuffix}`;
       
       // Build tooltip: include comment if present, and add import hint if imported
       let tooltip = dp?.comment || '';
+      if (rangeDisplay.source !== 'asserted') {
+        tooltip = tooltip ? `${tooltip}\n\n${rangeDisplay.tooltipNote}` : rangeDisplay.tooltipNote;
+      }
       if (isDataPropImported && definingOntologyUrl) {
         const importHint = `(Imported from ${definingOntologyUrl})`;
         tooltip = tooltip ? `${tooltip}\n\n${importHint}` : importHint;
@@ -3484,7 +3499,78 @@ function buildNetworkData(
       }
     });
   });
-  
+
+  // Data properties that assert no rdfs:domain belong to no class, so they get their own band below
+  // the graph with no edge to anything. Drawing them on a class would state a domain the ontology
+  // never asserted - which is how a domainless property used to end up hanging off skos:Concept.
+  if (unattachedDataProps.length > 0) {
+    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const entries = unattachedDataProps.map((dp) => {
+      const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
+      const rangeDisplay = describeRange(dp);
+      const label = `${prefix ? `${prefix}:${dp.label}` : dp.label}${rangeDisplay.labelSuffix}`;
+      const definingOntologyUrl = dp.isDefinedBy || (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
+      const isImported = isUriFromExternalOntology(dp.uri, dp.isDefinedBy ?? null, externalOntologyReferences, mainBase);
+      const notes = [
+        rangeDisplay.source === 'asserted' ? null : rangeDisplay.tooltipNote,
+        UNATTACHED_DOMAIN_NOTE,
+        isImported && definingOntologyUrl ? `(Imported from ${definingOntologyUrl})` : null,
+      ];
+      const tooltip = [dp.comment || null, ...notes].filter(Boolean).join('\n\n');
+      // These nodes stand outside the class graph, so they have no class to take a search category
+      // or an external-ontology fade from - both have to be resolved from the property itself.
+      const importedOpacity = isImported
+        ? getOpacityForExternalOntology(definingOntologyUrl, externalOntologyReferences)
+        : 1.0;
+      const opacity =
+        getFreeStandingNodeSearchOpacity(dp.name, label, searchQuery, filter.exactMatch) * importedOpacity;
+      return { dp, label, tooltip, opacity };
+    });
+
+    const classPositions = filteredNodes
+      .map((n) => (n.x != null && n.y != null ? { x: n.x, y: n.y } : nodePositions[n.id]))
+      .filter((p): p is { x: number; y: number } => !!p);
+    // Measure the label as it is drawn - wrapped - not by its raw character count. A label wrapping
+    // to three lines was being laid out as one long, one-line-tall box, which both inflated the
+    // widths (forcing rows earlier than needed) and let the rows it created overlap vertically.
+    const dimensions = entries.map((e) =>
+      estimateNodeDimensions(e.label, wrapChars, dataPropertyFontSize)
+    );
+    const positions = layoutUnattachedNodes(
+      dimensions.map((d) => d.width),
+      boundsOf(classPositions),
+      { rowSpacing: rowSpacingFor(dimensions.map((d) => d.height)) }
+    );
+
+    entries.forEach((entry, i) => {
+      const pos = positions[i];
+      const faded = entry.opacity < 1.0;
+      dataPropertyNodes.push({
+        id: unattachedDataPropertyNodeId(entry.dp.name),
+        label: wrapText(entry.label, wrapChars),
+        shape: 'box',
+        size: 15,
+        color: {
+          background: faded ? applyOpacityToColor(DATA_PROPERTY_FILL, entry.opacity) : DATA_PROPERTY_FILL,
+          border: faded ? applyOpacityToColor('#4a90a4', entry.opacity) : '#4a90a4',
+        },
+        font: {
+          size: dataPropertyFontSize,
+          color: faded
+            ? applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: entry.opacity }), entry.opacity)
+            : readableTextColor(DATA_PROPERTY_FILL),
+        },
+        margin: 4,
+        physics: false,
+        // Dashed border marks these as unattached, matching the absence of a connecting edge.
+        shapeProperties: { borderDashes: [4, 3] },
+        x: pos.x,
+        y: pos.y,
+        ...(faded && { opacity: entry.opacity }),
+        ...(entry.tooltip && { title: entry.tooltip }),
+      });
+    });
+  }
 
   // Debug: Check describes edges before mapping to vis-network format (only if they exist)
   const describesEdgesBeforeMapping = filteredEdges.filter((e) => 
@@ -5298,7 +5384,7 @@ function confirmEditEdge(): void {
     
     // Update the restriction in the store
     removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
-    addDataPropertyRestrictionToClass(ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined });
+    addDataPropertyRestrictionToClass(ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined }, restriction.onDataRange);
     
     // Update in rawData
     const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
@@ -6892,6 +6978,33 @@ async function loadTtlAndRender(
     errorMsg.textContent = `Parse error: ${err instanceof Error ? err.message : String(err)}`;
     errorMsg.style.display = 'block';
   }
+}
+
+/**
+ * Bring a node into view, keeping the current zoom.
+ *
+ * `applyFilter(true)` deliberately restores the viewport the user was looking at, which is right for
+ * an edit but wrong for something just created off-screen: a data property with no rdfs:domain is
+ * placed in the free-standing band below the class graph, so on any non-trivial ontology the user
+ * confirms the dialog and sees nothing happen.
+ *
+ * applyFilter restores that viewport from a requestAnimationFrame callback, so the reveal is queued
+ * behind it: callbacks run in registration order, and applyFilter registered its own before
+ * returning. Moving the view synchronously here would just be undone a frame later.
+ */
+function revealNodeInView(nodeId: string): void {
+  requestAnimationFrame(() => {
+    if (!network) return;
+    const position = network.getPositions([nodeId])[nodeId];
+    if (!position) return;
+    network.moveTo({
+      position,
+      scale: network.getScale(),
+      animation: skipSlowOperationsForTests
+        ? false
+        : { duration: 400, easingFunction: 'easeInOutQuad' },
+    });
+  });
 }
 
 function applyFilter(preserveView = false): void {

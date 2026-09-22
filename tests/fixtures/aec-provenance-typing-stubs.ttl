@@ -1,0 +1,156 @@
+@prefix : <https://w3id.org/adiro/aec_provenance#> .
+@base <https://w3id.org/adiro/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+#################################################################
+#    Ontology
+#################################################################
+
+<https://w3id.org/adiro/aec_provenance> rdf:type owl:Ontology ;
+    rdfs:label "AEC Provenance Ontology" ;
+    rdfs:comment "Foundational, domain-neutral vocabulary for representing an inferred/extracted assertion together with its provenance and confidence. It exists so that a value read off a drawing (a title-block field, a detected symbol, ...) can be modelled as a first-class assertion carrying: which region asserted it, what produced it, from where, when, and with what confidence - independently of the value itself. Imported by the drawing modules (e.g. aec_drawing_metadata); aligned to W3C PROV-O for interoperability." ;
+    dcterms:title "AEC Provenance Ontology" ;
+    dcterms:description "Reified assertion + inference provenance + confidence for AEC drawing extraction. Domain-neutral; PROV-O-aligned." ;
+    dcterms:license <https://www.gnu.org/licenses/gpl-3.0.html> ;
+    dcterms:creator "Buro Happold - Machine Learning R&D" ;
+    dcterms:publisher "Buro Happold" ;
+    owl:versionIRI <https://w3id.org/adiro/aec_provenance/1.0.0> ;
+    owl:versionInfo "1.0.0" .
+
+#################################################################
+#    PROV-O terms referenced for alignment
+#
+#    Declared locally (not owl:imports) so the module stays self-contained
+#    and the reasoning CI resolves everything offline via catalog-v001.xml
+#    without fetching PROV-O over the network. These are minimal typing stubs
+#    for the handful of PROV-O terms our alignment axioms point at; the
+#    authoritative definitions live at http://www.w3.org/ns/prov#.
+#    Credit: PROV-O alignment first suggested by Tianyang Huang.
+#################################################################
+
+prov:Agent rdf:type owl:Class ;
+    rdfs:label "Agent" ;
+    rdfs:comment "Typing stub for the PROV-O class of the same name, declared locally so this module stays self-contained and the reasoning CI resolves offline. A stub is a name, not a definition: the authoritative definition lives at the source that rdfs:isDefinedBy points at." ;
+    rdfs:isDefinedBy <http://www.w3.org/ns/prov#> .
+
+prov:wasAttributedTo rdf:type owl:ObjectProperty ;
+    rdfs:label "wasAttributedTo" ;
+    rdfs:comment "Typing stub for the PROV-O term of the same name, declared locally so this module stays self-contained and the reasoning CI resolves offline. It carries NO domain or range on purpose: a stub is a name, not a definition, and the authoritative axioms (rdfs:domain prov:Entity, rdfs:range prov:Agent) live at the source that rdfs:isDefinedBy points at. A viewer that shows an untyped datatype property as a string is reporting its own default, not an ADIRO assertion." ;
+    rdfs:isDefinedBy <http://www.w3.org/ns/prov#> .
+
+prov:wasDerivedFrom rdf:type owl:ObjectProperty ;
+    rdfs:label "wasDerivedFrom" ;
+    rdfs:comment "Typing stub for the PROV-O term of the same name, declared locally so this module stays self-contained and the reasoning CI resolves offline. It carries NO domain or range on purpose: a stub is a name, not a definition, and the authoritative axioms (rdfs:domain and rdfs:range prov:Entity) live at the source that rdfs:isDefinedBy points at. A viewer that shows an untyped datatype property as a string is reporting its own default, not an ADIRO assertion." ;
+    rdfs:isDefinedBy <http://www.w3.org/ns/prov#> .
+
+prov:generatedAtTime rdf:type owl:DatatypeProperty ;
+    rdfs:label "generatedAtTime" ;
+    rdfs:comment "Typing stub for the PROV-O term of the same name, declared locally so this module stays self-contained and the reasoning CI resolves offline. It carries NO domain or range on purpose: a stub is a name, not a definition, and the authoritative axioms (rdfs:domain prov:Entity, rdfs:range xsd:dateTime) live at the source that rdfs:isDefinedBy points at. A viewer that shows an untyped datatype property as a string is reporting its own default, not an ADIRO assertion. ADIRO's own :inferredAt declares rdfs:range xsd:dateTime, so the precision is asserted where it belongs - on the term this suite owns." ;
+    rdfs:isDefinedBy <http://www.w3.org/ns/prov#> .
+
+#################################################################
+#    Annotation Properties - field-kind metadata
+#
+#    A "field kind" is a skos:Concept in a field-kind scheme (defined by the
+#    importing module, e.g. the TitleblockFieldScheme in aec_drawing_metadata).
+#    These annotations describe such a concept; they carry no reasoning weight.
+#################################################################
+
+:expectedRange rdf:type owl:AnnotationProperty ;
+    rdfs:label "expectedRange" ;
+    rdfs:comment "On a field-kind concept: the expected type of its asserted value - a datatype (e.g. xsd:string, xsd:date) for literal-valued fields, or a class (e.g. Person, Organisation) for object-valued fields. Signals whether an assertion of this kind uses hasLiteralValue or hasValueEntity." .
+
+:mapsToFieldProperty rdf:type owl:AnnotationProperty ;
+    rdfs:label "mapsToFieldProperty" ;
+    rdfs:comment "On a field-kind concept: the canonical ADIRO property that a validated assertion of this field kind is promoted to (the bridge from the reified assertion to a direct statement on the subject). Annotation only - the promotion is performed by tooling on validation, not by reasoning." .
+
+#################################################################
+#    Classes
+#################################################################
+
+:FieldAssertion rdf:type owl:Class ;
+    rdfs:label "Field Assertion" ;
+    rdfs:comment "A single reified assertion that some source makes a value-claim about a field kind. Reifying the claim (rather than attaching the value straight to a subject) lets each printed occurrence carry its own provenance - which region asserted it (assertedBy), what produced it (hasInferenceMeta), and with what confidence (hasConfidence) - independently of the value it states. The value is a literal (hasLiteralValue) for datatype-valued fields or an entity (hasValueEntity) for object-valued fields. Validated assertions are promoted to direct statements on the subject downstream; conflicting assertions across sources are surfaced, not silently merged." .
+
+:InferenceMeta rdf:type owl:Class ;
+    rdfs:label "Inference Meta" ;
+    rdfs:comment "Provenance metadata for an inferred or extracted assertion: what produced it (inferredBy / inferredWith), the source it was derived from (inferredFrom), and when (inferredAt). Modelled as a separate object so several assertions can share one inference record and so provenance can be added without touching the value. Analogous to DANO's DrawingElementMeta, but aligned to PROV-O." .
+
+#################################################################
+#    Object Properties
+#################################################################
+
+:assertsFieldKind rdf:type owl:ObjectProperty ;
+    rdfs:label "assertsFieldKind" ;
+    rdfs:comment "The field kind (a SKOS concept in a field-kind scheme, e.g. a title-block field such as Scale or Client) that this assertion is about. Keeping the kind as a referenced concept - rather than a bespoke property per field - is what lets names/synonyms live on the concept and keeps the number of relationships small." ;
+    rdfs:domain :FieldAssertion ;
+    rdfs:range skos:Concept .
+
+:assertedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "assertedBy" ;
+    rdfs:comment "The source that makes this assertion - typically the drawing region it was read from (e.g. a Titleblock or a Layout). This is the provenance that lets the same field kind asserted by different regions be distinguished (e.g. a sheet-level scale in the title block versus a per-layout scale in a layout corner), which a fixed domain on a per-field property cannot express." ;
+    rdfs:domain :FieldAssertion .
+
+:hasValueEntity rdf:type owl:ObjectProperty ;
+    rdfs:label "hasValueEntity" ;
+    rdfs:comment "For object-valued field kinds, the entity that is the asserted value - e.g. a Person or Organisation. Used instead of hasLiteralValue when the field references a thing rather than states a string, which is what makes cross-sheet questions ('everything checked by X') answerable." ;
+    rdfs:domain :FieldAssertion .
+
+:hasInferenceMeta rdf:type owl:ObjectProperty ;
+    rdfs:label "hasInferenceMeta" ;
+    rdfs:comment "Links an assertion to the InferenceMeta describing what produced it, from where, and when." ;
+    rdfs:domain :FieldAssertion ;
+    rdfs:range :InferenceMeta .
+
+:inferredBy rdf:type owl:ObjectProperty ;
+    rdfs:label "inferredBy" ;
+    rdfs:comment "The actor, organisation or software that produced this inference. Aligned to prov:wasAttributedTo." ;
+    rdfs:subPropertyOf prov:wasAttributedTo ;
+    rdfs:domain :InferenceMeta ;
+    rdfs:range prov:Agent .
+
+:inferredWith rdf:type owl:ObjectProperty ;
+    rdfs:label "inferredWith" ;
+    rdfs:comment "The algorithm or model (ideally with version) used to produce this inference. Distinct from inferredBy, which names the responsible actor; inferredWith names the tool." ;
+    rdfs:domain :InferenceMeta .
+
+:inferredFrom rdf:type owl:ObjectProperty ;
+    rdfs:label "inferredFrom" ;
+    rdfs:comment "The source the value was derived from - e.g. the origin file, page or region. Aligned to prov:wasDerivedFrom." ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ;
+    rdfs:domain :InferenceMeta .
+
+#################################################################
+#    Datatype Properties
+#################################################################
+
+:hasLiteralValue rdf:type owl:DatatypeProperty ;
+    rdfs:label "hasLiteralValue" ;
+    rdfs:comment "For datatype-valued field kinds, the literal value asserted, kept verbatim (not normalised, expanded or translated at extraction time)." ;
+    rdfs:domain :FieldAssertion ;
+    rdfs:range rdfs:Literal .
+
+:capturedCaption rdf:type owl:DatatypeProperty ;
+    rdfs:label "capturedCaption" ;
+    rdfs:comment "The caption/label text exactly as printed on the drawing for this assertion (e.g. 'Verfasser', 'Dwg. Desc.'). Retained even when the field kind is uncertain, so the ground truth of what was on the sheet is never lost and mapping can be revisited later." ;
+    rdfs:domain :FieldAssertion ;
+    rdfs:range xsd:string .
+
+:hasConfidence rdf:type owl:DatatypeProperty ;
+    rdfs:label "hasConfidence" ;
+    rdfs:comment "Confidence of the inference behind this assertion, as a decimal in [0,1]. Carried on the assertion (an individual) rather than on a triple, which keeps confidence in the graph without requiring RDF-star or statement reification." ;
+    rdfs:domain :FieldAssertion ;
+    rdfs:range xsd:decimal .
+
+:inferredAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "inferredAt" ;
+    rdfs:comment "The time the inference was produced. Aligned to prov:generatedAtTime." ;
+    rdfs:subPropertyOf prov:generatedAtTime ;
+    rdfs:domain :InferenceMeta ;
+    rdfs:range xsd:dateTime .

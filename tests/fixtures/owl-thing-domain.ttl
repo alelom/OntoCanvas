@@ -1,0 +1,20 @@
+@prefix : <http://example.org/owlthing#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/owlthing> rdf:type owl:Ontology ;
+    rdfs:label "owl:Thing domain fixture" .
+
+:Alpha rdf:type owl:Class ;
+    rdfs:label "Alpha" .
+
+:Beta rdf:type owl:Class ;
+    rdfs:label "Beta" .
+
+#### The label is a single lowercase word, so the derived identifier is stable and pressing OK
+#### in the edit modal does not rename the property. ####
+:relates rdf:type owl:ObjectProperty ;
+    rdfs:label "relates" ;
+    rdfs:domain :Alpha ;
+    rdfs:range :Beta .

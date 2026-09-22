@@ -53,6 +53,18 @@ export const ANNOTATION_FILL_PALETTE: string[] = [
   '#2c3e50', // slate
 ];
 
+/** Label colours a node can use; the one with more contrast against the fill is chosen. */
+export const NODE_LABEL_DARK = '#2c3e50';
+export const NODE_LABEL_LIGHT = '#ffffff';
+/** Last resort for mid-tone fills, where neither house colour reaches WCAG AA. */
+export const NODE_LABEL_BLACK = '#000000';
+
+/** Graph canvas colour, used to work out how a faded node's fill actually appears. */
+export const CANVAS_BACKGROUND = '#ffffff';
+
+/** Fill of the small rectangles used for data-property nodes. */
+export const DATA_PROPERTY_FILL = '#e8f4f8';
+
 /** Style applied to nodes that no annotation property governs. */
 export const DEFAULT_NODE_FALLBACK = {
   fill: '#bdc3c7',

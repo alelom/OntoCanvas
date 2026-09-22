@@ -283,6 +283,19 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     openEditDataPropertyModal: (name: string): void => {
       showEditDataPropertyModal(name);
     },
+    getObjectPropertyByName: (
+      name: string
+    ): { domain?: string; range?: string; hasGlobalDomain?: boolean; hasGlobalRange?: boolean; uri?: string } | null => {
+      const op = getObjectProperties().find((p) => p.name === name);
+      if (!op) return null;
+      return {
+        domain: op.domain,
+        range: op.range,
+        hasGlobalDomain: op.hasGlobalDomain,
+        hasGlobalRange: op.hasGlobalRange,
+        uri: op.uri,
+      };
+    },
     getDataPropertyByName: (name: string): { domains: string[]; uri?: string } | null => {
       const dp = getDataProperties().find((p) => p.name === name);
       if (!dp) return null;
@@ -355,6 +368,53 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         console.error('[getRenderedNodeOptions] Error accessing network data:', e);
         return null;
       }
+    },
+    getRenderedNodeColors: (): Array<{ id: string; background: string; border: string; font: string; opacity?: number }> => {
+      const network = getNetwork();
+      if (!network) return [];
+      try {
+        const networkAny = network as {
+          body?: {
+            data?: {
+              nodes?: {
+                forEach: (
+                  cb: (n: {
+                    id: string;
+                    color?: { background?: string; border?: string };
+                    font?: { color?: string };
+                    opacity?: number;
+                  }) => void
+                ) => void;
+              };
+            };
+          };
+        };
+        const nodes = networkAny.body?.data?.nodes;
+        if (!nodes) return [];
+        const out: Array<{ id: string; background: string; border: string; font: string; opacity?: number }> = [];
+        nodes.forEach((n) =>
+          out.push({
+            id: String(n.id),
+            background: n.color?.background ?? '',
+            border: n.color?.border ?? '',
+            font: n.font?.color ?? '',
+            opacity: n.opacity,
+          })
+        );
+        return out;
+      } catch (e) {
+        console.error('[getRenderedNodeColors] Error accessing network data:', e);
+        return [];
+      }
+    },
+    setAnnotationBooleanFill: (propName: string, state: 'true' | 'false' | 'undefined', color: string): boolean => {
+      const input = document.querySelector(
+        `.ap-bool-fill[data-prop="${CSS.escape(propName)}"][data-val="${state}"]`
+      ) as HTMLInputElement | null;
+      if (!input) return false;
+      input.value = color;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
     },
     getRenderedEdgeLabel: (edgeId: string): string | null => {
       const network = getNetwork();

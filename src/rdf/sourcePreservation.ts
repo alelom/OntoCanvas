@@ -11,6 +11,7 @@ import { buildInlineForms, replaceBlankRefs, convertBlanksToInline } from '../tu
 import { debugLog, debugWarn, debugError } from '../utils/debug';
 import { quadsAreDifferent } from '../parser';
 import { parsePropertyLinesWithStateMachine, type PropertyLineMatch } from './propertyLineParser';
+import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './turtlePrefixes';
 
 // ============================================================================
 // Phase 1: Core Data Structures
@@ -476,18 +477,17 @@ function detectStatementTypeFromLine(line: string): StatementType {
 }
 
 /**
- * Extract subject from a Turtle line
+ * Extract the subject a Turtle statement starts with, as written: `<uri>`, `:Local` or `prov:Agent`.
+ *
+ * Only ever called on a statement's opening line (unindented, not a comment), so a continuation
+ * line such as `rdfs:label "x" ;` never reaches it. A subject this fails to read is a subject the
+ * serializer cannot find in the source — and it then appends the whole stanza again as if it were
+ * newly added, which is what used to happen to every subject written with a named prefix.
  */
-function extractSubject(line: string): string | null {
+export function extractSubject(line: string): string | null {
   const trimmed = line.trim();
-  
-  // Match :subject, <uri>, or prefix:localName at start of line
-  const subjectMatch = trimmed.match(/^([:<][^\s]+|<[^>]+>)/);
-  if (subjectMatch) {
-    return subjectMatch[1];
-  }
-  
-  return null;
+  const subjectMatch = trimmed.match(/^(<[^>]+>|[A-Za-z_][\w.\-]*:[^\s]*|:[^\s]*)/);
+  return subjectMatch ? subjectMatch[1] : null;
 }
 
 /**
@@ -499,43 +499,15 @@ function matchQuadsToBlocks(
   blocks: StatementBlock[],
   quadToBlockMap: Map<N3Quad, StatementBlock>
 ): void {
-  // Extract prefix map from header blocks to resolve prefixed names
+  // Every prefix the file declares, from every header block.
   const prefixMap = new Map<string, string>();
   for (const block of blocks) {
-    if (block.type === 'Header' && block.originalText) {
-      // Parse @prefix declarations
-      const prefixMatch = block.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
-      if (prefixMatch) {
-        prefixMap.set(prefixMatch[1], prefixMatch[2]);
-      }
-      // Also handle empty prefix (default namespace)
-      const emptyPrefixMatch = block.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
-      if (emptyPrefixMatch) {
-        prefixMap.set('', emptyPrefixMatch[1]);
-      }
-    }
+    if (block.type === 'Header' && block.originalText) parseTurtlePrefixes(block.originalText, prefixMap);
   }
   
   // Helper to resolve prefixed name to full URI
-  const resolvePrefixedName = (prefixedName: string): string | null => {
-    if (prefixedName.startsWith('<') && prefixedName.endsWith('>')) {
-      return prefixedName.slice(1, -1); // Already a full URI
-    }
-    if (prefixedName.startsWith(':')) {
-      // Empty prefix (default namespace)
-      const baseUri = prefixMap.get('');
-      if (baseUri) {
-        return baseUri + prefixedName.slice(1);
-      }
-    } else if (prefixedName.includes(':')) {
-      const [prefix, localName] = prefixedName.split(':', 2);
-      const baseUri = prefixMap.get(prefix);
-      if (baseUri) {
-        return baseUri + localName;
-      }
-    }
-    return null;
-  };
+  const resolvePrefixedName = (prefixedName: string): string | null =>
+    resolveTurtlePrefixedName(prefixedName, prefixMap);
   
   // Group quads by subject URI
   const quadsBySubject = new Map<string, N3Quad[]>();
@@ -1443,24 +1415,15 @@ async function serializeBlockToTurtle(
   // If targeted replacement didn't work, fall back to full serialization
   // The property ordering issue is a known limitation when blocks are fully serialized
   
-  // Extract prefix map from cache headerSection to preserve prefixed names
-  const prefixMap: Record<string, string> = {};
+  // Every prefix the file declares, so a re-serialized block keeps writing prefixed names rather
+  // than expanding the ones that were missed into full URIs.
+  const prefixes = new Map<string, string>();
   if (cache?.headerSection) {
     for (const headerBlock of cache.headerSection.blocks) {
-      if (headerBlock.originalText) {
-        // Parse @prefix declarations
-        const prefixMatch = headerBlock.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
-        if (prefixMatch) {
-          prefixMap[prefixMatch[1]] = prefixMatch[2];
-        }
-        // Also handle empty prefix (default namespace)
-        const emptyPrefixMatch = headerBlock.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
-        if (emptyPrefixMatch) {
-          prefixMap[''] = emptyPrefixMatch[1];
-        }
-      }
+      if (headerBlock.originalText) parseTurtlePrefixes(headerBlock.originalText, prefixes);
     }
   }
+  const prefixMap: Record<string, string> = Object.fromEntries(prefixes);
   
   // Targeted append: if the ONLY change to this block is added rdfs:subClassOf items (existing
   // items and every other property unchanged), keep the original block text verbatim and splice
@@ -3339,20 +3302,11 @@ export function extractPropertyLines(
   const blockText = block.originalText;
   const blockQuads = block.quads;
 
-  // Extract prefix map for resolving prefixed names
+  // Every prefix the file declares, for resolving prefixed names
   const prefixMap = new Map<string, string>();
   if (cache.headerSection) {
     for (const headerBlock of cache.headerSection.blocks) {
-      if (headerBlock.originalText) {
-        const prefixMatch = headerBlock.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
-        if (prefixMatch) {
-          prefixMap.set(prefixMatch[1], prefixMatch[2]);
-        }
-        const emptyPrefixMatch = headerBlock.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
-        if (emptyPrefixMatch) {
-          prefixMap.set('', emptyPrefixMatch[1]);
-        }
-      }
+      if (headerBlock.originalText) parseTurtlePrefixes(headerBlock.originalText, prefixMap);
     }
   }
 
@@ -3360,7 +3314,8 @@ export function extractPropertyLines(
   const propertyMatches = parsePropertyLinesWithStateMachine(
     blockText,
     block.position.start,
-    block.position.startLine
+    block.position.startLine,
+    block.subject
   );
   
   debugLog(`[extractPropertyLines] Parsed ${propertyMatches.length} property matches from text`);
