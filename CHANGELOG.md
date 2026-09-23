@@ -1,3 +1,10 @@
+## [1.18.2](https://github.com/alelom/OntoCanvas/compare/v1.18.1...v1.18.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* edit-property OK no longer silently renames camelCase terms ([a26c486](https://github.com/alelom/OntoCanvas/commit/a26c4869c63366a0391215cd549b3519c94ded5f)), closes [#33](https://github.com/alelom/OntoCanvas/issues/33)
+
 ## [1.18.1](https://github.com/alelom/OntoCanvas/compare/v1.18.0...v1.18.1) (2026-09-22)
 
 
