@@ -1221,7 +1221,10 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     const rangeChanged = oldRange !== newRange;
     const subPropertyOfChanged = oldSubPropertyOf !== newSubPropertyOf;
     const definedByChanged = (oldDefinedBy || '') !== (newDefinedBy || '');
-    const derivedId = !isImported && newLabel ? labelToCamelCaseIdentifier(newLabel) : null;
+    // The identifier is derived from the label and has no input of its own, so it can only
+    // change as a consequence of a label edit. Deriving it when the label is untouched
+    // spuriously renames terms whose label diverges from their local name (issue #33).
+    const derivedId = !isImported && newLabel && labelChanged ? labelToCamelCaseIdentifier(newLabel) : null;
     const identifierChanged = !!derivedId && derivedId !== (op.uri ? extractLocalName(op.uri) : op.name);
     if (!labelChanged && !commentChanged && !domainChanged && !rangeChanged && !subPropertyOfChanged && !definedByChanged && !identifierChanged) {
       document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
@@ -2013,10 +2016,13 @@ function initEditDataPropertyHandlers(): void {
       const validation = validateLabelForIdentifier(newLabel);
       if (!validation.valid) return;
     }
-    const derivedId = !isImported && newLabel ? labelToCamelCaseIdentifier(newLabel) : null;
+    const labelChanged = dp.label !== newLabel;
+    // The identifier is derived from the label and has no input of its own, so it can only
+    // change as a consequence of a label edit. Deriving it when the label is untouched
+    // spuriously renames terms whose label diverges from their local name (issue #33).
+    const derivedId = !isImported && newLabel && labelChanged ? labelToCamelCaseIdentifier(newLabel) : null;
     const currentLocalName = dp.uri ? extractLocalName(dp.uri) : dp.name;
     const identifierChanged = !!derivedId && derivedId !== currentLocalName;
-    const labelChanged = dp.label !== newLabel;
     const commentChanged = (dp.comment ?? '') !== newComment;
     const rangeChanged = dp.range !== newRange;
     const oldDefinedBy = dp.isDefinedBy ?? '';
