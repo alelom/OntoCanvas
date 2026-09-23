@@ -27,6 +27,16 @@ export function extractLocalName(uri: string): string {
 // Re-export for convenience
 export { extractLocalName as extractLocalNameFromUri };
 
+/**
+ * Return the namespace of a URI: everything up to and including the last '#' (or '/'),
+ * or null when the URI has no separator (so a caller can fall back to a default base).
+ */
+export function namespaceFromUri(uri: string): string | null {
+  if (uri.includes('#')) return uri.slice(0, uri.lastIndexOf('#') + 1);
+  if (uri.includes('/')) return uri.slice(0, uri.lastIndexOf('/') + 1);
+  return null;
+}
+
 function isBlankNode(term: { termType: string }): boolean {
   return term.termType === 'BlankNode';
 }
@@ -2643,9 +2653,14 @@ export function renameDataPropertyInStore(
   newLocalName: string
 ): boolean {
   if (!newLocalName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newLocalName)) return false;
-  // Use class namespace (default ontology #) so serialization uses :name not <...#Ontology#name>
-  const ns = getClassNamespace(store) ?? BASE_IRI;
-  const base = ns.endsWith('#') ? ns : ns + '#';
+  // A rename changes only the local name, never the namespace: keep the term's own namespace.
+  // getClassNamespace() returns whichever owl:Class quad comes back first, which in a document
+  // that declares external typing stubs (e.g. a local prov:Agent) can be an external namespace,
+  // reassigning a local property into someone else's vocabulary (issue #33). Fall back to the
+  // document's own ontology base, then BASE_IRI, only when the old URI has no namespace.
+  const existingNs = namespaceFromUri(oldSubjectUri);
+  const ns = existingNs ?? getMainOntologyBase(store) ?? getClassNamespace(store) ?? BASE_IRI;
+  const base = ns.endsWith('#') || ns.endsWith('/') ? ns : ns + '#';
   const newUri = base + newLocalName;
   if (oldSubjectUri === newUri) return true;
   const oldSubject = DataFactory.namedNode(oldSubjectUri);

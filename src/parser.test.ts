@@ -319,7 +319,9 @@ describe('updateLabelInStore (edit)', () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
     const fromId = addNodeToStore(store, 'CardinalityTestContainer');
-    expect(fromId).toBe('cardinalitytestcontainer');
+    // A single-token label keeps its internal capitals (only the initial is lowercased), so the
+    // derived identifier round-trips and matches the space-separated form (issue #33).
+    expect(fromId).toBe('cardinalityTestContainer');
     const ok = addEdgeToStore(store, fromId!, 'Layout', 'contains', {
       minCardinality: 0,
       maxCardinality: 3,
@@ -335,7 +337,7 @@ describe('updateLabelInStore (edit)', () => {
     const OWL = 'http://www.w3.org/2002/07/owl#';
     const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
     const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
-    const fromUri = DataFactory.namedNode(BASE_IRI + 'cardinalitytestcontainer');
+    const fromUri = DataFactory.namedNode(BASE_IRI + fromId!);
     const subClassQuads = parsedStore.getQuads(fromUri, DataFactory.namedNode(RDFS + 'subClassOf'), null, null);
     const blankNodeQuads = subClassQuads.filter(q => q.object.termType === 'BlankNode');
     console.log('After parsing: found', blankNodeQuads.length, 'blank node subClassOf quads for cardinalitytestcontainer');
@@ -363,7 +365,7 @@ describe('updateLabelInStore (edit)', () => {
     
     // The edge type might be the full URI or local name depending on how it's parsed
     const containsEdge = graphData.edges.find(
-      (e) => e.from === 'cardinalitytestcontainer' && 
+      (e) => e.from === fromId! &&
              e.to === 'Layout' && 
              (e.type === 'contains' || e.type === 'http://example.org/aec-drawing-ontology#contains' || e.type.includes('contains'))
     );

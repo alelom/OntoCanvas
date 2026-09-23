@@ -28,8 +28,13 @@ export function labelToCamelCaseIdentifier(label: string): string {
     firstChar === '_' || /[a-zA-Z]/.test(firstChar)
       ? first
       : first.replace(/^[0-9]+/, '');
+  // Lowercase only the initial of the first word, not the whole word. Lowercasing the whole
+  // word is not idempotent: it destroys internal capitals of a label that is already an
+  // identifier (`assertedBy` -> `assertedby`, `hasXMLValue` -> `hasxmlvalue`), which makes an
+  // edit-modal round-trip look like a rename (issue #33). "Created" still yields "created".
+  const startCamel = start ? start.charAt(0).toLowerCase() + start.slice(1) : '';
   const camel =
-    start.toLowerCase() +
+    startCamel +
     rest
       .map((w) => (w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
       .join('');
