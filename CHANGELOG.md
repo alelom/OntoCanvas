@@ -1,3 +1,10 @@
+## [1.18.3](https://github.com/alelom/OntoCanvas/compare/v1.18.2...v1.18.3) (2026-09-28)
+
+
+### Bug Fixes
+
+* external-namespace class declared as a local owl:Class stub no longer duplicates ([bb15b79](https://github.com/alelom/OntoCanvas/commit/bb15b79390acec9f9bad8caa8f99e479a79950fc)), closes [#35](https://github.com/alelom/OntoCanvas/issues/35)
+
 ## [1.18.2](https://github.com/alelom/OntoCanvas/compare/v1.18.1...v1.18.2) (2026-09-23)
 
 
