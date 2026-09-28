@@ -85,6 +85,7 @@ import {
   DISPLAY_CONFIG_VERSION,
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
+import { isDefinedElsewhere } from './graph/definedElsewhere';
 import {
   getQuadsRemovedForExternalClass,
   removeExternalClassReferencesFromStore,
@@ -3112,6 +3113,7 @@ function buildNetworkData(
     });
   }
 
+  const mainBaseForNodes = ttlStore ? getMainOntologyBase(ttlStore) : null;
   const nodes = filteredNodes.map((n) => {
     const pos = (n.x != null && n.y != null) ? { x: n.x, y: n.y } : nodePositions[n.id];
     const d = depth[n.id] ?? 0;
@@ -3135,10 +3137,16 @@ function buildNetworkData(
     }
     const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
     
-    // Apply search transparency if search query is active; external nodes use configured opacity
+    // Apply search transparency if search query is active; external nodes use configured opacity.
+    // A class declared locally but defined elsewhere (rdfs:isDefinedBy → another ontology) is
+    // treated like an import: dimmed with the defining ontology's opacity.
     const isExternal = (n as GraphNode & { isExternal?: boolean; externalOntologyUrl?: string }).isExternal;
-    const externalUrl = (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl;
-    const baseOpacity = isExternal ? getOpacityForExternalOntology(externalUrl, externalOntologyReferences) : 1.0;
+    const definedElsewhere = isDefinedElsewhere(n, mainBaseForNodes);
+    const isExternalLike = !!isExternal || definedElsewhere;
+    const externalUrl =
+      (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl ??
+      (definedElsewhere ? n.isDefinedBy ?? undefined : undefined);
+    const baseOpacity = isExternalLike ? getOpacityForExternalOntology(externalUrl, externalOntologyReferences) : 1.0;
     let nodeOpacity = baseOpacity;
     let backgroundColor = style.background;
     let borderColor = style.border;
@@ -3146,13 +3154,13 @@ function buildNetworkData(
     
     if (searchQuery) {
       const searchOpacity = getSearchOpacity(n.id, matchingNodeIds, neighborNodeIds);
-      nodeOpacity = isExternal ? searchOpacity * baseOpacity : searchOpacity;
+      nodeOpacity = isExternalLike ? searchOpacity * baseOpacity : searchOpacity;
       if (nodeOpacity < 1.0) {
         backgroundColor = applyOpacityToColor(style.background, nodeOpacity);
         borderColor = applyOpacityToColor(style.border, nodeOpacity);
         fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: nodeOpacity }), nodeOpacity);
       }
-    } else if (isExternal) {
+    } else if (isExternalLike) {
       backgroundColor = applyOpacityToColor(style.background, baseOpacity);
       borderColor = applyOpacityToColor(style.border, baseOpacity);
       fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: baseOpacity }), baseOpacity);
@@ -3166,12 +3174,14 @@ function buildNetworkData(
       font: { size: fontSize, color: fontColor },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
       ...((): { title?: string } => {
-        const title =
-          n.comment ??
-          ((n as GraphNode & { isExternal?: boolean; externalOntologyUrl?: string }).isExternal &&
+        const importedFrom =
+          (n as GraphNode & { isExternal?: boolean; externalOntologyUrl?: string }).isExternal &&
           (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl
             ? `(Imported from ${(n as GraphNode & { externalOntologyUrl: string }).externalOntologyUrl})`
-            : undefined);
+            : definedElsewhere && externalUrl
+              ? `(Defined in ${externalUrl})`
+              : undefined;
+        const title = n.comment ?? importedFrom;
         return title ? { title } : {};
       })(),
     };
@@ -4181,7 +4191,10 @@ function showRenameModal(
   const node = rawData.nodes.find((n) => n.id === nodeId);
   const isExternal = node?.isExternal && node?.externalOntologyUrl;
   const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-  const isImported = !!(isExternal || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, externalOntologyReferences, mainBase)));
+  // A class declared locally but defined elsewhere (rdfs:isDefinedBy → another ontology) is
+  // read-only here too — its real definition lives in the source ontology.
+  const definedElsewhere = !!node && isDefinedElsewhere(node, mainBase);
+  const isImported = !!(isExternal || definedElsewhere || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, externalOntologyReferences, mainBase)));
   
   // Add/update warning icon if imported - place it in header aligned with h3
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -4207,7 +4220,7 @@ function showRenameModal(
       warningIcon.style.display = 'inline';
       warningIcon.classList.add('warning-icon-pulse');
     }
-    const ontologyUrl = node?.externalOntologyUrl || 'an external ontology';
+    const ontologyUrl = node?.externalOntologyUrl || node?.isDefinedBy || 'an external ontology';
     warningIcon.title = `This class is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
   } else if (warningIcon) {
     warningIcon.style.display = 'none';

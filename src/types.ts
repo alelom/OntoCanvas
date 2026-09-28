@@ -34,6 +34,12 @@ export interface GraphNode {
   isExternal?: boolean;
   /** URL of the external ontology that defines this node. Set when isExternal is true. */
   externalOntologyUrl?: string;
+  /**
+   * rdfs:isDefinedBy (URI of the defining ontology), when the class is declared locally but
+   * defined elsewhere (a "typing stub" reused for alignment, e.g. geo:Geometry). When this points
+   * outside the main ontology the node is shown dimmed and treated as read-only, like an import.
+   */
+  isDefinedBy?: string | null;
 }
 
 export interface AnnotationPropertyInfo {
