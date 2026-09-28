@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/alelom/OntoCanvas/compare/v1.18.3...v1.19.0) (2026-09-28)
+
+
+### Features
+
+* show rdfs:isDefinedBy (defined-elsewhere) classes dimmed and read-only ([04db282](https://github.com/alelom/OntoCanvas/commit/04db28201300d080544ce79cd96e4012ff5b9975)), closes [#38](https://github.com/alelom/OntoCanvas/issues/38)
+
 ## [1.18.3](https://github.com/alelom/OntoCanvas/compare/v1.18.2...v1.18.3) (2026-09-28)
 
 
