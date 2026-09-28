@@ -2,6 +2,8 @@
 
 Guidance for working in this repository. These rules are distilled from `.cursor/rules/` (which remain the source of truth) plus verified facts about the codebase.
 
+> **Contribution workflow:** see [AGENTS.md](AGENTS.md) for the cross-agent, issue-first workflow — OntoCanvas is a personal open-source project tracked with **GitHub issues** (no YouTrack/Jira); open or find an issue before substantive work, use Conventional Commits, and open a PR that `Closes` it.
+
 ## What this project is
 
 **OntoCanvas** — an interactive, browser-only ontology editor and visualizer (`package.json` name: `ontology-editor`). It loads any RDF format and lets users edit a class/relationship graph visually, then save as Turtle.

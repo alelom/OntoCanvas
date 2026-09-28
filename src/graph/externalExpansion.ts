@@ -303,7 +303,14 @@ export function expandWithExternalRefs(
     const qObj = q.object as { termType: string; value?: string };
     if (qObj.termType !== 'NamedNode') continue;
     const superClassUri = qObj.value!;
-    const superClassIsLocal = isLocalUri(superClassUri, mainBase);
+    // A class from an external namespace may also be declared locally as an owl:Class
+    // "typing stub" (e.g. geo:Geometry reused for alignment). In that case the parser
+    // already created a local node for it (keyed by local name), so treat it as local
+    // here too — otherwise we mint a second node keyed by the full URI and the subClassOf
+    // line attaches only to the local one, leaving the external-looking node orphaned.
+    // Mirrors the domain/range branch above (localNodeIds check || isLocalUri).
+    const superClassIsLocal =
+      localNodeIds.has(extractLocalName(superClassUri)) || isLocalUri(superClassUri, mainBase);
     if (!superClassIsLocal) {
       const ref = findRefForUri(superClassUri, externalRefs);
       if (ref && !externalClassNodes.has(superClassUri)) {
