@@ -2,6 +2,8 @@
 alwaysApply: true
 ---
 
+Contribution workflow: see [AGENTS.md](mdc:AGENTS.md) — OntoCanvas is a personal open-source project tracked with GitHub issues (no YouTrack/Jira). Open or find a GitHub issue before substantive work, use Conventional Commits (semantic-release), and open a PR that `Closes` its issue.
+
 This project uses `uv` as a package manager.
 
 Whenever a modification to the Visualizer or Editor is requested, either take a screenshot or connect to the browser MCP to verify the output.

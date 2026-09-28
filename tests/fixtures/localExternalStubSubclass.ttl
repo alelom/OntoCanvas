@@ -1,0 +1,28 @@
+# Minimal reproduction of the "locally-declared external stub class" pattern.
+#
+# geo:Geometry belongs to an EXTERNAL namespace (GeoSPARQL) but is declared here
+# locally as an owl:Class "typing stub" (a name, not a full definition) so the module
+# stays self-contained. A local class then subclasses it. This is a legitimate,
+# deliberate modelling pattern (the same shape as reusing prov:Entity etc.).
+#
+# The stub must render as ONE node, with the subClassOf line attached to it.
+@prefix : <http://example.org/mine#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix geo: <http://www.opengis.net/ont/geosparql#> .
+
+<http://example.org/mine> rdf:type owl:Ontology ;
+    rdfs:label "Minimal stub-reuse ontology" .
+
+# External term reused for alignment, declared locally as a stub.
+geo:Geometry rdf:type owl:Class ;
+    rdfs:label "Geometry" ;
+    rdfs:comment "Typing stub for the external GeoSPARQL term of the same name." ;
+    rdfs:isDefinedBy <http://www.opengis.net/ont/geosparql#> .
+
+# Local class that is a subclass of the external stub.
+:BoundingBox rdf:type owl:Class ;
+    rdfs:label "Bounding Box" ;
+    rdfs:subClassOf geo:Geometry .
