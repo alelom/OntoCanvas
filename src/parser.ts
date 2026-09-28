@@ -334,6 +334,13 @@ function buildParseResultFromStore(
     const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
 
+    // rdfs:isDefinedBy — set on classes declared locally but defined elsewhere (typing stubs).
+    const isDefinedByQuad = store.getQuads(subj, RDFS + 'isDefinedBy', null, null)[0];
+    const isDefinedBy =
+      isDefinedByQuad?.object?.termType === 'NamedNode'
+        ? (isDefinedByQuad.object as { value: string }).value
+        : undefined;
+
     let labellableRoot: boolean | null = null;
     const annotations: Record<string, string | boolean | null> = {};
     const outQuads = store.getQuads(subj, null, null, null);
@@ -364,6 +371,7 @@ function buildParseResultFromStore(
       annotations,
       dataPropertyRestrictions: [],
       exampleImages: exampleImages.length > 0 ? exampleImages : undefined,
+      isDefinedBy,
     });
   }
   
