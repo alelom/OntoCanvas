@@ -146,6 +146,7 @@ import {
   getPrefixForUri,
   isUriFromExternalOntology,
   getOpacityForExternalOntology,
+  getNodeOntologyUrl,
 } from './ui/externalRefs';
 import {
   initRenameModalHeaderIcons,
@@ -3145,7 +3146,7 @@ function buildNetworkData(
     const isExternalLike = !!isExternal || definedElsewhere;
     const externalUrl =
       (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl ??
-      (definedElsewhere ? n.isDefinedBy ?? undefined : undefined);
+      (definedElsewhere ? getNodeOntologyUrl(n) ?? undefined : undefined);
     const baseOpacity = isExternalLike ? getOpacityForExternalOntology(externalUrl, externalOntologyReferences) : 1.0;
     let nodeOpacity = baseOpacity;
     let backgroundColor = style.background;
@@ -3174,14 +3175,17 @@ function buildNetworkData(
       font: { size: fontSize, color: fontColor },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
       ...((): { title?: string } => {
-        const importedFrom =
-          (n as GraphNode & { isExternal?: boolean; externalOntologyUrl?: string }).isExternal &&
-          (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl
-            ? `(Imported from ${(n as GraphNode & { externalOntologyUrl: string }).externalOntologyUrl})`
+        // Lead with a source note (like external "(Imported from …)"), then the rdfs:comment.
+        const extUrl = (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl;
+        const note =
+          (n as GraphNode & { isExternal?: boolean }).isExternal && extUrl
+            ? `(Imported from ${extUrl})`
             : definedElsewhere && externalUrl
-              ? `(Defined in ${externalUrl})`
+              ? `(Defined by ${externalUrl})`
               : undefined;
-        const title = n.comment ?? importedFrom;
+        const title = note
+          ? (n.comment ? `${note}\n\n${n.comment}` : note)
+          : n.comment ?? undefined;
         return title ? { title } : {};
       })(),
     };
@@ -4220,7 +4224,7 @@ function showRenameModal(
       warningIcon.style.display = 'inline';
       warningIcon.classList.add('warning-icon-pulse');
     }
-    const ontologyUrl = node?.externalOntologyUrl || node?.isDefinedBy || 'an external ontology';
+    const ontologyUrl = node?.externalOntologyUrl || node?.isDefinedBy || (node ? getNodeOntologyUrl(node) : null) || 'an external ontology';
     warningIcon.title = `This class is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
   } else if (warningIcon) {
     warningIcon.style.display = 'none';
@@ -4276,6 +4280,20 @@ function showRenameModal(
       nodeModalFormUi.updateRenameDataPropAddButtonState();
     }
   }
+
+  // Read-only parity: an imported / defined-elsewhere class cannot have its annotation or
+  // data-property assignments changed either (mirrors the label/comment gating above).
+  for (const section of [annotPropsSection, dataPropsSection]) {
+    if (!section) continue;
+    section.style.opacity = isImported ? '0.5' : '';
+    section.title = isImported ? 'Cannot be changed for classes defined in another ontology.' : '';
+    section.querySelectorAll('input, select, textarea, button').forEach((el) => {
+      (el as HTMLInputElement).disabled = isImported;
+    });
+  }
+  // Restore the correct add-button state for editable classes (it was just blanket-enabled above).
+  if (!isImported) nodeModalFormUi.updateRenameDataPropAddButtonState();
+
   modal.style.display = 'flex';
   refreshRenameModalFromInput();
   input.focus();

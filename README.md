@@ -37,6 +37,20 @@ Therefore, good reasons to use _Ontocanvas_ are: if you want a good hierarchical
 - **Relationships filters** – Show/hide by relationship type
 - **Open:** any RDF format supported by [rdf-parse](https://github.com/rubensworks/rdf-parse.js) — Turtle (`.ttl`, `.turtle`), RDF/XML / OWL (`.owl`, `.rdf`), JSON-LD (`.jsonld`, `.json`), N-Triples, N3, TriG, and more.
 - **Save:** Turtle only. When editing a Turtle file, a **minimal-diff, formatting-preserving serializer** rewrites only the lines an edit touches — keeping comments, blank lines, section dividers, property order, typed literals, `rdf:type` notation, and OWL restrictions (including multi-line `rdfs:subClassOf` lists) intact (see [Serialization (saving)](#serialization-saving)).
+- **Terms defined elsewhere** – classes that belong to another ontology are shown dimmed, prefixed (e.g. `geo:Geometry`), and are read-only (see [Terms defined elsewhere](#terms-defined-elsewhere)).
+
+
+## Terms defined elsewhere
+
+Ontologies often reuse terms that are really **defined in another ontology** — for example a class from a standard vocabulary, brought in for alignment and declared locally as a small "stub" (typically with `rdfs:isDefinedBy` pointing at its source, e.g. `geo:Geometry` from GeoSPARQL).
+
+OntoCanvas treats such terms as **belonging elsewhere**, exactly like imported/external references:
+
+- **Dimmed** on the canvas, so they read as "not part of this ontology's own definitions".
+- **Prefixed** with the namespace from the Turtle file (e.g. `geo:Geometry` rather than just `Geometry`).
+- **Read-only:** their label, comment, annotations and data-property assignments can't be edited here — a ⚠️ marker in the edit dialog explains that the term is defined in another ontology and must be edited there. Hovering the node shows a `(Defined by …)` note followed by the term's comment.
+
+A class counts as *defined elsewhere* when it carries an `rdfs:isDefinedBy` pointing outside this ontology, **or** when its own URI simply lives in a different namespace. Terms in this ontology's own namespace stay fully editable.
 
 
 ## Comparison with other ontology editors and visualisers 

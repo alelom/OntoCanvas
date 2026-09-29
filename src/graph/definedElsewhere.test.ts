@@ -26,4 +26,33 @@ describe('isDefinedElsewhere', () => {
   it('treats isDefinedBy as elsewhere when the main base is unknown', () => {
     expect(isDefinedElsewhere({ isDefinedBy: 'http://www.opengis.net/ont/geosparql#' }, null)).toBe(true);
   });
+
+  describe('by URI namespace (no rdfs:isDefinedBy)', () => {
+    it('is true when the class URI lives outside the main ontology', () => {
+      expect(isDefinedElsewhere({ uri: 'http://www.opengis.net/ont/geosparql#Geometry' }, mainBase)).toBe(true);
+    });
+
+    it('is false when the class URI is in the main ontology', () => {
+      expect(isDefinedElsewhere({ uri: 'https://w3id.org/adiro/aec_geometry#BoundingBox' }, mainBase)).toBe(false);
+    });
+
+    it('handles slash-based namespaces', () => {
+      expect(isDefinedElsewhere({ uri: 'http://example.org/other/Thing' }, 'http://example.org/main/')).toBe(true);
+      expect(isDefinedElsewhere({ uri: 'http://example.org/main/Thing' }, 'http://example.org/main/')).toBe(false);
+    });
+
+    it('cannot judge a bare URI when the main base is unknown (conservative false)', () => {
+      expect(isDefinedElsewhere({ uri: 'http://www.opengis.net/ont/geosparql#Geometry' }, null)).toBe(false);
+    });
+
+    it('prefers isDefinedBy over the URI namespace when both are present', () => {
+      // isDefinedBy points at main → local, even though the URI namespace differs.
+      expect(
+        isDefinedElsewhere(
+          { uri: 'http://www.opengis.net/ont/geosparql#Geometry', isDefinedBy: mainBase },
+          mainBase
+        )
+      ).toBe(false);
+    });
+  });
 });

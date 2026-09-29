@@ -258,6 +258,37 @@ describe('externalRefs', () => {
       const url = getNodeOntologyUrl(node);
       expect(url).toBeNull();
     });
+
+    it('should use rdfs:isDefinedBy for a locally-declared but externally-defined class', () => {
+      const node: GraphNode = {
+        labellableRoot: null,
+        id: 'Geometry',
+        label: 'Geometry',
+        comment: 'Typing stub.',
+        isDefinedBy: 'http://www.opengis.net/ont/geosparql#',
+      };
+      expect(getNodeOntologyUrl(node)).toBe('http://www.opengis.net/ont/geosparql#');
+    });
+  });
+
+  describe('getNodePrefix / formatNodeLabelWithPrefix for defined-elsewhere classes', () => {
+    const node: GraphNode = {
+      labellableRoot: null,
+      id: 'Geometry',
+      label: 'Geometry',
+      isDefinedBy: 'http://www.opengis.net/ont/geosparql#',
+    };
+    const refs: ExternalOntologyReference[] = [
+      { url: 'http://www.opengis.net/ont/geosparql#', usePrefix: true, prefix: 'geo' },
+    ];
+
+    it('resolves the TTL prefix from isDefinedBy', () => {
+      expect(getNodePrefix(node, refs)).toBe('geo');
+    });
+
+    it('renders the label with its prefix', () => {
+      expect(formatNodeLabelWithPrefix(node, refs)).toBe('geo: Geometry');
+    });
   });
   
   describe('getNodePrefix', () => {
