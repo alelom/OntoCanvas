@@ -168,6 +168,19 @@ export function getNodeOntologyUrl(node: GraphNode): string | null {
   if (nodeWithExternal.externalOntologyUrl) {
     return nodeWithExternal.externalOntologyUrl;
   }
+  // A class declared locally but defined elsewhere carries rdfs:isDefinedBy pointing at its
+  // defining ontology — use that so the node shows its prefix (e.g. geo:Geometry).
+  if (node.isDefinedBy) {
+    return node.isDefinedBy;
+  }
+  // A class whose own URI is in another namespace (no rdfs:isDefinedBy) — use that namespace.
+  // For main-ontology classes this returns the main base, which getNodePrefix maps to no prefix.
+  const nodeUri = (node as GraphNode & { uri?: string }).uri;
+  if (nodeUri && (nodeUri.startsWith('http://') || nodeUri.startsWith('https://'))) {
+    if (nodeUri.includes('#')) return nodeUri.slice(0, nodeUri.indexOf('#') + 1);
+    const lastSlash = nodeUri.lastIndexOf('/');
+    if (lastSlash > 0) return nodeUri.slice(0, lastSlash + 1);
+  }
   // Fallback: check comment for "(Imported from ...)" pattern
   if (node.comment) {
     const match = node.comment.match(/\(Imported from ([^)]+)\)/);

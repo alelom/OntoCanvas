@@ -371,6 +371,7 @@ function buildParseResultFromStore(
       annotations,
       dataPropertyRestrictions: [],
       exampleImages: exampleImages.length > 0 ? exampleImages : undefined,
+      uri,
       isDefinedBy,
     });
   }

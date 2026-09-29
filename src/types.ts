@@ -34,6 +34,9 @@ export interface GraphNode {
   isExternal?: boolean;
   /** URL of the external ontology that defines this node. Set when isExternal is true. */
   externalOntologyUrl?: string;
+  /** Full URI of the class (the rdf:type owl:Class subject). Used to detect when a class lives in
+   * a namespace outside the main ontology (defined elsewhere), independent of rdfs:isDefinedBy. */
+  uri?: string;
   /**
    * rdfs:isDefinedBy (URI of the defining ontology), when the class is declared locally but
    * defined elsewhere (a "typing stub" reused for alignment, e.g. geo:Geometry). When this points
