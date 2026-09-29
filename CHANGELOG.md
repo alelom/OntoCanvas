@@ -1,3 +1,10 @@
+## [1.21.1](https://github.com/alelom/OntoCanvas/compare/v1.21.0...v1.21.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **ci:** stop hygiene guard flagging its own scanner test fixtures ([7ddb6cc](https://github.com/alelom/OntoCanvas/commit/7ddb6cc4335699f65146bf4def7d91620362c551))
+
 # [1.21.0](https://github.com/alelom/OntoCanvas/compare/v1.20.0...v1.21.0) (2026-09-29)
 
 
