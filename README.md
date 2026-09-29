@@ -134,3 +134,13 @@ npm run test:watch  # Run tests in watch mode
 ```
 
 Tests cover load (parse), edit (label update), save (serialize), and round-trip consistency with E2E tests.
+
+## Repository hygiene
+
+This is a public repository. A guard fails CI if internal-only names (private infrastructure, feeds, trackers, emails) are committed. Run it locally before pushing:
+
+```bash
+npm run check:internal-names
+```
+
+Generic, non-identifying patterns are committed in `scripts/ci/internal-names.config.json`; organisation-specific literals are supplied via the `INTERNAL_NAME_PATTERNS` CI secret. See [`scripts/ci/README.md`](scripts/ci/README.md).

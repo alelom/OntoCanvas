@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "test:e2e:watch": "vitest -c vitest.e2e.config.ts",
-    "experiment:rdflib": "tsx scripts/rdflibexperiments/main.ts"
+    "experiment:rdflib": "tsx scripts/rdflibexperiments/main.ts",
+    "check:internal-names": "node scripts/ci/check-internal-names.mjs"
   },
   "dependencies": {
     "n3": "^1.17.0",

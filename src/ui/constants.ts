@@ -65,6 +65,10 @@ export const CANVAS_BACKGROUND = '#ffffff';
 /** Fill of the small rectangles used for data-property nodes. */
 export const DATA_PROPERTY_FILL = '#e8f4f8';
 
+/** RGB channels of the solid background box drawn behind relationship (edge) labels.
+ * Light grey; rendered at 50% opacity (dimmed further with the edge under search). */
+export const RELATIONSHIP_LABEL_BG_RGB = '211, 211, 211';
+
 /** Style applied to nodes that no annotation property governs. */
 export const DEFAULT_NODE_FALLBACK = {
   fill: '#bdc3c7',
