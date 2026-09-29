@@ -17,3 +17,11 @@ coverage/
 
 # Claude Code (personal/local overrides; project-shared settings live in .claude/settings.json)
 .claude/settings.local.json
+
+# Local dev/AI artifacts that must never be committed to this public repo (may contain internal
+# chat, emails, or infra detail). See scripts/ci/check-internal-names.mjs.
+test-results.log
+.cursor/transcripts/
+scripts/cursor_recovery/*.txt
+scripts/cursor_recovery/*.md
+scripts/rdflibexperiments/output/

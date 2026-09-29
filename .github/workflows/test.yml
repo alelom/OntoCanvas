@@ -16,6 +16,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  hygiene:
+    name: Public-repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Fails the PR if an internal-only name leaks into this public repo. Organisation-specific
+      # literals come from the INTERNAL_NAME_PATTERNS secret; generic patterns are committed.
+      - name: Check for internal names
+        run: node scripts/ci/check-internal-names.mjs
+        env:
+          INTERNAL_NAME_PATTERNS: ${{ secrets.INTERNAL_NAME_PATTERNS }}
+
   changes:
     name: Detect changes
     runs-on: ubuntu-latest

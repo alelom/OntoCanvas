@@ -86,6 +86,7 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
+import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import {
   getQuadsRemovedForExternalClass,
   removeExternalClassReferencesFromStore,
@@ -194,7 +195,7 @@ import {
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
 import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
-import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, type AnnotationStyleConfig } from './ui/constants';
+import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, RELATIONSHIP_LABEL_BG_RGB, type AnnotationStyleConfig } from './ui/constants';
 import { readableTextColor } from './lib/textContrast';
 import {
   DATA_PROPERTY_RANGE_OPTIONS,
@@ -3617,7 +3618,9 @@ function buildNetworkData(
     // Apply search transparency if search query is active
     let edgeColor = style.color;
     let edgeFontColor = '#2c3e50';
-    
+    // Solid light-grey box behind the label, 50% opacity — dimmed with the edge under search.
+    let labelBgAlpha = 0.5;
+
     if (searchQuery) {
       // An edge is full-opacity only when it matched directly or joins two matched nodes.
       // Edges merely departing from a matched node toward a non-neighbour are dimmed; edges
@@ -3632,6 +3635,7 @@ function buildNetworkData(
       if (edgeOpacity < 1.0) {
         edgeColor = applyOpacityToColor(style.color, edgeOpacity);
         edgeFontColor = applyOpacityToColor('#2c3e50', edgeOpacity);
+        labelBgAlpha = 0.5 * edgeOpacity;
       }
     }
     
@@ -3653,7 +3657,11 @@ function buildNetworkData(
       to: e.to,
       arrows: 'to',
       label: style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '',
-      font: { size: relationshipFontSize, color: edgeFontColor },
+      font: {
+        size: relationshipFontSize,
+        color: edgeFontColor,
+        ...(style.showLabel && { background: `rgba(${RELATIONSHIP_LABEL_BG_RGB}, ${labelBgAlpha})` }),
+      },
       color: { color: edgeColor, highlight: edgeColor },
       dashes,
       width,
@@ -3878,6 +3886,52 @@ function updateSelectionInfoDisplay(net: Network): void {
   }
 }
 
+/**
+ * Return the id of the edge whose label box is under `domPos`, or null.
+ * vis-network hit-tests edges by their line, not their label, so we test the label boxes
+ * ourselves using each edge's rendered label size (from the live network body).
+ */
+function getEdgeIdAtLabelPoint(net: Network, domPos: { x: number; y: number }): string | null {
+  const body = (net as unknown as { body?: { edges?: Record<string, {
+    options?: { label?: string };
+    labelModule?: { size?: { left: number; top: number; width: number; height: number } };
+  }> } }).body;
+  if (!body?.edges) return null;
+  const canvasPos = net.DOMtoCanvas(domPos);
+  const boxes: EdgeLabelBox[] = [];
+  for (const id in body.edges) {
+    const edge = body.edges[id];
+    if (!edge?.options?.label) continue;
+    const size = edge.labelModule?.size;
+    if (!size || typeof size.left !== 'number' || typeof size.top !== 'number') continue;
+    boxes.push({ id, left: size.left, top: size.top, width: size.width, height: size.height });
+  }
+  return findEdgeIdAtLabelPoint(boxes, canvasPos);
+}
+
+/** Singleton tooltip element used when hovering an edge label (vis-network only shows its own
+ * tooltip when hovering the edge line). */
+let edgeLabelTooltipEl: HTMLDivElement | null = null;
+function showEdgeLabelTooltip(text: string, clientX: number, clientY: number): void {
+  if (!edgeLabelTooltipEl) {
+    edgeLabelTooltipEl = document.createElement('div');
+    edgeLabelTooltipEl.className = 'edge-label-tooltip';
+    edgeLabelTooltipEl.style.cssText =
+      'position: fixed; z-index: 10000; pointer-events: none; max-width: 320px; ' +
+      'background: #fff; border: 1px solid #bbb; border-radius: 4px; padding: 6px 8px; ' +
+      'font-size: 12px; color: #2c3e50; box-shadow: 0 2px 6px rgba(0,0,0,0.15); white-space: pre-wrap;';
+    document.body.appendChild(edgeLabelTooltipEl);
+  }
+  edgeLabelTooltipEl.textContent = text;
+  edgeLabelTooltipEl.style.display = 'block';
+  // Offset slightly from the cursor.
+  edgeLabelTooltipEl.style.left = `${clientX + 12}px`;
+  edgeLabelTooltipEl.style.top = `${clientY + 12}px`;
+}
+function hideEdgeLabelTooltip(): void {
+  if (edgeLabelTooltipEl) edgeLabelTooltipEl.style.display = 'none';
+}
+
 function setupNetworkSelectionAndNavigation(
   net: Network,
   container: HTMLElement
@@ -3919,10 +3973,10 @@ function setupNetworkSelectionAndNavigation(
     }
     const coords = getContainerCoords(e);
     if (e.button === RIGHT_BUTTON) {
-      // Check if clicking on a node or edge
+      // Check if clicking on a node or edge (line, or — falling back — the edge's label box)
       const nodeAt = net.getNodeAt(coords);
-      const edgeAt = net.getEdgeAt(coords);
-      
+      const edgeAt = net.getEdgeAt(coords) ?? (nodeAt == null ? getEdgeIdAtLabelPoint(net, coords) : null);
+
       // If clicking on node/edge, don't start panning; store target for context menu (exact click position)
       if (nodeAt != null || edgeAt != null) {
         rightPanStart = null;
@@ -3959,7 +4013,29 @@ function setupNetworkSelectionAndNavigation(
         animation: false,
       });
       rightPanStart = { ...rightPanStart, x: coords.x, y: coords.y, viewPos: newViewPos };
+      hideEdgeLabelTooltip();
+      return;
     }
+
+    // Show the edge's tooltip when hovering its label box (vis-network only shows it on the line).
+    const target = e.target as Node;
+    const overContainer =
+      container.contains(target) || (container.querySelector('canvas')?.contains(target) ?? false);
+    if (!overContainer) {
+      hideEdgeLabelTooltip();
+      return;
+    }
+    const edgeId = getEdgeIdAtLabelPoint(net, coords);
+    if (edgeId) {
+      const edge = (net as unknown as { body?: { edges?: Record<string, { options?: { title?: string } }> } })
+        .body?.edges?.[edgeId];
+      const title = edge?.options?.title;
+      if (title) {
+        showEdgeLabelTooltip(String(title), e.clientX, e.clientY);
+        return;
+      }
+    }
+    hideEdgeLabelTooltip();
   };
 
   const handleMouseUp = (e: MouseEvent) => {
@@ -3987,6 +4063,7 @@ function setupNetworkSelectionAndNavigation(
 
   const handleMouseLeave = () => {
     rightPanStart = null;
+    hideEdgeLabelTooltip();
   };
 
   // Prevent browser context menu on container and all its children (including canvas)
@@ -4058,7 +4135,7 @@ function setupNetworkSelectionAndNavigation(
       }
       return;
     }
-    const edgeAt = net.getEdgeAt(domPos);
+    const edgeAt = net.getEdgeAt(domPos) ?? getEdgeIdAtLabelPoint(net, domPos);
     if (edgeAt != null) {
       openEditModalForEdge(String(edgeAt));
       return;
@@ -4105,8 +4182,19 @@ function setupNetworkSelectionAndNavigation(
       return;
     }
 
-    // If not in add node mode and no node clicked, don't do anything
+    // If not in add node mode and no node clicked: vis-network selects an edge only when its line
+    // is clicked, so if nothing was hit, try selecting an edge by its label box.
     if (!clickedNode) {
+      if ((params.edges?.length ?? 0) === 0) {
+        const domPos = params.event?.pointer?.DOM;
+        if (domPos) {
+          const edgeId = getEdgeIdAtLabelPoint(net, domPos);
+          if (edgeId) {
+            net.setSelection({ nodes: [], edges: [edgeId] }, { unselectAll: true, highlightEdges: true });
+            updateSelectionInfoDisplay(net);
+          }
+        }
+      }
       return;
     }
 
