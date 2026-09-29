@@ -2,18 +2,22 @@ import { describe, it, expect } from 'vitest';
 // @ts-expect-error - plain .mjs module without type declarations
 import { compilePatterns, scanText } from '../../scripts/ci/internalNameScan.mjs';
 
+// NOTE: this file necessarily contains sample strings that match the guard's own patterns
+// (e.g. pkgs.dev.azure.com, a private IP). It is therefore excluded from the hygiene scan via
+// "excludeFiles" in scripts/ci/internal-names.config.json. Values here are synthetic — no real
+// company/org names.
 describe('internal-name hygiene scan', () => {
   const patterns = compilePatterns([
-    '[a-z0-9._%+-]+@burohappold\\.com',
+    '[a-z0-9._%+-]+@example-corp\\.com',
     'pkgs\\.dev\\.azure\\.com',
     '\\b(?:10|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d{1,3}\\.\\d{1,3}(?:\\.\\d{1,3})?\\b',
   ]);
-  const allow = compilePatterns(['burohappoldmachinelearning\\.github\\.io', 'w3id\\.org/adiro']);
+  const allow = compilePatterns(['github\\.io/ADIRO', 'w3id\\.org/adiro']);
 
   it('flags an internal email', () => {
-    const f = scanText({ file: 'a.txt', text: 'contact alice@burohappold.com now', patterns, allow });
+    const f = scanText({ file: 'a.txt', text: 'contact alice@example-corp.com now', patterns, allow });
     expect(f).toHaveLength(1);
-    expect(f[0]).toMatchObject({ file: 'a.txt', line: 1, match: 'alice@burohappold.com' });
+    expect(f[0]).toMatchObject({ file: 'a.txt', line: 1, match: 'alice@example-corp.com' });
   });
 
   it('flags an internal Azure DevOps feed URL', () => {
@@ -23,7 +27,7 @@ describe('internal-name hygiene scan', () => {
   });
 
   it('does NOT flag legitimate public references (allowlist)', () => {
-    const text = 'load https://burohappoldmachinelearning.github.io/ADIRO/aec_geometry.ttl';
+    const text = 'load https://example.github.io/ADIRO/aec_geometry.ttl';
     expect(scanText({ file: 'c.ttl', text, patterns, allow })).toHaveLength(0);
   });
 

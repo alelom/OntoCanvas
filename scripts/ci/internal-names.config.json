@@ -2,7 +2,7 @@
   "_comment": "Config for the internal-name hygiene guard (see check-internal-names.mjs). This is a PUBLIC repo: keep committed patterns GENERIC and non-identifying. Organisation-specific literals (company email domain, internal feed/tracker org names, client names) belong in the INTERNAL_NAME_PATTERNS CI secret, not here.",
   "includeExt": [".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".mdc", ".ttl", ".turtle", ".html", ".css", ".yml", ".yaml", ".txt", ".py", ".log", ".sh"],
   "excludeDirs": ["node_modules/", "dist/", "Editor/", ".venv/", "coverage/", "scripts/ci/", "scripts/rdflibexperiments/output/", ".git/"],
-  "excludeFiles": ["package-lock.json"],
+  "excludeFiles": ["package-lock.json", "internalNameScan.test.ts"],
   "patterns": [
     "\\b10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b",
     "\\b192\\.168\\.\\d{1,3}\\.\\d{1,3}\\b",
@@ -12,7 +12,7 @@
     "\\b[a-z0-9-]+\\.youtrack\\.cloud\\b"
   ],
   "allow": [
-    "burohappoldmachinelearning\\.github\\.io",
+    "github\\.io/ADIRO",
     "w3id\\.org/adiro"
   ]
 }
