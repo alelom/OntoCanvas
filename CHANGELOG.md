@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/alelom/OntoCanvas/compare/v1.19.0...v1.20.0) (2026-09-29)
+
+
+### Features
+
+* prefix + richer read-only treatment for defined-elsewhere terms ([0d47e64](https://github.com/alelom/OntoCanvas/commit/0d47e6451d7e7c399ac635a8a000561112bff63a)), closes [#38](https://github.com/alelom/OntoCanvas/issues/38) [#39](https://github.com/alelom/OntoCanvas/issues/39)
+
 # [1.19.0](https://github.com/alelom/OntoCanvas/compare/v1.18.3...v1.19.0) (2026-09-28)
 
 
