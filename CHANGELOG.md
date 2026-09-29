@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/alelom/OntoCanvas/compare/v1.20.0...v1.21.0) (2026-09-29)
+
+
+### Features
+
+* selectable/legible edge labels; add public-repo hygiene guard ([e3d927c](https://github.com/alelom/OntoCanvas/commit/e3d927ca7368d690e11356509c81952d3b84cdd7)), closes [#42](https://github.com/alelom/OntoCanvas/issues/42) [#37](https://github.com/alelom/OntoCanvas/issues/37) [#42](https://github.com/alelom/OntoCanvas/issues/42) [#37](https://github.com/alelom/OntoCanvas/issues/37)
+
 # [1.20.0](https://github.com/alelom/OntoCanvas/compare/v1.19.0...v1.20.0) (2026-09-29)
 
 
