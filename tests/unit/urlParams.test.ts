@@ -8,6 +8,7 @@ import {
   convertOntologyUrlToHtmlUrl,
   clearOntologyParamsFromAddressBar,
   setOntologyUrlParamInAddressBar,
+  displayConfigBaseName,
 } from '../../src/utils/urlParams';
 
 describe('urlParams', () => {
@@ -158,6 +159,25 @@ describe('urlParams', () => {
         '',
         '/path?foo=bar&onto=https%3A%2F%2Fexample.org%2Fontology.ttl#section'
       );
+    });
+  });
+
+  describe('displayConfigBaseName', () => {
+    it('strips .html so the saved name matches the loader (issue #53)', () => {
+      expect(displayConfigBaseName('aec_drawing_metadata.html')).toBe('aec_drawing_metadata');
+    });
+    it('strips .ttl / .turtle / .owl and other RDF extensions', () => {
+      expect(displayConfigBaseName('ontology.ttl')).toBe('ontology');
+      expect(displayConfigBaseName('ontology.turtle')).toBe('ontology');
+      expect(displayConfigBaseName('ontology.owl')).toBe('ontology');
+      expect(displayConfigBaseName('ontology.jsonld')).toBe('ontology');
+    });
+    it('leaves a name without a known extension unchanged', () => {
+      expect(displayConfigBaseName('aec_drawing_metadata')).toBe('aec_drawing_metadata');
+      expect(displayConfigBaseName('my.ontology.name')).toBe('my.ontology.name');
+    });
+    it('falls back to "ontology" for empty input', () => {
+      expect(displayConfigBaseName('')).toBe('ontology');
     });
   });
 
