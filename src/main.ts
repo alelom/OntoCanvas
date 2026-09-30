@@ -4147,15 +4147,15 @@ function setupNetworkSelectionAndNavigation(
   container.addEventListener('click', handleNativeClick, true);
   container.addEventListener('dblclick', handleNativeDblclick, true);
 
-  net.on('click', (params: { nodes: string[]; edges: string[]; event?: { srcEvent?: MouseEvent; pointer?: { DOM: { x: number; y: number } } } }) => {
+  net.on('click', (params: { nodes: string[]; edges: string[]; pointer?: { DOM?: { x: number; y: number } }; event?: { srcEvent?: MouseEvent } }) => {
     const clickedNode = params.nodes[0] as string | undefined;
     const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
 
     // If in add node mode and no node clicked, show the add node modal
     if (addNodeMode && !clickedNode) {
       const srcEvent = params.event?.srcEvent;
-      const pointer = params.event?.pointer;
-      
+      const pointer = params.pointer;
+
       // Try to get position from srcEvent first, then from pointer
       let domPos: { x: number; y: number } | null = null;
       if (srcEvent && container) {
@@ -4186,7 +4186,13 @@ function setupNetworkSelectionAndNavigation(
     // is clicked, so if nothing was hit, try selecting an edge by its label box.
     if (!clickedNode) {
       if ((params.edges?.length ?? 0) === 0) {
-        const domPos = params.event?.pointer?.DOM;
+        // vis-network exposes the pointer at params.pointer.DOM (container-relative). Fall back to
+        // the raw source event if needed.
+        let domPos = params.pointer?.DOM ?? null;
+        if (!domPos && params.event?.srcEvent && container) {
+          const rect = container.getBoundingClientRect();
+          domPos = { x: params.event.srcEvent.clientX - rect.left, y: params.event.srcEvent.clientY - rect.top };
+        }
         if (domPos) {
           const edgeId = getEdgeIdAtLabelPoint(net, domPos);
           if (edgeId) {
