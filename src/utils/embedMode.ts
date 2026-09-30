@@ -36,3 +36,21 @@ export function getShouldShowTopMenu(): boolean {
   const isEmbedded = window.self !== window.top;
   return shouldShowTopMenuInEmbedMode(isEmbedded, window.location.search);
 }
+
+/**
+ * Pure: is the app in embedded mode? True when actually framed, or when the URL carries an
+ * `embed` flag (so embedded behaviour can be triggered/tested without an iframe).
+ * A bare `?embed` (no value) counts as enabled.
+ */
+export function isEmbeddedMode(isFramed: boolean, searchQuery: string): boolean {
+  if (isFramed) return true;
+  const params = new URLSearchParams(searchQuery);
+  if (!params.has('embed')) return false;
+  const v = (params.get('embed') ?? '').toLowerCase().trim();
+  return v === '' || v === '1' || v === 'true' || v === 'yes';
+}
+
+/** Reads window: is the app embedded (framed, or forced via ?embed)? */
+export function isEmbedded(): boolean {
+  return isEmbeddedMode(window.self !== window.top, window.location.search);
+}

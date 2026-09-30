@@ -53,6 +53,18 @@ OntoCanvas treats such terms as **belonging elsewhere**, exactly like imported/e
 A class counts as *defined elsewhere* when it carries an `rdfs:isDefinedBy` pointing outside this ontology, **or** when its own URI simply lives in a different namespace. Terms in this ontology's own namespace stay fully editable.
 
 
+## Embedding
+
+OntoCanvas can be embedded in an `<iframe>` (e.g. on an ontology's documentation page) for a compact, **read-only** view. When embedded — automatically inside an iframe, or by adding `?embed=1` to the URL — OntoCanvas:
+
+- hides the top menu and the bottom "Edges" legend for compactness;
+- disables all editing (no Add Node/Edge, no edit dialogs, no delete) — the graph can still be **panned (left or right mouse button), zoomed, and its nodes moved**;
+- shows an **"Open in a new tab"** button that opens the same ontology in a full, editable OntoCanvas tab.
+
+```html
+<iframe src="https://alelom.github.io/OntoCanvas/?onto=<ONTOLOGY_URL>" width="100%" height="600"></iframe>
+```
+
 ## Comparison with other ontology editors and visualisers 
 
 | Tool | Pros | Cons |

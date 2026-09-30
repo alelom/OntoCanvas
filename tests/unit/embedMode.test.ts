@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shouldShowTopMenuInEmbedMode } from '../../src/utils/embedMode';
+import { shouldShowTopMenuInEmbedMode, isEmbeddedMode } from '../../src/utils/embedMode';
 
 describe('embedMode', () => {
   describe('shouldShowTopMenuInEmbedMode', () => {
@@ -41,6 +41,30 @@ describe('embedMode', () => {
 
     it('returns true when embedded and showMenuInEmbedded=yes', () => {
       expect(shouldShowTopMenuInEmbedMode(true, '?showMenuInEmbedded=yes')).toBe(true);
+    });
+  });
+
+  describe('isEmbeddedMode', () => {
+    it('is true whenever actually framed, regardless of params', () => {
+      expect(isEmbeddedMode(true, '')).toBe(true);
+      expect(isEmbeddedMode(true, '?foo=bar')).toBe(true);
+    });
+
+    it('is false when not framed and no embed flag', () => {
+      expect(isEmbeddedMode(false, '')).toBe(false);
+      expect(isEmbeddedMode(false, '?onto=x')).toBe(false);
+    });
+
+    it('is true when not framed but ?embed flag is set (bare or truthy)', () => {
+      expect(isEmbeddedMode(false, '?embed')).toBe(true);
+      expect(isEmbeddedMode(false, '?embed=1')).toBe(true);
+      expect(isEmbeddedMode(false, '?embed=true')).toBe(true);
+      expect(isEmbeddedMode(false, '?onto=x&embed=yes')).toBe(true);
+    });
+
+    it('is false when ?embed is an explicit falsey value', () => {
+      expect(isEmbeddedMode(false, '?embed=0')).toBe(false);
+      expect(isEmbeddedMode(false, '?embed=false')).toBe(false);
     });
   });
 });

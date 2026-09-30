@@ -93,11 +93,15 @@ body {
   min-height: 0;
   overflow: hidden;
 }
-#networkWrapper #resetView {
+#networkWrapper #viewButtons {
   position: absolute;
   bottom: 16px;
   right: 16px;
   z-index: 10;
+  display: flex;
+  gap: 8px;
+}
+#networkWrapper #viewButtons button {
   padding: 6px 12px;
   border-radius: 4px;
   border: 1px solid #666;
@@ -106,8 +110,12 @@ body {
   font-size: 13px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
-#networkWrapper #resetView:hover {
+#networkWrapper #viewButtons button:hover {
   background: #eee;
+}
+/* Embedded mode: hide the edges legend in the bottom bar for compactness. */
+body.ontocanvas-embedded #edgeColorsLegend {
+  display: none !important;
 }
 #undoBtn:disabled,
 #redoBtn:disabled {
