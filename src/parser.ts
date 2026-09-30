@@ -890,7 +890,7 @@ function buildParseResultFromStore(
         } else if (pred === RDFS + 'comment') {
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'range') {
-          range = (q.object as { value?: string }).value ?? null;
+          range = resolveDatatypeRangeValue(store, q.object as RdfTerm);
         } else if (pred === RDFS + 'domain') {
           const domainUri = (q.object as { value?: string }).value;
           if (domainUri === OWL + 'Thing') {
@@ -1030,6 +1030,28 @@ export async function parseRdfToGraph(
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 
+/**
+ * Resolve an rdfs:range object to a datatype value string.
+ * - A NamedNode datatype (e.g. xsd:string) → its URI.
+ * - An anonymous OWL 2 datatype restriction ([ a rdfs:Datatype ; owl:onDatatype <dt> ; ... ]) →
+ *   the base datatype URI (owl:onDatatype), so the graph shows "xsd:decimal" rather than the
+ *   internal blank-node id. See issue #49.
+ * - Anything else (e.g. an unrecognised blank node) → null, so no blank-node id leaks to the UI.
+ */
+function resolveDatatypeRangeValue(store: Store, rangeObject: RdfTerm | undefined): string | null {
+  if (!rangeObject) return null;
+  if (rangeObject.termType === 'NamedNode') {
+    return (rangeObject as { value: string }).value;
+  }
+  if (rangeObject.termType === 'BlankNode') {
+    const onDatatype = store.getQuads(rangeObject as never, DataFactory.namedNode(OWL + 'onDatatype'), null, null)[0];
+    if (onDatatype?.object?.termType === 'NamedNode') {
+      return (onDatatype.object as { value: string }).value;
+    }
+  }
+  return null;
+}
+
 export function getDataProperties(store: Store): DataPropertyInfo[] {
   const result: DataPropertyInfo[] = [];
   const seen = new Set<string>();
@@ -1049,9 +1071,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     // No rdfs:range means the ontology asserts no datatype. Record that as null rather than
     // substituting a default, so a typing stub stays distinguishable from an asserted xsd:string.
     const rangeQuad = store.getQuads(subj, RDFS + 'range', null, null)[0];
-    const range = rangeQuad?.object && (rangeQuad.object as { value?: string }).value
-      ? (rangeQuad.object as { value: string }).value
-      : null;
+    const range = resolveDatatypeRangeValue(store, rangeQuad?.object as RdfTerm | undefined);
     
     // Extract domain(s) - rdfs:domain can appear multiple times
     const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
