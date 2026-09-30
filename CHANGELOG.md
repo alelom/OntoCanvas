@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/alelom/OntoCanvas/compare/v1.22.0...v1.22.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* datatype-restriction range display; embed status-bar layout; iframe tests ([e6f0bc6](https://github.com/alelom/OntoCanvas/commit/e6f0bc681e7b3a93462662a5958d4594aebf550e)), closes [#49](https://github.com/alelom/OntoCanvas/issues/49) [#51](https://github.com/alelom/OntoCanvas/issues/51) [#44](https://github.com/alelom/OntoCanvas/issues/44) [#49](https://github.com/alelom/OntoCanvas/issues/49) [#50](https://github.com/alelom/OntoCanvas/issues/50) [#51](https://github.com/alelom/OntoCanvas/issues/51)
+
 # [1.22.0](https://github.com/alelom/OntoCanvas/compare/v1.21.1...v1.22.0) (2026-09-30)
 
 
