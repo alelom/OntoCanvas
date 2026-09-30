@@ -1,3 +1,15 @@
+# [1.22.0](https://github.com/alelom/OntoCanvas/compare/v1.21.1...v1.22.0) (2026-09-30)
+
+
+### Bug Fixes
+
+* single-click on a relationship label now selects the edge ([570af54](https://github.com/alelom/OntoCanvas/commit/570af54835516b85f4c1c44b8092be8ac2aa6ffd)), closes [#45](https://github.com/alelom/OntoCanvas/issues/45)
+
+
+### Features
+
+* embedded read-only mode + adaptive default font size ([4d90723](https://github.com/alelom/OntoCanvas/commit/4d907239e6e285208343d5a9ab785ca5b34e783d)), closes [#44](https://github.com/alelom/OntoCanvas/issues/44) [#47](https://github.com/alelom/OntoCanvas/issues/47) [#44](https://github.com/alelom/OntoCanvas/issues/44) [#45](https://github.com/alelom/OntoCanvas/issues/45) [#47](https://github.com/alelom/OntoCanvas/issues/47)
+
 ## [1.21.1](https://github.com/alelom/OntoCanvas/compare/v1.21.0...v1.21.1) (2026-09-29)
 
 
