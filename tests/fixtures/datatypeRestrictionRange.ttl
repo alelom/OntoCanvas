@@ -1,0 +1,26 @@
+# A data property whose rdfs:range is an anonymous OWL 2 datatype restriction (a blank node),
+# plus one with a plain datatype range, for contrast. Mirrors the aec_provenance hasConfidence
+# pattern. See issue #49.
+@prefix : <http://example.org/o#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/o> rdf:type owl:Ontology .
+
+:Thing rdf:type owl:Class ;
+    rdfs:label "Thing" .
+
+:hasConfidence rdf:type owl:DatatypeProperty ;
+    rdfs:label "hasConfidence" ;
+    rdfs:domain :Thing ;
+    rdfs:range [ rdf:type rdfs:Datatype ;
+                 owl:onDatatype xsd:decimal ;
+                 owl:withRestrictions ( [ xsd:minInclusive "0.0"^^xsd:decimal ]
+                                        [ xsd:maxInclusive "1.0"^^xsd:decimal ] ) ] .
+
+:plainProp rdf:type owl:DatatypeProperty ;
+    rdfs:label "plainProp" ;
+    rdfs:domain :Thing ;
+    rdfs:range xsd:string .

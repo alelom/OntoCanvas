@@ -156,12 +156,14 @@ body.ontocanvas-embedded #edgeColorsLegend {
 #info a.version-link:hover {
   text-decoration: underline;
 }
-/* Keep status bar at bottom with normal height when embedded in iframe */
+/* Keep status bar at bottom with normal height when embedded in iframe. It must fill the full
+ * width and stay left-aligned (align-self:end would shrink it to content and push it right). */
 #app.embed-no-menu #info {
   flex: 0 0 auto;
   min-height: 0;
   height: fit-content;
-  align-self: end;
+  align-self: stretch;
+  text-align: left;
 }
 /* Hide issues (⚠️ issues (n)) section in status bar when embedded in iframe */
 #app.embed-no-menu #ontologyIssuesBtn {
