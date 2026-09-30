@@ -1,3 +1,10 @@
+## [1.22.2](https://github.com/alelom/OntoCanvas/compare/v1.22.1...v1.22.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* display-config save filename keeps the ontology extension ([585acc6](https://github.com/alelom/OntoCanvas/commit/585acc6bc540eba84508a8d8e215e5195540202c)), closes [#53](https://github.com/alelom/OntoCanvas/issues/53)
+
 ## [1.22.1](https://github.com/alelom/OntoCanvas/compare/v1.22.0...v1.22.1) (2026-09-30)
 
 
