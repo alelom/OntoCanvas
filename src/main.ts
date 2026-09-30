@@ -154,7 +154,8 @@ import {
   setRenameModalTipButtonVisible,
 } from './ui/renameModalHeaderIcons';
 import { getAppVersion } from './utils/version';
-import { getShouldShowTopMenu } from './utils/embedMode';
+import { getShouldShowTopMenu, isEmbedded } from './utils/embedMode';
+import { defaultMaxFontSize } from './ui/fontSizeDefaults';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
@@ -363,7 +364,10 @@ function applyDisplayConfig(config: DisplayConfig): void {
   }
   (document.getElementById('wrapChars') as HTMLInputElement).value = String(config.wrapChars ?? 12);
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
-  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? 70);
+  // Default the "Max" font size to a value scaled to the ontology size (fewer nodes → smaller Max,
+  // gentler root→leaf gap). An explicit saved value always wins. See issue #44.
+  const adaptiveMaxFont = defaultMaxFontSize(rawData?.nodes?.length ?? 0);
+  (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? adaptiveMaxFont);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
   // Fall back to the default DAG layout when the config's mode no longer exists
@@ -683,6 +687,8 @@ function performDeleteSelection(): boolean {
     debugLog(`[DELETE] Early return: network or ttlStore not available`);
     return false;
   }
+  // Embedded mode is read-only.
+  if (isEmbedded()) return false;
   const activeEl = document.activeElement as HTMLElement;
   if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
     debugLog(`[DELETE] Early return: active element is input/textarea/contentEditable:`, activeEl.tagName);
@@ -4050,8 +4056,9 @@ function setupNetworkSelectionAndNavigation(
         e.stopPropagation();
       }
       
-      // Check if we were panning (rightPanStart exists) or if we should show context menu
-      if (!rightPanStart && isInContainer) {
+      // Check if we were panning (rightPanStart exists) or if we should show context menu.
+      // The context menu is all edit/copy actions, so it is suppressed in read-only embedded mode.
+      if (!rightPanStart && isInContainer && !isEmbedded()) {
         // Show context menu; use node/edge stored at mousedown so target is exact (e.g. data property node)
         showContextMenu(e, net, container, rightClickNodeId, rightClickEdgeId);
       }
@@ -4120,6 +4127,8 @@ function setupNetworkSelectionAndNavigation(
 
   const handleNativeDblclick = (e: MouseEvent) => {
     if (!ttlStore || !network) return;
+    // Embedded mode is read-only: no edit modals, and no create-node on empty-canvas double-click.
+    if (isEmbedded()) return;
     const target = e.target as HTMLElement;
     if (target.closest?.('.vis-manipulation')) return;
     const rect = container.getBoundingClientRect();
@@ -6187,7 +6196,10 @@ function renderApp(): void {
     </div>
     <div id="networkWrapper">
       <div id="network"></div>
-      <button type="button" id="resetView">Reset view</button>
+      <div id="viewButtons">
+        <button type="button" id="openInNewTab" style="display: none;">Open in a new tab</button>
+        <button type="button" id="resetView">Reset view</button>
+      </div>
     </div>
     <div id="info">
       <span id="versionDisplay" style="margin-right: 12px; font-size: 11px; color: #666;"></span>
@@ -7074,6 +7086,10 @@ async function loadTtlAndRender(
       applyDisplayConfig(displayConfig);
       if (displayConfig.viewState) savedViewState = displayConfig.viewState;
     } else {
+      // No saved config: default the "Max" node font size to a value scaled to the ontology size
+      // (fewer nodes → smaller Max, gentler root→leaf gap). See issue #44.
+      const maxFontEl = document.getElementById('maxFontSize') as HTMLInputElement | null;
+      if (maxFontEl) maxFontEl.value = String(defaultMaxFontSize(rawData?.nodes?.length ?? 0));
       // Debug logging (only in debug mode)
       if (isDebugMode()) {
         debugLog('[DISPLAY CONFIG] No display config found in IndexedDB for:', loadedFileName);
@@ -7300,7 +7316,7 @@ function applyFilter(preserveView = false): void {
       window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
     });
   }
-  const options = getNetworkOptions(layoutMode);
+  const options = getNetworkOptions(layoutMode, { embedded: isEmbedded() });
 
   scheduleDisplayConfigSave();
 
@@ -7378,8 +7394,9 @@ function applyFilter(preserveView = false): void {
     deleteEdge: false,
   };
 
-  // In embed mode (iframe without showMenuInEmbedded), disable manipulation UI entirely (no X, Edit, Add Node/Edge)
-  const manipulationToUse = getShouldShowTopMenu()
+  // In embed mode, disable manipulation UI entirely (no X, Edit, Add Node/Edge). Covers both a real
+  // iframe (top menu hidden) and the ?embed flag.
+  const manipulationToUse = getShouldShowTopMenu() && !isEmbedded()
     ? manipulationOptions
     : { enabled: false as const };
 
@@ -7558,6 +7575,7 @@ function applyFilter(preserveView = false): void {
     });
     network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
       if (!network) return;
+      if (isEmbedded()) return; // read-only in embedded mode
       if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0] as string;
         if (clickedNodeId.startsWith('http://') || clickedNodeId.startsWith('https://')) {
@@ -8300,11 +8318,19 @@ function setupEventListeners(): void {
       e.stopPropagation();
     }
   }, true);
+  document.getElementById('openInNewTab')?.addEventListener('click', () => {
+    const params = new URLSearchParams(window.location.search);
+    const onto = params.get('onto');
+    const base = window.location.origin + window.location.pathname;
+    // Open the same ontology in a full, non-embedded OntoCanvas tab (drop the embed flag).
+    const url = onto ? `${base}?onto=${encodeURIComponent(onto)}` : base;
+    window.open(url, '_blank', 'noopener');
+  });
   document.getElementById('resetView')?.addEventListener('click', () => {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
-    (document.getElementById('maxFontSize') as HTMLInputElement).value = '70';
+    (document.getElementById('maxFontSize') as HTMLInputElement).value = String(defaultMaxFontSize(rawData?.nodes?.length ?? 0));
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
@@ -8927,9 +8953,16 @@ document.addEventListener('click', (e) => {
 
 renderApp();
 const appEl = document.getElementById('app');
-if (appEl && !getShouldShowTopMenu()) {
+if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {
   appEl.classList.add('embed-no-menu');
   document.body.classList.add('embed-no-menu');
+}
+// Embedded (iframe or ?embed): compact, read-only view. Hide the edges legend (CSS), show the
+// "Open in a new tab" button. Editing is gated in the handlers via isEmbedded().
+if (isEmbedded()) {
+  document.body.classList.add('ontocanvas-embedded');
+  const openBtn = document.getElementById('openInNewTab');
+  if (openBtn) openBtn.style.display = '';
 }
 setupEventListeners();
 // Update serializer dropdown after DOM is ready (in case it was rendered)
