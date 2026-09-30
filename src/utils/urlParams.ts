@@ -92,11 +92,24 @@ export function getOntologyUrlFromParams(): string | null {
   }
 }
 
+/** Ontology / documentation extensions to strip when deriving the display-config base name. */
+const ONTOLOGY_EXTENSION = /\.(ttl|turtle|owl|rdf|rdfxml|jsonld|json|nt|nq|n3|trig|xml|html?)$/i;
+
+/**
+ * Base name for a display-config file, given an ontology file name or path.
+ * Strips a trailing ontology/HTML extension so the saved `<base>.display.json` matches what the
+ * loader looks for (getDisplayFileUrl / the sibling-file loader strip the extension too). Without
+ * this, an ontology opened from `foo.html` would save as `foo.html.display.json` and never reload.
+ */
+export function displayConfigBaseName(fileNameOrPath: string): string {
+  return (fileNameOrPath || 'ontology').replace(ONTOLOGY_EXTENSION, '');
+}
+
 /**
  * Construct the display file URL from an ontology URL.
  * If the ontology URL is {base}.html or {base}.ttl, returns {base}.display.json
  * Handles both .html and .ttl URLs by extracting the base name (removing extension).
- * 
+ *
  * @param ontologyUrl - The ontology URL
  * @returns The display file URL, or null if the ontology URL is invalid
  */

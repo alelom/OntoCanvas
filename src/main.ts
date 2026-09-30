@@ -134,7 +134,7 @@ import {
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName } from './utils/urlParams';
 import {
   extractUsedNamespaceRefsFromStore,
   formatNodeLabelWithPrefix,
@@ -8432,7 +8432,7 @@ function setupEventListeners(): void {
     }
     const config = collectDisplayConfig();
     if (!config) return;
-    const baseName = (loadedFileName || loadedFilePath || 'ontology').replace(/\.(ttl|turtle)$/i, '');
+    const baseName = displayConfigBaseName(loadedFileName || loadedFilePath || 'ontology');
     const suggestedName = `${baseName}.display.json`;
     try {
       if ('showSaveFilePicker' in window) {
