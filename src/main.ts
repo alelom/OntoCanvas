@@ -134,7 +134,7 @@ import {
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust } from './utils/urlParams';
 import {
   extractUsedNamespaceRefsFromStore,
   formatNodeLabelWithPrefix,
@@ -7673,7 +7673,8 @@ async function loadFromFile(): Promise<void> {
  */
 async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConfig | null> {
   try {
-    const response = await fetch(displayUrl);
+    // Cache-bust: the config may have just been re-published; GitHub Pages caches it for ~10 min.
+    const response = await fetch(withCacheBust(displayUrl, Date.now()), { cache: 'no-store' });
     if (!response.ok) {
       // 404 or other error - display file doesn't exist, which is fine
       // Show a helpful warning message (not an error, since this is expected)
