@@ -96,6 +96,17 @@ export function getOntologyUrlFromParams(): string | null {
 const ONTOLOGY_EXTENSION = /\.(ttl|turtle|owl|rdf|rdfxml|jsonld|json|nt|nq|n3|trig|xml|html?)$/i;
 
 /**
+ * Append a cache-busting query parameter to a URL. Display-config files are served from GitHub
+ * Pages with `Cache-Control: max-age=600`, so after a user re-publishes their `.display.json` the
+ * old copy can be served (browser + CDN) for up to ~10 minutes. Fetching with a unique param
+ * bypasses both caches so config updates are picked up immediately. See issue #55.
+ */
+export function withCacheBust(url: string, token: number | string): string {
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}_ontocanvas=${token}`;
+}
+
+/**
  * Base name for a display-config file, given an ontology file name or path.
  * Strips a trailing ontology/HTML extension so the saved `<base>.display.json` matches what the
  * loader looks for (getDisplayFileUrl / the sibling-file loader strip the extension too). Without

@@ -9,6 +9,7 @@ import {
   clearOntologyParamsFromAddressBar,
   setOntologyUrlParamInAddressBar,
   displayConfigBaseName,
+  withCacheBust,
 } from '../../src/utils/urlParams';
 
 describe('urlParams', () => {
@@ -159,6 +160,17 @@ describe('urlParams', () => {
         '',
         '/path?foo=bar&onto=https%3A%2F%2Fexample.org%2Fontology.ttl#section'
       );
+    });
+  });
+
+  describe('withCacheBust', () => {
+    it('adds the param with ? when the URL has no query', () => {
+      expect(withCacheBust('https://w3id.org/adiro/x.display.json', 123)).toBe(
+        'https://w3id.org/adiro/x.display.json?_ontocanvas=123'
+      );
+    });
+    it('adds the param with & when the URL already has a query', () => {
+      expect(withCacheBust('https://e.org/x.json?a=1', 'tok')).toBe('https://e.org/x.json?a=1&_ontocanvas=tok');
     });
   });
 
