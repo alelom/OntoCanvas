@@ -1,3 +1,10 @@
+## [1.22.4](https://github.com/alelom/OntoCanvas/compare/v1.22.3...v1.22.4) (2026-10-01)
+
+
+### Bug Fixes
+
+* **#64:** prevent data loss when saving anonymous class expressions in domain/range ([826ef3d](https://github.com/alelom/OntoCanvas/commit/826ef3dda1191fa0d76b6b2d2e8d7c49ca44b3b4)), closes [#64](https://github.com/alelom/OntoCanvas/issues/64) [#58](https://github.com/alelom/OntoCanvas/issues/58) [#64](https://github.com/alelom/OntoCanvas/issues/64) [#58](https://github.com/alelom/OntoCanvas/issues/58)
+
 ## [1.22.3](https://github.com/alelom/OntoCanvas/compare/v1.22.2...v1.22.3) (2026-10-01)
 
 
