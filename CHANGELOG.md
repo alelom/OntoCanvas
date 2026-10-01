@@ -1,3 +1,10 @@
+## [1.22.3](https://github.com/alelom/OntoCanvas/compare/v1.22.2...v1.22.3) (2026-10-01)
+
+
+### Bug Fixes
+
+* cache-bust the auto-loaded display config so re-published updates load ([25c5390](https://github.com/alelom/OntoCanvas/commit/25c5390990c0f775fc350972a5853b8b5b3e34d1)), closes [#55](https://github.com/alelom/OntoCanvas/issues/55)
+
 ## [1.22.2](https://github.com/alelom/OntoCanvas/compare/v1.22.1...v1.22.2) (2026-09-30)
 
 
