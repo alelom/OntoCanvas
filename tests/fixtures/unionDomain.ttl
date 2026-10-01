@@ -1,0 +1,32 @@
+@prefix : <http://example.org/o#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/o> rdf:type owl:Ontology .
+
+:Section rdf:type owl:Class ;
+    rdfs:label "Section" .
+
+:Detail rdf:type owl:Class ;
+    rdfs:label "Detail" .
+
+:OrientationValue rdf:type owl:Class ;
+    rdfs:label "Orientation Value" .
+
+:DrawingSheet rdf:type owl:Class ;
+    rdfs:label "Drawing Sheet" .
+
+:Layout rdf:type owl:Class ;
+    rdfs:label "Layout" .
+
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "hasOrientation" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] ;
+    rdfs:range :OrientationValue .
+
+:scale rdf:type owl:DatatypeProperty ;
+    rdfs:label "scale" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :DrawingSheet :Layout ) ] ;
+    rdfs:range xsd:string .

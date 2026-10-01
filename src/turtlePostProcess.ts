@@ -8,6 +8,31 @@ import type { Quad, Term, BlankNode, NamedNode, Literal } from 'n3';
 import { getAppVersion } from './utils/version';
 import { debugError, debugLog } from './utils/debug';
 
+/**
+ * True when the Turtle text references a blank node (`_:id`) in object position that is never
+ * defined as a subject. The custom source-preserving serializer encodes anonymous nodes inline
+ * (`[ … ]`); a leftover `_:id` object ref that is never defined means its contents were dropped —
+ * e.g. an anonymous `owl:unionOf`/`owl:intersectionOf` class expression in rdfs:domain/range that
+ * the serializer could not inline. Used to detect data loss and fall back to rdflib. See #64.
+ */
+export function hasUndefinedBlankNodeRefs(ttl: string): boolean {
+  const defined = new Set<string>();
+  const referenced = new Set<string>();
+  for (const rawLine of ttl.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line.startsWith('#') || line.startsWith('@')) continue;
+    // A blank node in SUBJECT position starts the statement: "_:id <pred> …".
+    const subj = line.match(/^(_:[A-Za-z0-9_-]+)\s+\S/);
+    if (subj) defined.add(subj[1]);
+    // Any blank node token (subject or object); subjects are filtered out below.
+    for (const m of line.matchAll(/(?<![\w:-])(_:[A-Za-z0-9_-]+)/g)) referenced.add(m[1]);
+  }
+  for (const ref of referenced) {
+    if (!defined.has(ref)) return true;
+  }
+  return false;
+}
+
 // --- Constants (aligned with parser.ts) ---
 
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
