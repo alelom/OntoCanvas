@@ -8,6 +8,7 @@ import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
 import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
 import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
+import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -2759,8 +2760,8 @@ import type { SerializerType } from './storage';
 // Re-export for convenience
 export type { SerializerType };
 
-export function storeToTurtle(
-  store: Store, 
+export async function storeToTurtle(
+  store: Store,
   externalRefs?: Array<{ url: string; usePrefix: boolean; prefix?: string }>,
   originalTtlString?: string,
   originalFileCache?: OriginalFileCache,
@@ -2775,9 +2776,19 @@ export function storeToTurtle(
       );
     }
     debugLog('[storeToTurtle] Using custom TTL serializer with cache-based reconstruction, cache has', originalFileCache.statementBlocks.length, 'blocks');
-    return reconstructFromCache(store, originalFileCache, externalRefs);
+    const custom = await reconstructFromCache(store, originalFileCache, externalRefs);
+    // Safety net (#64): the custom serializer cannot inline anonymous class expressions that
+    // contain RDF lists (owl:unionOf / intersectionOf / oneOf) in domain/range, and would emit a
+    // dangling "_:df_x" reference — silently dropping the expression. Rather than lose data, fall
+    // back to rdflib (which preserves the expression, at the cost of reformatting the file).
+    if (hasUndefinedBlankNodeRefs(custom)) {
+      debugWarn('[storeToTurtle] Custom serialization produced an undefined blank-node reference ' +
+        '(likely an anonymous class expression in domain/range); falling back to rdflib to avoid data loss. See issue #64.');
+      return serializeStoreWithRdflib(store, { externalRefs, originalTtlString });
+    }
+    return custom;
   }
-  
+
   // Default: Use rdflib serialization
   debugLog('[storeToTurtle] Using rdflib serialization');
   return serializeStoreWithRdflib(store, {

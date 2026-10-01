@@ -43,25 +43,28 @@ describe('owl:unionOf domain round-trip (#58)', () => {
   const OP = 'http://example.org/o#hasOrientation';
   const DP = 'http://example.org/o#scale';
 
-  async function roundTrip(edit?: (s: Store) => void): Promise<Store> {
+  async function roundTrip(serializer: 'rdflib' | 'custom', edit?: (s: Store) => void): Promise<Store> {
     const { store, cache } = await parseTtlWithCache(content);
     edit?.(store);
-    const out = await storeToTurtle(store, undefined, content, cache);
+    const out = await storeToTurtle(store, undefined, content, cache, serializer);
     const reparsed = await parseRdfToGraph(out, { path: 'out.ttl' });
     return reparsed.store as unknown as Store;
   }
 
-  it('keeps both domains as unions on an unchanged save (no OR->AND flip)', async () => {
-    const store = await roundTrip();
-    expect(unionDomainMembers(store, OP)).toEqual(['Detail', 'Section']);
-    expect(unionDomainMembers(store, DP)).toEqual(['DrawingSheet', 'Layout']);
-  });
+  // The app saves .ttl with the custom serializer; rdflib is the fallback. Both must preserve the union.
+  for (const serializer of ['rdflib', 'custom'] as const) {
+    it(`[${serializer}] keeps both domains as unions on an unchanged save (no OR->AND flip)`, async () => {
+      const store = await roundTrip(serializer);
+      expect(unionDomainMembers(store, OP)).toEqual(['Detail', 'Section']);
+      expect(unionDomainMembers(store, DP)).toEqual(['DrawingSheet', 'Layout']);
+    });
 
-  it('keeps the unions when an unrelated class label is edited', async () => {
-    const store = await roundTrip((s) => modifyLabel(s, 'http://example.org/o#Section', 'Section (renamed)'));
-    expect(unionDomainMembers(store, OP)).toEqual(['Detail', 'Section']);
-    expect(unionDomainMembers(store, DP)).toEqual(['DrawingSheet', 'Layout']);
-  });
+    it(`[${serializer}] keeps the unions when an unrelated class label is edited`, async () => {
+      const store = await roundTrip(serializer, (s) => modifyLabel(s, 'http://example.org/o#Section', 'Section (renamed)'));
+      expect(unionDomainMembers(store, OP)).toEqual(['Detail', 'Section']);
+      expect(unionDomainMembers(store, DP)).toEqual(['DrawingSheet', 'Layout']);
+    });
+  }
 
   it('baseline: a data-property union domain is currently flattened to its members in the graph model', async () => {
     const { store } = await parseTtlWithCache(content);

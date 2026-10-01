@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { postProcessTurtle } from './turtlePostProcess';
+import { postProcessTurtle, hasUndefinedBlankNodeRefs } from './turtlePostProcess';
+
+describe('hasUndefinedBlankNodeRefs', () => {
+  it('is true when a blank node is referenced but never defined (data loss)', () => {
+    const ttl = `:hasOrientation rdfs:domain _:df_0_0 ;\n    rdfs:range :OrientationValue .`;
+    expect(hasUndefinedBlankNodeRefs(ttl)).toBe(true);
+  });
+  it('is false when a referenced blank node is also defined', () => {
+    const ttl = `:Test rdfs:subClassOf _:n3-0 .\n_:n3-0 rdf:type owl:Restriction ; owl:onProperty :p .`;
+    expect(hasUndefinedBlankNodeRefs(ttl)).toBe(false);
+  });
+  it('is false for inline-only anonymous nodes (no _: references at all)', () => {
+    const ttl = `:hasOrientation rdfs:domain [ a owl:Class ; owl:unionOf ( :A :B ) ] .`;
+    expect(hasUndefinedBlankNodeRefs(ttl)).toBe(false);
+  });
+});
 
 describe('postProcessTurtle blank node inlining', () => {
   it('inlines _:n3-X to [ ... ] form', () => {
