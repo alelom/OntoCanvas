@@ -2,7 +2,7 @@ import { DataFactory, Store } from 'n3';
 import type { Quad as N3Quad } from 'n3';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
-import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
+import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction, ClassExpressionGroup } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
@@ -79,6 +79,60 @@ function resolveDomainClassUris(store: Store, domainObj: RdfTerm): string[] {
     }
   }
   return [];
+}
+
+/**
+ * Find anonymous owl:unionOf class expressions used as a property's rdfs:domain OR rdfs:range, and
+ * surface them as groups to render instead of dropping (object props) or flattening (data props)
+ * them. See issue #59. Only members that are classes in the graph are kept, so a data property's
+ * range union (a union of datatypes) is naturally ignored.
+ */
+function extractUnionGroups(store: Store, seenClasses: Set<string>): ClassExpressionGroup[] {
+  const groups: ClassExpressionGroup[] = [];
+  const kinds: Array<['object' | 'data', string]> = [
+    ['object', OWL + 'ObjectProperty'],
+    ['data', OWL + 'DatatypeProperty'],
+  ];
+  const sides: Array<{ unionSide: 'domain' | 'range'; otherSide: 'domain' | 'range' }> = [
+    { unionSide: 'domain', otherSide: 'range' },
+    { unionSide: 'range', otherSide: 'domain' },
+  ];
+  for (const [propertyKind, typeUri] of kinds) {
+    for (const q of store.getQuads(null, RDF + 'type', typeUri, null)) {
+      const subj = q.subject;
+      if (subj.termType !== 'NamedNode') continue;
+      const propUri = (subj as { value: string }).value;
+      for (const { unionSide, otherSide } of sides) {
+        const sideQuad = store.getQuads(subj, RDFS + unionSide, null, null)[0];
+        if (!sideQuad || sideQuad.object.termType !== 'BlankNode') continue;
+        const unionQuad = store.getQuads(sideQuad.object as RdfTerm as never, OWL + 'unionOf', null, null)[0];
+        if (!unionQuad) continue;
+        const members = readRdfList(store, unionQuad.object as RdfTerm)
+          .filter((t) => t.termType === 'NamedNode' && t.value)
+          .map((t) => extractLocalName(t.value!))
+          .filter((name) => seenClasses.has(name));
+        if (members.length < 2) continue; // a one-member "union" isn't worth grouping
+        // The single named class on the other end (the connector target), if it's in the graph.
+        let counterpart: string | undefined;
+        for (const cq of store.getQuads(subj, RDFS + otherSide, null, null)) {
+          if (cq.object.termType === 'NamedNode') {
+            const cn = extractLocalName((cq.object as { value: string }).value);
+            if (seenClasses.has(cn)) { counterpart = cn; break; }
+          }
+        }
+        groups.push({
+          operator: 'union',
+          members,
+          propertyName: extractLocalName(propUri),
+          propertyUri: propUri,
+          counterpart,
+          position: unionSide,
+          propertyKind,
+        });
+      }
+    }
+  }
+  return groups;
 }
 
 function parseCardinalityFromRestriction(
@@ -759,17 +813,26 @@ function buildParseResultFromStore(
     const validDomains: string[] = [];
     let hasOwlThingDomain = false;
     for (const domainQuad of domainQuads) {
-      if (domainQuad.object.termType !== 'NamedNode') continue;
-      const domainUri = (domainQuad.object as { value: string }).value;
-      if (domainUri === OWL_THING) {
-        hasOwlThingDomain = true;
-        // When domain is owl:Thing, skip creating domain/range edges
-        // Edges should only come from actual restrictions, not from owl:Thing domain/range
-        break;
-      }
-      const domainName = extractLocalName(domainUri);
-      if (seenClasses.has(domainName)) {
-        validDomains.push(domainName);
+      const domObj = domainQuad.object;
+      if (domObj.termType === 'NamedNode') {
+        const domainUri = (domObj as { value: string }).value;
+        if (domainUri === OWL_THING) {
+          hasOwlThingDomain = true;
+          // When domain is owl:Thing, skip creating domain/range edges
+          // Edges should only come from actual restrictions, not from owl:Thing domain/range
+          break;
+        }
+        const domainName = extractLocalName(domainUri);
+        if (seenClasses.has(domainName)) {
+          validDomains.push(domainName);
+        }
+      } else if (domObj.termType === 'BlankNode') {
+        // An anonymous class expression domain (e.g. owl:unionOf): flatten to its member classes so
+        // the relationship is visible. The union itself is shown by the overlay grouping (issue #59).
+        for (const uri of resolveDomainClassUris(store, domObj as RdfTerm)) {
+          const name = extractLocalName(uri);
+          if (seenClasses.has(name) && !validDomains.includes(name)) validDomains.push(name);
+        }
       }
     }
     
@@ -777,17 +840,26 @@ function buildParseResultFromStore(
     const validRanges: string[] = [];
     let hasOwlThingRange = false;
     for (const rangeQuad of rangeQuads) {
-      if (rangeQuad.object.termType !== 'NamedNode') continue;
-      const rangeUri = (rangeQuad.object as { value: string }).value;
-      if (rangeUri === OWL_THING) {
-        hasOwlThingRange = true;
-        // When range is owl:Thing, skip creating domain/range edges
-        // Edges should only come from actual restrictions, not from owl:Thing domain/range
-        break;
-      }
-      const rangeName = extractLocalName(rangeUri);
-      if (seenClasses.has(rangeName)) {
-        validRanges.push(rangeName);
+      const rangeObj = rangeQuad.object;
+      if (rangeObj.termType === 'NamedNode') {
+        const rangeUri = (rangeObj as { value: string }).value;
+        if (rangeUri === OWL_THING) {
+          hasOwlThingRange = true;
+          // When range is owl:Thing, skip creating domain/range edges
+          // Edges should only come from actual restrictions, not from owl:Thing domain/range
+          break;
+        }
+        const rangeName = extractLocalName(rangeUri);
+        if (seenClasses.has(rangeName)) {
+          validRanges.push(rangeName);
+        }
+      } else if (rangeObj.termType === 'BlankNode') {
+        // An anonymous class expression range (e.g. owl:unionOf): flatten to its member classes so the
+        // relationships are visible. The union itself is shown by the overlay grouping (issue #59).
+        for (const uri of resolveDomainClassUris(store, rangeObj as RdfTerm)) {
+          const name = extractLocalName(uri);
+          if (seenClasses.has(name) && !validRanges.includes(name)) validRanges.push(name);
+        }
       }
     }
     
@@ -937,10 +1009,12 @@ function buildParseResultFromStore(
     }
   }
 
-  return { 
-    graphData: { nodes, edges }, 
-    store, 
-    annotationProperties: annotationProps, 
+  const classExpressions = extractUnionGroups(store, seenClasses);
+
+  return {
+    graphData: { nodes, edges, classExpressions },
+    store,
+    annotationProperties: annotationProps,
     objectProperties: objectProps, 
     dataProperties: dataProps,
     originalFileCache: originalFileCache ?? undefined

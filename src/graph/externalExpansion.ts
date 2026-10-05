@@ -436,6 +436,9 @@ export function expandWithExternalRefs(
   }
 
   return {
+    // Spread rawData first so other GraphData fields (e.g. classExpressions) survive expansion;
+    // nodes/edges are then overridden with the expanded sets.
+    ...rawData,
     nodes: [...rawData.nodes, ...externalNodesList],
     edges: deduplicatedEdges,
   };
