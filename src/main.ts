@@ -127,12 +127,21 @@ import {
   updateNodeEdgeCounts,
   updateFilePathDisplay as updateStatusBarFilePath,
   updateSelectionInfo as updateStatusBarSelection,
+  updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
 import {
   initContextMenu,
   showContextMenu,
   updateContextMenuData,
+  setTermUriResolver,
 } from './ui/contextMenu';
+import {
+  resolveNodeTerm,
+  resolveEdgeTerm,
+  buildTermLink,
+  type TermLookup,
+  type ResolvedTerm,
+} from './lib/termUri';
 import { attachEditorTestHook } from './e2e/editorTestHook';
 import {
   initOpenOntologyModal,
@@ -3889,13 +3898,42 @@ function buildNetworkData(
   };
 }
 
+/** Nodes/properties used to resolve a term's URI (includes external nodes when they are displayed). */
+function getTermLookup(): TermLookup {
+  return { nodes: (currentGraphDataForBuild ?? rawData).nodes, objectProperties, dataProperties };
+}
+setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
+
+function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
+  return kind === 'node' ? resolveNodeTerm(id, getTermLookup()) : resolveEdgeTerm(id, getTermLookup());
+}
+
+/** Link for the selected term: the loaded TTL + #fragment for main-ontology terms, else the term URI. */
+function getTermLink(termUri: string | null): string | null {
+  const namespaces = ttlStore ? [getMainOntologyBase(ttlStore), getClassNamespace(ttlStore)] : [];
+  return buildTermLink(termUri, loadedFilePath, namespaces.filter((ns): ns is string => !!ns));
+}
+
 function updateSelectionInfoDisplay(net: Network): void {
   const nodeIds = net.getSelectedNodes().map(String);
   if (nodeIds.length === 0) {
-    updateStatusBarSelection('');
+    const edgeIds = net.getSelectedEdges().map(String);
+    if (edgeIds.length === 1) {
+      const term = resolveTerm('edge', edgeIds[0]);
+      updateStatusBarSelectedTerm(term?.label ?? edgeIds[0], getTermLink(term?.uri ?? null));
+    } else if (edgeIds.length > 1) {
+      updateStatusBarSelection(` | Selected: ${edgeIds.length} relationships`);
+    } else {
+      updateStatusBarSelection('');
+    }
   } else if (nodeIds.length === 1) {
     const node = rawData.nodes.find((n) => n.id === nodeIds[0]);
-    updateStatusBarSelection(` | Selected: ${node?.label ?? nodeIds[0]} | Labellable: ${node?.labellableRoot ?? 'N/A'}`);
+    const term = resolveTerm('node', nodeIds[0]);
+    updateStatusBarSelectedTerm(
+      node?.label ?? term?.label ?? nodeIds[0],
+      getTermLink(term?.uri ?? null),
+      ` | Labellable: ${node?.labellableRoot ?? 'N/A'}`
+    );
   } else {
     updateStatusBarSelection(` | Selected: ${nodeIds.length} nodes`);
   }
@@ -4075,10 +4113,10 @@ function setupNetworkSelectionAndNavigation(
       }
       
       // Check if we were panning (rightPanStart exists) or if we should show context menu.
-      // The context menu is all edit/copy actions, so it is suppressed in read-only embedded mode.
-      if (!rightPanStart && isInContainer && !isEmbedded()) {
+      // In read-only embedded mode the menu is reduced to the read-only "Copy URI".
+      if (!rightPanStart && isInContainer) {
         // Show context menu; use node/edge stored at mousedown so target is exact (e.g. data property node)
-        showContextMenu(e, net, container, rightClickNodeId, rightClickEdgeId);
+        showContextMenu(e, net, container, rightClickNodeId, rightClickEdgeId, { copyOnly: isEmbedded() });
       }
       rightPanStart = null;
       rightClickNodeId = null;
