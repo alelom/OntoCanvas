@@ -147,10 +147,11 @@ export interface ClassExpressionGroup {
   propertyName: string;
   /** Full URI of the property. */
   propertyUri?: string;
-  /** Local name of the range class this property points to (for the connector), if present. */
-  range?: string;
-  /** Where in the axiom the expression appears. Only 'domain' is produced today; 'range' is reserved
-   * for when class expressions on a property's range are surfaced (see #57). */
+  /** Local name of the single class on the OPPOSITE end of the property (the one the connector runs
+   * to): the range class when the union is on the domain, the domain class when it is on the range.
+   * Absent if that end isn't a single named class in the graph. */
+  counterpart?: string;
+  /** Which end of the property the union sits on. */
   position: 'domain' | 'range';
   /** Whether the carrying property is an object or datatype property. */
   propertyKind: 'object' | 'data';

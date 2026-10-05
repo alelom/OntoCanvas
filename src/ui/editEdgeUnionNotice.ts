@@ -8,18 +8,20 @@ import type { ClassExpressionGroup } from '../types';
 
 const NOTICE_ID = 'editEdgeUnionNotice';
 
-/** The union group whose domain includes `memberName` for the given property, or null. `property`
- * may be a local name or a full URI (edge types can be either). */
+/** The union group for the given property whose members include either end of the edge, or null. A
+ * domain union matches on the edge's `from`, a range union on its `to`. `property` may be a local
+ * name or a full URI (edge types can be either). */
 export function findUnionGroupForEdge(
   groups: ClassExpressionGroup[] | undefined,
-  memberName: string,
+  from: string,
+  to: string,
   property: string,
 ): ClassExpressionGroup | null {
   if (!groups || groups.length === 0) return null;
   return (
     groups.find(
       (g) =>
-        g.members.includes(memberName) &&
+        (g.members.includes(from) || g.members.includes(to)) &&
         (g.propertyName === property ||
           g.propertyUri === property ||
           (!!g.propertyUri && (g.propertyUri.endsWith(`#${property}`) || g.propertyUri.endsWith(`/${property}`)))),

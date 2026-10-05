@@ -50,8 +50,10 @@ export function showClassExpressionModal(group: ClassExpressionGroup): void {
   const prop = escapeHtml(group.propertyName);
   const where = group.position === 'domain' ? 'domain' : 'range';
   const membersEsc = group.members.map(escapeHtml);
-  const rangeLine = group.range
-    ? `<p style="margin:8px 0 0 0;font-size:12px;color:#444;">Range: <code>${escapeHtml(group.range)}</code></p>`
+  // The opposite end of the property: its range when the union is on the domain, and vice versa.
+  const counterpartLabel = group.position === 'domain' ? 'Range' : 'Domain';
+  const counterpartLine = group.counterpart
+    ? `<p style="margin:8px 0 0 0;font-size:12px;color:#444;">${counterpartLabel}: <code>${escapeHtml(group.counterpart)}</code></p>`
     : '';
   // Worked example of what the union means, in plain language. Colons, no em dashes (per request).
   const example =
@@ -71,7 +73,7 @@ export function showClassExpressionModal(group: ClassExpressionGroup): void {
         The <b>${where}</b> of <b>${prop}</b> (${kind}) is the <b>${op.word}</b> of these classes:
       </p>
       <div style="margin-top:6px;">${chips}</div>
-      ${rangeLine}
+      ${counterpartLine}
       <p style="margin:10px 0 0 0;font-size:12px;color:#444;background:#f5f1fb;border-radius:4px;padding:6px 8px;">
         ${example}
       </p>

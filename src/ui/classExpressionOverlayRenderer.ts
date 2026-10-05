@@ -109,12 +109,13 @@ function colorOf(edge: EdgeLike): string | null {
   return null;
 }
 
-/** The point at fraction t from `member`'s end along the edge's real (curved) path, or null if the
- * edge can't be sampled. Samples the actual rendered curve so the dot tracks curve reshaping — a
- * straight chord's ¼ point is invariant to moving a shared range node, the real curve's is not. */
-function edgePoint(edge: EdgeLike | null, member: string, t: number): Point | null {
+/** The point at fraction t measured from `domainNode`'s end along the edge's real (curved) path, or
+ * null if the edge can't be sampled. Samples the actual rendered curve so the dot tracks curve
+ * reshaping — a straight chord's fraction point is invariant to moving a shared endpoint, the real
+ * curve's is not. `t` is domain-relative: ¼ for a domain union, ¾ for a range union. */
+function edgePoint(edge: EdgeLike | null, domainNode: string, t: number): Point | null {
   if (!edge?.edgeType?.getPoint) return null;
-  const tEff = edge.fromId === member ? t : 1 - t;
+  const tEff = edge.fromId === domainNode ? t : 1 - t;
   try {
     const p = edge.edgeType.getPoint(tEff);
     if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return { x: p.x, y: p.y };
@@ -187,21 +188,26 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
         }
         continue;
       }
-      // Dot position along each member edge: ¼ from the domain end, or ¾ for a range union.
+      // Dot position along each member edge, measured from the domain end: ¼ for a domain union
+      // (dots near the domain members), ¾ for a range union (dots near the range members).
       const t = group.position === 'domain' ? 0.25 : 0.75;
-      const targetId = group.range ?? null; // object-property range class (shared by all members)
-      if (!targetId) continue;
+      const counterpartId = group.counterpart ?? null; // single class on the opposite end
+      if (!counterpartId) continue;
       const dots: Point[] = [];
       let color: string | null = null;
       for (const member of group.members) {
         const memberPos = nodePos(net, member);
         if (!memberPos) continue;
-        const target = nodePos(net, targetId);
-        if (!target) continue;
-        const edge = findEdge(net, member, targetId);
+        const cpPos = nodePos(net, counterpartId);
+        if (!cpPos) continue;
+        const edge = findEdge(net, member, counterpartId);
         if (edge && !color) color = colorOf(edge);
-        // Sample the ¼ point on the real edge curve; fall back to a straight chord if unavailable.
-        dots.push(edgePoint(edge, member, t) ?? lerp(memberPos, target, t));
+        // The edge runs domain→range; `domainNode` is whichever end isn't the union side.
+        const domainNode = group.position === 'domain' ? member : counterpartId;
+        const domainPos = group.position === 'domain' ? memberPos : cpPos;
+        const rangePos = group.position === 'domain' ? cpPos : memberPos;
+        // Sample on the real edge curve; fall back to a straight chord (domain→range) if unavailable.
+        dots.push(edgePoint(edge, domainNode, t) ?? lerp(domainPos, rangePos, t));
       }
       if (dots.length < 2) continue;
       const stroke = color ?? FALLBACK_COLOR;

@@ -5125,7 +5125,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     const [, classId, propertyName] = match;
 
-    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, classId, propertyName));
+    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, classId, classId, propertyName));
 
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
@@ -5338,7 +5338,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     // Show cardinality section only if this is a restriction (cardinality only makes sense for restrictions)
     cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
-    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, edgeFrom, edgeType));
+    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType));
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
