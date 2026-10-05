@@ -1,3 +1,11 @@
+# [1.23.0](https://github.com/alelom/OntoCanvas/compare/v1.22.4...v1.23.0) (2026-10-05)
+
+
+### Features
+
+* **#59:** also visualize owl:unionOf on property ranges ([5ec9e58](https://github.com/alelom/OntoCanvas/commit/5ec9e588ed6a29d644ee28252a2d3e3ac2b50227)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59)
+* **#59:** visualize owl:unionOf domains instead of flattening ([f278438](https://github.com/alelom/OntoCanvas/commit/f2784387202e662161878a3b8808d1ac71150ef6)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#59](https://github.com/alelom/OntoCanvas/issues/59)
+
 ## [1.22.4](https://github.com/alelom/OntoCanvas/compare/v1.22.3...v1.22.4) (2026-10-01)
 
 
