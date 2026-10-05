@@ -55,6 +55,38 @@ describe('expandWithExternalRefs', () => {
     expect(result.edges.length).toBe(0);
   });
 
+  it('preserves classExpressions (union groups) through expansion', async () => {
+    const ttl = `
+@prefix ta: <http://example.org/task-assignment#> .
+@prefix pm: <http://example.org/project-mgmt#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/task-assignment> a owl:Ontology ; owl:imports <http://example.org/project-mgmt> .
+ta:Task a owl:Class ; rdfs:label "Task"@en .
+ta:Assignment a owl:Class ; rdfs:label "Assignment"@en .
+ta:priority a owl:DatatypeProperty ;
+  rdfs:domain [ a owl:Class ; owl:unionOf ( ta:Task ta:Assignment ) ] ;
+  rdfs:range xsd:string .
+ta:forProject a owl:ObjectProperty ;
+  rdfs:domain ta:Task ;
+  rdfs:range pm:Project .
+`;
+    const { parseResult } = await loadOntologyFromContent(ttl, 'http://example.org/task-assignment.ttl');
+    const rawData = parseResult.graphData;
+    expect(rawData.classExpressions?.length).toBe(1);
+    const refs = [{ url: 'http://example.org/project-mgmt', usePrefix: true, prefix: 'pm' }];
+    const result = expandWithExternalRefs(rawData, parseResult.store, refs, {
+      displayExternalReferences: true,
+      externalNodeLayout: 'auto',
+    });
+    // Expansion creates a new object (nodes/edges change) but must carry classExpressions forward.
+    expect(result).not.toBe(rawData);
+    expect(result.classExpressions).toEqual(rawData.classExpressions);
+  });
+
   it('returns rawData unchanged when externalRefs is empty', async () => {
     const { parseResult } = await loadOntologyFromContent(TASK_ASSIGNMENT_TTL, 'http://example.org/task-assignment.ttl');
     const rawData = parseResult.graphData;

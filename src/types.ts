@@ -133,9 +133,34 @@ export interface GraphEdge {
   isRestriction?: boolean;
 }
 
+/**
+ * An anonymous OWL class expression (e.g. owl:unionOf) that appears in a property's rdfs:domain.
+ * Rendered as a grouping (convex hull / junction) over its member class nodes rather than as a
+ * "fictional" node, with the property edge attached to the group. See issue #59.
+ */
+export interface ClassExpressionGroup {
+  /** The set operator of the expression. (Only union for now; extensible to intersection/etc.) */
+  operator: 'union';
+  /** Local names (graph node ids) of the member classes. */
+  members: string[];
+  /** Local name of the property whose domain is this expression. */
+  propertyName: string;
+  /** Full URI of the property. */
+  propertyUri?: string;
+  /** Local name of the range class this property points to (for the connector), if present. */
+  range?: string;
+  /** Where in the axiom the expression appears. Only 'domain' is produced today; 'range' is reserved
+   * for when class expressions on a property's range are surfaced (see #57). */
+  position: 'domain' | 'range';
+  /** Whether the carrying property is an object or datatype property. */
+  propertyKind: 'object' | 'data';
+}
+
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /** Anonymous class expressions (e.g. union domains) to render as groupings. */
+  classExpressions?: ClassExpressionGroup[];
 }
 
 export type BorderLineType = 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'dash-dot-dot';
