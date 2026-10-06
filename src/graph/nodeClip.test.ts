@@ -4,7 +4,7 @@ import { nodeClipBox, boxesInView, viewRect } from './nodeClip';
 const boxNode = (o: Record<string, unknown> = {}) => ({
   x: 100,
   y: 50,
-  options: { shape: 'box', shapeProperties: { borderRadius: 6 } },
+  options: { shape: 'box', shapeProperties: { borderRadius: 6 }, color: { background: 'rgba(200, 200, 200, 0.5)' } },
   shape: { width: 80, height: 30 },
   ...o,
 });
@@ -15,15 +15,32 @@ describe('nodeClipBox: the drawn outline of a vis box node', () => {
   });
 
   it("uses vis's default radius (6) when none is set, and clamps it to the box", () => {
-    expect(nodeClipBox(boxNode({ options: { shape: 'box' } }))?.radius).toBe(6);
-    expect(nodeClipBox(boxNode({ options: { shape: 'box', shapeProperties: { borderRadius: 99 } } }))?.radius).toBe(15);
+    const faded = { background: 'rgba(1, 2, 3, 0.4)' };
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: faded } }))?.radius).toBe(6);
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: faded, shapeProperties: { borderRadius: 99 } } }))?.radius).toBe(15);
   });
 
   it('is null for hidden nodes, nodes not sized yet, and non-box shapes (left unclipped)', () => {
-    expect(nodeClipBox(boxNode({ options: { shape: 'box', hidden: true } }))).toBeNull();
+    const faded = { background: 'rgba(1, 2, 3, 0.4)' };
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: faded, hidden: true } }))).toBeNull();
     expect(nodeClipBox(boxNode({ shape: {} }))).toBeNull();
     expect(nodeClipBox(boxNode({ x: undefined }))).toBeNull();
-    expect(nodeClipBox(boxNode({ options: { shape: 'ellipse' } }))).toBeNull();
+    expect(nodeClipBox(boxNode({ options: { shape: 'ellipse', color: faded } }))).toBeNull();
+  });
+});
+
+describe('nodeClipBox: only semi-transparent nodes need clipping (opaque ones already cover the lines)', () => {
+  it('skips opaque nodes: hex colours, rgb(), rgba() with alpha 1, no colour', () => {
+    for (const background of ['#c0c0c0', 'rgb(1, 2, 3)', 'rgba(1, 2, 3, 1)', undefined]) {
+      expect(nodeClipBox(boxNode({ options: { shape: 'box', color: { background } } }))).toBeNull();
+    }
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: '#c0c0c0' } }))).toBeNull();
+  });
+
+  it('clips nodes with a translucent background or a node opacity below 1', () => {
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: { background: 'rgba(1, 2, 3, 0.35)' } } }))).not.toBeNull();
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: 'rgba(1,2,3,0.5)' } }))).not.toBeNull();
+    expect(nodeClipBox(boxNode({ options: { shape: 'box', color: { background: '#c0c0c0' }, opacity: 0.6 } }))).not.toBeNull();
   });
 });
 

@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { hideEdgeLinesUnderNodes } from './edgeNodeClipping';
 
-const box = (x: number, y: number) => ({ x, y, options: { shape: 'box' }, shape: { width: 40, height: 20 } });
+const box = (x: number, y: number) => ({
+  x,
+  y,
+  options: { shape: 'box', color: { background: 'rgba(200, 200, 200, 0.5)' } }, // semi-transparent (imported)
+  shape: { width: 40, height: 20 },
+});
 
 /** A canvas context fake that records the node outlines clipped out (roundRect calls). */
 function recordingCtx(clipped: Array<[number, number]>) {

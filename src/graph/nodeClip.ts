@@ -24,18 +24,40 @@ export interface ViewRect {
 export interface ClipNodeLike {
   x?: number;
   y?: number;
-  options?: { hidden?: boolean; shape?: string; shapeProperties?: { borderRadius?: number } };
+  options?: {
+    hidden?: boolean;
+    shape?: string;
+    shapeProperties?: { borderRadius?: number };
+    color?: { background?: string } | string;
+    opacity?: number;
+  };
   shape?: { width?: number; height?: number };
 }
 
 /** vis-network's default box corner radius (nodes.shapeProperties.borderRadius). */
 const VIS_DEFAULT_BORDER_RADIUS = 6;
 
-/** The outline vis draws for a `box` node (centred on x/y, sized by its shape), or null when it can't
- * be clipped: hidden, not sized yet, or another shape (left unclipped rather than mis-clipped). */
+/** Alpha of a CSS colour string: the 4th component of rgba()/hsla(), else 1 (hex, rgb(), names). */
+function colorAlpha(color: string | undefined): number {
+  const m = color?.match(/^\s*(?:rgba|hsla)\(([^)]*)\)\s*$/i);
+  if (!m) return 1;
+  const alpha = Number.parseFloat(m[1].split(',')[3] ?? '1');
+  return Number.isFinite(alpha) ? alpha : 1;
+}
+
+/** Whether a node lets what's underneath show through (a translucent fill, or node opacity below 1).
+ * Only these need edge lines clipped: an opaque node already covers them. */
+function isTranslucent(options: ClipNodeLike['options']): boolean {
+  const background = typeof options?.color === 'string' ? options.color : options?.color?.background;
+  return colorAlpha(background) < 1 || (options?.opacity ?? 1) < 1;
+}
+
+/** The outline vis draws for a `box` node (centred on x/y, sized by its shape), or null when it doesn't
+ * need clipping (opaque — it already covers the lines) or can't be clipped: hidden, not sized yet, or
+ * another shape (left unclipped rather than mis-clipped). */
 export function nodeClipBox(node: ClipNodeLike): ClipBox | null {
   const { x, y, options, shape } = node;
-  if (options?.hidden || options?.shape !== 'box') return null;
+  if (options?.hidden || options?.shape !== 'box' || !isTranslucent(options)) return null;
   const width = shape?.width;
   const height = shape?.height;
   if (x == null || y == null || !(width! > 0) || !(height! > 0)) return null;
