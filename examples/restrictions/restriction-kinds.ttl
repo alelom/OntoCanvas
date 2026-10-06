@@ -1,0 +1,44 @@
+@prefix : <http://example.org/examples/restrictions#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# One OWL restriction of each kind (issue #63). Expected edge labels:
+#   Room → Wall         "∃∀ hasPart [1..*]"   (∃ some and ∀ only on the same property, merged)
+#   Building → Floor    "∀ hasFloor"
+#   Sheet → Status      "∋ hasStatus {Current}"  (hasValue: drawn to the individual's class)
+#   Person → Person     "⟲ knows"              (hasSelf: a loop)
+#   Sheet → Revision    "hasRevision [2..2]"   (unqualified cardinality: drawn to the property range)
+#   DrawingSet → Sheet  "contains [1..*]"      (qualified cardinality, editable)
+# Open "Edit edge" on any of them to read what the restriction means. Only the last two kinds
+# (∃ and qualified cardinality) are editable; the others are read-only for now.
+
+<http://example.org/examples/restrictions> rdf:type owl:Ontology ;
+    rdfs:label "Restriction kinds" .
+
+:Room rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasPart ; owl:someValuesFrom :Wall ] ,
+                    [ rdf:type owl:Restriction ; owl:onProperty :hasPart ; owl:allValuesFrom :Wall ] .
+:Wall rdf:type owl:Class .
+:Building rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasFloor ; owl:allValuesFrom :Floor ] .
+:Floor rdf:type owl:Class .
+:Status rdf:type owl:Class .
+:Current rdf:type owl:NamedIndividual , :Status .
+:Revision rdf:type owl:Class .
+:Sheet rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasStatus ; owl:hasValue :Current ] ,
+                    [ rdf:type owl:Restriction ; owl:onProperty :hasRevision ; owl:cardinality "2"^^xsd:nonNegativeInteger ] .
+:Person rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :knows ; owl:hasSelf "true"^^xsd:boolean ] .
+:DrawingSet rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Sheet ;
+                      owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ] .
+
+:hasPart rdf:type owl:ObjectProperty .
+:hasFloor rdf:type owl:ObjectProperty .
+:hasStatus rdf:type owl:ObjectProperty .
+:hasRevision rdf:type owl:ObjectProperty ; rdfs:range :Revision .
+:knows rdf:type owl:ObjectProperty .
+:contains rdf:type owl:ObjectProperty .

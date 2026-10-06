@@ -1,0 +1,42 @@
+@prefix : <http://example.org/examples/dataranges#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Anonymous data ranges (issue #63). The data-property box shows the base type; open
+# "Edit data property" (or hover the box) to see the range as declared:
+#   confidence  xsd:decimal [0.0, 1.0]
+#   count       xsd:integer (0, ∞)
+#   code        xsd:string pattern "[A-Z]+", maxLength 8
+#   either      xsd:string ∪ xsd:integer
+#   notText     ¬xsd:string
+# Plus OWL 2 qualified cardinalities on data restrictions (Sheet): title [1..1], note [0..3].
+
+<http://example.org/examples/dataranges> rdf:type owl:Ontology ;
+    rdfs:label "Data ranges" .
+
+:Measurement rdf:type owl:Class .
+
+:confidence rdf:type owl:DatatypeProperty ; rdfs:domain :Measurement ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:onDatatype xsd:decimal ;
+                 owl:withRestrictions ( [ xsd:minInclusive "0.0"^^xsd:decimal ] [ xsd:maxInclusive "1.0"^^xsd:decimal ] ) ] .
+:count rdf:type owl:DatatypeProperty ; rdfs:domain :Measurement ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:onDatatype xsd:integer ;
+                 owl:withRestrictions ( [ xsd:minExclusive "0"^^xsd:integer ] ) ] .
+:code rdf:type owl:DatatypeProperty ; rdfs:domain :Measurement ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:onDatatype xsd:string ;
+                 owl:withRestrictions ( [ xsd:pattern "[A-Z]+" ] [ xsd:maxLength "8"^^xsd:integer ] ) ] .
+:either rdf:type owl:DatatypeProperty ; rdfs:domain :Measurement ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:unionOf ( xsd:string xsd:integer ) ] .
+:notText rdf:type owl:DatatypeProperty ; rdfs:domain :Measurement ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:datatypeComplementOf xsd:string ] .
+
+:Sheet rdf:type owl:Class ;
+    rdfs:subClassOf
+        [ rdf:type owl:Restriction ; owl:onProperty :title ; owl:onDataRange xsd:string ;
+          owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :note ; owl:onDataRange xsd:string ;
+          owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "3"^^xsd:nonNegativeInteger ] .
+:title rdf:type owl:DatatypeProperty .
+:note rdf:type owl:DatatypeProperty .

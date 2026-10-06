@@ -1,0 +1,51 @@
+@prefix : <http://example.org/examples/nested#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Nested class expressions (issue #63). The mark uses the outer constructor's glyph; hover or click
+# it for the full formula:
+#   currentProject  range   ¬(Agent ∪ OnlineAccount)     (as in FOAF)
+#   worksOn         domain  Employee ∩ ∃hasBadge.Badge     (a restriction operand: no edge to Badge)
+#   linkedTo        domain  A ∪ (B ∪ C)
+#   limitedTo       domain  A ∩ ∀p.(B ∪ C) ∩ ≥2 q.B
+
+<http://example.org/examples/nested> rdf:type owl:Ontology ;
+    rdfs:label "Nested class expressions" .
+
+:Person rdf:type owl:Class .
+:Agent rdf:type owl:Class .
+:OnlineAccount rdf:type owl:Class .
+:Employee rdf:type owl:Class .
+:Badge rdf:type owl:Class .
+:Project rdf:type owl:Class .
+:A rdf:type owl:Class .
+:B rdf:type owl:Class .
+:C rdf:type owl:Class .
+:D rdf:type owl:Class .
+
+:currentProject rdf:type owl:ObjectProperty ;
+    rdfs:domain :Person ;
+    rdfs:range [ rdf:type owl:Class ; owl:complementOf [ rdf:type owl:Class ; owl:unionOf ( :Agent :OnlineAccount ) ] ] .
+
+:worksOn rdf:type owl:ObjectProperty ;
+    rdfs:domain [ rdf:type owl:Class ;
+                  owl:intersectionOf ( :Employee [ rdf:type owl:Restriction ; owl:onProperty :hasBadge ; owl:someValuesFrom :Badge ] ) ] ;
+    rdfs:range :Project .
+
+:linkedTo rdf:type owl:ObjectProperty ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :A [ rdf:type owl:Class ; owl:unionOf ( :B :C ) ] ) ] ;
+    rdfs:range :D .
+
+:limitedTo rdf:type owl:ObjectProperty ;
+    rdfs:domain [ rdf:type owl:Class ;
+                  owl:intersectionOf ( :A
+                                       [ rdf:type owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom [ rdf:type owl:Class ; owl:unionOf ( :B :C ) ] ]
+                                       [ rdf:type owl:Restriction ; owl:onProperty :q ; owl:onClass :B ;
+                                         owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger ] ) ] ;
+    rdfs:range :D .
+
+:hasBadge rdf:type owl:ObjectProperty .
+:p rdf:type owl:ObjectProperty .
+:q rdf:type owl:ObjectProperty .
