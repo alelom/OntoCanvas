@@ -1,3 +1,31 @@
+# [1.25.0](https://github.com/alelom/OntoCanvas/compare/v1.24.0...v1.25.0) (2026-10-06)
+
+
+### Bug Fixes
+
+* **#59,#60,#61,#62:** badge sizing follows each node's font by depth (Max for roots) ([2240111](https://github.com/alelom/OntoCanvas/commit/22401110a2fce09fe8e7ec0e9729835c0b01c888)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#59,#60,#61,#62:** corner badge when a class expression has no edge to mark ([853c86c](https://github.com/alelom/OntoCanvas/commit/853c86c0fc1523016eab8bd46d8f547374968b11)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#60,#61,#62:** address PR review on class-expression parsing and lookup ([14e596e](https://github.com/alelom/OntoCanvas/commit/14e596e224ce3aaac5bedf7ed6b97931fe68a2a6)), closes [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#71:** clip edges at nodes' live positions, not the first layout ([4454482](https://github.com/alelom/OntoCanvas/commit/44544828f33634486426bbebd1665e9ac918b116)), closes [#71](https://github.com/alelom/OntoCanvas/issues/71) [#71](https://github.com/alelom/OntoCanvas/issues/71)
+* **#71:** hide edge lines under semi-transparent (imported) nodes ([16042f5](https://github.com/alelom/OntoCanvas/commit/16042f5f2bb2397013d5798ea101e06a0cfe1c6b)), closes [#71](https://github.com/alelom/OntoCanvas/issues/71) [59-#62](https://github.com/59-/issues/62) [#71](https://github.com/alelom/OntoCanvas/issues/71)
+* **#72:** keep data-property boxes clear of their class node ([20cd7ef](https://github.com/alelom/OntoCanvas/commit/20cd7eff65d25c355bf2cc6f2d9a36b9e188eedf)), closes [#72](https://github.com/alelom/OntoCanvas/issues/72) [#72](https://github.com/alelom/OntoCanvas/issues/72)
+* **#73:** draw arrowheads under edge labels and nodes ([ae8e928](https://github.com/alelom/OntoCanvas/commit/ae8e928e35530b6ee312bca1520e7206eb6e27b0)), closes [#73](https://github.com/alelom/OntoCanvas/issues/73) [#73](https://github.com/alelom/OntoCanvas/issues/73)
+
+
+### Features
+
+* **#59,#60,#61,#62:** draw class-expression edge marks under edge labels ([9507aa1](https://github.com/alelom/OntoCanvas/commit/9507aa1c552677bc486daa9e4fe03bcc299bb202)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#59,#60,#61,#62:** place class-expression marks on the edge's visible part ([1513a73](https://github.com/alelom/OntoCanvas/commit/1513a737ec482dec71105d68666bdc1d94565894)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#59,#60,#61,#62:** scale on-edge class-expression badges with edge length ([93d5b75](https://github.com/alelom/OntoCanvas/commit/93d5b758294c6bc88c429f7b835f130e72148884)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#59,#60,#61,#62:** size class-expression badges with the display fonts ([89088d7](https://github.com/alelom/OntoCanvas/commit/89088d7ea6c072db614f9cb412e5195ce49d87dd)), closes [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#60,#61,#62:** draw ∩ ¬ {} marks and move overlay wiring out of main.ts ([850608f](https://github.com/alelom/OntoCanvas/commit/850608ffebca2a5a98fc3790e66a36a9fe30fd02)), closes [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+* **#60,#61,#62:** surface intersection, complement and oneOf class expressions ([9aa7d63](https://github.com/alelom/OntoCanvas/commit/9aa7d63d8d5d0b069379542e4e38cdd089699072)), closes [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#59](https://github.com/alelom/OntoCanvas/issues/59) [#60](https://github.com/alelom/OntoCanvas/issues/60) [#61](https://github.com/alelom/OntoCanvas/issues/61) [#62](https://github.com/alelom/OntoCanvas/issues/62) [#57](https://github.com/alelom/OntoCanvas/issues/57)
+
+
+### Performance Improvements
+
+* **#71:** clip edge lines only under semi-transparent nodes ([b052816](https://github.com/alelom/OntoCanvas/commit/b052816f12d94826e421f700246320d149fa9421)), closes [#71](https://github.com/alelom/OntoCanvas/issues/71)
+
 # [1.24.0](https://github.com/alelom/OntoCanvas/compare/v1.23.0...v1.24.0) (2026-10-06)
 
 
