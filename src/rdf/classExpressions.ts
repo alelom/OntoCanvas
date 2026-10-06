@@ -12,8 +12,19 @@ import { extractLocalName } from '../utils/localName';
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
+const XSD = 'http://www.w3.org/2001/XMLSchema#';
 
-export type RdfTerm = { termType: string; value?: string };
+export type RdfTerm = { termType: string; value?: string; language?: string; datatype?: { value: string } };
+
+/** A literal as shown in the tooltip / modal: plain strings bare, otherwise in Turtle form so values
+ * differing only by language or datatype stay distinguishable — `"hello"@en`, `"1"^^xsd:integer`. */
+export function literalDisplay(term: RdfTerm): string {
+  const value = term.value ?? '';
+  if (term.language) return `"${value}"@${term.language}`;
+  const datatype = term.datatype?.value;
+  if (!datatype || datatype === XSD + 'string' || datatype === RDF + 'langString') return value;
+  return `"${value}"^^${datatype.startsWith(XSD) ? `xsd:${datatype.slice(XSD.length)}` : `<${datatype}>`}`;
+}
 
 /** Walk an RDF collection (rdf:first/rdf:rest) starting at listHead, returning its member terms in order. */
 export function readRdfList(store: Store, listHead: RdfTerm): RdfTerm[] {
@@ -79,7 +90,7 @@ function readClassExpression(store: Store, node: RdfTerm): ClassExpression | nul
       if (item.termType !== 'NamedNode') continue;
       for (const uri of individualTypeUris(store, item)) if (!classUris.includes(uri)) classUris.push(uri);
     }
-    const values = items.map((t) => (t.termType === 'NamedNode' ? extractLocalName(t.value!) : t.value!));
+    const values = items.map((t) => (t.termType === 'NamedNode' ? extractLocalName(t.value!) : literalDisplay(t)));
     return { operator: 'oneOf', classUris, values };
   }
   return null;
@@ -148,32 +159,33 @@ export function extractClassExpressionGroups(store: Store, seenClasses: Set<stri
       const subj = q.subject;
       if (subj.termType !== 'NamedNode') continue;
       const propUri = subj.value;
+      // Every rdfs:domain / rdfs:range triple: a property may list a named class AND an expression.
       for (const { exprSide, otherSide } of sides) {
-        const sideQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + exprSide), null, null)[0];
-        if (!sideQuad) continue;
-        const expr = readClassExpression(store, sideQuad.object as RdfTerm);
-        if (!expr) continue;
-        const members: string[] = [];
-        for (const uri of expr.classUris) {
-          const name = extractLocalName(uri);
-          if (seenClasses.has(name) && !members.includes(name)) members.push(name);
+        for (const sideQuad of store.getQuads(subj, DataFactory.namedNode(RDFS + exprSide), null, null)) {
+          const expr = readClassExpression(store, sideQuad.object as RdfTerm);
+          if (!expr) continue;
+          const members: string[] = [];
+          for (const uri of expr.classUris) {
+            const name = extractLocalName(uri);
+            if (seenClasses.has(name) && !members.includes(name)) members.push(name);
+          }
+          // The classes on the other end (edge targets), resolved through an expression there too. A data
+          // property's stubs hang off its domain classes, so for a range expression these carry the mark.
+          const counterparts = sideClasses(store, subj, otherSide, seenClasses);
+          const stubOwners = exprSide === 'domain' ? members : counterparts;
+          const anchorAvailable = propertyKind === 'data' ? stubOwners.length > 0 : counterparts.length > 0;
+          if (!isDrawable(expr.operator, members, expr.values, anchorAvailable)) continue;
+          groups.push({
+            operator: expr.operator,
+            members,
+            ...(expr.values ? { values: expr.values } : {}),
+            propertyName: extractLocalName(propUri),
+            propertyUri: propUri,
+            counterparts,
+            position: exprSide,
+            propertyKind,
+          });
         }
-        // The classes on the other end (edge targets), resolved through an expression there too. A data
-        // property's stubs hang off its domain classes, so for a range expression these carry the mark.
-        const counterparts = sideClasses(store, subj, otherSide, seenClasses);
-        const stubOwners = exprSide === 'domain' ? members : counterparts;
-        const anchorAvailable = propertyKind === 'data' ? stubOwners.length > 0 : counterparts.length > 0;
-        if (!isDrawable(expr.operator, members, expr.values, anchorAvailable)) continue;
-        groups.push({
-          operator: expr.operator,
-          members,
-          ...(expr.values ? { values: expr.values } : {}),
-          propertyName: extractLocalName(propUri),
-          propertyUri: propUri,
-          counterparts,
-          position: exprSide,
-          propertyKind,
-        });
       }
     }
   }

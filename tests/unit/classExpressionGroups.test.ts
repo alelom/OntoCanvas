@@ -110,3 +110,33 @@ describe('class expressions whose edge cannot be drawn (FOAF made: domain Agent,
     expect(tagged!.members.sort()).toEqual(['A', 'B']);
   });
 });
+
+describe('review fixes: literal display and multiple domain/range triples', async () => {
+  const ttl = `@prefix : <http://example.org/o#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<http://example.org/o> a owl:Ontology .
+:Thing2 a owl:Class .
+:A a owl:Class .
+:B a owl:Class .
+:R a owl:Class .
+:code a owl:DatatypeProperty ; rdfs:domain :Thing2 ;
+  rdfs:range [ a rdfs:Datatype ; owl:oneOf ( "1" "1"^^xsd:integer "hello"@en "plain" ) ] .
+:linked a owl:ObjectProperty ;
+  rdfs:domain :Thing2 , [ a owl:Class ; owl:unionOf ( :A :B ) ] ;
+  rdfs:range :R .`;
+  const r = await parseRdfToGraph(ttl, { path: 'review.ttl' });
+  const groups = r.graphData.classExpressions ?? [];
+
+  it('keeps literal datatypes and language tags so values stay distinguishable', () => {
+    const g = groups.find((x) => x.propertyName === 'code');
+    expect(g?.values).toEqual(['1', '"1"^^xsd:integer', '"hello"@en', 'plain']);
+  });
+
+  it('finds an expression among several rdfs:domain triples, not only the first', () => {
+    const g = groups.find((x) => x.propertyName === 'linked');
+    expect(g).toMatchObject({ operator: 'union', position: 'domain', counterparts: ['R'] });
+    expect(g!.members.sort()).toEqual(['A', 'B']);
+  });
+});

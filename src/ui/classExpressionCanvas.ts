@@ -3,7 +3,7 @@
  * (classExpressionOverlayRenderer). Kept separate so the renderer reads as "which mark goes where".
  * See issues #59-#62.
  */
-import { glyphFontSize, propertyEdgeIds, type NodeBox, type Point } from '../graph/classExpressionOverlay';
+import { dataPropertyEdgeIds, glyphFontSize, propertyEdgeIds, type NodeBox, type Point } from '../graph/classExpressionOverlay';
 import { arrowheadLength, chordT, pointAlongVisibleSpan, visibleSpanLength, type VisibleSpan } from '../graph/visibleSpan';
 
 /** A vis edge, as far as the overlay pokes at it. `edgeType.getPoint(t)` samples the real (possibly
@@ -69,14 +69,11 @@ export function findPropertyEdge(net: OverlayNet, from: string, to: string, prop
   return null;
 }
 
-/** The edge between two nodes (either direction), or null. */
-export function findEdge(net: OverlayNet, a: string, b: string): EdgeLike | null {
+/** The edge from a class to one of its data-property boxes (by vis edge id), or null. */
+export function findDataPropertyEdge(net: OverlayNet, classId: string, boxId: string): EdgeLike | null {
   const edges = net.body?.edges;
   if (!edges) return null;
-  for (const key in edges) {
-    const e = edges[key];
-    if ((e.fromId === a && e.toId === b) || (e.fromId === b && e.toId === a)) return e;
-  }
+  for (const id of dataPropertyEdgeIds(classId, boxId)) if (edges[id]) return edges[id];
   return null;
 }
 

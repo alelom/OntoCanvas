@@ -59,7 +59,7 @@ import {
   drawArrowhead,
   drawBadge,
   edgePoint,
-  findEdge,
+  findDataPropertyEdge,
   findPropertyEdge,
   nodeBox,
   nodePos,
@@ -272,7 +272,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
           for (const classId of group.position === 'domain' ? group.members : group.counterparts) {
             const stubId = dataStubId(net, classId, group.propertyName);
             if (!stubId) continue;
-            const color = colorOf(findEdge(net, classId, stubId)) ?? DATA_FALLBACK_COLOR;
+            const color = colorOf(findDataPropertyEdge(net, classId, stubId)) ?? DATA_FALLBACK_COLOR;
             drawCornerBadge(net, ctx, group, glyph, stubId, color, stacker, 'dataProperty');
           }
           break;

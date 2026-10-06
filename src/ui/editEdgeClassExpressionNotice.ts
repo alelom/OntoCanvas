@@ -40,6 +40,24 @@ export function findClassExpressionGroupForEdge(
   );
 }
 
+/** What the notice says the expression is. A datatype enumeration lists literal values (no class edge);
+ * an object one lists individuals, drawn to their class only when they have one on the graph. */
+export function noticeTargetText(group: ClassExpressionGroup): string {
+  switch (group.operator) {
+    case 'complement':
+      return 'the complement of this class (anything that is not it)';
+    case 'oneOf':
+      if (group.propertyKind === 'data') return 'an enumeration of these literal values';
+      return group.members.length > 0
+        ? 'an enumeration of these individuals; the edge is drawn to their class'
+        : 'an enumeration of these individuals';
+    case 'union':
+      return 'a union of these classes';
+    case 'intersection':
+      return 'an intersection of these classes';
+  }
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 }
@@ -78,12 +96,7 @@ export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: Cla
         ? glyph('{') + (group.values ?? []).map(chip).join(glyph(',')) + glyph('}')
         : group.members.map(chip).join(glyph(info.glyph));
   const where = group.position === 'domain' ? 'domain' : 'range';
-  const what =
-    group.operator === 'complement'
-      ? 'the complement of this class (anything that is not it)'
-      : group.operator === 'oneOf'
-        ? 'an enumeration of these individuals; the edge is drawn to their class'
-        : `${group.operator === 'union' ? 'a union' : 'an intersection'} of these classes`;
+  const what = noticeTargetText(group);
   el.innerHTML =
     `<div style="font-weight:600;margin-bottom:4px;">${info.glyph} ${where === 'domain' ? 'Domain' : 'Range'} ${info.word}</div>` +
     `<div style="margin-bottom:5px;">${chips}</div>` +

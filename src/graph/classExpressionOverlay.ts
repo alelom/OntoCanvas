@@ -156,6 +156,12 @@ export function badgeScale(visibleLength: number | null): number {
   return Math.min(BADGE_MAX_SCALE, Math.max(BADGE_MIN_SCALE, visibleLength / BADGE_REFERENCE_LENGTH));
 }
 
+/** The vis edge ids of the edge from a class to one of its data-property boxes (main.ts builds them as
+ * `${classId}->${boxId}:dataprop`, or `:dataproprestrict` for a restriction box). */
+export function dataPropertyEdgeIds(classId: string, boxId: string): string[] {
+  return [`${classId}->${boxId}:dataprop`, `${classId}->${boxId}:dataproprestrict`];
+}
+
 /** The vis edge ids the from→to edge of a property may have: `${from}->${to}:${type}`, where type is
  * the property's local name or full URI (main.ts builds them so). Looking the edge up by id means marks
  * never land on another property's edge between the same classes. */
