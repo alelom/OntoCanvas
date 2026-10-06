@@ -170,7 +170,7 @@ import {
 } from './ui/renameModalHeaderIcons';
 import { getAppVersion } from './utils/version';
 import { getShouldShowTopMenu, isEmbedded } from './utils/embedMode';
-import { defaultMaxFontSize } from './ui/fontSizeDefaults';
+import { defaultMaxFontSize, fontSettingRatios } from './ui/fontSizeDefaults';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
@@ -501,6 +501,8 @@ function flushDisplayConfigSave(): void {
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 let rawData: GraphData = { nodes: [], edges: [] };
+/** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
+let classExpressionFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 /** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
 let currentGraphDataForBuild: GraphData | null = null;
 /** External class URIs we have seen in this session (from store or added by user). Not removed when user deletes an external node, so "Add from referenced ontology" still finds them. Cleared on load. */
@@ -3066,6 +3068,8 @@ function buildNetworkData(
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
+  // Class-expression badges are sized with the display fonts (relative to their defaults).
+  classExpressionFontRatios = fontSettingRatios({ minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize }, rawData?.nodes?.length ?? 0);
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
@@ -3995,6 +3999,7 @@ function setupNetworkSelectionAndNavigation(
   const classExprMarks = attachClassExpressionMarks(
     net as unknown as Parameters<typeof attachClassExpressionMarks>[0],
     () => rawData?.classExpressions ?? [],
+    () => classExpressionFontRatios,
   );
   // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
   hideEdgeLinesUnderNodes(net);

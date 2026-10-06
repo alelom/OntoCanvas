@@ -163,3 +163,32 @@ export function propertyEdgeIds(from: string, to: string, propertyName: string, 
   const prefix = `${from}->${to}:`;
   return propertyUri && propertyUri !== propertyName ? [prefix + propertyName, prefix + propertyUri] : [prefix + propertyName];
 }
+
+/** Where a badge sits, which decides the font it follows most. */
+export type BadgePlacement = 'edge' | 'node' | 'dataProperty';
+
+/** Each display font setting relative to its default (1 = default; see fontSettingRatios). */
+export interface BadgeFontRatios {
+  node: number;
+  relationship: number;
+  dataProperty: number;
+}
+
+export const FONT_SCALE_MIN = 0.5;
+export const FONT_SCALE_MAX = 2.5;
+
+/** Weight of each font, per placement: the font of what the badge sits on leads (60%), the others
+ * follow (25% / 15%), so changing any font size moves every badge a little and its own a lot. */
+const FONT_WEIGHTS: Record<BadgePlacement, { node: number; relationship: number; dataProperty: number }> = {
+  edge: { relationship: 0.6, node: 0.25, dataProperty: 0.15 },
+  node: { node: 0.6, relationship: 0.25, dataProperty: 0.15 },
+  dataProperty: { dataProperty: 0.6, relationship: 0.25, node: 0.15 },
+};
+
+/** Size factor for a badge from the display font settings: a weighted average of the font ratios,
+ * clamped to [FONT_SCALE_MIN, FONT_SCALE_MAX]. 1 at the default fonts. */
+export function badgeFontScale(placement: BadgePlacement, ratios: BadgeFontRatios): number {
+  const w = FONT_WEIGHTS[placement];
+  const scale = w.node * ratios.node + w.relationship * ratios.relationship + w.dataProperty * ratios.dataProperty;
+  return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, scale));
+}

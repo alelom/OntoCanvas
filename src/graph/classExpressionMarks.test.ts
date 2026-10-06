@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { markKind, markLayer, nodeBadgeTargets, partitionByEdge, propertyEdgeIds, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
+import { markKind, markLayer, badgeFontScale, FONT_SCALE_MIN, FONT_SCALE_MAX, nodeBadgeTargets, partitionByEdge, propertyEdgeIds, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
 import type { ClassExpressionGroup } from '../types';
 
 const g = (o: Partial<ClassExpressionGroup>): ClassExpressionGroup =>
@@ -129,5 +129,35 @@ describe('propertyEdgeIds: vis edge ids are `${from}->${to}:${type}`', () => {
 
   it('works with node ids that are full URIs', () => {
     expect(propertyEdgeIds(`${FOAF}Agent`, 'Doc', 'made')).toEqual([`${FOAF}Agent->Doc:made`]);
+  });
+});
+
+describe('badgeFontScale: badges follow the display font settings, weighted by what they sit on', () => {
+  const ones = { node: 1, relationship: 1, dataProperty: 1 };
+
+  it('is exactly 1 at the default font settings, for every placement', () => {
+    for (const placement of ['edge', 'node', 'dataProperty'] as const) expect(badgeFontScale(placement, ones)).toBeCloseTo(1, 10);
+  });
+
+  it('is led by the font of what the badge sits on (60%), blended with the others (25% / 15%)', () => {
+    const relDoubled = { ...ones, relationship: 2 };
+    expect(badgeFontScale('edge', relDoubled)).toBeCloseTo(1.6, 10);
+    expect(badgeFontScale('node', relDoubled)).toBeCloseTo(1.25, 10);
+    expect(badgeFontScale('dataProperty', relDoubled)).toBeCloseTo(1.25, 10);
+    const nodeDoubled = { ...ones, node: 2 };
+    expect(badgeFontScale('node', nodeDoubled)).toBeCloseTo(1.6, 10);
+    expect(badgeFontScale('edge', nodeDoubled)).toBeCloseTo(1.25, 10);
+    expect(badgeFontScale('dataProperty', nodeDoubled)).toBeCloseTo(1.15, 10);
+  });
+
+  it('moves all badges together when every font scales together', () => {
+    for (const placement of ['edge', 'node', 'dataProperty'] as const) {
+      expect(badgeFontScale(placement, { node: 0.5, relationship: 0.5, dataProperty: 0.5 })).toBeCloseTo(0.5, 10);
+    }
+  });
+
+  it('is clamped', () => {
+    expect(badgeFontScale('edge', { node: 50, relationship: 50, dataProperty: 50 })).toBe(FONT_SCALE_MAX);
+    expect(badgeFontScale('edge', { node: 0.01, relationship: 0.01, dataProperty: 0.01 })).toBe(FONT_SCALE_MIN);
   });
 });

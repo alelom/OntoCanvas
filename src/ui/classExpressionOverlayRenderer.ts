@@ -24,14 +24,19 @@
  * - stubBadge (data property): the class→stub edge is too short for an edge mark, so a badge overlaps
  *   a corner of each stub node (domain → top-left, range → top-right); the stub label stays intact.
  *
- * Badges on edges scale with the edge's visible length (badgeScale, clamped), so they shrink on short
- * edges and grow a little on long ones; corner badges keep a fixed size. Marks borrow the colour of the
+ * Badges also follow the display font settings (badgeFontScale): led by the font of what they sit on —
+ * relationship for edge marks, node for node corners, data property for stub corners — blended with
+ * the others, and exactly nominal size at the default settings. Edge badges additionally scale with the edge's visible length (badgeScale),
+ * shrinking on short edges and growing a little on long ones. Marks borrow the colour of the
  * relationship they mark. Every mark is a hit-region so hovering
  * explains the expression and clicking opens its modal. Kept out of main.ts.
  */
 import type { ClassExpressionGroup } from '../types';
 import {
   badgeFraction,
+  badgeFontScale,
+  type BadgeFontRatios,
+  type BadgePlacement,
   badgeScale,
   centroid,
   cornerBadgeCenter,
@@ -80,11 +85,18 @@ const SMALL_GLYPH_SIZE = 16;
 interface Region { group: ClassExpressionGroup; center: Point; radius: number; segments: Array<[Point, Point]> }
 
 const ALL_LAYERS: MarkLayer[] = ['edges', 'nodes'];
+const DEFAULT_FONT_RATIOS: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 
 export interface ClassExpressionOverlay {
   /** Draw the marks of the given layers (default: all) in canvas coords. `edges` marks belong between
    * the edge lines and labels, `nodes` marks on top (see visEdgeLayering / markLayer). */
-  draw(net: OverlayNet, ctx: CanvasRenderingContext2D, groups: ClassExpressionGroup[], layers?: MarkLayer[]): void;
+  draw(
+    net: OverlayNet,
+    ctx: CanvasRenderingContext2D,
+    groups: ClassExpressionGroup[],
+    layers?: MarkLayer[],
+    fontRatios?: BadgeFontRatios,
+  ): void;
   /** The group whose mark / connector is under a canvas-space point, or null. */
   groupAt(point: Point): ClassExpressionGroup | null;
 }
@@ -131,6 +143,8 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
   // the draw helpers append to (the layer currently being drawn).
   const regionsByLayer: Record<MarkLayer, Region[]> = { edges: [], nodes: [] };
   let regions: Region[] = regionsByLayer.edges;
+  // Display font settings (relative to their defaults) for the frame being drawn: badges follow them.
+  let ratios: BadgeFontRatios = DEFAULT_FONT_RATIOS;
 
   function drawConnector(
     net: OverlayNet,
@@ -140,7 +154,8 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     counterpartId: string,
     members: string[],
   ): void {
-    const { points: dots, color, scale } = memberEdgePoints(net, ctx, group, counterpartId, members);
+    const { points: dots, color, scale: lengthScale } = memberEdgePoints(net, ctx, group, counterpartId, members);
+    const scale = lengthScale * badgeFontScale('edge', ratios);
     if (dots.length < 2) return;
     const stroke = color ?? FALLBACK_COLOR;
     const hub = centroid(dots);
@@ -183,7 +198,8 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     counterpartId: string,
     members: string[],
   ): void {
-    const { points, color, scale } = memberEdgePoints(net, ctx, group, counterpartId, members);
+    const { points, color, scale: lengthScale } = memberEdgePoints(net, ctx, group, counterpartId, members);
+    const scale = lengthScale * badgeFontScale('edge', ratios);
     const at = points[0];
     if (!at) return;
     drawBadge(ctx, at, HUB_RADIUS * scale, HUB_GLYPH_SIZE * scale, color ?? FALLBACK_COLOR, glyph);
@@ -198,15 +214,25 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     nodeId: string,
     color: string,
     stacker: CornerStacker,
+    placement: BadgePlacement,
   ): void {
     const box = nodeBox(net, nodeId);
     if (!box) return;
-    const at = cornerBadgeCenter(box, group.position, stacker.next(nodeId, group.position), SMALL_BADGE_RADIUS);
-    drawBadge(ctx, at, SMALL_BADGE_RADIUS, SMALL_GLYPH_SIZE, color, glyph);
-    regions.push({ group, center: at, radius: SMALL_BADGE_RADIUS, segments: [] });
+    const s = badgeFontScale(placement, ratios);
+    const radius = SMALL_BADGE_RADIUS * s;
+    const at = cornerBadgeCenter(box, group.position, stacker.next(nodeId, group.position), radius);
+    drawBadge(ctx, at, radius, SMALL_GLYPH_SIZE * s, color, glyph);
+    regions.push({ group, center: at, radius, segments: [] });
   }
 
-  function draw(net: OverlayNet, ctx: CanvasRenderingContext2D, groups: ClassExpressionGroup[], layers = ALL_LAYERS): void {
+  function draw(
+    net: OverlayNet,
+    ctx: CanvasRenderingContext2D,
+    groups: ClassExpressionGroup[],
+    layers = ALL_LAYERS,
+    fontRatios = DEFAULT_FONT_RATIOS,
+  ): void {
+    ratios = fontRatios;
     for (const layer of layers) regionsByLayer[layer] = [];
     if (!groups || groups.length === 0) return;
     const stacker = new CornerStacker();
@@ -228,7 +254,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
           }
           if (layers.includes('nodes') && withoutEdge.length > 0) {
             regions = regionsByLayer.nodes;
-            drawCornerBadge(net, ctx, group, glyph, cp, FALLBACK_COLOR, stacker);
+            drawCornerBadge(net, ctx, group, glyph, cp, FALLBACK_COLOR, stacker, 'node');
           }
         }
         continue;
@@ -237,7 +263,9 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
       regions = regionsByLayer[markLayer(kind)];
       switch (kind) {
         case 'nodeBadge':
-          for (const nodeId of nodeBadgeTargets(group)) drawCornerBadge(net, ctx, group, glyph, nodeId, FALLBACK_COLOR, stacker);
+          for (const nodeId of nodeBadgeTargets(group)) {
+            drawCornerBadge(net, ctx, group, glyph, nodeId, FALLBACK_COLOR, stacker, 'node');
+          }
           break;
         case 'stubBadge':
           // A range expression marks the stubs of the property's domain classes (its counterparts).
@@ -245,7 +273,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
             const stubId = dataStubId(net, classId, group.propertyName);
             if (!stubId) continue;
             const color = colorOf(findEdge(net, classId, stubId)) ?? DATA_FALLBACK_COLOR;
-            drawCornerBadge(net, ctx, group, glyph, stubId, color, stacker);
+            drawCornerBadge(net, ctx, group, glyph, stubId, color, stacker, 'dataProperty');
           }
           break;
       }
