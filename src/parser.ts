@@ -11,7 +11,13 @@ import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
-import { findRestrictionBlanks, mergeRestrictionKinds, readObjectRestriction, removeRestrictionBlank } from './rdf/restrictions';
+import {
+  findRestrictionBlanks,
+  mergeRestrictionKinds,
+  readObjectRestriction,
+  readRestrictionCardinality,
+  removeRestrictionBlank,
+} from './rdf/restrictions';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -842,18 +848,8 @@ function buildParseResultFromStore(
     const propUri = (onProp.object as { value: string }).value;
     const propName = extractLocalName(propUri);
     referencedDataPropUris.add(propUri); // Track full URI
-    const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
-    const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
-    const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
-    const toInt = (quad: import('n3').Quad | undefined): number | null =>
-      quad?.object?.value != null ? parseInt(String(quad.object.value), 10) : null;
-    let minCard: number | null = toInt(minQ);
-    let maxCard: number | null = toInt(maxQ);
-    const n = toInt(cardQ);
-    if (n !== null && !isNaN(n)) {
-      minCard = n;
-      maxCard = n;
-    }
+    // Qualified (OWL 2, the form used with owl:onDataRange) or unqualified cardinality (#63).
+    const { min: minCard, max: maxCard } = readRestrictionCardinality(store, obj as RdfTerm);
     const subjName = extractLocalName((subj as { value: string }).value);
     const node = nodes.find((n) => n.id === subjName);
     if (node && node.dataPropertyRestrictions) {
@@ -2260,18 +2256,8 @@ export function getDataPropertyRestrictionsForClass(
     const onDataRange = store.getQuads(obj, DataFactory.namedNode(OWL_ON_DATA_RANGE), null, null)[0];
     if (!onProp || !onDataRange) continue;
     const propName = extractLocalName((onProp.object as { value: string }).value);
-    const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
-    const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
-    const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
-    const toInt = (quad: import('n3').Quad | undefined): number | null =>
-      quad?.object?.value != null ? parseInt(String(quad.object.value), 10) : null;
-    let minCard: number | null = toInt(minQ);
-    let maxCard: number | null = toInt(maxQ);
-    const n = toInt(cardQ);
-    if (n !== null && !isNaN(n)) {
-      minCard = n;
-      maxCard = n;
-    }
+    // Qualified (OWL 2, the form used with owl:onDataRange) or unqualified cardinality (#63).
+    const { min: minCard, max: maxCard } = readRestrictionCardinality(store, obj as RdfTerm);
     result.push({
       propertyName: propName,
       minCardinality: minCard ?? undefined,

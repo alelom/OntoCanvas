@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph, removeRestrictionEdgeFromStore } from '../../src/parser';
+import { parseRdfToGraph, removeRestrictionEdgeFromStore, getDataPropertyRestrictionsForClass } from '../../src/parser';
 import { getEdgeDisplayLabel } from '../../src/ui/relationshipUtils';
 import { isEditableRestriction, findRestrictionBlanks, describeRestriction } from '../../src/rdf/restrictions';
 import type { GraphEdge } from '../../src/types';
@@ -132,5 +132,37 @@ describe('describeRestriction: the read-only detail shown in the Edit-edge modal
   });
   it('lists one line per kind on a merged edge', () => {
     expect(describeRestriction(e({ restrictionKinds: ['some', 'only'], minCardinality: 1 }), 'hasPart')).toHaveLength(2);
+  });
+});
+
+describe('data-property restriction cardinality, OWL 2 qualified forms (#63)', async () => {
+  const ttl = `@prefix : <http://example.org/dq#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<http://example.org/dq> a owl:Ontology .
+:Sheet a owl:Class ;
+  rdfs:subClassOf
+    [ a owl:Restriction ; owl:onProperty :title ; owl:onDataRange xsd:string ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] ,
+    [ a owl:Restriction ; owl:onProperty :note ; owl:onDataRange xsd:string ; owl:minQualifiedCardinality "0"^^xsd:nonNegativeInteger ; owl:maxQualifiedCardinality "3"^^xsd:nonNegativeInteger ] ,
+    [ a owl:Restriction ; owl:onProperty :code ; owl:onDataRange xsd:string ; owl:minCardinality "2"^^xsd:nonNegativeInteger ] .
+:title a owl:DatatypeProperty .
+:note a owl:DatatypeProperty .
+:code a owl:DatatypeProperty .`;
+  const r = await parseRdfToGraph(ttl, { path: 'dq.ttl' });
+  const sheet = r.graphData.nodes.find((n) => n.id === 'Sheet')!;
+  const byProp = (p: string) => sheet.dataPropertyRestrictions?.find((x) => x.propertyName === p);
+
+  it('reads qualifiedCardinality and min/maxQualifiedCardinality, not only the unqualified forms', () => {
+    expect(byProp('title')).toMatchObject({ minCardinality: 1, maxCardinality: 1 });
+    expect(byProp('note')).toMatchObject({ minCardinality: 0, maxCardinality: 3 });
+    expect(byProp('code')).toMatchObject({ minCardinality: 2 });
+    expect(byProp('code')?.maxCardinality).toBeUndefined();
+  });
+
+  it('reads them the same way when re-reading a class after an edit', () => {
+    const again = getDataPropertyRestrictionsForClass(r.store, 'Sheet');
+    expect(again.find((x) => x.propertyName === 'note')).toMatchObject({ minCardinality: 0, maxCardinality: 3 });
   });
 });

@@ -141,3 +141,16 @@ export function describeRestriction(edge: GraphEdge, propertyLabel: string): str
     }
   });
 }
+
+/** Cardinality of a restriction blank node, reading both the qualified (OWL 2, used with owl:onClass /
+ * owl:onDataRange) and unqualified forms: an exact count sets min and max; otherwise min/max as given. */
+export function readRestrictionCardinality(store: Store, blank: RdfTerm): { min: number | null; max: number | null } {
+  const int = (pred: string): number | null => {
+    const value = store.getQuads(blank as never, DataFactory.namedNode(OWL + pred), null, null)[0]?.object?.value;
+    const n = value != null ? Number.parseInt(String(value), 10) : NaN;
+    return Number.isNaN(n) ? null : n;
+  };
+  const exact = int('qualifiedCardinality') ?? int('cardinality');
+  if (exact != null) return { min: exact, max: exact };
+  return { min: int('minQualifiedCardinality') ?? int('minCardinality'), max: int('maxQualifiedCardinality') ?? int('maxCardinality') };
+}
