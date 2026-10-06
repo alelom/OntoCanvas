@@ -1,0 +1,85 @@
+/**
+ * Read-only notice shown in the Edit-edge modal when the edge was drawn from an anonymous class
+ * expression (union / intersection / complement / oneOf) in the property's domain or range. Clicking
+ * any relationship that shares the expression surfaces the same note, so the expression is
+ * discoverable from the edge. Editing the expression itself is not yet supported — see #59-#62 (and
+ * #65 for faithful serialization). Kept out of main.ts.
+ */
+import type { ClassExpressionGroup } from '../types';
+import { OPERATOR_INFO } from './classExpressionModal';
+
+const NOTICE_ID = 'editEdgeClassExpressionNotice';
+
+/** The class-expression group for the given property whose members include either end of the edge, or null. A
+ * domain union matches on the edge's `from`, a range union on its `to`. `property` may be a local
+ * name or a full URI (edge types can be either). */
+export function findClassExpressionGroupForEdge(
+  groups: ClassExpressionGroup[] | undefined,
+  from: string,
+  to: string,
+  property: string,
+): ClassExpressionGroup | null {
+  if (!groups || groups.length === 0) return null;
+  return (
+    groups.find(
+      (g) =>
+        [...g.members, ...(g.hosts ?? [])].some((c) => c === from || c === to) &&
+        (g.propertyName === property ||
+          g.propertyUri === property ||
+          (!!g.propertyUri && (g.propertyUri.endsWith(`#${property}`) || g.propertyUri.endsWith(`/${property}`)))),
+    ) ?? null
+  );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+}
+
+/** Show (or, when `group` is null, hide) the class-expression notice inside the Edit-edge modal. */
+export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: ClassExpressionGroup | null): void {
+  let el = document.getElementById(NOTICE_ID) as HTMLDivElement | null;
+  if (!group) {
+    if (el) el.style.display = 'none';
+    return;
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = NOTICE_ID;
+    el.style.cssText =
+      'font-size: 12px; color: #4a2f72; margin: 0 0 10px 0; padding: 8px 10px; background: #f3eefb;' +
+      'border: 1px solid #d8c9ef; border-radius: 6px; line-height: 1.45; width: 100%; box-sizing: border-box;' +
+      'word-wrap: break-word; overflow-wrap: break-word;';
+    const content = modal.querySelector('.modal-content');
+    const anchor = content?.querySelector('h3');
+    if (anchor && anchor.parentElement === content) {
+      anchor.insertAdjacentElement('afterend', el);
+    } else if (content) {
+      content.insertBefore(el, content.firstChild);
+    }
+  }
+  const info = OPERATOR_INFO[group.operator];
+  const chip = (m: string) =>
+    `<span style="display:inline-block;background:#efe9f7;border:1px solid #c9b8e6;border-radius:4px;` +
+    `padding:1px 7px;margin:1px;font-size:11px;">${escapeHtml(m)}</span>`;
+  const glyph = (g: string) => `<span style="font-weight:bold;margin:0 2px;">${g}</span>`;
+  const chips =
+    group.operator === 'complement'
+      ? glyph('¬') + group.members.map(chip).join('')
+      : group.operator === 'oneOf'
+        ? glyph('{') + (group.values ?? []).map(chip).join(glyph(',')) + glyph('}')
+        : group.members.map(chip).join(glyph(info.glyph));
+  const where = group.position === 'domain' ? 'domain' : 'range';
+  const what =
+    group.operator === 'complement'
+      ? 'the complement of this class (anything that is not it)'
+      : group.operator === 'oneOf'
+        ? 'an enumeration of these individuals; the edge is drawn to their class'
+        : `${group.operator === 'union' ? 'a union' : 'an intersection'} of these classes`;
+  el.innerHTML =
+    `<div style="font-weight:600;margin-bottom:4px;">${info.glyph} ${where === 'domain' ? 'Domain' : 'Range'} ${info.word}</div>` +
+    `<div style="margin-bottom:5px;">${chips}</div>` +
+    `<div style="color:#6a5a85;">The ${where} of <b>${escapeHtml(group.propertyName)}</b> is ${what}; ` +
+    `the same expression applies to every relationship drawn from it. Editing it isn't available yet — ` +
+    `adjust it in the ontology source.</div>`;
+  el.style.display = 'block';
+}

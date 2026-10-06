@@ -138,11 +138,22 @@ export interface GraphEdge {
  * Rendered as a grouping (convex hull / junction) over its member class nodes rather than as a
  * "fictional" node, with the property edge attached to the group. See issue #59.
  */
+/** OWL class-expression constructors rendered on the graph: owl:unionOf (#59), owl:intersectionOf
+ * (#60), owl:complementOf (#61) and owl:oneOf (#62). */
+export type ClassExpressionOperator = 'union' | 'intersection' | 'complement' | 'oneOf';
+
 export interface ClassExpressionGroup {
-  /** The set operator of the expression. (Only union for now; extensible to intersection/etc.) */
-  operator: 'union';
-  /** Local names (graph node ids) of the member classes. */
+  /** The constructor of the expression. */
+  operator: ClassExpressionOperator;
+  /** Local names (graph node ids) of the classes the expression is drawn against: the operands of a
+   * union / intersection / complement, or the named types of a oneOf's individuals (empty when the
+   * enumerated individuals have no class on the graph, or are literals). */
   members: string[];
+  /** oneOf only: the enumerated individuals (local names) or literal values, in list order. */
+  values?: string[];
+  /** Data-property groups only: classes whose data-property stub nodes carry the mark, when they are
+   * not the members (a range expression is marked on the stubs of the property's domain classes). */
+  hosts?: string[];
   /** Local name of the property whose domain is this expression. */
   propertyName: string;
   /** Full URI of the property. */
@@ -160,7 +171,8 @@ export interface ClassExpressionGroup {
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  /** Anonymous class expressions (e.g. union domains) to render as groupings. */
+  /** Anonymous class expressions (union / intersection / complement / oneOf in a domain or range)
+   * to render as overlay marks. */
   classExpressions?: ClassExpressionGroup[];
 }
 

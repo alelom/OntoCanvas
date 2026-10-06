@@ -65,8 +65,8 @@ import {
 } from './externalOntologySearch';
 import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import { createClassExpressionOverlay } from './ui/classExpressionOverlayRenderer';
-import { showClassExpressionModal, describeUnion } from './ui/classExpressionModal';
-import { findUnionGroupForEdge, showEditEdgeUnionNotice } from './ui/editEdgeUnionNotice';
+import { showClassExpressionModal, describeClassExpression } from './ui/classExpressionModal';
+import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
 const classExprOverlay = createClassExpressionOverlay();
@@ -3459,9 +3459,9 @@ function buildNetworkData(
       const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : null;
       const dataPropDisplayLabel = dataPropPrefix ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
       
-      // A data property whose rdfs:domain is an owl:unionOf is marked with a small ∪ badge overlapping
-      // each stub node (classExpressionOverlayRenderer, which owns the hover/click too) — the label
-      // stays the plain property name, so nothing is added here. See #59.
+      // A data property whose domain/range is an anonymous class expression is marked with a small
+      // badge (∪ ∩ ¬ {}) overlapping its stub node (classExpressionOverlayRenderer, which owns the
+      // hover/click too) — the label stays the plain property name, so nothing is added here. #59-#62
       // Format the node label as "prefix:property label (datatype)" - e.g., "dpbase:createdDate (xsd:dateTime)"
       const nodeLabel = `${dataPropDisplayLabel}${rangeDisplay.labelSuffix}`;
       
@@ -4091,10 +4091,10 @@ function setupNetworkSelectionAndNavigation(
         return;
       }
     }
-    // Hovering a class-expression union symbol / connector explains the union and how to edit it.
-    const unionGroup = classExprOverlay.groupAt(net.DOMtoCanvas(coords));
-    if (unionGroup) {
-      showEdgeLabelTooltip(describeUnion(unionGroup), e.clientX, e.clientY);
+    // Hovering a class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
+    const exprGroup = classExprOverlay.groupAt(net.DOMtoCanvas(coords));
+    if (exprGroup) {
+      showEdgeLabelTooltip(describeClassExpression(exprGroup), e.clientX, e.clientY);
       return;
     }
     hideEdgeLabelTooltip();
@@ -5141,7 +5141,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
   // Cleared up-front; each branch re-shows it if this edge's domain belongs to a union (owl:unionOf).
-  showEditEdgeUnionNotice(modal, null);
+  showEditEdgeClassExpressionNotice(modal, null);
 
   const isDataPropertyEdge = edgeType === 'dataprop';
 
@@ -5163,7 +5163,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     const [, classId, propertyName] = match;
 
-    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, classId, classId, propertyName));
+    showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(rawData.classExpressions, classId, classId, propertyName));
 
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
@@ -5376,7 +5376,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     // Show cardinality section only if this is a restriction (cardinality only makes sense for restrictions)
     cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
-    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType));
+    showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType));
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
@@ -5399,7 +5399,7 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
-  showEditEdgeUnionNotice(modal, null);
+  showEditEdgeClassExpressionNotice(modal, null);
   modal.dataset.mode = 'add';
   pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;

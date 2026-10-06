@@ -1,0 +1,73 @@
+@prefix : <http://example.org/ce#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Class expressions other than owl:unionOf in rdfs:domain / rdfs:range (issues #60, #61, #62).
+
+<http://example.org/ce> rdf:type owl:Ontology .
+
+:Drawing rdf:type owl:Class ;
+    rdfs:label "Drawing" .
+
+:Approved rdf:type owl:Class ;
+    rdfs:label "Approved" .
+
+:Revision rdf:type owl:Class ;
+    rdfs:label "Revision" .
+
+:Draft rdf:type owl:Class ;
+    rdfs:label "Draft" .
+
+:Sheet rdf:type owl:Class ;
+    rdfs:label "Sheet" .
+
+:Orientation rdf:type owl:Class ;
+    rdfs:label "Orientation" .
+
+:Portrait rdf:type owl:NamedIndividual , :Orientation .
+
+:Landscape rdf:type owl:NamedIndividual , :Orientation .
+
+# #60 intersection domain (object property): only drawings that are also approved.
+:hasRevision rdf:type owl:ObjectProperty ;
+    rdfs:label "hasRevision" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Drawing :Approved ) ] ;
+    rdfs:range :Revision .
+
+# #60 intersection domain (data property).
+:approvalCode rdf:type owl:DatatypeProperty ;
+    rdfs:label "approvalCode" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Drawing :Approved ) ] ;
+    rdfs:range xsd:string .
+
+# #61 complement range: a sheet supersedes anything that is not a draft.
+:supersedes rdf:type owl:ObjectProperty ;
+    rdfs:label "supersedes" ;
+    rdfs:domain :Sheet ;
+    rdfs:range [ rdf:type owl:Class ; owl:complementOf :Draft ] .
+
+# #61 complement domain (data property).
+:issueDate rdf:type owl:DatatypeProperty ;
+    rdfs:label "issueDate" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:complementOf :Draft ] ;
+    rdfs:range xsd:date .
+
+# #62 enumeration of individuals as an object-property range.
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "hasOrientation" ;
+    rdfs:domain :Sheet ;
+    rdfs:range [ rdf:type owl:Class ; owl:oneOf ( :Portrait :Landscape ) ] .
+
+# #62 enumeration of untyped individuals (no class on the graph to anchor an edge to).
+:hasStatus rdf:type owl:ObjectProperty ;
+    rdfs:label "hasStatus" ;
+    rdfs:domain :Drawing ;
+    rdfs:range [ rdf:type owl:Class ; owl:oneOf ( :Current :Superseded ) ] .
+
+# #62 enumerated literal values as a data-property range.
+:paperSize rdf:type owl:DatatypeProperty ;
+    rdfs:label "paperSize" ;
+    rdfs:domain :Sheet ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:oneOf ( "A0" "A1" "A3" ) ] .

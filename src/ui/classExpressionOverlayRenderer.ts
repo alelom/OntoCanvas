@@ -20,8 +20,8 @@ import {
   pointNearSegment,
   type Point,
 } from '../graph/classExpressionOverlay';
+import { OPERATOR_INFO } from './classExpressionModal';
 
-const GLYPH: Record<ClassExpressionGroup['operator'], string> = { union: '∪' };
 const FALLBACK_COLOR = 'rgba(120, 90, 160, 0.95)';
 const DATA_FALLBACK_COLOR = '#4a90a4'; // data-property edge teal, when the edge colour can't be read
 const HUB_RADIUS = 13;
@@ -171,7 +171,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
       // small ∪ badge overlapping a corner of each member's stub node (label kept intact). Registered
       // as a hit-region so hover shows the union and click opens its modal, as for object props. #59
       if (group.propertyKind === 'data') {
-        const glyph = GLYPH[group.operator] ?? '∪';
+        const glyph = OPERATOR_INFO[group.operator].glyph;
         const inset = STUB_BADGE_RADIUS * 0.6; // nudge inward so the badge sits ON the node corner
         for (const member of group.members) {
           const stubId = dataStubId(net, group, member);
@@ -211,7 +211,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
       }
       if (dots.length < 2) continue;
       const stroke = color ?? FALLBACK_COLOR;
-      const glyph = GLYPH[group.operator] ?? '∪';
+      const glyph = OPERATOR_INFO[group.operator].glyph;
       const hub = centroid(dots);
       const segments: Array<[Point, Point]> = [];
       // Any over-long connector "breaks" the whole group: the continuous line + central ∪ give way to
