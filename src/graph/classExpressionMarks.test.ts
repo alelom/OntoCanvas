@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { markKind, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
+import { markKind, markLayer, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
 import type { ClassExpressionGroup } from '../types';
 
 const g = (o: Partial<ClassExpressionGroup>): ClassExpressionGroup =>
@@ -67,5 +67,14 @@ describe('glyphFontSize', () => {
     expect(glyphFontSize('∪', 20)).toBe(20);
     expect(glyphFontSize('¬', 16)).toBe(16);
     expect(glyphFontSize('{}', 20)).toBe(15);
+  });
+});
+
+describe('markLayer', () => {
+  it('edge marks sit between edge lines and labels; corner badges on nodes stay on top', () => {
+    expect(markLayer('connector')).toBe('edges');
+    expect(markLayer('edgeBadge')).toBe('edges');
+    expect(markLayer('nodeBadge')).toBe('nodes');
+    expect(markLayer('stubBadge')).toBe('nodes');
   });
 });

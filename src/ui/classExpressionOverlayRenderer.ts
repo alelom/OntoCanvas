@@ -30,8 +30,10 @@ import {
   CornerStacker,
   lerp,
   markKind,
+  markLayer,
   pointNear,
   pointNearSegment,
+  type MarkLayer,
   type Point,
 } from '../graph/classExpressionOverlay';
 import { OPERATOR_INFO } from './classExpressionModal';
@@ -65,9 +67,12 @@ const SMALL_GLYPH_SIZE = 16;
 
 interface Region { group: ClassExpressionGroup; center: Point; radius: number; segments: Array<[Point, Point]> }
 
+const ALL_LAYERS: MarkLayer[] = ['edges', 'nodes'];
+
 export interface ClassExpressionOverlay {
-  /** Draw every group's mark; call from the network's `afterDrawing` hook (canvas coords). */
-  draw(net: OverlayNet, ctx: CanvasRenderingContext2D, groups: ClassExpressionGroup[]): void;
+  /** Draw the marks of the given layers (default: all) in canvas coords. `edges` marks belong between
+   * the edge lines and labels, `nodes` marks on top (see visEdgeLayering / markLayer). */
+  draw(net: OverlayNet, ctx: CanvasRenderingContext2D, groups: ClassExpressionGroup[], layers?: MarkLayer[]): void;
   /** The group whose mark / connector is under a canvas-space point, or null. */
   groupAt(point: Point): ClassExpressionGroup | null;
 }
@@ -99,7 +104,10 @@ function memberEdgePoints(
 }
 
 export function createClassExpressionOverlay(): ClassExpressionOverlay {
-  let regions: Region[] = [];
+  // Hit regions per layer; each layer's are rebuilt when that layer is drawn. `regions` is the list
+  // the draw helpers append to (the layer currently being drawn).
+  const regionsByLayer: Record<MarkLayer, Region[]> = { edges: [], nodes: [] };
+  let regions: Region[] = regionsByLayer.edges;
 
   function drawConnector(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
     const { points: dots, color } = memberEdgePoints(net, ctx, group, counterpartId);
@@ -161,15 +169,18 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     regions.push({ group, center: at, radius: SMALL_BADGE_RADIUS, segments: [] });
   }
 
-  function draw(net: OverlayNet, ctx: CanvasRenderingContext2D, groups: ClassExpressionGroup[]): void {
-    regions = [];
+  function draw(net: OverlayNet, ctx: CanvasRenderingContext2D, groups: ClassExpressionGroup[], layers = ALL_LAYERS): void {
+    for (const layer of layers) regionsByLayer[layer] = [];
     if (!groups || groups.length === 0) return;
     const stacker = new CornerStacker();
     ctx.save();
     ctx.setLineDash([]);
     for (const group of groups) {
+      const kind = markKind(group);
+      if (!kind || !layers.includes(markLayer(kind))) continue;
+      regions = regionsByLayer[markLayer(kind)];
       const glyph = OPERATOR_INFO[group.operator].glyph;
-      switch (markKind(group)) {
+      switch (kind) {
         case 'connector':
           for (const cp of group.counterparts) drawConnector(net, ctx, group, glyph, cp);
           break;
@@ -194,8 +205,10 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
   }
 
   function groupAt(point: Point): ClassExpressionGroup | null {
-    for (let i = regions.length - 1; i >= 0; i--) {
-      const r = regions[i];
+    // Topmost first: node corner badges are drawn over the edge marks.
+    const all = [...regionsByLayer.edges, ...regionsByLayer.nodes];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const r = all[i];
       if (pointNear(point, r.center, r.radius)) return r.group;
       if (r.segments.some(([a, b]) => pointNearSegment(point, a, b, SEGMENT_HIT_TOLERANCE))) return r.group;
     }

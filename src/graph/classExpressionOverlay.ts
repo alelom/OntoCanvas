@@ -111,3 +111,12 @@ export class CornerStacker {
 export function glyphFontSize(glyph: string, base: number): number {
   return [...glyph].length > 1 ? Math.round(base * 0.75) : base;
 }
+
+/** Which drawing layer a mark belongs to: `edges` marks (on the relationship edges) are drawn between
+ * the edge lines and the edge labels, so labels stay readable over them; `nodes` marks (corner badges
+ * overlapping a class or data-property node) are drawn on top of everything, or the node would hide them. */
+export type MarkLayer = 'edges' | 'nodes';
+
+export function markLayer(kind: MarkKind): MarkLayer {
+  return kind === 'connector' || kind === 'edgeBadge' ? 'edges' : 'nodes';
+}
