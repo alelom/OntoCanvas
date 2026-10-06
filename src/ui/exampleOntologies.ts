@@ -24,7 +24,9 @@ export const EXAMPLE_ONTOLOGIES: ExampleOntology[] = [
   {
     label: 'FOAF',
     domain: 'Social / people',
-    url: 'https://raw.githubusercontent.com/SPAROntologies/foaf/refs/heads/master/docs/current/foaf.ttl',
+    // The current FOAF spec (2014-01-14, as at http://xmlns.com/foaf/spec/ and in WebVOWL), from the
+    // LOV archive: xmlns.com sends no CORS header, and the GitHub copies are reduced or older (#78).
+    url: 'https://lov.linkeddata.es/dataset/vocabs/foaf/versions/2014-01-14.n3',
   },
   {
     label: 'DAnO',
