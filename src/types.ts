@@ -138,20 +138,29 @@ export interface GraphEdge {
  * Rendered as a grouping (convex hull / junction) over its member class nodes rather than as a
  * "fictional" node, with the property edge attached to the group. See issue #59.
  */
+/** OWL class-expression constructors rendered on the graph: owl:unionOf (#59), owl:intersectionOf
+ * (#60), owl:complementOf (#61) and owl:oneOf (#62). */
+export type ClassExpressionOperator = 'union' | 'intersection' | 'complement' | 'oneOf';
+
 export interface ClassExpressionGroup {
-  /** The set operator of the expression. (Only union for now; extensible to intersection/etc.) */
-  operator: 'union';
-  /** Local names (graph node ids) of the member classes. */
+  /** The constructor of the expression. */
+  operator: ClassExpressionOperator;
+  /** Local names (graph node ids) of the classes the expression is drawn against: the operands of a
+   * union / intersection / complement, or the named types of a oneOf's individuals (empty when the
+   * enumerated individuals have no class on the graph, or are literals). */
   members: string[];
-  /** Local name of the property whose domain is this expression. */
+  /** oneOf only: the enumerated individuals (local names) or literal values, in list order. */
+  values?: string[];
+  /** Local name of the property whose domain or range is this expression. */
   propertyName: string;
   /** Full URI of the property. */
   propertyUri?: string;
-  /** Local name of the single class on the OPPOSITE end of the property (the one the connector runs
-   * to): the range class when the union is on the domain, the domain class when it is on the range.
-   * Absent if that end isn't a single named class in the graph. */
-  counterpart?: string;
-  /** Which end of the property the union sits on. */
+  /** Local names of the in-graph classes on the OPPOSITE end of the property (resolved through an
+   * expression there too): the range classes for a domain expression, the domain classes for a range
+   * expression. Each member edge runs between a member and a counterpart. For a data property's range
+   * expression these are the classes whose stub nodes carry the mark. */
+  counterparts: string[];
+  /** Which end of the property the expression sits on. */
   position: 'domain' | 'range';
   /** Whether the carrying property is an object or datatype property. */
   propertyKind: 'object' | 'data';
@@ -160,7 +169,8 @@ export interface ClassExpressionGroup {
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  /** Anonymous class expressions (e.g. union domains) to render as groupings. */
+  /** Anonymous class expressions (union / intersection / complement / oneOf in a domain or range)
+   * to render as overlay marks. */
   classExpressions?: ClassExpressionGroup[];
 }
 

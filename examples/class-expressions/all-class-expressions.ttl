@@ -1,0 +1,56 @@
+@prefix : <http://example.org/examples/expressions#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# All four constructors side by side, to check they are visually distinct:
+# ∪ union (#59), ∩ intersection (#60), ¬ complement (#61), {} enumeration (#62).
+
+<http://example.org/examples/expressions> rdf:type owl:Ontology ;
+    rdfs:label "Class expression examples" .
+
+:Section rdf:type owl:Class ; rdfs:label "Section" .
+:Detail rdf:type owl:Class ; rdfs:label "Detail" .
+:Approved rdf:type owl:Class ; rdfs:label "Approved" .
+:Draft rdf:type owl:Class ; rdfs:label "Draft" .
+:Revision rdf:type owl:Class ; rdfs:label "Revision" .
+:Reviewer rdf:type owl:Class ; rdfs:label "Reviewer" .
+:Orientation rdf:type owl:Class ; rdfs:label "Orientation" .
+
+:Portrait rdf:type owl:NamedIndividual , :Orientation .
+:Landscape rdf:type owl:NamedIndividual , :Orientation .
+
+# ∪ OR domain and {} enumeration range on the same property.
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "hasOrientation" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] ;
+    rdfs:range [ rdf:type owl:Class ; owl:oneOf ( :Portrait :Landscape ) ] .
+
+# ∩ AND: only approved sections have revisions.
+:hasRevision rdf:type owl:ObjectProperty ;
+    rdfs:label "hasRevision" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Section :Approved ) ] ;
+    rdfs:range :Revision .
+
+# ¬ NOT: anything that is not a draft can be reviewed.
+:reviewedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "reviewedBy" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:complementOf :Draft ] ;
+    rdfs:range :Reviewer .
+
+# Data properties: ∪ and ∩ domains, {} literal range.
+:scale rdf:type owl:DatatypeProperty ;
+    rdfs:label "scale" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] ;
+    rdfs:range xsd:string .
+
+:approvalCode rdf:type owl:DatatypeProperty ;
+    rdfs:label "approvalCode" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Section :Approved ) ] ;
+    rdfs:range xsd:string .
+
+:status rdf:type owl:DatatypeProperty ;
+    rdfs:label "status" ;
+    rdfs:domain :Revision ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:oneOf ( "WIP" "Shared" "Published" ) ] .

@@ -1,0 +1,54 @@
+@prefix : <http://example.org/examples/union#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# owl:unionOf (OR) in rdfs:domain / rdfs:range (issue #59).
+# Expect: a dot on each member edge joined to a central ∪ badge (object properties; ¼ along the
+# edge for a domain union, ¾ for a range union), and a ∪ corner badge on each member's
+# data-property stub (data properties). Drag members far apart to see the connector "break" into
+# short inward arrows, each with its own ∪.
+
+<http://example.org/examples/union> rdf:type owl:Ontology ;
+    rdfs:label "Union examples" .
+
+:Section rdf:type owl:Class ; rdfs:label "Section" .
+:Detail rdf:type owl:Class ; rdfs:label "Detail" .
+:Elevation rdf:type owl:Class ; rdfs:label "Elevation" .
+:OrientationValue rdf:type owl:Class ; rdfs:label "Orientation Value" .
+:Room rdf:type owl:Class ; rdfs:label "Room" .
+:Wall rdf:type owl:Class ; rdfs:label "Wall" .
+:Floor rdf:type owl:Class ; rdfs:label "Floor" .
+:DrawingSheet rdf:type owl:Class ; rdfs:label "Drawing Sheet" .
+:Layout rdf:type owl:Class ; rdfs:label "Layout" .
+
+# Domain union of two classes.
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "hasOrientation" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] ;
+    rdfs:range :OrientationValue .
+
+# Domain union of three classes.
+:hasViewDirection rdf:type owl:ObjectProperty ;
+    rdfs:label "hasViewDirection" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail :Elevation ) ] ;
+    rdfs:range :OrientationValue .
+
+# Range union: a room has parts that are walls or floors.
+:hasPart rdf:type owl:ObjectProperty ;
+    rdfs:label "hasPart" ;
+    rdfs:domain :Room ;
+    rdfs:range [ rdf:type owl:Class ; owl:unionOf ( :Wall :Floor ) ] .
+
+# Data property with a union domain.
+:scale rdf:type owl:DatatypeProperty ;
+    rdfs:label "scale" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :DrawingSheet :Layout ) ] ;
+    rdfs:range xsd:string .
+
+# Domain union with no range: there is no edge to mark, so a ∪ corner badge (top-left, as for a
+# domain expression) sits on each member class.
+:annotatedWith rdf:type owl:ObjectProperty ;
+    rdfs:label "annotatedWith" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] .

@@ -2,13 +2,15 @@ import { DataFactory, Store } from 'n3';
 import type { Quad as N3Quad } from 'n3';
 import { getExampleImageUrisForClass } from './lib/exampleImageStore';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
-import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction, ClassExpressionGroup } from './types';
+import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
 import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
 import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
+import { extractLocalName } from './utils/localName';
+import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -19,14 +21,8 @@ const OWL = 'http://www.w3.org/2002/07/owl#';
 export const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 const HAS_CARDINALITY_PROP = BASE_IRI + 'hasCardinality';
 
-export function extractLocalName(uri: string): string {
-  if (uri.includes('#')) return uri.split('#').pop()!;
-  if (uri.includes('/')) return uri.split('/').pop()!;
-  return uri;
-}
-
 // Re-export for convenience
-export { extractLocalName as extractLocalNameFromUri };
+export { extractLocalName, extractLocalName as extractLocalNameFromUri };
 
 /**
  * Return the namespace of a URI: everything up to and including the last '#' (or '/'),
@@ -40,99 +36,6 @@ export function namespaceFromUri(uri: string): string | null {
 
 function isBlankNode(term: { termType: string }): boolean {
   return term.termType === 'BlankNode';
-}
-
-type RdfTerm = { termType: string; value?: string };
-
-/** Walk an RDF collection (rdf:first/rdf:rest) starting at listHead, returning its member terms in order. */
-function readRdfList(store: Store, listHead: RdfTerm): RdfTerm[] {
-  const items: RdfTerm[] = [];
-  const seen = new Set<string>();
-  let current = listHead;
-  while (current.termType === 'BlankNode' && current.value && !seen.has(current.value)) {
-    seen.add(current.value);
-    const firstQuad = store.getQuads(current as Parameters<Store['getQuads']>[0], DataFactory.namedNode(RDF + 'first'), null, null)[0];
-    const restQuad = store.getQuads(current as Parameters<Store['getQuads']>[0], DataFactory.namedNode(RDF + 'rest'), null, null)[0];
-    if (firstQuad) items.push(firstQuad.object as RdfTerm);
-    if (!restQuad) break;
-    current = restQuad.object as RdfTerm;
-  }
-  return items;
-}
-
-/**
- * Resolve an rdfs:domain (or rdfs:range) object to the class URIs it denotes.
- * Handles plain NamedNode domains as well as owl:unionOf class expressions
- * (a blank node with `owl:unionOf ( :A :B ... )`), which real-world ontologies
- * use to express "applies to any of these classes".
- */
-function resolveDomainClassUris(store: Store, domainObj: RdfTerm): string[] {
-  if (domainObj.termType === 'NamedNode' && domainObj.value) {
-    return [domainObj.value];
-  }
-  if (domainObj.termType === 'BlankNode' && domainObj.value) {
-    const unionOfQuad = store.getQuads(domainObj as Parameters<Store['getQuads']>[0], DataFactory.namedNode(OWL + 'unionOf'), null, null)[0];
-    if (unionOfQuad) {
-      return readRdfList(store, unionOfQuad.object as RdfTerm)
-        .filter((term) => term.termType === 'NamedNode' && term.value)
-        .map((term) => term.value!);
-    }
-  }
-  return [];
-}
-
-/**
- * Find anonymous owl:unionOf class expressions used as a property's rdfs:domain OR rdfs:range, and
- * surface them as groups to render instead of dropping (object props) or flattening (data props)
- * them. See issue #59. Only members that are classes in the graph are kept, so a data property's
- * range union (a union of datatypes) is naturally ignored.
- */
-function extractUnionGroups(store: Store, seenClasses: Set<string>): ClassExpressionGroup[] {
-  const groups: ClassExpressionGroup[] = [];
-  const kinds: Array<['object' | 'data', string]> = [
-    ['object', OWL + 'ObjectProperty'],
-    ['data', OWL + 'DatatypeProperty'],
-  ];
-  const sides: Array<{ unionSide: 'domain' | 'range'; otherSide: 'domain' | 'range' }> = [
-    { unionSide: 'domain', otherSide: 'range' },
-    { unionSide: 'range', otherSide: 'domain' },
-  ];
-  for (const [propertyKind, typeUri] of kinds) {
-    for (const q of store.getQuads(null, RDF + 'type', typeUri, null)) {
-      const subj = q.subject;
-      if (subj.termType !== 'NamedNode') continue;
-      const propUri = (subj as { value: string }).value;
-      for (const { unionSide, otherSide } of sides) {
-        const sideQuad = store.getQuads(subj, RDFS + unionSide, null, null)[0];
-        if (!sideQuad || sideQuad.object.termType !== 'BlankNode') continue;
-        const unionQuad = store.getQuads(sideQuad.object as RdfTerm as never, OWL + 'unionOf', null, null)[0];
-        if (!unionQuad) continue;
-        const members = readRdfList(store, unionQuad.object as RdfTerm)
-          .filter((t) => t.termType === 'NamedNode' && t.value)
-          .map((t) => extractLocalName(t.value!))
-          .filter((name) => seenClasses.has(name));
-        if (members.length < 2) continue; // a one-member "union" isn't worth grouping
-        // The single named class on the other end (the connector target), if it's in the graph.
-        let counterpart: string | undefined;
-        for (const cq of store.getQuads(subj, RDFS + otherSide, null, null)) {
-          if (cq.object.termType === 'NamedNode') {
-            const cn = extractLocalName((cq.object as { value: string }).value);
-            if (seenClasses.has(cn)) { counterpart = cn; break; }
-          }
-        }
-        groups.push({
-          operator: 'union',
-          members,
-          propertyName: extractLocalName(propUri),
-          propertyUri: propUri,
-          counterpart,
-          position: unionSide,
-          propertyKind,
-        });
-      }
-    }
-  }
-  return groups;
 }
 
 function parseCardinalityFromRestriction(
@@ -827,9 +730,10 @@ function buildParseResultFromStore(
           validDomains.push(domainName);
         }
       } else if (domObj.termType === 'BlankNode') {
-        // An anonymous class expression domain (e.g. owl:unionOf): flatten to its member classes so
-        // the relationship is visible. The union itself is shown by the overlay grouping (issue #59).
-        for (const uri of resolveDomainClassUris(store, domObj as RdfTerm)) {
+        // An anonymous class expression domain (union / intersection / complement / oneOf): flatten to
+        // the classes it is drawn against so the relationship is visible. The expression itself is
+        // shown by the overlay mark (issues #59-#62).
+        for (const uri of resolveExpressionClassUris(store, domObj as RdfTerm)) {
           const name = extractLocalName(uri);
           if (seenClasses.has(name) && !validDomains.includes(name)) validDomains.push(name);
         }
@@ -854,9 +758,10 @@ function buildParseResultFromStore(
           validRanges.push(rangeName);
         }
       } else if (rangeObj.termType === 'BlankNode') {
-        // An anonymous class expression range (e.g. owl:unionOf): flatten to its member classes so the
-        // relationships are visible. The union itself is shown by the overlay grouping (issue #59).
-        for (const uri of resolveDomainClassUris(store, rangeObj as RdfTerm)) {
+        // An anonymous class expression range (union / intersection / complement / oneOf): flatten to
+        // the classes it is drawn against so the relationships are visible. The expression itself is
+        // shown by the overlay mark (issues #59-#62).
+        for (const uri of resolveExpressionClassUris(store, rangeObj as RdfTerm)) {
           const name = extractLocalName(uri);
           if (seenClasses.has(name) && !validRanges.includes(name)) validRanges.push(name);
         }
@@ -1009,7 +914,7 @@ function buildParseResultFromStore(
     }
   }
 
-  const classExpressions = extractUnionGroups(store, seenClasses);
+  const classExpressions = extractClassExpressionGroups(store, seenClasses);
 
   return {
     graphData: { nodes, edges, classExpressions },
@@ -1153,7 +1058,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     const domains: string[] = [];
     let hasGlobalDomain = false;
     for (const domainQuad of domainQuads) {
-      const domainUris = resolveDomainClassUris(store, domainQuad.object as RdfTerm);
+      const domainUris = resolveExpressionClassUris(store, domainQuad.object as RdfTerm);
       for (const domainUri of domainUris) {
         // An asserted owl:Thing domain means "every class"; keep it apart from asserting nothing.
         if (domainUri === OWL_THING) {

@@ -64,12 +64,12 @@ import {
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
 import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
-import { createClassExpressionOverlay } from './ui/classExpressionOverlayRenderer';
-import { showClassExpressionModal, describeUnion } from './ui/classExpressionModal';
-import { findUnionGroupForEdge, showEditEdgeUnionNotice } from './ui/editEdgeUnionNotice';
+import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
+import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
+import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
+import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
-const classExprOverlay = createClassExpressionOverlay();
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
@@ -170,7 +170,8 @@ import {
 } from './ui/renameModalHeaderIcons';
 import { getAppVersion } from './utils/version';
 import { getShouldShowTopMenu, isEmbedded } from './utils/embedMode';
-import { defaultMaxFontSize } from './ui/fontSizeDefaults';
+import { defaultMaxFontSize, fontSettingRatios, nodeFontRatio } from './ui/fontSizeDefaults';
+import type { BadgeFontRatios } from './graph/classExpressionOverlay';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
@@ -501,6 +502,8 @@ function flushDisplayConfigSave(): void {
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 let rawData: GraphData = { nodes: [], edges: [] };
+/** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
+let classExpressionFontRatios: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 /** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
 let currentGraphDataForBuild: GraphData | null = null;
 /** External class URIs we have seen in this session (from store or added by user). Not removed when user deletes an external node, so "Add from referenced ontology" still finds them. Cleared on load. */
@@ -3067,6 +3070,16 @@ function buildNetworkData(
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
+  // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
+  // as they are drawn (roots follow Max, the deepest nodes Min).
+  const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
+  const nodeCountForDefaults = rawData?.nodes?.length ?? 0;
+  classExpressionFontRatios = {
+    ...fontSettingRatios(fontSettings, nodeCountForDefaults),
+    byNode: Object.fromEntries(
+      [...nodeIds].map((id) => [id, nodeFontRatio(fontSettings, depth[id] ?? 0, maxDepth, nodeCountForDefaults)]),
+    ),
+  };
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
   
@@ -3244,7 +3257,8 @@ function buildNetworkData(
               (maxFontSize - minFontSize) * (maxDepth - d) / maxDepth
           )
         : maxFontSize;
-    nodeDimensionsMap.set(n.id, estimateNodeDimensions(n.label, wrapChars, fontSize));
+    // Estimate from the label as drawn (prefix included), or imported classes come out a line short (#72).
+    nodeDimensionsMap.set(n.id, estimateNodeDimensions(formatNodeLabelWithPrefix(n, externalOntologyReferences), wrapChars, fontSize));
   });
   
   // Group data properties by their parent class node for better layout
@@ -3367,7 +3381,8 @@ function buildNetworkData(
     // Calculate positions with horizontal fan-out and alternating vertical positions
     const horizontalSpacing = 15;
     const verticalOffset = 25; // Vertical offset for alternating rows
-    const baseYOffset = classNodeHeight / 2 + 20; // Start below the node
+    // First row below the class, leaving a minimum visible edge so arrowheads stay outside it (#72).
+    const baseYOffset = firstDataPropertyRowOffset(classNodeHeight, dataPropertyFontSize);
     
     let propIndex = 0;
     let currentY = classPos.y + baseYOffset;
@@ -3459,9 +3474,9 @@ function buildNetworkData(
       const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : null;
       const dataPropDisplayLabel = dataPropPrefix ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
       
-      // A data property whose rdfs:domain is an owl:unionOf is marked with a small ∪ badge overlapping
-      // each stub node (classExpressionOverlayRenderer, which owns the hover/click too) — the label
-      // stays the plain property name, so nothing is added here. See #59.
+      // A data property whose domain/range is an anonymous class expression is marked with a small
+      // badge (∪ ∩ ¬ {}) overlapping its stub node (classExpressionOverlayRenderer, which owns the
+      // hover/click too) — the label stays the plain property name, so nothing is added here. #59-#62
       // Format the node label as "prefix:property label (datatype)" - e.g., "dpbase:createdDate (xsd:dateTime)"
       const nodeLabel = `${dataPropDisplayLabel}${rangeDisplay.labelSuffix}`;
       
@@ -3989,9 +4004,14 @@ function setupNetworkSelectionAndNavigation(
   net: Network,
   container: HTMLElement
 ): void {
-  // Draw anonymous class-expression groupings (union domains etc.) on top of the graph.
-  net.on('afterDrawing', (ctx: CanvasRenderingContext2D) =>
-    classExprOverlay.draw(net as unknown as Parameters<typeof classExprOverlay.draw>[0], ctx, rawData?.classExpressions ?? []));
+  // Draw anonymous class-expression marks (∪ ∩ ¬ {}) on top of the graph.
+  const classExprMarks = attachClassExpressionMarks(
+    net as unknown as Parameters<typeof attachClassExpressionMarks>[0],
+    () => rawData?.classExpressions ?? [],
+    () => classExpressionFontRatios,
+  );
+  // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
+  hideEdgeLinesUnderNodes(net);
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
@@ -4091,10 +4111,10 @@ function setupNetworkSelectionAndNavigation(
         return;
       }
     }
-    // Hovering a class-expression union symbol / connector explains the union and how to edit it.
-    const unionGroup = classExprOverlay.groupAt(net.DOMtoCanvas(coords));
-    if (unionGroup) {
-      showEdgeLabelTooltip(describeUnion(unionGroup), e.clientX, e.clientY);
+    // Hovering a class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
+    const exprTip = classExprMarks.tooltipAt(net.DOMtoCanvas(coords));
+    if (exprTip) {
+      showEdgeLabelTooltip(exprTip, e.clientX, e.clientY);
       return;
     }
     hideEdgeLabelTooltip();
@@ -4216,21 +4236,15 @@ function setupNetworkSelectionAndNavigation(
     const clickedNode = params.nodes[0] as string | undefined;
     const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
 
-    // A click on a class-expression union mark opens its details. Checked before node handling so a
-    // data-property ∪ badge (which overlaps its stub node) wins over selecting the node underneath.
+    // A click on a class-expression mark opens its details. Checked before node handling so a
+    // data-property badge (which overlaps its stub node) wins over selecting the node underneath.
     if (!addNodeMode && container) {
       let dom = params.pointer?.DOM ?? null;
       if (!dom && params.event?.srcEvent) {
         const rect = container.getBoundingClientRect();
         dom = { x: params.event.srcEvent.clientX - rect.left, y: params.event.srcEvent.clientY - rect.top };
       }
-      if (dom) {
-        const group = classExprOverlay.groupAt(net.DOMtoCanvas(dom));
-        if (group) {
-          showClassExpressionModal(group);
-          return;
-        }
-      }
+      if (dom && classExprMarks.openAt(net.DOMtoCanvas(dom))) return;
     }
 
     // If in add node mode and no node clicked, show the add node modal
@@ -5141,7 +5155,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
   // Cleared up-front; each branch re-shows it if this edge's domain belongs to a union (owl:unionOf).
-  showEditEdgeUnionNotice(modal, null);
+  showEditEdgeClassExpressionNotice(modal, null);
 
   const isDataPropertyEdge = edgeType === 'dataprop';
 
@@ -5163,7 +5177,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     const [, classId, propertyName] = match;
 
-    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, classId, classId, propertyName));
+    showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(rawData.classExpressions, classId, classId, propertyName));
 
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
@@ -5376,7 +5390,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     // Show cardinality section only if this is a restriction (cardinality only makes sense for restrictions)
     cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
-    showEditEdgeUnionNotice(modal, findUnionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType));
+    showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType));
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
@@ -5399,7 +5413,7 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   const minCardInput = document.getElementById('editEdgeMinCard') as HTMLInputElement;
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
-  showEditEdgeUnionNotice(modal, null);
+  showEditEdgeClassExpressionNotice(modal, null);
   modal.dataset.mode = 'add';
   pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;

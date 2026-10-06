@@ -18,7 +18,7 @@ describe('union-domain class expression groups (#59)', () => {
     expect(op!.propertyKind).toBe('object');
     expect(op!.position).toBe('domain');
     expect(op!.members.sort()).toEqual(['Detail', 'Section']);
-    expect(op!.counterpart).toBe('OrientationValue');
+    expect(op!.counterparts).toEqual(['OrientationValue']);
 
     const dp = groups.find((g) => g.propertyName === 'scale');
     expect(dp).toBeTruthy();
@@ -45,7 +45,7 @@ describe('union-domain class expression groups (#59)', () => {
     expect(g!.position).toBe('range');
     expect(g!.propertyKind).toBe('object');
     expect(g!.members.sort()).toEqual(['Floor', 'Wall']);
-    expect(g!.counterpart).toBe('Room');
+    expect(g!.counterparts).toEqual(['Room']);
 
     // The range union is flattened into one edge per member so both relationships are visible.
     const edges = r.graphData.edges.filter((e) => e.from === 'Room' && (e.to === 'Wall' || e.to === 'Floor'));

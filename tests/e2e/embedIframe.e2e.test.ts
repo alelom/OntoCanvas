@@ -128,7 +128,10 @@ describe('Embedded in a real iframe E2E', () => {
     );
     expect(items).toEqual(['Copy URI']);
     await frame.click('#contextMenu >> text=Copy URI');
-    const copied = await page.evaluate(() => navigator.clipboard.readText());
-    expect(copied).toBe(`http://example.org/o#${pos.id}`);
+    // The copy is asynchronous (navigator.clipboard.writeText): wait for it to land instead of reading
+    // immediately, which raced on slow CI runners.
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 })
+      .toBe(`http://example.org/o#${pos.id}`);
   });
 });

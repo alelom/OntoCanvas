@@ -70,9 +70,11 @@ describe('Edge label single-click selection E2E', () => {
     expect(target.onLine).toBeNull();
 
     await page.mouse.click(target.clientX, target.clientY);
-    await page.waitForTimeout(200);
 
-    const selected = await page.evaluate(() => (window as any).__EDITOR_TEST__.getSelectedEdges());
-    expect(selected).toContain(target.id);
+    // Wait for the click to be handled rather than a fixed pause: on a busy CI runner the handler can
+    // run later than any fixed delay. A click that misses the label still fails once the poll times out.
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__.getSelectedEdges()), { timeout: 5000 })
+      .toContain(target.id);
   });
 });
