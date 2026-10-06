@@ -65,6 +65,7 @@ import {
 } from './externalOntologySearch';
 import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
+import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -3992,6 +3993,8 @@ function setupNetworkSelectionAndNavigation(
     net as unknown as Parameters<typeof attachClassExpressionMarks>[0],
     () => rawData?.classExpressions ?? [],
   );
+  // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
+  hideEdgeLinesUnderNodes(net);
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;

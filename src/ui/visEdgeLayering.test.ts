@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { drawBetweenEdgeLinesAndLabels } from './visEdgeLayering';
+import { edgePass } from './visEdgeLayering';
 
 /** A fake vis edge that records the order its line and label are drawn in. */
 function fakeEdge(id: string, log: string[], opts: { hidden?: boolean; connected?: boolean } = {}) {
@@ -28,39 +28,63 @@ function fakeNet(log: string[], edgeOpts: Record<string, { hidden?: boolean; con
   return { renderer, body: { edges, edgeIndices: ids } };
 }
 
-const ctx = {} as CanvasRenderingContext2D;
+const fakeCtx = (log: string[]) =>
+  ({ save: () => log.push('save'), restore: () => log.push('restore') }) as unknown as CanvasRenderingContext2D;
 
-describe('drawBetweenEdgeLinesAndLabels', () => {
-  it('draws every edge line, then the overlay, then every edge label', () => {
+describe('edgePass: vis edge drawing split into lines → overlays → labels', () => {
+  it('draws every edge line, then the overlays, then every edge label', () => {
     const log: string[] = [];
     const net = fakeNet(log);
-    expect(drawBetweenEdgeLinesAndLabels(net, () => log.push('overlay'))).toBe(true);
-    net.renderer._drawEdges(ctx);
-    expect(log).toEqual(['line:a', 'line:b', 'line:c', 'overlay', 'label:a:via-a', 'label:b:via-b', 'label:c:via-c']);
+    edgePass(net)!.addBetweenLinesAndLabels(() => log.push('overlay'));
+    net.renderer._drawEdges(fakeCtx(log));
+    expect(log).toEqual(['save', 'line:a', 'line:b', 'line:c', 'overlay', 'restore', 'label:a:via-a', 'label:b:via-b', 'label:c:via-c']);
+  });
+
+  it('applies the clip to the lines and overlays, but not the labels (#71)', () => {
+    const log: string[] = [];
+    const net = fakeNet(log);
+    const pass = edgePass(net)!;
+    pass.setLineClip(() => log.push('clip'));
+    pass.addBetweenLinesAndLabels(() => log.push('overlay'));
+    net.renderer._drawEdges(fakeCtx(log));
+    expect(log).toEqual(['save', 'clip', 'line:a', 'line:b', 'line:c', 'overlay', 'restore', 'label:a:via-a', 'label:b:via-b', 'label:c:via-c']);
+  });
+
+  it('is shared: patching the same network twice returns the same pass (one patch, several users)', () => {
+    const log: string[] = [];
+    const net = fakeNet(log);
+    expect(edgePass(net)).toBe(edgePass(net));
+    edgePass(net)!.addBetweenLinesAndLabels(() => log.push('first'));
+    edgePass(net)!.addBetweenLinesAndLabels(() => log.push('second'));
+    net.renderer._drawEdges(fakeCtx(log));
+    expect(log.filter((l) => l === 'first' || l === 'second')).toEqual(['first', 'second']);
   });
 
   it('skips hidden and unconnected edges, as vis does', () => {
     const log: string[] = [];
     const net = fakeNet(log, { b: { hidden: true }, c: { connected: false } });
-    drawBetweenEdgeLinesAndLabels(net, () => log.push('overlay'));
-    net.renderer._drawEdges(ctx);
-    expect(log).toEqual(['line:a', 'overlay', 'label:a:via-a']);
+    edgePass(net)!.addBetweenLinesAndLabels(() => log.push('overlay'));
+    net.renderer._drawEdges(fakeCtx(log));
+    expect(log).toEqual(['save', 'line:a', 'overlay', 'restore', 'label:a:via-a']);
   });
 
-  it('falls back to the original edge pass if the split pass throws, without losing the overlay', () => {
+  it('falls back to the original edge pass if the split pass throws, restoring the context', () => {
     const log: string[] = [];
     const net = fakeNet(log);
     (net.body.edges.b.edgeType as { drawLine: () => void }).drawLine = () => { throw new Error('vis changed'); };
     const onFallback = vi.fn();
-    drawBetweenEdgeLinesAndLabels(net, () => log.push('overlay'), onFallback);
-    net.renderer._drawEdges(ctx);
+    const pass = edgePass(net)!;
+    pass.addBetweenLinesAndLabels(() => log.push('overlay'));
+    pass.onFallback(onFallback);
+    net.renderer._drawEdges(fakeCtx(log));
+    expect(log).toContain('restore');
     expect(log.filter((l) => l.startsWith('original'))).toEqual(['original:a', 'original:b', 'original:c']);
     expect(log).not.toContain('overlay');
     expect(onFallback).toHaveBeenCalledOnce();
   });
 
-  it('returns false (and changes nothing) when the renderer has no edge pass to split', () => {
-    expect(drawBetweenEdgeLinesAndLabels({ renderer: {}, body: { edges: {}, edgeIndices: [] } }, () => {})).toBe(false);
-    expect(drawBetweenEdgeLinesAndLabels({}, () => {})).toBe(false);
+  it('returns null (and changes nothing) when the renderer has no edge pass to split', () => {
+    expect(edgePass({ renderer: {}, body: { edges: {}, edgeIndices: [] } })).toBeNull();
+    expect(edgePass({})).toBeNull();
   });
 });
