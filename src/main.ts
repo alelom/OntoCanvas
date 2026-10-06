@@ -67,6 +67,8 @@ import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, A
 import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
+import { buildSearchVocabulary } from './ui/searchVocabulary';
+import { buildSearchSuggestions } from './lib/searchSuggestions';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -115,7 +117,7 @@ import {
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
-  getFreeStandingNodeSearchOpacity,
+  getDataPropertySearchOpacity,
   getEdgeSearchOpacity,
 } from './lib/searchHighlight';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
@@ -2907,12 +2909,22 @@ function buildNetworkData(
   const searchQuery = (filter.searchQuery || '').trim();
   // Search highlighting sets (matching nodes/edges + first-ring neighbours). Neighbours are
   // only populated when includeNeighbors is on, and the traversal stops at the first ring.
+  // Data properties, prefixed names (foaf:member) and labels are searchable too (#81).
+  const searchVocabulary = buildSearchVocabulary({
+    nodes: filteredNodes,
+    edgeTypes: getEdgeTypes(filteredEdges),
+    objectProperties,
+    dataProperties,
+    externalOntologyReferences,
+    mainOntologyBase: ttlStore ? getMainOntologyBase(ttlStore) : null,
+  });
   const searchSets = computeSearchSets(
     filteredNodes,
     filteredEdges,
     searchQuery,
     filter.includeNeighbors,
-    filter.exactMatch
+    filter.exactMatch,
+    { ...searchVocabulary.extras, dataProperties: searchVocabulary.dataProperties }
   );
   const { matchingNodeIds, neighborNodeIds } = searchSets;
 
@@ -3455,8 +3467,9 @@ function buildNetworkData(
       let dataPropFontColor = readableTextColor(DATA_PROPERTY_FILL);
       
       if (searchQuery) {
-        // Use the class node's opacity category, but multiply by base opacity if imported
-        const searchOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
+        // Full when this property matched (#81), otherwise the class node's opacity category; times the
+        // base opacity if imported
+        const searchOpacity = getDataPropertySearchOpacity(dataProp.propertyName, classId, searchSets, searchQuery);
         dataPropNodeOpacity = isDataPropImported ? searchOpacity * baseDataPropOpacity : searchOpacity;
         if (dataPropNodeOpacity < 1.0) {
           dataPropBackgroundColor = applyOpacityToColor(DATA_PROPERTY_FILL, dataPropNodeOpacity);
@@ -3522,8 +3535,8 @@ function buildNetworkData(
       let dataPropEdgeFontColor = '#666';
       
       if (searchQuery) {
-        // Use the class node's opacity category
-        const dataPropEdgeOpacity = getSearchOpacity(classId, matchingNodeIds, neighborNodeIds);
+        // Same as the box it leads to (#81)
+        const dataPropEdgeOpacity = getDataPropertySearchOpacity(dataProp.propertyName, classId, searchSets, searchQuery);
         if (dataPropEdgeOpacity < 1.0) {
           dataPropEdgeColor = applyOpacityToColor('#4a90a4', dataPropEdgeOpacity);
           dataPropEdgeFontColor = applyOpacityToColor('#666', dataPropEdgeOpacity);
@@ -3583,7 +3596,7 @@ function buildNetworkData(
         ? getOpacityForExternalOntology(definingOntologyUrl, externalOntologyReferences)
         : 1.0;
       const opacity =
-        getFreeStandingNodeSearchOpacity(dp.name, label, searchQuery, filter.exactMatch) * importedOpacity;
+        getDataPropertySearchOpacity(dp.name, null, searchSets, searchQuery) * importedOpacity;
       return { dp, label, tooltip, opacity };
     });
 
@@ -8972,31 +8985,31 @@ function updateSearchAutocomplete(): void {
     list.classList.remove('visible');
     return;
   }
-  const seen = new Set<string>();
-  const suggestions: { value: string; label: string; hint: string }[] = [];
-  getEdgeTypes(rawData.edges).forEach((type) => {
-    if (type.toLowerCase().includes(q) && !seen.has(type)) {
-      seen.add(type);
-      suggestions.push({ value: type, label: type, hint: 'relationship' });
-    }
+  // Relationships, classes and data properties, shown by prefixed name (foaf:member) with the full IRI
+  // as a tooltip (#81).
+  const { sources } = buildSearchVocabulary({
+    nodes: rawData.nodes,
+    edgeTypes: getEdgeTypes(rawData.edges),
+    objectProperties,
+    dataProperties,
+    externalOntologyReferences,
+    mainOntologyBase: ttlStore ? getMainOntologyBase(ttlStore) : null,
   });
-  rawData.nodes.forEach((n) => {
-    const label = (n.label || '').toLowerCase();
-    const id = (n.id || '').toLowerCase();
-    const val = n.label || n.id;
-    if ((label.includes(q) || id.includes(q)) && !seen.has(val)) {
-      seen.add(val);
-      suggestions.push({ value: val, label: val, hint: 'node' });
-    }
-  });
+  const suggestions = buildSearchSuggestions(query, sources);
   list.innerHTML = '';
   list.classList.remove('visible');
   list.dataset.highlight = '-1';
-  suggestions.slice(0, 12).forEach((s) => {
+  suggestions.forEach((s) => {
     const div = document.createElement('div');
     div.className = 'suggestion';
     div.dataset.value = s.value;
-    div.innerHTML = s.label + '<span class="hint">(' + s.hint + ')</span>';
+    div.title = s.title;
+    // Built with textContent: labels come from the loaded ontology and must not be read as HTML.
+    div.textContent = s.display;
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = `(${s.hint})`;
+    div.appendChild(hint);
     div.addEventListener('click', () => {
       input.value = s.value;
       list.classList.remove('visible');

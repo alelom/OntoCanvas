@@ -26,6 +26,34 @@ export interface SearchHighlightSets {
   neighborNodeIds: Set<string>;
   /** Edges whose type matches the query directly. */
   matchingEdgeIds: Set<string>;
+  /** Data properties (by name) matching the query; their boxes are shown at full opacity (#81). */
+  matchingDataPropertyNames: Set<string>;
+}
+
+/** A data property as search sees it: the names it can be found by (identifier, label, full IRI,
+ * prefixed name) and the classes its boxes hang on (empty for a free-standing one). */
+export interface SearchableDataProperty {
+  name: string;
+  names: string[];
+  classIds: string[];
+}
+
+/** Optional extra search inputs (#81): data properties, and further names classes and relationships can
+ * be found by — e.g. the prefixed name `foaf:member` the suggestions show, or a relationship's label. */
+export interface SearchExtras {
+  dataProperties?: SearchableDataProperty[];
+  nodeNames?: (nodeId: string) => string[];
+  edgeNames?: (edgeType: string) => string[];
+}
+
+/** Whether any of `names` matches the query: case-insensitive substring, or whole-name in exact mode. */
+export function namesMatch(names: string[], query: string, exactMatch: boolean): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  return names.some((n) => {
+    const v = (n || '').toLowerCase();
+    return exactMatch ? v === q : v.includes(q);
+  });
 }
 
 export function edgeKey(from: string, to: string, type: string): string {
@@ -46,27 +74,36 @@ export function computeSearchSets(
   edges: GraphEdge[],
   query: string,
   includeNeighbors: boolean,
-  exactMatch = false
+  exactMatch = false,
+  extras: SearchExtras = {}
 ): SearchHighlightSets {
   const matchingNodeIds = new Set<string>();
   const directNodeMatchIds = new Set<string>();
   const neighborNodeIds = new Set<string>();
   const matchingEdgeIds = new Set<string>();
+  const matchingDataPropertyNames = new Set<string>();
   const q = (query || '').trim();
-  if (!q) return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds };
+  if (!q) return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds, matchingDataPropertyNames };
 
   for (const n of nodes) {
-    if (matchesSearch(n, null, q, exactMatch)) {
+    if (matchesSearch(n, null, q, exactMatch) || namesMatch(extras.nodeNames?.(n.id) ?? [], q, exactMatch)) {
       matchingNodeIds.add(n.id);
       directNodeMatchIds.add(n.id);
     }
   }
   for (const e of edges) {
-    if (matchesSearch(null, e, q, exactMatch)) {
+    if (matchesSearch(null, e, q, exactMatch) || namesMatch(extras.edgeNames?.(e.type) ?? [], q, exactMatch)) {
       matchingNodeIds.add(e.from);
       matchingNodeIds.add(e.to);
       matchingEdgeIds.add(edgeKey(e.from, e.to, e.type));
     }
+  }
+  // A matched data property highlights its own boxes, and its classes the way a matched relationship
+  // highlights its endpoints.
+  for (const dp of extras.dataProperties ?? []) {
+    if (!namesMatch(dp.names, q, exactMatch)) continue;
+    matchingDataPropertyNames.add(dp.name);
+    for (const classId of dp.classIds) matchingNodeIds.add(classId);
   }
 
   if (includeNeighbors) {
@@ -78,7 +115,7 @@ export function computeSearchSets(
     }
   }
 
-  return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds };
+  return { matchingNodeIds, directNodeMatchIds, neighborNodeIds, matchingEdgeIds, matchingDataPropertyNames };
 }
 
 /** Opacity for a node given the highlight sets. */
@@ -93,22 +130,25 @@ export function getNodeSearchOpacity(
 }
 
 /**
- * Opacity for a node that stands outside the class graph — a data property asserting no
- * rdfs:domain, drawn in its own band.
- *
- * It has no class to inherit a search category from, so it is judged on its own name. Without this
- * it would keep full opacity while every class dimmed around it, making the nodes least relevant to
- * the query the most prominent things on the canvas.
+ * Opacity for a data-property box (#81). A box whose property matched the query is shown in full; boxes
+ * of a class highlighted only through the search (not by its own name) are faded. Any
+ * other box follows the class it hangs on (as before); a free-standing one — a data property asserting
+ * no rdfs:domain, drawn in its own band — has no class to follow, so it dims like an unmatched class
+ * rather than staying the most prominent thing on the canvas.
  */
-export function getFreeStandingNodeSearchOpacity(
-  id: string,
-  label: string,
-  query: string,
-  exactMatch = false
+export function getDataPropertySearchOpacity(
+  propertyName: string,
+  classId: string | null,
+  sets: SearchHighlightSets,
+  query: string
 ): number {
   if (!(query || '').trim()) return OPACITY_MATCH;
-  const node = { id, label } as GraphNode;
-  return matchesSearch(node, null, query, exactMatch) ? OPACITY_MATCH : OPACITY_DIM;
+  if (sets.matchingDataPropertyNames.has(propertyName)) return OPACITY_MATCH;
+  if (!classId) return OPACITY_DIM;
+  // A class highlighted only through what was searched (a relationship or another data property on it)
+  // fades its other boxes, so the match stands out — as other relationships between matched nodes do.
+  if (sets.matchingNodeIds.has(classId) && !sets.directNodeMatchIds.has(classId)) return OPACITY_RELATED;
+  return getNodeSearchOpacity(classId, sets.matchingNodeIds, sets.neighborNodeIds);
 }
 
 /**
