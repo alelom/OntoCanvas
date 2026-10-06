@@ -1,0 +1,44 @@
+@prefix : <http://example.org/examples/intersection#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# owl:intersectionOf (AND) in rdfs:domain / rdfs:range (issue #60).
+# Expect: a dot on each member edge joined to a central ∩ badge (object properties), and a
+# ∩ corner badge on each member's data-property stub (data properties).
+
+<http://example.org/examples/intersection> rdf:type owl:Ontology ;
+    rdfs:label "Intersection examples" .
+
+:Drawing rdf:type owl:Class ; rdfs:label "Drawing" .
+:Approved rdf:type owl:Class ; rdfs:label "Approved" .
+:Issued rdf:type owl:Class ; rdfs:label "Issued" .
+:Revision rdf:type owl:Class ; rdfs:label "Revision" .
+:Element rdf:type owl:Class ; rdfs:label "Element" .
+:LoadBearing rdf:type owl:Class ; rdfs:label "Load Bearing" .
+:Wall rdf:type owl:Class ; rdfs:label "Wall" .
+
+# Domain intersection of two classes: only drawings that are also approved have revisions.
+:hasRevision rdf:type owl:ObjectProperty ;
+    rdfs:label "hasRevision" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Drawing :Approved ) ] ;
+    rdfs:range :Revision .
+
+# Domain intersection of three classes.
+:supersededBy rdf:type owl:ObjectProperty ;
+    rdfs:label "supersededBy" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Drawing :Approved :Issued ) ] ;
+    rdfs:range :Revision .
+
+# Range intersection: a wall is supported by something that is both an element and load bearing.
+:supportedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "supportedBy" ;
+    rdfs:domain :Wall ;
+    rdfs:range [ rdf:type owl:Class ; owl:intersectionOf ( :Element :LoadBearing ) ] .
+
+# Data property with an intersection domain.
+:approvalCode rdf:type owl:DatatypeProperty ;
+    rdfs:label "approvalCode" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:intersectionOf ( :Drawing :Approved ) ] ;
+    rdfs:range xsd:string .

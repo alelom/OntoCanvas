@@ -1,0 +1,35 @@
+@prefix : <http://example.org/examples/complement#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# owl:complementOf (NOT) in rdfs:domain / rdfs:range (issue #61).
+# Expect: a single ¬ badge sitting on the edge, near the complemented end (object properties),
+# and a ¬ corner badge on the data-property stub (data properties).
+
+<http://example.org/examples/complement> rdf:type owl:Ontology ;
+    rdfs:label "Complement examples" .
+
+:Sheet rdf:type owl:Class ; rdfs:label "Sheet" .
+:Draft rdf:type owl:Class ; rdfs:label "Draft" .
+:Archived rdf:type owl:Class ; rdfs:label "Archived" .
+:Reviewer rdf:type owl:Class ; rdfs:label "Reviewer" .
+
+# Range complement: a sheet supersedes anything that is not a draft.
+:supersedes rdf:type owl:ObjectProperty ;
+    rdfs:label "supersedes" ;
+    rdfs:domain :Sheet ;
+    rdfs:range [ rdf:type owl:Class ; owl:complementOf :Draft ] .
+
+# Domain complement: anything that is not archived can be assigned a reviewer.
+:assignedReviewer rdf:type owl:ObjectProperty ;
+    rdfs:label "assignedReviewer" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:complementOf :Archived ] ;
+    rdfs:range :Reviewer .
+
+# Data property with a complement domain.
+:issueDate rdf:type owl:DatatypeProperty ;
+    rdfs:label "issueDate" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:complementOf :Draft ] ;
+    rdfs:range xsd:date .

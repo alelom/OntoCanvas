@@ -1,0 +1,52 @@
+@prefix : <http://example.org/examples/oneOf#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# owl:oneOf (enumerations) in rdfs:range (issue #62). Individuals are NOT added as nodes.
+# Expect:
+#  - typed individuals: the edge is drawn to their class, with a {} badge near that end;
+#  - individuals of two classes: a dot-line-dot {} overlay across both edges;
+#  - untyped individuals: a {} corner badge on the domain class (no edge to draw);
+#  - enumerated literals on a data property: a {} corner badge (top-right) on the stub.
+# Click any {} badge to see the enumerated members.
+
+<http://example.org/examples/oneOf> rdf:type owl:Ontology ;
+    rdfs:label "Enumeration examples" .
+
+:Sheet rdf:type owl:Class ; rdfs:label "Sheet" .
+:Drawing rdf:type owl:Class ; rdfs:label "Drawing" .
+:Orientation rdf:type owl:Class ; rdfs:label "Orientation" .
+:Discipline rdf:type owl:Class ; rdfs:label "Discipline" .
+:Team rdf:type owl:Class ; rdfs:label "Team" .
+
+:Portrait rdf:type owl:NamedIndividual , :Orientation .
+:Landscape rdf:type owl:NamedIndividual , :Orientation .
+:Structural rdf:type owl:NamedIndividual , :Discipline .
+:Architecture rdf:type owl:NamedIndividual , :Discipline .
+:DesignTeam rdf:type owl:NamedIndividual , :Team .
+
+# Enumeration of individuals that share one class.
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "hasOrientation" ;
+    rdfs:domain :Sheet ;
+    rdfs:range [ rdf:type owl:Class ; owl:oneOf ( :Portrait :Landscape ) ] .
+
+# Enumeration of individuals spread over two classes.
+:responsibleParty rdf:type owl:ObjectProperty ;
+    rdfs:label "responsibleParty" ;
+    rdfs:domain :Drawing ;
+    rdfs:range [ rdf:type owl:Class ; owl:oneOf ( :Structural :Architecture :DesignTeam ) ] .
+
+# Enumeration of untyped individuals (no class on the graph to draw an edge to).
+:hasStatus rdf:type owl:ObjectProperty ;
+    rdfs:label "hasStatus" ;
+    rdfs:domain :Drawing ;
+    rdfs:range [ rdf:type owl:Class ; owl:oneOf ( :Current :Superseded :Withdrawn ) ] .
+
+# Enumerated literal values (a datatype oneOf) on a data property.
+:paperSize rdf:type owl:DatatypeProperty ;
+    rdfs:label "paperSize" ;
+    rdfs:domain :Sheet ;
+    rdfs:range [ rdf:type rdfs:Datatype ; owl:oneOf ( "A0" "A1" "A2" "A3" ) ] .
