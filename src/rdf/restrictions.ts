@@ -87,3 +87,57 @@ export function readObjectRestriction(store: Store, blank: RdfTerm, subjectUri: 
   }
   return null;
 }
+
+/** The restriction blank nodes of `subjectUri` (via rdfs:subClassOf) that are drawn as the edge to
+ * `targetUri` for `propertyUri` — matched with readObjectRestriction, exactly as the parser drew them,
+ * so every kind is found (a merged ∃∀ edge yields both). */
+export function findRestrictionBlanks(store: Store, subjectUri: string, propertyUri: string, targetUri: string): RdfTerm[] {
+  return store
+    .getQuads(DataFactory.namedNode(subjectUri), DataFactory.namedNode(RDFS + 'subClassOf'), null, null)
+    .map((q) => q.object as RdfTerm)
+    .filter((o) => o.termType === 'BlankNode')
+    .filter((blank) => {
+      const r = readObjectRestriction(store, blank, subjectUri);
+      return !!r && r.propertyUri === propertyUri && r.targetUri === targetUri;
+    });
+}
+
+/** Remove a blank node's triples, and those of any blank node it leaves unreferenced (nested lists etc.). */
+function removeBlankClosure(store: Store, node: RdfTerm): void {
+  for (const q of store.getQuads(node as never, null, null, null)) {
+    store.removeQuad(q);
+    const obj = q.object as RdfTerm;
+    if (obj.termType === 'BlankNode' && store.getQuads(null, null, obj as never, null).length === 0) removeBlankClosure(store, obj);
+  }
+}
+
+/** Remove one restriction of `subjectUri`: its rdfs:subClassOf link and the restriction's own triples,
+ * leaving no orphaned blank nodes. */
+export function removeRestrictionBlank(store: Store, subjectUri: string, blank: RdfTerm): void {
+  for (const q of store.getQuads(DataFactory.namedNode(subjectUri), DataFactory.namedNode(RDFS + 'subClassOf'), blank as never, null)) {
+    store.removeQuad(q);
+  }
+  removeBlankClosure(store, blank);
+}
+
+/** Plain-language detail of a restriction edge, one line per kind (for the read-only Edit-edge notice). */
+export function describeRestriction(edge: GraphEdge, propertyLabel: string): string[] {
+  const { from, to } = edge;
+  const card = `[${edge.minCardinality ?? 0}..${edge.maxCardinality ?? '*'}]`;
+  return (edge.restrictionKinds ?? []).map((kind) => {
+    switch (kind) {
+      case 'some':
+        return `∃ some: every ${from} has at least one ${propertyLabel} that is a ${to}.`;
+      case 'only':
+        return `∀ only: every ${propertyLabel} of a ${from} is a ${to}.`;
+      case 'value':
+        return `∋ value: every ${from} has ${propertyLabel} ${edge.restrictionValue ?? '?'} (a ${to}).`;
+      case 'self':
+        return `⟲ self: every ${from} is related to itself by ${propertyLabel}.`;
+      case 'qualified':
+        return `Cardinality: every ${from} has ${card} ${propertyLabel} values that are a ${to}.`;
+      case 'unqualified':
+        return `Cardinality: every ${from} has ${card} ${propertyLabel} values (of any class; ${to} is the property range).`;
+    }
+  });
+}

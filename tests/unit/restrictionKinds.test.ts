@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph, removeRestrictionEdgeFromStore } from '../../src/parser';
 import { getEdgeDisplayLabel } from '../../src/ui/relationshipUtils';
-import { isEditableRestriction } from '../../src/rdf/restrictions';
+import { isEditableRestriction, findRestrictionBlanks, describeRestriction } from '../../src/rdf/restrictions';
 import type { GraphEdge } from '../../src/types';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../fixtures');
@@ -69,5 +69,68 @@ describe('restriction kinds (#63)', async () => {
     // Plain domain/range edges and legacy restriction edges without kinds stay editable.
     expect(isEditableRestriction({ from: 'A', to: 'B', type: 'p' })).toBe(true);
     expect(isEditableRestriction({ from: 'A', to: 'B', type: 'p', isRestriction: true })).toBe(true);
+  });
+});
+
+describe('removing the restriction(s) behind an edge (#63)', () => {
+  const RK = 'http://example.org/rk#';
+  const OWL = 'http://www.w3.org/2002/07/owl#';
+  const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+
+  async function load() {
+    const ttl = readFileSync(join(FIXTURES, 'restrictionKinds.ttl'), 'utf-8');
+    return (await parseRdfToGraph(ttl, { path: 'restrictionKinds.ttl' })).store;
+  }
+
+  it('finds every restriction drawn as the edge (∃ and ∀ merged) and removes them without orphans', async () => {
+    const store = await load();
+    const blanks = findRestrictionBlanks(store, RK + 'Room', RK + 'hasPart', RK + 'Wall');
+    expect(blanks).toHaveLength(2);
+    const before = store.size;
+    expect(removeRestrictionEdgeFromStore(store, 'Room', 'Wall', 'hasPart')).toBe(2);
+    // Each restriction: its subClassOf link + rdf:type + onProperty + filler = 4 quads.
+    expect(before - store.size).toBe(8);
+    expect(findRestrictionBlanks(store, RK + 'Room', RK + 'hasPart', RK + 'Wall')).toHaveLength(0);
+    const orphans = store.getQuads(null, null, null, null).filter((q) => q.subject.termType === 'BlankNode' && store.getQuads(null, null, q.subject, null).length === 0);
+    expect(orphans).toHaveLength(0);
+  });
+
+  it('matches each kind by the class its edge points to, and leaves other restrictions alone', async () => {
+    const store = await load();
+    expect(findRestrictionBlanks(store, RK + 'Sheet', RK + 'hasStatus', RK + 'Status')).toHaveLength(1); // ∋ via the individual's class
+    expect(findRestrictionBlanks(store, RK + 'Person', RK + 'knows', RK + 'Person')).toHaveLength(1); // ⟲
+    expect(findRestrictionBlanks(store, RK + 'Sheet', RK + 'hasRevision', RK + 'Revision')).toHaveLength(1); // unqualified, via range
+    expect(findRestrictionBlanks(store, RK + 'Sheet', RK + 'hasStatus', RK + 'Revision')).toHaveLength(0);
+    removeRestrictionEdgeFromStore(store, 'Building', 'Floor', 'hasFloor');
+    expect(findRestrictionBlanks(store, RK + 'Sheet', RK + 'hasStatus', RK + 'Status')).toHaveLength(1);
+    expect(store.getQuads(null, RDFS + 'subClassOf', null, null).filter((q) => q.subject.value === RK + 'Building')).toHaveLength(0);
+    expect(store.getQuads(null, OWL + 'allValuesFrom', RK + 'Floor', null)).toHaveLength(0);
+  });
+});
+
+describe('describeRestriction: the read-only detail shown in the Edit-edge modal (#63)', () => {
+  const e = (o: Partial<GraphEdge>): GraphEdge => ({ from: 'Room', to: 'Wall', type: 'hasPart', isRestriction: true, ...o });
+  it('says what each kind means, in plain language', () => {
+    expect(describeRestriction(e({ restrictionKinds: ['some'], minCardinality: 1 }), 'hasPart')).toEqual([
+      '∃ some: every Room has at least one hasPart that is a Wall.',
+    ]);
+    expect(describeRestriction(e({ restrictionKinds: ['only'] }), 'hasPart')).toEqual([
+      '∀ only: every hasPart of a Room is a Wall.',
+    ]);
+    expect(describeRestriction(e({ to: 'Status', restrictionKinds: ['value'], restrictionValue: 'Current' }), 'hasStatus')).toEqual([
+      '∋ value: every Room has hasStatus Current (a Status).',
+    ]);
+    expect(describeRestriction(e({ to: 'Room', restrictionKinds: ['self'] }), 'knows')).toEqual([
+      '⟲ self: every Room is related to itself by knows.',
+    ]);
+    expect(describeRestriction(e({ to: 'Revision', restrictionKinds: ['unqualified'], minCardinality: 2, maxCardinality: 2 }), 'hasRevision')).toEqual([
+      'Cardinality: every Room has [2..2] hasRevision values (of any class; Revision is the property range).',
+    ]);
+    expect(describeRestriction(e({ to: 'Sheet', restrictionKinds: ['qualified'], minCardinality: 1 }), 'contains')).toEqual([
+      'Cardinality: every Room has [1..*] contains values that are a Sheet.',
+    ]);
+  });
+  it('lists one line per kind on a merged edge', () => {
+    expect(describeRestriction(e({ restrictionKinds: ['some', 'only'], minCardinality: 1 }), 'hasPart')).toHaveLength(2);
   });
 });

@@ -11,7 +11,7 @@ import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
-import { mergeRestrictionKinds, readObjectRestriction } from './rdf/restrictions';
+import { findRestrictionBlanks, mergeRestrictionKinds, readObjectRestriction, removeRestrictionBlank } from './rdf/restrictions';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -2484,6 +2484,23 @@ export function removeRestrictionFromStore(
   for (const q of blankQuads) store.removeQuad(q);
   const blankAsObjQuads = store.getQuads(null, null, blank, null);
   for (const q of blankAsObjQuads) store.removeQuad(q);
+}
+
+/**
+ * Remove the OWL restriction(s) drawn as the edge from→to for `edgeType` — any kind (∃ ∀ ∋ ⟲,
+ * qualified or unqualified cardinality; see src/rdf/restrictions.ts) — leaving the property's
+ * domain/range alone. Used when a class is deleted, so its read-only restriction edges (which
+ * removeEdgeFromStore, knowing only ∃/onClass, would mishandle) go cleanly. Returns how many were removed.
+ */
+export function removeRestrictionEdgeFromStore(store: Store, from: string, to: string, edgeType: string): number {
+  const base = resolveClassBase(store);
+  const uriOf = (name: string) => (/^https?:\/\//.test(name) ? name : base + name);
+  const propUri = getObjectPropertyUriFromStore(store, edgeType);
+  if (!propUri) return 0;
+  const subjectUri = uriOf(from);
+  const blanks = findRestrictionBlanks(store, subjectUri, propUri, uriOf(to));
+  for (const blank of blanks) removeRestrictionBlank(store, subjectUri, blank);
+  return blanks.length;
 }
 
 /**
