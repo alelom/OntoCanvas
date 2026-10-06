@@ -259,3 +259,33 @@ export function updateSelectionInfo(info: string): void {
   if (!el) return;
   el.textContent = info;
 }
+
+/**
+ * Show a single selected term as " | Selected: <name><suffix>", with the name rendered as a link
+ * opening `href` in a new tab when one is given.
+ */
+export function updateSelectedTerm(name: string, href: string | null, suffix = ''): void {
+  const el = document.getElementById('selectionInfo');
+  if (!el) return;
+  el.textContent = ' | Selected: ';
+  if (href) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = name;
+    link.title = `Open ${href}`;
+    link.style.color = '#3498db';
+    link.style.textDecoration = 'none';
+    link.addEventListener('mouseenter', () => {
+      link.style.textDecoration = 'underline';
+    });
+    link.addEventListener('mouseleave', () => {
+      link.style.textDecoration = 'none';
+    });
+    el.appendChild(link);
+  } else {
+    el.appendChild(document.createTextNode(name));
+  }
+  if (suffix) el.appendChild(document.createTextNode(suffix));
+}

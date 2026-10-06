@@ -15,6 +15,8 @@ import {
   getTransitiveChildIds,
   getTransitiveParentIds,
 } from '../lib/classGraphTraversal';
+import { copyTextToClipboard } from '../utils/clipboard';
+import { debugLog } from '../utils/debug';
 
 /**
  * Callback type for when relationships are pasted.
@@ -49,6 +51,11 @@ export type OnSelectionChangedCallback = () => void;
  */
 export type OnOpenExternalOntologyCallback = (url: string) => Promise<void>;
 
+/**
+ * Resolves the full URI of the term behind a node or edge, for "Copy URI". Null when unknown.
+ */
+export type TermUriResolver = (kind: 'node' | 'edge', id: string) => string | null;
+
 export interface ExternalRefForContextMenu {
   url: string;
 }
@@ -64,6 +71,14 @@ let onCopyCallback: OnCopyCallback | null = null;
 let onEditNodeCallback: ((nodeId: string) => void) | null = null;
 let onEditEdgeCallback: ((edgeId: string) => void) | null = null;
 let onSelectionChangedCallback: OnSelectionChangedCallback | null = null;
+let termUriResolver: TermUriResolver | null = null;
+/** When true (embedded, read-only mode) the menu offers only "Copy URI". */
+let copyOnlyMenu = false;
+
+/** Register how "Copy URI" resolves a node/edge to its term URI. */
+export function setTermUriResolver(resolver: TermUriResolver | null): void {
+  termUriResolver = resolver;
+}
 
 function normalizeUrl(u: string): string {
   let s = u.endsWith('#') ? u.slice(0, -1) : u;
@@ -146,8 +161,10 @@ export function showContextMenu(
   network: Network,
   container: HTMLElement,
   nodeId?: string | null,
-  edgeId?: string | null
+  edgeId?: string | null,
+  options?: { copyOnly?: boolean }
 ): void {
+  copyOnlyMenu = options?.copyOnly ?? false;
   if (!contextMenuElement) {
     console.warn('Context menu element not found. Initializing...');
     // Try to create the element if it doesn't exist
@@ -197,6 +214,9 @@ export function showContextMenu(
           return at != null ? String(at) : null;
         })();
 
+  // In copy-only mode there is nothing to offer on the empty canvas.
+  if (copyOnlyMenu && !resolvedNodeId && !resolvedEdgeId) return;
+
   // Update menu items based on what was clicked
   updateContextMenuItems(resolvedNodeId, resolvedEdgeId);
 
@@ -222,6 +242,18 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
   if (!contextMenuElement || !currentRawData) return;
 
   contextMenuElement.innerHTML = '';
+
+  // "Copy URI" is always the first item for a node or edge.
+  const target = nodeId
+    ? { kind: 'node' as const, id: nodeId }
+    : edgeId
+      ? { kind: 'edge' as const, id: edgeId }
+      : null;
+  if (target) {
+    contextMenuElement.appendChild(createCopyUriItem(target.kind, target.id));
+    if (copyOnlyMenu) return;
+    contextMenuElement.appendChild(createSeparator());
+  }
 
   if (nodeId) {
     // Node context menu
@@ -318,10 +350,7 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       contextMenuElement.appendChild(editBtn);
     }
   } else if (edgeId) {
-    // Edge context menu
-    // Separator before "Edit properties"
-    const separator = createSeparator();
-    
+    // Edge context menu (the separator after "Copy URI" precedes this)
     // Edit properties option (always last)
     const editBtn = createMenuItem('Edit properties', () => {
       if (onEditEdgeCallback) {
@@ -330,13 +359,33 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       hideContextMenu();
     });
 
-    contextMenuElement.appendChild(separator);
     contextMenuElement.appendChild(editBtn);
   } else {
     // Canvas context menu (placeholder for future)
     const placeholder = createMenuItem('(Canvas options coming soon)', () => {}, true);
     contextMenuElement.appendChild(placeholder);
   }
+}
+
+/**
+ * "Copy URI" menu item; disabled when the term's URI cannot be resolved.
+ */
+function createCopyUriItem(kind: 'node' | 'edge', id: string): HTMLElement {
+  const uri = termUriResolver?.(kind, id) ?? null;
+  const item = createMenuItem(
+    'Copy URI',
+    () => {
+      if (uri) {
+        void copyTextToClipboard(uri).then((ok) =>
+          debugLog(`[contextMenu] Copy URI ${ok ? 'copied' : 'failed'}: ${uri}`)
+        );
+      }
+      hideContextMenu();
+    },
+    !uri
+  );
+  item.title = uri ?? 'No URI recorded for this item';
+  return item;
 }
 
 /**

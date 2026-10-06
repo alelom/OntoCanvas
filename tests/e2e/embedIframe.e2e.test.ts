@@ -37,7 +37,11 @@ describe('Embedded in a real iframe E2E', () => {
 
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true });
-    page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    const context = await browser.newContext({
+      viewport: { width: 1400, height: 900 },
+      permissions: ['clipboard-read', 'clipboard-write'],
+    });
+    page = await context.newPage();
     page.setDefaultTimeout(10000);
     await page.route(HOST_URL, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: HOST_HTML }));
     await page.route(ONTO_URL, (r) => r.fulfill({ status: 200, contentType: 'text/turtle', body: TTL }));
@@ -107,5 +111,24 @@ describe('Embedded in a real iframe E2E', () => {
     expect(s.alignSelf).toBe('stretch');
     expect(s.textAlign).toBe('left');
     expect(s.infoWidth).toBeGreaterThan(s.appWidth * 0.95);
+  });
+
+  it('right-click on a node offers only "Copy URI", which copies the term URI (#68)', async () => {
+    const pos = await frame.evaluate(() => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      const id = net.body.data.nodes.getIds()[0];
+      const dom = net.canvasToDOM(net.getPositions([id])[id]);
+      const box = document.querySelector('canvas')!.getBoundingClientRect();
+      return { x: box.left + dom.x, y: box.top + dom.y, id: String(id) };
+    });
+    const frameBox = (await (await page.$('#f'))!.boundingBox())!;
+    await page.mouse.click(frameBox.x + pos.x, frameBox.y + pos.y, { button: 'right' });
+    const items = await frame.evaluate(() =>
+      [...document.getElementById('contextMenu')!.children].map((c) => c.textContent ?? '').filter(Boolean)
+    );
+    expect(items).toEqual(['Copy URI']);
+    await frame.click('#contextMenu >> text=Copy URI');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toBe(`http://example.org/o#${pos.id}`);
   });
 });

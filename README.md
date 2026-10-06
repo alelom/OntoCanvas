@@ -59,10 +59,11 @@ OntoCanvas can be embedded in an `<iframe>` (e.g. on an ontology's documentation
 
 - hides the top menu and the bottom "Edges" legend for compactness;
 - disables all editing (no Add Node/Edge, no edit dialogs, no delete) — the graph can still be **panned (left or right mouse button), zoomed, and its nodes moved**;
+- offers a read-only **right-click → "Copy URI"** on classes and relationships (the only context-menu item when embedded). If the embedding page is on a different origin, add `allow="clipboard-write"` to the iframe so the browser permits clipboard access; without it OntoCanvas falls back to a legacy copy method;
 - shows an **"Open in a new tab"** button that opens the same ontology in a full, editable OntoCanvas tab.
 
 ```html
-<iframe src="https://alelom.github.io/OntoCanvas/?onto=<ONTOLOGY_URL>" width="100%" height="600"></iframe>
+<iframe src="https://alelom.github.io/OntoCanvas/?onto=<ONTOLOGY_URL>" width="100%" height="600" allow="clipboard-write"></iframe>
 ```
 
 ## Comparison with other ontology editors and visualisers 
