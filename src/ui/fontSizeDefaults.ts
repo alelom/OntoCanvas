@@ -49,3 +49,17 @@ export function fontSettingRatios(s: FontSettings, nodeCount: number): { node: n
     dataProperty: s.dataPropertyFontSize / DEFAULT_DATA_PROPERTY_FONT_SIZE,
   };
 }
+
+/** The node font at `depth`, as the graph draws it: interpolated from Max (roots) to Min (deepest);
+ * every node gets Max when the graph has no depth. */
+function nodeFontAtDepth(min: number, max: number, depth: number, maxDepth: number): number {
+  return maxDepth > 0 ? min + ((max - min) * (maxDepth - depth)) / maxDepth : max;
+}
+
+/** A node's font relative to what the default settings would give it at the same depth: 1 everywhere at
+ * the defaults; follows Max for roots, Min for the deepest nodes, Max alone in a flat graph. */
+export function nodeFontRatio(s: FontSettings, depth: number, maxDepth: number, nodeCount: number): number {
+  const current = nodeFontAtDepth(s.minFontSize, s.maxFontSize, depth, maxDepth);
+  const byDefault = nodeFontAtDepth(DEFAULT_MIN_FONT_SIZE, defaultMaxFontSize(nodeCount), depth, maxDepth);
+  return current / byDefault;
+}

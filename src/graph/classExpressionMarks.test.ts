@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { markKind, markLayer, dataPropertyEdgeIds, badgeFontScale, FONT_SCALE_MIN, FONT_SCALE_MAX, nodeBadgeTargets, partitionByEdge, propertyEdgeIds, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
+import { markKind, markLayer, dataPropertyEdgeIds, badgeFontScale, ratiosForNodes, FONT_SCALE_MIN, FONT_SCALE_MAX, nodeBadgeTargets, partitionByEdge, propertyEdgeIds, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
 import type { ClassExpressionGroup } from '../types';
 
 const g = (o: Partial<ClassExpressionGroup>): ClassExpressionGroup =>
@@ -168,5 +168,17 @@ describe('dataPropertyEdgeIds: the class → data-property box edge, by id', () 
       'Sheet->__dataprop__Sheet__paperSize:dataprop',
       'Sheet->__dataprop__Sheet__paperSize:dataproprestrict',
     ]);
+  });
+});
+
+describe('ratiosForNodes', () => {
+  const r = { node: 1, relationship: 1, dataProperty: 1, byNode: { Root: 2, Leaf: 0.5 } };
+  it('uses the mean per-node ratio of the nodes a badge relates to', () => {
+    expect(ratiosForNodes(r, ['Root']).node).toBe(2);
+    expect(ratiosForNodes(r, ['Root', 'Leaf']).node).toBe(1.25);
+  });
+  it('falls back to the overall node ratio for unknown nodes, or when no nodes are given', () => {
+    expect(ratiosForNodes(r, ['Other']).node).toBe(1);
+    expect(ratiosForNodes(r, []).node).toBe(1);
   });
 });

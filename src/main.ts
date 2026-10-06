@@ -170,7 +170,8 @@ import {
 } from './ui/renameModalHeaderIcons';
 import { getAppVersion } from './utils/version';
 import { getShouldShowTopMenu, isEmbedded } from './utils/embedMode';
-import { defaultMaxFontSize, fontSettingRatios } from './ui/fontSizeDefaults';
+import { defaultMaxFontSize, fontSettingRatios, nodeFontRatio } from './ui/fontSizeDefaults';
+import type { BadgeFontRatios } from './graph/classExpressionOverlay';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
@@ -502,7 +503,7 @@ function flushDisplayConfigSave(): void {
 
 let rawData: GraphData = { nodes: [], edges: [] };
 /** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
-let classExpressionFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
+let classExpressionFontRatios: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 /** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
 let currentGraphDataForBuild: GraphData | null = null;
 /** External class URIs we have seen in this session (from store or added by user). Not removed when user deletes an external node, so "Add from referenced ontology" still finds them. Cleared on load. */
@@ -3068,9 +3069,17 @@ function buildNetworkData(
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
-  // Class-expression badges are sized with the display fonts (relative to their defaults).
-  classExpressionFontRatios = fontSettingRatios({ minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize }, rawData?.nodes?.length ?? 0);
   const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
+  // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
+  // as they are drawn (roots follow Max, the deepest nodes Min).
+  const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
+  const nodeCountForDefaults = rawData?.nodes?.length ?? 0;
+  classExpressionFontRatios = {
+    ...fontSettingRatios(fontSettings, nodeCountForDefaults),
+    byNode: Object.fromEntries(
+      [...nodeIds].map((id) => [id, nodeFontRatio(fontSettings, depth[id] ?? 0, maxDepth, nodeCountForDefaults)]),
+    ),
+  };
 
   let nodePositions: Record<string, { x: number; y: number }> = {};
   

@@ -35,6 +35,7 @@ import type { ClassExpressionGroup } from '../types';
 import {
   badgeFraction,
   badgeFontScale,
+  ratiosForNodes,
   type BadgeFontRatios,
   type BadgePlacement,
   badgeScale,
@@ -155,7 +156,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     members: string[],
   ): void {
     const { points: dots, color, scale: lengthScale } = memberEdgePoints(net, ctx, group, counterpartId, members);
-    const scale = lengthScale * badgeFontScale('edge', ratios);
+    const scale = lengthScale * badgeFontScale('edge', ratiosForNodes(ratios, [counterpartId, ...members]));
     if (dots.length < 2) return;
     const stroke = color ?? FALLBACK_COLOR;
     const hub = centroid(dots);
@@ -199,7 +200,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     members: string[],
   ): void {
     const { points, color, scale: lengthScale } = memberEdgePoints(net, ctx, group, counterpartId, members);
-    const scale = lengthScale * badgeFontScale('edge', ratios);
+    const scale = lengthScale * badgeFontScale('edge', ratiosForNodes(ratios, [counterpartId, ...members]));
     const at = points[0];
     if (!at) return;
     drawBadge(ctx, at, HUB_RADIUS * scale, HUB_GLYPH_SIZE * scale, color ?? FALLBACK_COLOR, glyph);
@@ -215,10 +216,11 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     color: string,
     stacker: CornerStacker,
     placement: BadgePlacement,
+    fontNode: string,
   ): void {
     const box = nodeBox(net, nodeId);
     if (!box) return;
-    const s = badgeFontScale(placement, ratios);
+    const s = badgeFontScale(placement, ratiosForNodes(ratios, [fontNode]));
     const radius = SMALL_BADGE_RADIUS * s;
     const at = cornerBadgeCenter(box, group.position, stacker.next(nodeId, group.position), radius);
     drawBadge(ctx, at, radius, SMALL_GLYPH_SIZE * s, color, glyph);
@@ -254,7 +256,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
           }
           if (layers.includes('nodes') && withoutEdge.length > 0) {
             regions = regionsByLayer.nodes;
-            drawCornerBadge(net, ctx, group, glyph, cp, FALLBACK_COLOR, stacker, 'node');
+            drawCornerBadge(net, ctx, group, glyph, cp, FALLBACK_COLOR, stacker, 'node', cp);
           }
         }
         continue;
@@ -264,7 +266,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
       switch (kind) {
         case 'nodeBadge':
           for (const nodeId of nodeBadgeTargets(group)) {
-            drawCornerBadge(net, ctx, group, glyph, nodeId, FALLBACK_COLOR, stacker, 'node');
+            drawCornerBadge(net, ctx, group, glyph, nodeId, FALLBACK_COLOR, stacker, 'node', nodeId);
           }
           break;
         case 'stubBadge':
@@ -273,7 +275,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
             const stubId = dataStubId(net, classId, group.propertyName);
             if (!stubId) continue;
             const color = colorOf(findDataPropertyEdge(net, classId, stubId)) ?? DATA_FALLBACK_COLOR;
-            drawCornerBadge(net, ctx, group, glyph, stubId, color, stacker, 'dataProperty');
+            drawCornerBadge(net, ctx, group, glyph, stubId, color, stacker, 'dataProperty', classId);
           }
           break;
       }

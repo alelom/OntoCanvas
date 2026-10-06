@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   defaultMaxFontSize,
   fontSettingRatios,
+  nodeFontRatio,
   DEFAULT_MIN_FONT_SIZE,
   DEFAULT_RELATIONSHIP_FONT_SIZE,
   DEFAULT_DATA_PROPERTY_FONT_SIZE,
@@ -58,5 +59,31 @@ describe('fontSettingRatios: each font setting relative to its default (for sizi
     const r = fontSettingRatios({ ...defaults(10), relationshipFontSize: 36, dataPropertyFontSize: 6 }, 10);
     expect(r.relationship).toBeCloseTo(2, 10);
     expect(r.dataProperty).toBeCloseTo(0.5, 10);
+  });
+});
+
+describe('nodeFontRatio: a node\'s font (by depth) relative to the default font at the same depth', () => {
+  const settings = (min: number, max: number) => ({ minFontSize: min, maxFontSize: max, relationshipFontSize: 18, dataPropertyFontSize: 12 });
+  const n = 100; // default max 70
+
+  it('is 1 at the default settings, at every depth', () => {
+    for (const [d, maxDepth] of [[0, 0], [0, 3], [1, 3], [3, 3]]) {
+      expect(nodeFontRatio(settings(DEFAULT_MIN_FONT_SIZE, defaultMaxFontSize(n)), d, maxDepth, n)).toBeCloseTo(1, 10);
+    }
+  });
+
+  it('follows Max for roots and Min for the deepest nodes', () => {
+    expect(nodeFontRatio(settings(20, 140), 0, 3, n)).toBeCloseTo(2, 10); // root: 140 / 70
+    expect(nodeFontRatio(settings(40, 70), 3, 3, n)).toBeCloseTo(2, 10); // leaf: 40 / 20
+    expect(nodeFontRatio(settings(40, 70), 0, 3, n)).toBeCloseTo(1, 10); // root ignores Min
+  });
+
+  it('follows Max alone in a flat graph, where every node is drawn at Max', () => {
+    expect(nodeFontRatio(settings(40, 35), 0, 0, n)).toBeCloseTo(0.5, 10);
+  });
+
+  it('interpolates for middle depths', () => {
+    // depth 1 of 2: font = min + (max - min) / 2. Default: (20 + 70) / 2 = 45; set: (20 + 160) / 2 = 90.
+    expect(nodeFontRatio(settings(20, 160), 1, 2, n)).toBeCloseTo(2, 10);
   });
 });

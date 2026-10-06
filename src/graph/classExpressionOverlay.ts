@@ -175,9 +175,20 @@ export type BadgePlacement = 'edge' | 'node' | 'dataProperty';
 
 /** Each display font setting relative to its default (1 = default; see fontSettingRatios). */
 export interface BadgeFontRatios {
+  /** Fallback node ratio, for nodes not in `byNode`. */
   node: number;
   relationship: number;
   dataProperty: number;
+  /** Per-node ratio (each node's font by depth vs. the default at that depth; see nodeFontRatio). */
+  byNode?: Record<string, number>;
+}
+
+/** The ratios with `node` set to the mean per-node ratio of `nodeIds` (the nodes a badge relates to),
+ * falling back to the overall node ratio for nodes not listed. */
+export function ratiosForNodes(ratios: BadgeFontRatios, nodeIds: string[]): BadgeFontRatios {
+  if (nodeIds.length === 0) return ratios;
+  const each = nodeIds.map((id) => ratios.byNode?.[id] ?? ratios.node);
+  return { ...ratios, node: each.reduce((a, b) => a + b, 0) / each.length };
 }
 
 export const FONT_SCALE_MIN = 0.5;
