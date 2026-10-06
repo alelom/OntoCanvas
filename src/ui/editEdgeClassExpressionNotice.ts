@@ -100,6 +100,7 @@ export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: Cla
   el.innerHTML =
     `<div style="font-weight:600;margin-bottom:4px;">${info.glyph} ${where === 'domain' ? 'Domain' : 'Range'} ${info.word}</div>` +
     `<div style="margin-bottom:5px;">${chips}</div>` +
+    (group.nested && group.formula ? `<div style="margin-bottom:5px;">Full expression: <code>${escapeHtml(group.formula)}</code></div>` : '') +
     `<div style="color:#6a5a85;">The ${where} of <b>${escapeHtml(group.propertyName)}</b> is ${what}; ` +
     `the same expression applies to every relationship drawn from it. Editing it isn't available yet — ` +
     `adjust it in the ontology source.</div>`;

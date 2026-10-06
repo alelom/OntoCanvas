@@ -140,3 +140,56 @@ describe('review fixes: literal display and multiple domain/range triples', asyn
     expect(g!.members.sort()).toEqual(['A', 'B']);
   });
 });
+
+describe('nested class expressions (#63)', async () => {
+  const ttl = `@prefix : <http://example.org/nx#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<http://example.org/nx> a owl:Ontology .
+:Person a owl:Class . :Agent a owl:Class . :OnlineAccount a owl:Class . :Employee a owl:Class .
+:Badge a owl:Class . :Project a owl:Class . :A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class .
+:currentProject a owl:ObjectProperty ; rdfs:domain :Person ;
+  rdfs:range [ a owl:Class ; owl:complementOf [ a owl:Class ; owl:unionOf ( :Agent :OnlineAccount ) ] ] .
+:worksOn a owl:ObjectProperty ; rdfs:range :Project ;
+  rdfs:domain [ a owl:Class ; owl:intersectionOf ( :Employee [ a owl:Restriction ; owl:onProperty :hasBadge ; owl:someValuesFrom :Badge ] ) ] .
+:linked a owl:ObjectProperty ; rdfs:range :D ;
+  rdfs:domain [ a owl:Class ; owl:unionOf ( :A [ a owl:Class ; owl:unionOf ( :B :C ) ] ) ] .
+:limited a owl:ObjectProperty ; rdfs:range :D ;
+  rdfs:domain [ a owl:Class ; owl:intersectionOf ( :A
+    [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom [ a owl:Class ; owl:unionOf ( :B :C ) ] ]
+    [ a owl:Restriction ; owl:onProperty :q ; owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger ; owl:onClass :B ]
+    [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] ) ] .
+:hasBadge a owl:ObjectProperty . :p a owl:ObjectProperty . :q a owl:ObjectProperty . :r a owl:ObjectProperty .`;
+  const r = await parseRdfToGraph(ttl, { path: 'nested.ttl' });
+  const groups = r.graphData.classExpressions ?? [];
+  const byProp = (name: string) => groups.find((g) => g.propertyName === name);
+
+  it('a complement of a union is drawn against the union\'s classes, with the full formula', () => {
+    const g = byProp('currentProject');
+    expect(g).toMatchObject({ operator: 'complement', position: 'range', counterparts: ['Person'], formula: '¬(Agent ∪ OnlineAccount)', nested: true });
+    expect(g!.members.sort()).toEqual(['Agent', 'OnlineAccount']);
+  });
+
+  it('an intersection with a restriction operand is drawn against its named class only', () => {
+    const g = byProp('worksOn');
+    expect(g).toMatchObject({ operator: 'intersection', members: ['Employee'], formula: 'Employee ∩ ∃hasBadge.Badge', nested: true });
+  });
+
+  it('nested unions collect every named class, parenthesising the inner one', () => {
+    const g = byProp('linked');
+    expect(g?.members.sort()).toEqual(['A', 'B', 'C']);
+    expect(g?.formula).toBe('A ∪ (B ∪ C)');
+  });
+
+  it('writes ∀, qualified cardinality and Self restrictions in DL notation', () => {
+    expect(byProp('limited')?.formula).toBe('A ∩ ∀p.(B ∪ C) ∩ ≥2 q.B ∩ ∃r.Self');
+  });
+
+  it('flat expressions are marked not nested, with a plain formula', () => {
+    const u = groups.find((g) => g.propertyName === 'linked');
+    expect(u?.nested).toBe(true);
+    const flat = (r.graphData.classExpressions ?? []).filter((g) => !g.nested);
+    expect(flat).toHaveLength(0); // every expression in this fixture is nested
+  });
+});

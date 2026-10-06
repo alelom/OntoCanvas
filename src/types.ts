@@ -163,6 +163,11 @@ export interface ClassExpressionGroup {
   members: string[];
   /** oneOf only: the enumerated individuals (local names) or literal values, in list order. */
   values?: string[];
+  /** The whole expression in description-logic notation, e.g. `¬(Agent ∪ OnlineAccount)` (#63). */
+  formula?: string;
+  /** Whether the expression has anonymous operands (nested expressions or restrictions), so the members
+   * alone don't say it all and the formula should be shown. */
+  nested?: boolean;
   /** Local name of the property whose domain or range is this expression. */
   propertyName: string;
   /** Full URI of the property. */
