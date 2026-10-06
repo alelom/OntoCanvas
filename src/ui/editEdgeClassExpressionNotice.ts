@@ -10,9 +10,18 @@ import { OPERATOR_INFO } from './classExpressionModal';
 
 const NOTICE_ID = 'editEdgeClassExpressionNotice';
 
-/** The class-expression group for the given property whose members include either end of the edge, or null. A
- * domain union matches on the edge's `from`, a range union on its `to`. `property` may be a local
- * name or a full URI (edge types can be either). */
+/** Whether the edge from→to is one the group's expression produced. Object property: a member on the
+ * expression's end (`from` for a domain expression, `to` for a range one) and a counterpart on the
+ * other. Data property (from = to = the stub's class): that class owns a marked stub — a member for a
+ * domain expression, a counterpart (domain class) for a range one. */
+function edgeBelongsTo(g: ClassExpressionGroup, from: string, to: string): boolean {
+  if (g.propertyKind === 'data') return (g.position === 'domain' ? g.members : g.counterparts).includes(from);
+  const [exprEnd, otherEnd] = g.position === 'domain' ? [from, to] : [to, from];
+  return g.members.includes(exprEnd) && g.counterparts.includes(otherEnd);
+}
+
+/** The class-expression group for the given property that produced the edge from→to, or null.
+ * `property` may be a local name or a full URI (edge types can be either). */
 export function findClassExpressionGroupForEdge(
   groups: ClassExpressionGroup[] | undefined,
   from: string,
@@ -23,7 +32,7 @@ export function findClassExpressionGroupForEdge(
   return (
     groups.find(
       (g) =>
-        [...g.members, ...(g.hosts ?? [])].some((c) => c === from || c === to) &&
+        edgeBelongsTo(g, from, to) &&
         (g.propertyName === property ||
           g.propertyUri === property ||
           (!!g.propertyUri && (g.propertyUri.endsWith(`#${property}`) || g.propertyUri.endsWith(`/${property}`)))),

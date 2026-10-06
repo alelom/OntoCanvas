@@ -110,7 +110,9 @@ export function showClassExpressionModal(group: ClassExpressionGroup): void {
   // The opposite end of the property: its range when the expression is on the domain, and vice versa.
   const counterpartLabel = group.position === 'domain' ? 'Range' : 'Domain';
   const lines: string[] = [];
-  if (group.counterpart) lines.push(`${counterpartLabel}: <code>${escapeHtml(group.counterpart)}</code>`);
+  if (group.counterparts.length > 0) {
+    lines.push(`${counterpartLabel}: ${group.counterparts.map((c) => `<code>${escapeHtml(c)}</code>`).join(', ')}`);
+  }
   if (group.operator === 'oneOf' && group.members.length > 0) {
     lines.push(`Drawn against the class${group.members.length > 1 ? 'es' : ''} of these individuals: ${group.members.map((m) => `<code>${escapeHtml(m)}</code>`).join(', ')}`);
   }

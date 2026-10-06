@@ -131,7 +131,7 @@ function isDrawable(
  * as groups to render. Only members that are classes in the graph are kept, so e.g. a data property's
  * union of datatypes is naturally ignored. An enumeration of literals (a data range) or of individuals
  * with no class on the graph has no members; it is anchored on the opposite end instead (the
- * counterpart class for an object property, the domain classes' stubs for a data property).
+ * counterpart classes for an object property, the domain classes' stubs for a data property).
  */
 export function extractClassExpressionGroups(store: Store, seenClasses: Set<string>): ClassExpressionGroup[] {
   const groups: ClassExpressionGroup[] = [];
@@ -158,27 +158,19 @@ export function extractClassExpressionGroups(store: Store, seenClasses: Set<stri
           const name = extractLocalName(uri);
           if (seenClasses.has(name) && !members.includes(name)) members.push(name);
         }
-        // The single named class on the other end (the connector target), if it's in the graph.
-        let counterpart: string | undefined;
-        for (const cq of store.getQuads(subj, DataFactory.namedNode(RDFS + otherSide), null, null)) {
-          if (cq.object.termType === 'NamedNode') {
-            const cn = extractLocalName(cq.object.value);
-            if (seenClasses.has(cn)) { counterpart = cn; break; }
-          }
-        }
-        // A data property's stubs hang off its domain classes, so a range expression marks those.
-        const hosts = propertyKind === 'data' && exprSide === 'range' ? sideClasses(store, subj, 'domain', seenClasses) : undefined;
-        const anchorAvailable = propertyKind === 'data' ? (hosts ?? members).length > 0 : !!counterpart;
+        // The classes on the other end (edge targets), resolved through an expression there too. A data
+        // property's stubs hang off its domain classes, so for a range expression these carry the mark.
+        const counterparts = sideClasses(store, subj, otherSide, seenClasses);
+        const stubOwners = exprSide === 'domain' ? members : counterparts;
+        const anchorAvailable = propertyKind === 'data' ? stubOwners.length > 0 : counterparts.length > 0;
         if (!isDrawable(expr.operator, members, expr.values, anchorAvailable)) continue;
-        if (propertyKind === 'data' && hosts && hosts.length === 0) continue;
         groups.push({
           operator: expr.operator,
           members,
           ...(expr.values ? { values: expr.values } : {}),
-          ...(hosts ? { hosts } : {}),
           propertyName: extractLocalName(propUri),
           propertyUri: propUri,
-          counterpart,
+          counterparts,
           position: exprSide,
           propertyKind,
         });

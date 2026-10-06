@@ -7,7 +7,7 @@ const domainGroup: ClassExpressionGroup = {
   members: ['Section', 'Detail'],
   propertyName: 'hasOrientation',
   propertyUri: 'http://example.org/o#hasOrientation',
-  counterpart: 'OrientationValue',
+  counterparts: ['OrientationValue'],
   position: 'domain',
   propertyKind: 'object',
 };
@@ -17,7 +17,7 @@ const rangeGroup: ClassExpressionGroup = {
   members: ['Wall', 'Floor'],
   propertyName: 'hasPart',
   propertyUri: 'http://example.org/o#hasPart',
-  counterpart: 'Room',
+  counterparts: ['Room'],
   position: 'range',
   propertyKind: 'object',
 };
@@ -68,9 +68,9 @@ describe('findClassExpressionGroupForEdge: other operators (#60, #61, #62)', () 
 });
 
 describe('findClassExpressionGroupForEdge: data-property range expression (#62)', () => {
-  it('matches a data-property stub on one of the group hosts (the domain classes)', () => {
+  it('matches a data-property stub on one of the counterparts (the domain classes)', () => {
     const paper: ClassExpressionGroup = {
-      operator: 'oneOf', members: [], values: ['A0', 'A1'], hosts: ['Sheet'],
+      operator: 'oneOf', members: [], values: ['A0', 'A1'], counterparts: ['Sheet'],
       propertyName: 'paperSize', position: 'range', propertyKind: 'data',
     };
     expect(findClassExpressionGroupForEdge([paper], 'Sheet', 'Sheet', 'paperSize')).toBe(paper);

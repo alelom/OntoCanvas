@@ -151,18 +151,16 @@ export interface ClassExpressionGroup {
   members: string[];
   /** oneOf only: the enumerated individuals (local names) or literal values, in list order. */
   values?: string[];
-  /** Data-property groups only: classes whose data-property stub nodes carry the mark, when they are
-   * not the members (a range expression is marked on the stubs of the property's domain classes). */
-  hosts?: string[];
-  /** Local name of the property whose domain is this expression. */
+  /** Local name of the property whose domain or range is this expression. */
   propertyName: string;
   /** Full URI of the property. */
   propertyUri?: string;
-  /** Local name of the single class on the OPPOSITE end of the property (the one the connector runs
-   * to): the range class when the union is on the domain, the domain class when it is on the range.
-   * Absent if that end isn't a single named class in the graph. */
-  counterpart?: string;
-  /** Which end of the property the union sits on. */
+  /** Local names of the in-graph classes on the OPPOSITE end of the property (resolved through an
+   * expression there too): the range classes for a domain expression, the domain classes for a range
+   * expression. Each member edge runs between a member and a counterpart. For a data property's range
+   * expression these are the classes whose stub nodes carry the mark. */
+  counterparts: string[];
+  /** Which end of the property the expression sits on. */
   position: 'domain' | 'range';
   /** Whether the carrying property is an object or datatype property. */
   propertyKind: 'object' | 'data';

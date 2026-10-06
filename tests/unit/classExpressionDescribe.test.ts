@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { describeClassExpression, expressionExample } from '../../src/ui/classExpressionModal';
 import type { ClassExpressionGroup } from '../../src/types';
 
-const base = { propertyUri: undefined, counterpart: undefined, propertyKind: 'object' as const };
+const base = { propertyUri: undefined, counterparts: [], propertyKind: 'object' as const };
 
 describe('describeClassExpression (hover tooltip)', () => {
   it('union: lists members joined by ∪', () => {
@@ -21,7 +21,7 @@ describe('describeClassExpression (hover tooltip)', () => {
   });
 
   it('#62 oneOf: lists the enumerated values in braces', () => {
-    const g: ClassExpressionGroup = { ...base, operator: 'oneOf', members: [], values: ['A0', 'A1'], propertyName: 'p', position: 'range', propertyKind: 'data', hosts: ['Sheet'] };
+    const g: ClassExpressionGroup = { ...base, operator: 'oneOf', members: [], values: ['A0', 'A1'], propertyName: 'p', position: 'range', propertyKind: 'data', counterparts: ['Sheet'] };
     expect(describeClassExpression(g).split('\n')[0]).toBe('Range enumeration: {A0, A1}');
   });
 });

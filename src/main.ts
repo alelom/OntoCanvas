@@ -64,12 +64,10 @@ import {
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
 import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
-import { createClassExpressionOverlay } from './ui/classExpressionOverlayRenderer';
-import { showClassExpressionModal, describeClassExpression } from './ui/classExpressionModal';
+import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
-const classExprOverlay = createClassExpressionOverlay();
 import {
   type DisplayConfig,
   type ExternalOntologyReference,
@@ -3989,9 +3987,11 @@ function setupNetworkSelectionAndNavigation(
   net: Network,
   container: HTMLElement
 ): void {
-  // Draw anonymous class-expression groupings (union domains etc.) on top of the graph.
-  net.on('afterDrawing', (ctx: CanvasRenderingContext2D) =>
-    classExprOverlay.draw(net as unknown as Parameters<typeof classExprOverlay.draw>[0], ctx, rawData?.classExpressions ?? []));
+  // Draw anonymous class-expression marks (∪ ∩ ¬ {}) on top of the graph.
+  const classExprMarks = attachClassExpressionMarks(
+    net as unknown as Parameters<typeof attachClassExpressionMarks>[0],
+    () => rawData?.classExpressions ?? [],
+  );
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
@@ -4092,9 +4092,9 @@ function setupNetworkSelectionAndNavigation(
       }
     }
     // Hovering a class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
-    const exprGroup = classExprOverlay.groupAt(net.DOMtoCanvas(coords));
-    if (exprGroup) {
-      showEdgeLabelTooltip(describeClassExpression(exprGroup), e.clientX, e.clientY);
+    const exprTip = classExprMarks.tooltipAt(net.DOMtoCanvas(coords));
+    if (exprTip) {
+      showEdgeLabelTooltip(exprTip, e.clientX, e.clientY);
       return;
     }
     hideEdgeLabelTooltip();
@@ -4216,21 +4216,15 @@ function setupNetworkSelectionAndNavigation(
     const clickedNode = params.nodes[0] as string | undefined;
     const ctrlKey = params.event?.srcEvent?.ctrlKey ?? false;
 
-    // A click on a class-expression union mark opens its details. Checked before node handling so a
-    // data-property ∪ badge (which overlaps its stub node) wins over selecting the node underneath.
+    // A click on a class-expression mark opens its details. Checked before node handling so a
+    // data-property badge (which overlaps its stub node) wins over selecting the node underneath.
     if (!addNodeMode && container) {
       let dom = params.pointer?.DOM ?? null;
       if (!dom && params.event?.srcEvent) {
         const rect = container.getBoundingClientRect();
         dom = { x: params.event.srcEvent.clientX - rect.left, y: params.event.srcEvent.clientY - rect.top };
       }
-      if (dom) {
-        const group = classExprOverlay.groupAt(net.DOMtoCanvas(dom));
-        if (group) {
-          showClassExpressionModal(group);
-          return;
-        }
-      }
+      if (dom && classExprMarks.openAt(net.DOMtoCanvas(dom))) return;
     }
 
     // If in add node mode and no node clicked, show the add node modal
