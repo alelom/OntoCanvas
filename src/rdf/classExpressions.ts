@@ -57,7 +57,7 @@ const LIST_OPERATORS: Array<[ClassExpressionOperator, string]> = [
 ];
 
 /** Named rdf:types of an individual, excluding OWL/RDF(S) vocabulary such as owl:NamedIndividual. */
-function individualTypeUris(store: Store, individual: RdfTerm): string[] {
+export function individualTypeUris(store: Store, individual: RdfTerm): string[] {
   return store
     .getQuads(individual as never, DataFactory.namedNode(RDF + 'type'), null, null)
     .map((q) => q.object)

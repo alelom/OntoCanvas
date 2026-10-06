@@ -11,6 +11,7 @@ import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
+import { mergeRestrictionKinds, readObjectRestriction } from './rdf/restrictions';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -411,15 +412,13 @@ function buildParseResultFromStore(
         const minCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'minCardinality');
         const maxCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'maxCardinality');
         
-        const targetQuad = someValuesFrom ?? onClass;
-        if (!onProperty || !targetQuad) {
+        // Which kind of restriction this is, and the named class its edge points to (#63): ∃ some, ∀ only,
+        // ∋ hasValue (the individual's class), ⟲ hasSelf (the subject), qualified/unqualified cardinality.
+        const restriction = onProperty ? readObjectRestriction(store, candidateBlank as RdfTerm, subjUri) : null;
+        if (!onProperty || !restriction) {
           continue; // Skip this blank node, continue to next one
         }
-        const target = targetQuad.object;
-        if (target.termType !== 'NamedNode') {
-          continue; // Skip this blank node, continue to next one
-        }
-        const targetUri = (target as { value: string }).value;
+        const targetUri = restriction.targetUri;
         const targetName = extractLocalName(targetUri);
         
         // Check if target class exists
@@ -442,8 +441,9 @@ function buildParseResultFromStore(
         }
         const propName = isExternalProperty ? propUri : extractLocalName(propUri);
 
-        // Create a unique key for this restriction to avoid processing duplicates
-        const restrictionKey = `${subjName}:${propUri}:${targetUri}`;
+        // Create a unique key for this restriction to avoid processing duplicates (per kind, so a ∀ and a
+        // ∃ on the same property and class are both read, then merged into one edge below)
+        const restrictionKey = `${subjName}:${propUri}:${targetUri}:${restriction.kind}`;
         if (processedRestrictions.has(restrictionKey)) {
           continue; // Already processed this restriction
         }
@@ -454,8 +454,13 @@ function buildParseResultFromStore(
           foundDescribesRestriction = true;
         }
 
+        // Only ∃ and qualified restrictions carry an implied [1..*]; owl:cardinality (unqualified, exact) is
+        // read like qualifiedCardinality.
+        const exactCard = qualCard ?? allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'cardinality');
         const cardinality = parseCardinalityFromRestriction(
-          minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom, propName, onClass
+          minQual, maxQual, exactCard, minCard, maxCard,
+          restriction.kind === 'some' ? someValuesFrom : undefined, propName,
+          restriction.kind === 'qualified' ? onClass : undefined
         );
 
         const key = `${subjName}->${targetName}:${propName}`;
@@ -465,12 +470,25 @@ function buildParseResultFromStore(
           (e) => e.from === subjName && e.to === targetName && e.type === propName
         );
         
+        // A second restriction on the same property and class (e.g. ∀ next to ∃) joins the existing edge.
+        const existingRestriction = existingEdgeIndex >= 0 && edges[existingEdgeIndex].isRestriction ? edges[existingEdgeIndex] : null;
+        if (existingRestriction) {
+          existingRestriction.restrictionKinds = mergeRestrictionKinds(existingRestriction.restrictionKinds, restriction.kind);
+          if (existingRestriction.minCardinality == null && existingRestriction.maxCardinality == null) {
+            Object.assign(existingRestriction, cardinality);
+          }
+          if (restriction.value) existingRestriction.restrictionValue = restriction.value;
+          continue;
+        }
+
         const restrictionEdge: GraphEdge = { 
           from: subjName, 
           to: targetName, 
           type: propName, 
           ...cardinality,
           isRestriction: true, // Mark as restriction (from OWL restriction)
+          restrictionKinds: [restriction.kind],
+          ...(restriction.value ? { restrictionValue: restriction.value } : {}),
         };
         
         // Debug: Log restriction edge creation for contains edges

@@ -3,6 +3,7 @@ import type { ExternalOntologyReference } from '../storage';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
 import { extractLocalName } from '../parser';
+import { RESTRICTION_GLYPH } from '../rdf/restrictions';
 
 export const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
 
@@ -91,13 +92,16 @@ export function getRelationshipLabel(
   return type;
 }
 
-/** Format edge label for graph display, using relationship label and optional cardinality. */
+/** Format edge label for graph display: restriction glyphs (∃ ∀ ∋ ⟲, #63), relationship label, the
+ * hasValue individual, and optional cardinality — e.g. "∃∀ hasPart [1..*]", "∋ hasStatus {Current}". */
 export function getEdgeDisplayLabel(
   edge: GraphEdge,
   objectProperties: ObjectPropertyInfo[],
   externalOntologyReferences: ExternalOntologyReference[]
 ): string {
-  const baseLabel = getRelationshipLabel(edge.type, objectProperties, externalOntologyReferences);
+  const glyphs = (edge.restrictionKinds ?? []).map((k) => RESTRICTION_GLYPH[k] ?? '').join('');
+  const value = edge.restrictionValue != null ? ` {${edge.restrictionValue}}` : '';
+  const baseLabel = `${glyphs ? `${glyphs} ` : ''}${getRelationshipLabel(edge.type, objectProperties, externalOntologyReferences)}${value}`;
   const min = edge.minCardinality;
   const max = edge.maxCardinality;
   if (min == null && max == null) return baseLabel;

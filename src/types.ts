@@ -131,7 +131,16 @@ export interface GraphEdge {
   onClass?: string;
   /** Whether this edge comes from an OWL restriction (true) or from domain/range definition (false/undefined) */
   isRestriction?: boolean;
+  /** The restriction kinds this edge stands for (several when e.g. both ∃ and ∀ restrict the same
+   * property to the same class). See src/rdf/restrictions.ts (#63). */
+  restrictionKinds?: RestrictionKind[];
+  /** For a `value` (owl:hasValue) restriction: the individual's local name. */
+  restrictionValue?: string;
 }
+
+/** OWL restriction kinds drawn as edges: ∃ some, ∀ only, ∋ value, ⟲ self, and qualified / unqualified
+ * cardinality (#63). */
+export type RestrictionKind = 'some' | 'only' | 'value' | 'self' | 'qualified' | 'unqualified';
 
 /**
  * An anonymous OWL class expression (e.g. owl:unionOf) that appears in a property's rdfs:domain.
