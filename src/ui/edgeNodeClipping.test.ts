@@ -20,7 +20,7 @@ function recordingCtx(clipped: Array<[number, number]>) {
 /** A network fake with an empty edge pass, enough for the clip to run each frame. */
 function fakeNet(nodes: Record<string, unknown>) {
   return {
-    renderer: { _drawEdges: (_ctx: CanvasRenderingContext2D) => {} },
+    renderer: { _drawEdges: (_ctx: CanvasRenderingContext2D) => {}, _drawArrows: (_ctx: CanvasRenderingContext2D) => {} },
     body: { nodes, edges: {}, edgeIndices: [] as string[] },
   };
 }
