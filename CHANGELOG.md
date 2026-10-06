@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/alelom/OntoCanvas/compare/v1.23.0...v1.24.0) (2026-10-06)
+
+
+### Features
+
+* **#68:** copy a term's URI from the context menu and link the selected term ([57448cb](https://github.com/alelom/OntoCanvas/commit/57448cbf51d4b23fee9afeb72736569d3074ca61)), closes [#68](https://github.com/alelom/OntoCanvas/issues/68) [#localName](https://github.com/alelom/OntoCanvas/issues/localName)
+
 # [1.23.0](https://github.com/alelom/OntoCanvas/compare/v1.22.4...v1.23.0) (2026-10-05)
 
 
