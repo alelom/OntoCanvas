@@ -42,9 +42,13 @@ export function clipOutNodes(ctx: CanvasRenderingContext2D, nodes: Record<string
 
 /** Clip node shapes out of `net`'s edge lines on every frame. No-op if vis's edge pass can't be patched. */
 export function hideEdgeLinesUnderNodes(net: unknown): void {
-  const nodes = (net as { body?: { nodes?: Record<string, ClipNodeLike> } }).body?.nodes;
-  if (!nodes) return;
+  const body = (net as { body?: { nodes?: Record<string, ClipNodeLike> } }).body;
+  if (!body) return;
   edgePass(net)?.setLineClip((ctx) => {
+    // Read body.nodes every frame: vis replaces the object on setData, so a reference taken at setup
+    // would keep clipping the first layout's nodes instead of the live, draggable ones.
+    const nodes = body.nodes;
+    if (!nodes) return;
     try {
       clipOutNodes(ctx, nodes);
     } catch {
