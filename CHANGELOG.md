@@ -1,3 +1,10 @@
+## [1.25.1](https://github.com/alelom/OntoCanvas/compare/v1.25.0...v1.25.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **#78:** FOAF example loads the current spec; URL loads resolve relative IRIs ([a6885e4](https://github.com/alelom/OntoCanvas/commit/a6885e4a066a4ea9595f9b7770bac90c93157b53))
+
 # [1.25.0](https://github.com/alelom/OntoCanvas/compare/v1.24.0...v1.25.0) (2026-10-06)
 
 
