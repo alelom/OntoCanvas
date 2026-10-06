@@ -53,9 +53,14 @@ export async function loadOntologyFromContent(
   const contentType =
     options?.contentType ??
     (pathHasRdfExtension(pathHint) ? undefined : inferContentTypeFromContent(content));
+  // A document fetched from a URL resolves relative IRIs against that URL (RDF's base IRI is the
+  // retrieval location); without it e.g. FOAF's rdf:resource="../foafsig" fails to parse. A local file
+  // has no meaningful location, so it gets none.
+  const baseIRI = /^https?:\/\//i.test(pathHint) ? pathHint : undefined;
   const parseResult = await parseRdfToGraph(content, {
     path: pathHint,
     contentType,
+    ...(baseIRI ? { baseIRI } : {}),
   });
 
   const prefixMap = looksLikeTurtle(content) ? extractPrefixesFromTtl(content) : {};
