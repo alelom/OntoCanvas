@@ -120,3 +120,16 @@ export type MarkLayer = 'edges' | 'nodes';
 export function markLayer(kind: MarkKind): MarkLayer {
   return kind === 'connector' || kind === 'edgeBadge' ? 'edges' : 'nodes';
 }
+
+/** Visible edge length (canvas units) at which on-edge badges are drawn at their nominal size. */
+export const BADGE_REFERENCE_LENGTH = 120;
+/** Limits on the badge scale, so badges stay legible on very short edges and modest on long ones. */
+export const BADGE_MIN_SCALE = 0.55;
+export const BADGE_MAX_SCALE = 1.3;
+
+/** Size factor for a badge on an edge whose visible part is `visibleLength` long: proportional to the
+ * length, clamped to [BADGE_MIN_SCALE, BADGE_MAX_SCALE]; 1 when the length is unknown. */
+export function badgeScale(visibleLength: number | null): number {
+  if (visibleLength == null || !Number.isFinite(visibleLength)) return 1;
+  return Math.min(BADGE_MAX_SCALE, Math.max(BADGE_MIN_SCALE, visibleLength / BADGE_REFERENCE_LENGTH));
+}

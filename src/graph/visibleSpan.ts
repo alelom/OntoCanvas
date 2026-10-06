@@ -30,6 +30,23 @@ export function chordT(p: Point, a: Point, b: Point): number {
   return ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
 }
 
+/** Sample the path between the span's border crossings; `visible` is the length left after trimming. */
+function sampleSpan(sample: (t: number) => Point, span: VisibleSpan, samples: number) {
+  const pts: Point[] = [];
+  for (let i = 0; i <= samples; i++) pts.push(sample(span.tStart + ((span.tEnd - span.tStart) * i) / samples));
+  const cumulative = [0];
+  for (let i = 1; i < pts.length; i++) {
+    cumulative.push(cumulative[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  }
+  const visible = cumulative[cumulative.length - 1] - span.trimStart - span.trimEnd;
+  return { pts, cumulative, visible };
+}
+
+/** On-screen length of the visible span (outline to outline, arrowheads excluded); 0 if none. */
+export function visibleSpanLength(sample: (t: number) => Point, span: VisibleSpan, samples = 24): number {
+  return Math.max(0, sampleSpan(sample, span, samples).visible);
+}
+
 /**
  * The point at `fraction` (0 = span start, 1 = span end) of the visible span, by distance along the
  * path rather than by curve parameter (a Bézier's parameter isn't proportional to length). The path
@@ -42,14 +59,7 @@ export function pointAlongVisibleSpan(
   fraction: number,
   samples = 24,
 ): Point | null {
-  const pts: Point[] = [];
-  for (let i = 0; i <= samples; i++) pts.push(sample(span.tStart + ((span.tEnd - span.tStart) * i) / samples));
-  const cumulative = [0];
-  for (let i = 1; i < pts.length; i++) {
-    cumulative.push(cumulative[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
-  }
-  const total = cumulative[cumulative.length - 1];
-  const visible = total - span.trimStart - span.trimEnd;
+  const { pts, cumulative, visible } = sampleSpan(sample, span, samples);
   if (!(visible > 0)) return null;
   const target = span.trimStart + visible * fraction;
   for (let i = 1; i < pts.length; i++) {

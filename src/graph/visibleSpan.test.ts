@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointAlongVisibleSpan, chordT, arrowheadLength } from './visibleSpan';
+import { pointAlongVisibleSpan, visibleSpanLength, chordT, arrowheadLength } from './visibleSpan';
 import type { Point } from './classExpressionOverlay';
 
 /** A straight path from (0,0) to (100,0). */
@@ -54,5 +54,12 @@ describe('arrowheadLength', () => {
   it('matches vis-network: 15 × scaleFactor + 3 × edge width', () => {
     expect(arrowheadLength(1, 1)).toBe(18);
     expect(arrowheadLength(0.5, 2)).toBe(13.5);
+  });
+});
+
+describe('visibleSpanLength', () => {
+  it('is the on-screen length between the outlines, less the arrowheads', () => {
+    expect(visibleSpanLength(line, { tStart: 0.2, tEnd: 0.8, trimStart: 0, trimEnd: 20 })).toBeCloseTo(40, 5);
+    expect(visibleSpanLength(line, { tStart: 0.2, tEnd: 0.3, trimStart: 6, trimEnd: 6 })).toBe(0);
   });
 });

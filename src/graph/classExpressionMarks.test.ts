@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { markKind, markLayer, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
+import { markKind, markLayer, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
 import type { ClassExpressionGroup } from '../types';
 
 const g = (o: Partial<ClassExpressionGroup>): ClassExpressionGroup =>
@@ -76,5 +76,25 @@ describe('markLayer', () => {
     expect(markLayer('edgeBadge')).toBe('edges');
     expect(markLayer('nodeBadge')).toBe('nodes');
     expect(markLayer('stubBadge')).toBe('nodes');
+  });
+});
+
+describe('badgeScale: badges follow the visible edge length, within limits', () => {
+  it('is 1 at the reference length and grows / shrinks proportionally', () => {
+    expect(badgeScale(BADGE_REFERENCE_LENGTH)).toBe(1);
+    expect(badgeScale(BADGE_REFERENCE_LENGTH * 0.8)).toBeCloseTo(0.8, 5);
+    expect(badgeScale(BADGE_REFERENCE_LENGTH * 1.2)).toBeCloseTo(1.2, 5);
+  });
+
+  it('is clamped so badges never get unreadably small or oversized', () => {
+    expect(badgeScale(1)).toBe(BADGE_MIN_SCALE);
+    expect(badgeScale(0)).toBe(BADGE_MIN_SCALE);
+    expect(badgeScale(100000)).toBe(BADGE_MAX_SCALE);
+    expect(BADGE_MIN_SCALE).toBeGreaterThan(0.4);
+    expect(BADGE_MAX_SCALE).toBeLessThan(1.6);
+  });
+
+  it('keeps the default size when the length is unknown', () => {
+    expect(badgeScale(null)).toBe(1);
   });
 });

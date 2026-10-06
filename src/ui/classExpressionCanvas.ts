@@ -4,7 +4,7 @@
  * See issues #59-#62.
  */
 import { glyphFontSize, type NodeBox, type Point } from '../graph/classExpressionOverlay';
-import { arrowheadLength, chordT, pointAlongVisibleSpan, type VisibleSpan } from '../graph/visibleSpan';
+import { arrowheadLength, chordT, pointAlongVisibleSpan, visibleSpanLength, type VisibleSpan } from '../graph/visibleSpan';
 
 /** A vis edge, as far as the overlay pokes at it. `edgeType.getPoint(t)` samples the real (possibly
  * curved) rendered path at fraction t (0 = `from`, 1 = `to`), tracking the via-node live. */
@@ -87,10 +87,14 @@ function arrowTrim(edge: EdgeLike, end: 'from' | 'to'): number {
   return arrow?.enabled ? arrowheadLength(arrow.scaleFactor ?? 1, edge.options?.width ?? 1) : 0;
 }
 
-/** The point at `fraction` of the edge's VISIBLE part — between the two node outlines, less any
- * arrowhead — measured from `domainNode`'s end, by distance along the real (curved) path. Null if the
- * outlines can't be resolved (e.g. not laid out yet) or nothing is visible. */
-function visibleEdgePoint(edge: EdgeLike, domainNode: string, fraction: number, ctx: CanvasRenderingContext2D): Point | null {
+/** The edge's VISIBLE part — between the two node outlines, less any arrowhead — oriented from
+ * `domainNode`'s end, with a sampler for the real (curved) path. Null if the outlines can't be resolved
+ * (e.g. not laid out yet). */
+function visibleSpanOf(
+  edge: EdgeLike,
+  domainNode: string,
+  ctx: CanvasRenderingContext2D,
+): { sample: (t: number) => Point; span: VisibleSpan } | null {
   const et = edge.edgeType;
   const { from, to } = edge;
   if (!et?.getPoint || !et.findBorderPosition || !from || !to || from === to) return null;
@@ -105,7 +109,26 @@ function visibleEdgePoint(edge: EdgeLike, domainNode: string, fraction: number, 
   const toSide = { t: tTo as number, trim: arrowTrim(edge, 'to') };
   const [start, end] = edge.fromId === domainNode ? [fromSide, toSide] : [toSide, fromSide];
   const span: VisibleSpan = { tStart: start.t, tEnd: end.t, trimStart: start.trim, trimEnd: end.trim };
-  return pointAlongVisibleSpan((t) => et.getPoint!(t), span, fraction);
+  return { sample: (t) => et.getPoint!(t), span };
+}
+
+/** The point at `fraction` of the edge's visible part, measured from `domainNode`'s end by distance
+ * along the path. Null if the outlines can't be resolved or nothing is visible. */
+function visibleEdgePoint(edge: EdgeLike, domainNode: string, fraction: number, ctx: CanvasRenderingContext2D): Point | null {
+  const v = visibleSpanOf(edge, domainNode, ctx);
+  return v ? pointAlongVisibleSpan(v.sample, v.span, fraction) : null;
+}
+
+/** Length of the edge's visible part (outline to outline, arrowheads excluded), or null if the outlines
+ * can't be resolved. Used to size the badges drawn on it. */
+export function visibleEdgeLength(edge: EdgeLike | null, ctx: CanvasRenderingContext2D): number | null {
+  if (!edge?.fromId) return null;
+  try {
+    const v = visibleSpanOf(edge, edge.fromId, ctx);
+    return v ? visibleSpanLength(v.sample, v.span) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The point at fraction t measured from `domainNode`'s end along the edge, or null if the edge can't

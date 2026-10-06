@@ -19,12 +19,15 @@
  * - stubBadge (data property): the class→stub edge is too short for an edge mark, so a badge overlaps
  *   a corner of each stub node (domain → top-left, range → top-right); the stub label stays intact.
  *
- * Marks borrow the colour of the relationship they mark. Every mark is a hit-region so hovering
+ * Badges on edges scale with the edge's visible length (badgeScale, clamped), so they shrink on short
+ * edges and grow a little on long ones; corner badges keep a fixed size. Marks borrow the colour of the
+ * relationship they mark. Every mark is a hit-region so hovering
  * explains the expression and clicking opens its modal. Kept out of main.ts.
  */
 import type { ClassExpressionGroup } from '../types';
 import {
   badgeFraction,
+  badgeScale,
   centroid,
   cornerBadgeCenter,
   CornerStacker,
@@ -39,6 +42,7 @@ import {
 import { OPERATOR_INFO } from './classExpressionModal';
 import {
   colorOf,
+  visibleEdgeLength,
   dataStubId,
   drawArrowhead,
   drawBadge,
@@ -77,18 +81,20 @@ export interface ClassExpressionOverlay {
   groupAt(point: Point): ClassExpressionGroup | null;
 }
 
-/** The point on each member edge where the expression is "tapped", and the colour of those edges. */
+/** The point on each member edge where the expression is "tapped", the colour of those edges, and the
+ * badge scale for them: set by the SHORTEST member edge's visible length, so the badge fits it. */
 function memberEdgePoints(
   net: OverlayNet,
   ctx: CanvasRenderingContext2D,
   group: ClassExpressionGroup,
   counterpartId: string,
-): { points: Point[]; color: string | null } {
+): { points: Point[]; color: string | null; scale: number } {
   const t = badgeFraction(group.position);
   const points: Point[] = [];
+  const lengths: number[] = [];
   let color: string | null = null;
   const cpPos = nodePos(net, counterpartId);
-  if (!cpPos) return { points, color };
+  if (!cpPos) return { points, color, scale: 1 };
   for (const member of group.members) {
     const memberPos = nodePos(net, member);
     if (!memberPos) continue;
@@ -99,8 +105,10 @@ function memberEdgePoints(
     const [domainPos, rangePos] = group.position === 'domain' ? [memberPos, cpPos] : [cpPos, memberPos];
     // Sample on the real edge curve; fall back to a straight chord (domain→range) if unavailable.
     points.push(edgePoint(edge, domainNode, t, ctx) ?? lerp(domainPos, rangePos, t));
+    const length = visibleEdgeLength(edge, ctx);
+    if (length != null) lengths.push(length);
   }
-  return { points, color };
+  return { points, color, scale: badgeScale(lengths.length > 0 ? Math.min(...lengths) : null) };
 }
 
 export function createClassExpressionOverlay(): ClassExpressionOverlay {
@@ -110,7 +118,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
   let regions: Region[] = regionsByLayer.edges;
 
   function drawConnector(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
-    const { points: dots, color } = memberEdgePoints(net, ctx, group, counterpartId);
+    const { points: dots, color, scale } = memberEdgePoints(net, ctx, group, counterpartId);
     if (dots.length < 2) return;
     const stroke = color ?? FALLBACK_COLOR;
     const hub = centroid(dots);
@@ -129,8 +137,8 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
       ctx.lineTo(end.x, end.y);
       ctx.stroke();
       if (broken) {
-        drawArrowhead(ctx, end, d, ARROW_SIZE, stroke);
-        drawBadge(ctx, lerp(d, end, 0.5), SMALL_BADGE_RADIUS, SMALL_GLYPH_SIZE, stroke, glyph);
+        drawArrowhead(ctx, end, d, ARROW_SIZE * scale, stroke);
+        drawBadge(ctx, lerp(d, end, 0.5), SMALL_BADGE_RADIUS * scale, SMALL_GLYPH_SIZE * scale, stroke, glyph);
       }
       segments.push([d, end]);
     }
@@ -138,19 +146,19 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     ctx.fillStyle = stroke;
     for (const d of dots) {
       ctx.beginPath();
-      ctx.arc(d.x, d.y, DOT_RADIUS, 0, Math.PI * 2);
+      ctx.arc(d.x, d.y, DOT_RADIUS * scale, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (!broken) drawBadge(ctx, hub, HUB_RADIUS, HUB_GLYPH_SIZE, stroke, glyph);
-    regions.push({ group, center: hub, radius: broken ? 0 : HUB_RADIUS, segments });
+    if (!broken) drawBadge(ctx, hub, HUB_RADIUS * scale, HUB_GLYPH_SIZE * scale, stroke, glyph);
+    regions.push({ group, center: hub, radius: broken ? 0 : HUB_RADIUS * scale, segments });
   }
 
   function drawEdgeBadge(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
-    const { points, color } = memberEdgePoints(net, ctx, group, counterpartId);
+    const { points, color, scale } = memberEdgePoints(net, ctx, group, counterpartId);
     const at = points[0];
     if (!at) return;
-    drawBadge(ctx, at, HUB_RADIUS, HUB_GLYPH_SIZE, color ?? FALLBACK_COLOR, glyph);
-    regions.push({ group, center: at, radius: HUB_RADIUS, segments: [] });
+    drawBadge(ctx, at, HUB_RADIUS * scale, HUB_GLYPH_SIZE * scale, color ?? FALLBACK_COLOR, glyph);
+    regions.push({ group, center: at, radius: HUB_RADIUS * scale, segments: [] });
   }
 
   function drawCornerBadge(
