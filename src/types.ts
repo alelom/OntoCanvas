@@ -97,6 +97,9 @@ export interface DataPropertyInfo {
    * declared as a name only must stay distinguishable from a property that asserts xsd:string.
    */
   range: string | null;
+  /** When rdfs:range is an anonymous data range (facets, union, …): its readable form, e.g.
+   * `xsd:decimal [0.0, 1.0]`. `range` then holds just the base type, when there is one (#63). */
+  rangeExpression?: string;
   /**
    * Range this property inherits through rdfs:subPropertyOf from a super-property whose range is
    * declared *in the same loaded document*. Only set when `range` is null. Never resolved by

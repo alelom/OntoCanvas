@@ -14,6 +14,7 @@ import { DataFactory, type Store } from 'n3';
 import type { GraphEdge, RestrictionKind } from '../types';
 import { extractLocalName } from '../utils/localName';
 import { individualTypeUris, type RdfTerm } from './classExpressions';
+import { removeBlankNodeClosure } from './blankNodes';
 
 const OWL = 'http://www.w3.org/2002/07/owl#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -102,22 +103,13 @@ export function findRestrictionBlanks(store: Store, subjectUri: string, property
     });
 }
 
-/** Remove a blank node's triples, and those of any blank node it leaves unreferenced (nested lists etc.). */
-function removeBlankClosure(store: Store, node: RdfTerm): void {
-  for (const q of store.getQuads(node as never, null, null, null)) {
-    store.removeQuad(q);
-    const obj = q.object as RdfTerm;
-    if (obj.termType === 'BlankNode' && store.getQuads(null, null, obj as never, null).length === 0) removeBlankClosure(store, obj);
-  }
-}
-
 /** Remove one restriction of `subjectUri`: its rdfs:subClassOf link and the restriction's own triples,
  * leaving no orphaned blank nodes. */
 export function removeRestrictionBlank(store: Store, subjectUri: string, blank: RdfTerm): void {
   for (const q of store.getQuads(DataFactory.namedNode(subjectUri), DataFactory.namedNode(RDFS + 'subClassOf'), blank as never, null)) {
     store.removeQuad(q);
   }
-  removeBlankClosure(store, blank);
+  removeBlankNodeClosure(store, blank);
 }
 
 /** Plain-language detail of a restriction edge, one line per kind (for the read-only Edit-edge notice). */

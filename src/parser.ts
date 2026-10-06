@@ -18,6 +18,8 @@ import {
   readRestrictionCardinality,
   removeRestrictionBlank,
 } from './rdf/restrictions';
+import { describeDataRange } from './rdf/dataRanges';
+import { removeBlankNodeClosure } from './rdf/blankNodes';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -872,6 +874,7 @@ function buildParseResultFromStore(
       let label = propName;
       let comment: string | undefined = undefined;
       let range: string | null = null;
+      let rangeExpression: string | undefined;
       let domains: string[] = [];
       let hasGlobalDomain = false;
       
@@ -883,6 +886,7 @@ function buildParseResultFromStore(
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'range') {
           range = resolveDatatypeRangeValue(store, q.object as RdfTerm);
+          rangeExpression = describeDataRange(store, q.object as RdfTerm) ?? undefined;
         } else if (pred === RDFS + 'domain') {
           const domainUri = (q.object as { value?: string }).value;
           if (domainUri === OWL + 'Thing') {
@@ -919,6 +923,7 @@ function buildParseResultFromStore(
         label: String(label),
         comment,
         range,
+        ...(rangeExpression ? { rangeExpression } : {}),
         inheritedRange: range ? null : findInheritedRange(store, propUri),
         domains,
         hasGlobalDomain,
@@ -1066,6 +1071,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     // substituting a default, so a typing stub stays distinguishable from an asserted xsd:string.
     const rangeQuad = store.getQuads(subj, RDFS + 'range', null, null)[0];
     const range = resolveDatatypeRangeValue(store, rangeQuad?.object as RdfTerm | undefined);
+    const rangeExpression = rangeQuad ? describeDataRange(store, rangeQuad.object as RdfTerm) : null;
     
     // Extract domain(s) - rdfs:domain can appear multiple times
     const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
@@ -1095,6 +1101,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       label: String(label),
       comment: comment || undefined,
       range,
+      ...(rangeExpression ? { rangeExpression } : {}),
       inheritedRange: range ? null : findInheritedRange(store, subjUri),
       domains,
       hasGlobalDomain,
@@ -2021,7 +2028,12 @@ export function updateDataPropertyRangeInStore(
   const rangePred = DataFactory.namedNode(RDFS + 'range');
   const rangeQuads = store.getQuads(subject, rangePred, null, null);
   const graph = rangeQuads[0]?.graph ?? subjectQuads[0]?.graph ?? DataFactory.defaultGraph();
-  for (const rq of rangeQuads) store.removeQuad(rq);
+  for (const rq of rangeQuads) {
+    store.removeQuad(rq);
+    // An anonymous range (datatype restriction with facets, datatype union, …) goes with it entirely,
+    // rather than staying behind as stray blank-node triples (#63).
+    if (store.getQuads(null, null, rq.object, null).length === 0) removeBlankNodeClosure(store, rq.object as RdfTerm);
+  }
   if (rangeUri) {
     store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
   }

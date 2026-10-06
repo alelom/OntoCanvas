@@ -74,6 +74,7 @@ import { outlineTargets, type OutlineTargets } from './graph/searchOutline';
 import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
+import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { isEditableRestriction } from './rdf/restrictions';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -2410,6 +2411,8 @@ function showEditDataPropertyModal(name: string): void {
   rangeSel.disabled = isImported;
   rangeSel.style.opacity = isImported ? '0.5' : '1';
   rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
+  // An anonymous data range (facets, datatype union, …) can't be shown in the dropdown: spell it out (#63).
+  showDataRangeNotice(rangeSel, dp?.rangeExpression);
   const originalDomains = dp ? [...(dp.domains || [])] : [];
   (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
   if (domainsListEl && dp) {
@@ -3532,6 +3535,9 @@ function buildNetworkData(
       
       // Build tooltip: include comment if present, and add import hint if imported
       let tooltip = dp?.comment || '';
+      if (dp?.rangeExpression) {
+        tooltip = tooltip ? `${tooltip}\n\nRange: ${dp.rangeExpression}` : `Range: ${dp.rangeExpression}`;
+      }
       if (rangeDisplay.source !== 'asserted') {
         tooltip = tooltip ? `${tooltip}\n\n${rangeDisplay.tooltipNote}` : rangeDisplay.tooltipNote;
       }
