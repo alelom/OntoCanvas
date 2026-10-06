@@ -84,3 +84,29 @@ describe('class expression groups: intersection / complement / oneOf (#60, #61, 
     expect(op!.values).toBeUndefined();
   });
 });
+
+describe('class expressions whose edge cannot be drawn (FOAF made: domain Agent, range ¬Agent)', async () => {
+  const ttl = `@prefix : <http://example.org/o#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/o> a owl:Ontology .
+:Agent a owl:Class .
+:A a owl:Class .
+:B a owl:Class .
+:made a owl:ObjectProperty ; rdfs:domain :Agent ; rdfs:range [ a owl:Class ; owl:complementOf :Agent ] .
+:tagged a owl:ObjectProperty ; rdfs:domain [ a owl:Class ; owl:unionOf ( :A :B ) ] .`;
+  const r = await parseRdfToGraph(ttl, { path: 'made.ttl' });
+  const groups = r.graphData.classExpressions ?? [];
+
+  it('keeps the group even though its only edge would be a self-loop (not drawn)', () => {
+    const made = groups.find((x) => x.propertyName === 'made');
+    expect(made).toMatchObject({ operator: 'complement', position: 'range', members: ['Agent'], counterparts: ['Agent'] });
+    expect(r.graphData.edges.some((e) => e.from === 'Agent' && e.to === 'Agent' && e.type.endsWith('made'))).toBe(false);
+  });
+
+  it('keeps a domain expression with no range (no other end)', () => {
+    const tagged = groups.find((x) => x.propertyName === 'tagged');
+    expect(tagged).toMatchObject({ operator: 'union', position: 'domain', counterparts: [] });
+    expect(tagged!.members.sort()).toEqual(['A', 'B']);
+  });
+});

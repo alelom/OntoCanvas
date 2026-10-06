@@ -9,9 +9,9 @@ const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples/c
 /** The hand-testing examples (linked from the #59-#62 PR) must keep producing their marks. */
 describe('examples/class-expressions', () => {
   const cases: Array<[string, Record<string, number>]> = [
-    ['union.ttl', { union: 4 }],
+    ['union.ttl', { union: 5 }],
     ['intersection.ttl', { intersection: 4 }],
-    ['complement.ttl', { complement: 3 }],
+    ['complement.ttl', { complement: 4 }],
     ['oneOf.ttl', { oneOf: 4 }],
     ['all-class-expressions.ttl', { union: 2, oneOf: 2, intersection: 2, complement: 1 }],
   ];

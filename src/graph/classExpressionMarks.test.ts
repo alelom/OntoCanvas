@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { markKind, markLayer, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
+import { markKind, markLayer, nodeBadgeTargets, partitionByEdge, propertyEdgeIds, badgeScale, BADGE_REFERENCE_LENGTH, BADGE_MIN_SCALE, BADGE_MAX_SCALE, badgeFraction, cornerBadgeCenter, glyphFontSize, CornerStacker } from './classExpressionOverlay';
 import type { ClassExpressionGroup } from '../types';
 
 const g = (o: Partial<ClassExpressionGroup>): ClassExpressionGroup =>
@@ -26,8 +26,12 @@ describe('markKind: which mark a group gets (#59-#62)', () => {
     expect(markKind(g({ operator: 'oneOf', members: [], values: ['i'] }))).toBe('nodeBadge');
   });
 
-  it('nothing to draw without a counterpart for object groups', () => {
-    expect(markKind(g({ counterparts: [] }))).toBeNull();
+  it('an object group with no other end (no range / domain, or owl:Thing) is badged on its own classes', () => {
+    expect(markKind(g({ counterparts: [] }))).toBe('nodeBadge');
+    expect(markKind(g({ operator: 'complement', members: ['A'], counterparts: [] }))).toBe('nodeBadge');
+  });
+
+  it('nothing to draw when neither end has a class on the graph', () => {
     expect(markKind(g({ operator: 'oneOf', members: [], values: ['i'], counterparts: [] }))).toBeNull();
   });
 });
@@ -96,5 +100,34 @@ describe('badgeScale: badges follow the visible edge length, within limits', () 
 
   it('keeps the default size when the length is unknown', () => {
     expect(badgeScale(null)).toBe(1);
+  });
+});
+
+describe('nodeBadgeTargets: which nodes carry a corner badge', () => {
+  it('the counterparts, when the expression has no member classes (untyped oneOf)', () => {
+    expect(nodeBadgeTargets(g({ operator: 'oneOf', members: [], values: ['i'], counterparts: ['C'] }))).toEqual(['C']);
+  });
+  it("the expression's own classes, when there is no other end", () => {
+    expect(nodeBadgeTargets(g({ members: ['A', 'B'], counterparts: [] }))).toEqual(['A', 'B']);
+  });
+});
+
+describe('partitionByEdge: members whose edge to the counterpart is not drawn', () => {
+  it('splits members by whether the member–counterpart edge exists', () => {
+    const has = (m: string, c: string) => !(m === c); // self-loops are never drawn
+    expect(partitionByEdge(['Agent', 'Doc'], 'Agent', has)).toEqual({ withEdge: ['Doc'], withoutEdge: ['Agent'] });
+    expect(partitionByEdge(['A', 'B'], 'C', has)).toEqual({ withEdge: ['A', 'B'], withoutEdge: [] });
+  });
+});
+
+describe('propertyEdgeIds: vis edge ids are `${from}->${to}:${type}`', () => {
+  const FOAF = 'http://xmlns.com/foaf/0.1/';
+  it('covers the property type as local name and as full URI', () => {
+    expect(propertyEdgeIds('A', 'B', 'made', `${FOAF}made`)).toEqual(['A->B:made', `A->B:${FOAF}made`]);
+    expect(propertyEdgeIds('A', 'B', 'made')).toEqual(['A->B:made']);
+  });
+
+  it('works with node ids that are full URIs', () => {
+    expect(propertyEdgeIds(`${FOAF}Agent`, 'Doc', 'made')).toEqual([`${FOAF}Agent->Doc:made`]);
   });
 });

@@ -46,3 +46,9 @@
     rdfs:label "scale" ;
     rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :DrawingSheet :Layout ) ] ;
     rdfs:range xsd:string .
+
+# Domain union with no range: there is no edge to mark, so a ∪ corner badge (top-left, as for a
+# domain expression) sits on each member class.
+:annotatedWith rdf:type owl:ObjectProperty ;
+    rdfs:label "annotatedWith" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] .

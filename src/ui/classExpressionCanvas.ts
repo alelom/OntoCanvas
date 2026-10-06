@@ -3,7 +3,7 @@
  * (classExpressionOverlayRenderer). Kept separate so the renderer reads as "which mark goes where".
  * See issues #59-#62.
  */
-import { glyphFontSize, type NodeBox, type Point } from '../graph/classExpressionOverlay';
+import { glyphFontSize, propertyEdgeIds, type NodeBox, type Point } from '../graph/classExpressionOverlay';
 import { arrowheadLength, chordT, pointAlongVisibleSpan, visibleSpanLength, type VisibleSpan } from '../graph/visibleSpan';
 
 /** A vis edge, as far as the overlay pokes at it. `edgeType.getPoint(t)` samples the real (possibly
@@ -57,6 +57,15 @@ export function dataStubId(net: OverlayNet, classId: string, propertyName: strin
   for (const id of [`__dataprop__${classId}__${propertyName}`, `__dataproprestrict__${classId}__${propertyName}`]) {
     if (nodePos(net, id)) return id;
   }
+  return null;
+}
+
+/** The from→to edge of a property (by vis edge id), or null if it isn't drawn — e.g. a self-loop, which
+ * the parser never creates. */
+export function findPropertyEdge(net: OverlayNet, from: string, to: string, propertyName: string, propertyUri?: string): EdgeLike | null {
+  const edges = net.body?.edges;
+  if (!edges) return null;
+  for (const id of propertyEdgeIds(from, to, propertyName, propertyUri)) if (edges[id]) return edges[id];
   return null;
 }
 

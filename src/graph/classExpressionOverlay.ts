@@ -64,7 +64,9 @@ export function pointNearSegment(p: Point, a: Point, b: Point, tol: number): boo
 /** Which mark a class-expression group is drawn with (issues #59-#62):
  * - `connector`: a dot on each member edge joined to a central badge (2+ members, object property);
  * - `edgeBadge`: one badge on the single member edge (complement, or oneOf of one class);
- * - `nodeBadge`: a corner badge on each counterpart class (oneOf of individuals with no class on the graph);
+ * - `nodeBadge`: a corner badge on nodes (see nodeBadgeTargets) when there is no edge to mark: an
+ *   enumeration of untyped individuals (on the counterparts), or an expression with no other end — no
+ *   range/domain, or owl:Thing (on its own classes);
  * - `stubBadge`: a corner badge on each data-property stub node (data properties: the class→stub edge
  *   is too short for an edge mark);
  * - null: nothing on the graph to anchor it to. */
@@ -72,10 +74,30 @@ export type MarkKind = 'connector' | 'edgeBadge' | 'nodeBadge' | 'stubBadge';
 
 export function markKind(group: ClassExpressionGroup): MarkKind | null {
   if (group.propertyKind === 'data') return 'stubBadge';
-  if (group.counterparts.length === 0) return null;
+  if (group.counterparts.length === 0) return group.members.length > 0 ? 'nodeBadge' : null;
   if (group.members.length >= 2) return 'connector';
   if (group.members.length === 1) return 'edgeBadge';
   return 'nodeBadge';
+}
+
+/** Nodes that carry a `nodeBadge`: the counterparts when the expression has no member classes, else
+ * (no other end) the expression's own classes. */
+export function nodeBadgeTargets(group: ClassExpressionGroup): string[] {
+  return group.counterparts.length > 0 ? group.counterparts : group.members;
+}
+
+/** Split members by whether their edge to `counterpart` is drawn. A missing edge (e.g. a self-loop,
+ * which the parser never draws — FOAF `made`: domain Agent, range ¬Agent) can't carry an edge mark,
+ * so the renderer puts a corner badge on the counterpart node instead. */
+export function partitionByEdge(
+  members: string[],
+  counterpart: string,
+  hasEdge: (member: string, counterpart: string) => boolean,
+): { withEdge: string[]; withoutEdge: string[] } {
+  const withEdge: string[] = [];
+  const withoutEdge: string[] = [];
+  for (const m of members) (hasEdge(m, counterpart) ? withEdge : withoutEdge).push(m);
+  return { withEdge, withoutEdge };
 }
 
 /** Fraction along a member edge, measured from its domain end, where the mark sits: near the end the
@@ -132,4 +154,12 @@ export const BADGE_MAX_SCALE = 1.3;
 export function badgeScale(visibleLength: number | null): number {
   if (visibleLength == null || !Number.isFinite(visibleLength)) return 1;
   return Math.min(BADGE_MAX_SCALE, Math.max(BADGE_MIN_SCALE, visibleLength / BADGE_REFERENCE_LENGTH));
+}
+
+/** The vis edge ids the from→to edge of a property may have: `${from}->${to}:${type}`, where type is
+ * the property's local name or full URI (main.ts builds them so). Looking the edge up by id means marks
+ * never land on another property's edge between the same classes. */
+export function propertyEdgeIds(from: string, to: string, propertyName: string, propertyUri?: string): string[] {
+  const prefix = `${from}->${to}:`;
+  return propertyUri && propertyUri !== propertyName ? [prefix + propertyName, prefix + propertyUri] : [prefix + propertyName];
 }

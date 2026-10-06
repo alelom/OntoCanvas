@@ -10,8 +10,13 @@
  *   lines across the graph.
  * - edgeBadge (object property, 1 member — a complement, or an enumeration of one class's
  *   individuals): one badge sitting on the edge at the same ¼ / ¾ point.
- * - nodeBadge (object property, no member — an enumeration of untyped individuals): a corner badge on
- *   each counterpart class, since there is no edge to mark.
+ * - nodeBadge (object property, no edge to mark): a corner badge — on each counterpart for an
+ *   enumeration of untyped individuals, or on the expression's own classes when the property has no
+ *   other end (no range / domain, or owl:Thing).
+ * - Missing edges: a member whose edge to the counterpart isn't drawn (a self-loop — FOAF `made`:
+ *   domain Agent, range ¬Agent) gets a corner badge on the counterpart instead of an edge mark, rather
+ *   than a mark floating over the node's centre. Edges are looked up by property (vis edge id), so a
+ *   mark never lands on another property's edge between the same classes.
  *
  * Object-property marks are drawn once per counterpart (the class on the opposite end), so an
  * expression whose other end is itself an expression (e.g. a union domain with an enumeration range)
@@ -34,6 +39,8 @@ import {
   lerp,
   markKind,
   markLayer,
+  nodeBadgeTargets,
+  partitionByEdge,
   pointNear,
   pointNearSegment,
   type MarkLayer,
@@ -48,6 +55,7 @@ import {
   drawBadge,
   edgePoint,
   findEdge,
+  findPropertyEdge,
   nodeBox,
   nodePos,
   type OverlayNet,
@@ -88,6 +96,7 @@ function memberEdgePoints(
   ctx: CanvasRenderingContext2D,
   group: ClassExpressionGroup,
   counterpartId: string,
+  members: string[],
 ): { points: Point[]; color: string | null; scale: number } {
   const t = badgeFraction(group.position);
   const points: Point[] = [];
@@ -95,10 +104,10 @@ function memberEdgePoints(
   let color: string | null = null;
   const cpPos = nodePos(net, counterpartId);
   if (!cpPos) return { points, color, scale: 1 };
-  for (const member of group.members) {
+  for (const member of members) {
     const memberPos = nodePos(net, member);
     if (!memberPos) continue;
-    const edge = findEdge(net, member, counterpartId);
+    const edge = propertyEdge(net, group, member, counterpartId);
     color = color ?? colorOf(edge);
     // The edge runs domain→range; `domainNode` is whichever end isn't the expression side.
     const domainNode = group.position === 'domain' ? member : counterpartId;
@@ -111,14 +120,27 @@ function memberEdgePoints(
   return { points, color, scale: badgeScale(lengths.length > 0 ? Math.min(...lengths) : null) };
 }
 
+/** The drawn edge of the group's property between a member and a counterpart (domain → range), or null. */
+function propertyEdge(net: OverlayNet, group: ClassExpressionGroup, member: string, counterpartId: string) {
+  const [from, to] = group.position === 'domain' ? [member, counterpartId] : [counterpartId, member];
+  return findPropertyEdge(net, from, to, group.propertyName, group.propertyUri);
+}
+
 export function createClassExpressionOverlay(): ClassExpressionOverlay {
   // Hit regions per layer; each layer's are rebuilt when that layer is drawn. `regions` is the list
   // the draw helpers append to (the layer currently being drawn).
   const regionsByLayer: Record<MarkLayer, Region[]> = { edges: [], nodes: [] };
   let regions: Region[] = regionsByLayer.edges;
 
-  function drawConnector(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
-    const { points: dots, color, scale } = memberEdgePoints(net, ctx, group, counterpartId);
+  function drawConnector(
+    net: OverlayNet,
+    ctx: CanvasRenderingContext2D,
+    group: ClassExpressionGroup,
+    glyph: string,
+    counterpartId: string,
+    members: string[],
+  ): void {
+    const { points: dots, color, scale } = memberEdgePoints(net, ctx, group, counterpartId, members);
     if (dots.length < 2) return;
     const stroke = color ?? FALLBACK_COLOR;
     const hub = centroid(dots);
@@ -153,8 +175,15 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     regions.push({ group, center: hub, radius: broken ? 0 : HUB_RADIUS * scale, segments });
   }
 
-  function drawEdgeBadge(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
-    const { points, color, scale } = memberEdgePoints(net, ctx, group, counterpartId);
+  function drawEdgeBadge(
+    net: OverlayNet,
+    ctx: CanvasRenderingContext2D,
+    group: ClassExpressionGroup,
+    glyph: string,
+    counterpartId: string,
+    members: string[],
+  ): void {
+    const { points, color, scale } = memberEdgePoints(net, ctx, group, counterpartId, members);
     const at = points[0];
     if (!at) return;
     drawBadge(ctx, at, HUB_RADIUS * scale, HUB_GLYPH_SIZE * scale, color ?? FALLBACK_COLOR, glyph);
@@ -185,18 +214,30 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
     ctx.setLineDash([]);
     for (const group of groups) {
       const kind = markKind(group);
-      if (!kind || !layers.includes(markLayer(kind))) continue;
-      regions = regionsByLayer[markLayer(kind)];
+      if (!kind) continue;
       const glyph = OPERATOR_INFO[group.operator].glyph;
+      if (kind === 'connector' || kind === 'edgeBadge') {
+        // Per counterpart: members with a drawn edge get the edge mark (connector for 2+, else one badge);
+        // any member without one (a self-loop) puts a corner badge on the counterpart, in the top layer.
+        for (const cp of group.counterparts) {
+          const { withEdge, withoutEdge } = partitionByEdge(group.members, cp, (m, c) => propertyEdge(net, group, m, c) !== null);
+          if (layers.includes('edges') && withEdge.length > 0) {
+            regions = regionsByLayer.edges;
+            if (withEdge.length >= 2) drawConnector(net, ctx, group, glyph, cp, withEdge);
+            else drawEdgeBadge(net, ctx, group, glyph, cp, withEdge);
+          }
+          if (layers.includes('nodes') && withoutEdge.length > 0) {
+            regions = regionsByLayer.nodes;
+            drawCornerBadge(net, ctx, group, glyph, cp, FALLBACK_COLOR, stacker);
+          }
+        }
+        continue;
+      }
+      if (!layers.includes(markLayer(kind))) continue;
+      regions = regionsByLayer[markLayer(kind)];
       switch (kind) {
-        case 'connector':
-          for (const cp of group.counterparts) drawConnector(net, ctx, group, glyph, cp);
-          break;
-        case 'edgeBadge':
-          for (const cp of group.counterparts) drawEdgeBadge(net, ctx, group, glyph, cp);
-          break;
         case 'nodeBadge':
-          for (const cp of group.counterparts) drawCornerBadge(net, ctx, group, glyph, cp, FALLBACK_COLOR, stacker);
+          for (const nodeId of nodeBadgeTargets(group)) drawCornerBadge(net, ctx, group, glyph, nodeId, FALLBACK_COLOR, stacker);
           break;
         case 'stubBadge':
           // A range expression marks the stubs of the property's domain classes (its counterparts).
