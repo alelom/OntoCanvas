@@ -66,6 +66,7 @@ import {
 import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
+import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -3243,7 +3244,8 @@ function buildNetworkData(
               (maxFontSize - minFontSize) * (maxDepth - d) / maxDepth
           )
         : maxFontSize;
-    nodeDimensionsMap.set(n.id, estimateNodeDimensions(n.label, wrapChars, fontSize));
+    // Estimate from the label as drawn (prefix included), or imported classes come out a line short (#72).
+    nodeDimensionsMap.set(n.id, estimateNodeDimensions(formatNodeLabelWithPrefix(n, externalOntologyReferences), wrapChars, fontSize));
   });
   
   // Group data properties by their parent class node for better layout
@@ -3366,7 +3368,8 @@ function buildNetworkData(
     // Calculate positions with horizontal fan-out and alternating vertical positions
     const horizontalSpacing = 15;
     const verticalOffset = 25; // Vertical offset for alternating rows
-    const baseYOffset = classNodeHeight / 2 + 20; // Start below the node
+    // First row below the class, leaving a minimum visible edge so arrowheads stay outside it (#72).
+    const baseYOffset = firstDataPropertyRowOffset(classNodeHeight, dataPropertyFontSize);
     
     let propIndex = 0;
     let currentY = classPos.y + baseYOffset;
