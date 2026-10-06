@@ -37,6 +37,12 @@ OntoCanvas is a **personal open-source project on GitHub** ([alelom/OntoCanvas](
 - **Open a PR that closes its issue.** Put a closing keyword on its **own line** in the PR
   **body** — `Closes #123` (one keyword, one issue, one line). A list after a single
   keyword (`Closes #1, #2`) only closes the first.
+- **Feature PRs ship example ontologies.** A PR that adds a user-visible feature or fixes an
+  important user-visible bug adds a small TTL under `examples/`, pins it with a unit test,
+  indexes it in `examples/README.md`, and puts a "Try it" table of
+  `http://localhost:5173/?onto=<raw URL>` links in the PR body. Not needed for minor fixes,
+  refactors or test/CI/docs changes. Full procedure:
+  [`.claude/skills/feature-examples/SKILL.md`](.claude/skills/feature-examples/SKILL.md).
 - **Public repository.** Everything committed or written in an issue/PR is world-readable
   and permanent. Keep out internal tool names, client/project names, infrastructure detail,
   and internal ticket content.
