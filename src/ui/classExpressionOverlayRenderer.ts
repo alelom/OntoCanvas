@@ -4,8 +4,8 @@
  * expression into the classes its edges are drawn against; this draws the mark that keeps the
  * expression visible. Which mark a group gets is decided by `markKind` (pure, unit-tested):
  *
- * - connector (object property, 2+ members): a small dot at ¼ of each member edge from the domain end
- *   (¾ for a range expression), joined by thin lines to a central badge. A long connector is "broken"
+ * - connector (object property, 2+ members): a small dot at ¼ of each member edge's visible part
+ *   (outline to outline, arrowhead excluded) from the domain end (¾ for a range expression), joined by thin lines to a central badge. A long connector is "broken"
  *   into short inward arrow-stubs, each with its own small badge, so distant members don't drag long
  *   lines across the graph.
  * - edgeBadge (object property, 1 member — a complement, or an enumeration of one class's
@@ -73,7 +73,12 @@ export interface ClassExpressionOverlay {
 }
 
 /** The point on each member edge where the expression is "tapped", and the colour of those edges. */
-function memberEdgePoints(net: OverlayNet, group: ClassExpressionGroup, counterpartId: string): { points: Point[]; color: string | null } {
+function memberEdgePoints(
+  net: OverlayNet,
+  ctx: CanvasRenderingContext2D,
+  group: ClassExpressionGroup,
+  counterpartId: string,
+): { points: Point[]; color: string | null } {
   const t = badgeFraction(group.position);
   const points: Point[] = [];
   let color: string | null = null;
@@ -88,7 +93,7 @@ function memberEdgePoints(net: OverlayNet, group: ClassExpressionGroup, counterp
     const domainNode = group.position === 'domain' ? member : counterpartId;
     const [domainPos, rangePos] = group.position === 'domain' ? [memberPos, cpPos] : [cpPos, memberPos];
     // Sample on the real edge curve; fall back to a straight chord (domain→range) if unavailable.
-    points.push(edgePoint(edge, domainNode, t) ?? lerp(domainPos, rangePos, t));
+    points.push(edgePoint(edge, domainNode, t, ctx) ?? lerp(domainPos, rangePos, t));
   }
   return { points, color };
 }
@@ -97,7 +102,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
   let regions: Region[] = [];
 
   function drawConnector(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
-    const { points: dots, color } = memberEdgePoints(net, group, counterpartId);
+    const { points: dots, color } = memberEdgePoints(net, ctx, group, counterpartId);
     if (dots.length < 2) return;
     const stroke = color ?? FALLBACK_COLOR;
     const hub = centroid(dots);
@@ -133,7 +138,7 @@ export function createClassExpressionOverlay(): ClassExpressionOverlay {
   }
 
   function drawEdgeBadge(net: OverlayNet, ctx: CanvasRenderingContext2D, group: ClassExpressionGroup, glyph: string, counterpartId: string): void {
-    const { points, color } = memberEdgePoints(net, group, counterpartId);
+    const { points, color } = memberEdgePoints(net, ctx, group, counterpartId);
     const at = points[0];
     if (!at) return;
     drawBadge(ctx, at, HUB_RADIUS, HUB_GLYPH_SIZE, color ?? FALLBACK_COLOR, glyph);
