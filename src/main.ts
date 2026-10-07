@@ -121,7 +121,12 @@ import {
   getNodeSearchOpacity as getSearchOpacity,
   getDataPropertySearchOpacity,
   getEdgeSearchOpacity,
+  scopeDimsGraph,
+  scopeIncludesNeighbours,
+  searchScopeFromConfig,
+  type SearchScope,
 } from './lib/searchHighlight';
+import { attachPopover, DEFAULT_SEARCH_SCOPE, getSearchScope, searchControlsMarkup, setSearchScope } from './ui/searchOptions';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
 import { persistNodePositionsFromNetwork } from './graph/persistNodePositions';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
@@ -279,7 +284,8 @@ function collectDisplayConfig(): DisplayConfig | null {
     dataPropertyFontSize: parseInt((document.getElementById('dataPropertyFontSize') as HTMLInputElement)?.value, 10) || 12,
     layoutMode: (document.getElementById('layoutMode') as HTMLSelectElement)?.value || 'hierarchical-dag',
     searchQuery: (document.getElementById('searchQuery') as HTMLInputElement)?.value ?? '',
-    includeNeighbors: (document.getElementById('searchIncludeNeighbors') as HTMLInputElement)?.checked ?? false,
+    searchScope: getSearchScope(),
+    includeNeighbors: getSearchScope() === 'neighbours', // read by builds from before #85
     exactMatch: (document.getElementById('searchExactMatch') as HTMLInputElement)?.checked ?? true,
     annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, annotationProperties) : undefined,
     annotationPropertyOrder: annotationProperties.map((ap) => ap.name),
@@ -403,7 +409,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
       searchQueryEl.dispatchEvent(new Event('input', { bubbles: true }));
     });
   }
-  (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = config.includeNeighbors ?? false;
+  setSearchScope(searchScopeFromConfig(config));
   (document.getElementById('searchExactMatch') as HTMLInputElement).checked = config.exactMatch ?? true;
   
   // Store the loaded edge style config so it can be merged when building the filter
@@ -2843,7 +2849,7 @@ function buildNetworkData(
     relationshipFontSize: number;
     dataPropertyFontSize?: number;
     searchQuery: string;
-    includeNeighbors: boolean;
+    searchScope: SearchScope;
     exactMatch: boolean;
     edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string }>;
     annotationStyleConfig: AnnotationStyleConfig;
@@ -2912,9 +2918,12 @@ function buildNetworkData(
     debugLog(`[DEBUG] Describes edges after node filtering: ${describesEdgesAfterNodeFilter.length}`, describesEdgesAfterNodeFilter);
   }
 
-  const searchQuery = (filter.searchQuery || '').trim();
-  // Search highlighting sets (matching nodes/edges + first-ring neighbours). Neighbours are
-  // only populated when includeNeighbors is on, and the traversal stops at the first ring.
+  const matchQuery = (filter.searchQuery || '').trim();
+  // What the search finds (matchQuery) vs whether it fades the rest (searchQuery, used by every
+  // opacity branch below): "Highlight matches in whole graph" only outlines, it fades nothing (#85).
+  const searchQuery = scopeDimsGraph(filter.searchScope) ? matchQuery : '';
+  // Search highlighting sets (matching nodes/edges + first-ring neighbours). Neighbours are only
+  // populated for the "matches and their neighbours" scope, and the traversal stops at the first ring.
   // Data properties, prefixed names (foaf:member) and labels are searchable too (#81).
   const searchVocabulary = buildSearchVocabulary({
     nodes: filteredNodes,
@@ -2930,19 +2939,14 @@ function buildNetworkData(
   const searchSets = computeSearchSets(
     filteredNodes,
     filteredEdges,
-    searchQuery,
-    filter.includeNeighbors,
+    matchQuery,
+    scopeIncludesNeighbours(filter.searchScope),
     filter.exactMatch,
     { ...searchVocabulary.extras, dataProperties: searchVocabulary.dataProperties }
   );
   const { matchingNodeIds, neighborNodeIds } = searchSets;
   // What the pulsing search outline surrounds: direct matches only (#84).
-  searchOutlineTargets = outlineTargets(searchSets, searchQuery);
-
-  if (searchQuery) {
-    // Keep ALL nodes and edges - don't filter them out.
-    // We apply opacity styling based on their category (matching / neighbour / other).
-  }
+  searchOutlineTargets = outlineTargets(searchSets, matchQuery);
 
   // edgeStyleConfig is already defined above at the start of the function
   
@@ -3687,13 +3691,13 @@ function buildNetworkData(
     if (searchQuery) {
       // An edge is full-opacity only when it matched directly or joins two matched nodes.
       // Edges merely departing from a matched node toward a non-neighbour are dimmed; edges
-      // to first-ring neighbours are shown dimmed-but-visible only when includeNeighbors is on.
+      // to first-ring neighbours are shown dimmed-but-visible only in the neighbours scope.
       const edgeOpacity = getEdgeSearchOpacity(
         e.from,
         e.to,
         e.type,
         searchSets,
-        filter.includeNeighbors
+        scopeIncludesNeighbours(filter.searchScope)
       );
       if (edgeOpacity < 1.0) {
         edgeColor = applyOpacityToColor(style.color, edgeOpacity);
@@ -6272,20 +6276,7 @@ function renderApp(): void {
           <button type="button" id="addAnnotationPropertyBtn" style="margin-top: 6px; font-size: 11px;">+ Add annotation property</button>
         </details>
       </div>
-      <div>
-        <strong>Search:</strong>
-        <div id="searchWrap" style="position: relative; display: inline-block;">
-          <input type="text" id="searchQuery" placeholder="Node or relationship..." autocomplete="off" style="width: 180px; padding-right: 24px; box-sizing: border-box;">
-          <button type="button" id="searchClearBtn" style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 2px 4px; color: #666; font-size: 16px; line-height: 1; display: none; z-index: 10;" title="Clear search" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#666'">×</button>
-          <div id="searchAutocomplete"></div>
-        </div>
-        <label style="font-size: 11px; margin-left: 4px;">
-          <input type="checkbox" id="searchIncludeNeighbors"> Include neighbors
-        </label>
-        <label style="font-size: 11px; margin-left: 4px;" title="Match whole names instead of substrings (e.g. 'hasRevision' won't match 'hasRevisionTable')">
-          <input type="checkbox" id="searchExactMatch" checked> Exact match
-        </label>
-      </div>
+      ${searchControlsMarkup()}
       <span id="undoRedoGroup" style="gap: 4px; align-items: center; display: inline-flex; flex-direction: column;">
         <button type="button" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
         <button type="button" id="redoBtn" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
@@ -7335,9 +7326,6 @@ function applyFilter(preserveView = false): void {
       10
     ) || 12;
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement;
-  const neighborsEl = document.getElementById(
-    'searchIncludeNeighbors'
-  ) as HTMLInputElement;
   const exactMatchEl = document.getElementById(
     'searchExactMatch'
   ) as HTMLInputElement;
@@ -7371,7 +7359,7 @@ function applyFilter(preserveView = false): void {
     relationshipFontSize,
     dataPropertyFontSize,
     searchQuery: searchEl?.value ?? '',
-    includeNeighbors: neighborsEl?.checked ?? false,
+    searchScope: getSearchScope(),
     exactMatch: exactMatchEl?.checked ?? true,
     edgeStyleConfig: mergedEdgeStyleConfig,
     annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent, annotationProperties),
@@ -8320,19 +8308,12 @@ function setupEventListeners(): void {
     }
   });
 
-  const textDisplayToggle = document.getElementById('textDisplayToggle');
-  const textDisplayPopup = document.getElementById('textDisplayPopup');
-  const textDisplayWrap = document.getElementById('textDisplayWrap');
-  textDisplayToggle?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isVisible = textDisplayPopup?.style.display === 'block';
-    if (textDisplayPopup) textDisplayPopup.style.display = isVisible ? 'none' : 'block';
-  });
-  document.addEventListener('click', (e) => {
-    if (textDisplayPopup?.style.display === 'block' && textDisplayWrap && !textDisplayWrap.contains(e.target as Node)) {
-      textDisplayPopup.style.display = 'none';
-    }
-  });
+  for (const name of ['textDisplay', 'searchOptions']) {
+    const wrap = document.getElementById(`${name}Wrap`);
+    const toggle = document.getElementById(`${name}Toggle`);
+    const popup = document.getElementById(`${name}Popup`);
+    if (wrap && toggle && popup) attachPopover(wrap, toggle, popup);
+  }
 
   // Layout-mode hint popup (describes the logic of each layout mode).
   initLayoutModeHint();
@@ -8348,8 +8329,8 @@ function setupEventListeners(): void {
   document.getElementById('dataPropertyFontSize')?.addEventListener('input', () => applyFilter());
   document.getElementById('dataPropertyFontSize')?.addEventListener('change', () => applyFilter());
   document
-    .getElementById('searchIncludeNeighbors')
-    ?.addEventListener('change', () => applyFilter());
+    .querySelectorAll('input[name="searchScope"]')
+    .forEach((radio) => radio.addEventListener('change', () => applyFilter()));
   document
     .getElementById('searchExactMatch')
     ?.addEventListener('change', () => applyFilter());
@@ -8456,10 +8437,13 @@ function setupEventListeners(): void {
     (document.getElementById('maxFontSize') as HTMLInputElement).value = String(defaultMaxFontSize(rawData?.nodes?.length ?? 0));
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
-    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
+    setSearchScope(DEFAULT_SEARCH_SCOPE);
     (document.getElementById('searchExactMatch') as HTMLInputElement).checked = true;
     document.getElementById('searchAutocomplete')?.classList.remove('visible');
-    textDisplayPopup && (textDisplayPopup.style.display = 'none');
+    for (const id of ['textDisplayPopup', 'searchOptionsPopup']) {
+      const popup = document.getElementById(id);
+      if (popup) popup.style.display = 'none';
+    }
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     const types = getAllRelationshipTypes(rawData, objectProperties);
@@ -8678,7 +8662,7 @@ function setupEventListeners(): void {
     (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = '12';
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
-    (document.getElementById('searchIncludeNeighbors') as HTMLInputElement).checked = false;
+    setSearchScope(DEFAULT_SEARCH_SCOPE);
     (document.getElementById('searchExactMatch') as HTMLInputElement).checked = true;
 
     // Clear loaded edge style config (so it doesn't override DOM checkboxes)

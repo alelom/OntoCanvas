@@ -10,6 +10,9 @@ import {
   computeSearchSets,
   getNodeSearchOpacity,
   getDataPropertySearchOpacity,
+  searchScopeFromConfig,
+  scopeIncludesNeighbours,
+  scopeDimsGraph,
   getEdgeSearchOpacity,
   OPACITY_MATCH,
   OPACITY_RELATED,
@@ -267,5 +270,21 @@ describe('relationships and classes by prefixed name or label (#81)', () => {
   it('without extra names, behaves exactly as before', () => {
     expect(computeSearchSets(nodes, edges, 'foaf:member', false, false).matchingEdgeIds.size).toBe(0);
     expect(computeSearchSets(nodes, edges, 'member', false, false).matchingEdgeIds.size).toBe(1);
+  });
+});
+
+describe('search scope: three display options (#85)', () => {
+  it('reads the scope from a saved config, falling back to the old includeNeighbors', () => {
+    expect(searchScopeFromConfig({ searchScope: 'highlight' })).toBe('highlight');
+    expect(searchScopeFromConfig({ searchScope: 'neighbours', includeNeighbors: false })).toBe('neighbours');
+    expect(searchScopeFromConfig({ includeNeighbors: true })).toBe('neighbours');
+    expect(searchScopeFromConfig({ includeNeighbors: false })).toBe('matches');
+    expect(searchScopeFromConfig({})).toBe('matches'); // the default, as before
+    expect(searchScopeFromConfig({ searchScope: 'bogus' as never })).toBe('matches');
+  });
+
+  it('only "neighbours" collects neighbours; only "highlight" leaves the graph undimmed', () => {
+    expect(['highlight', 'neighbours', 'matches'].map((s) => scopeIncludesNeighbours(s as never))).toEqual([false, true, false]);
+    expect(['highlight', 'neighbours', 'matches'].map((s) => scopeDimsGraph(s as never))).toEqual([false, true, true]);
   });
 });

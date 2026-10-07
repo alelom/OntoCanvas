@@ -182,3 +182,29 @@ export function getEdgeSearchOpacity(
   }
   return OPACITY_DIM;
 }
+
+/**
+ * How a search shows its results (#85):
+ * - `highlight`: the graph stays at normal opacity; matches are marked only by the pulsing outline;
+ * - `neighbours`: matches and their first-ring neighbours stay visible, everything else is faded;
+ * - `matches`: only matches stay visible, everything else is faded (the default).
+ */
+export type SearchScope = 'highlight' | 'neighbours' | 'matches';
+
+export const SEARCH_SCOPES: readonly SearchScope[] = ['highlight', 'neighbours', 'matches'];
+
+/** The scope a saved display config asks for; configs from before #85 only have `includeNeighbors`. */
+export function searchScopeFromConfig(config: { searchScope?: string; includeNeighbors?: boolean }): SearchScope {
+  if (SEARCH_SCOPES.includes(config.searchScope as SearchScope)) return config.searchScope as SearchScope;
+  return config.includeNeighbors ? 'neighbours' : 'matches';
+}
+
+/** Whether the scope collects first-ring neighbours. */
+export function scopeIncludesNeighbours(scope: SearchScope): boolean {
+  return scope === 'neighbours';
+}
+
+/** Whether the scope fades what didn't match (every scope but `highlight`). */
+export function scopeDimsGraph(scope: SearchScope): boolean {
+  return scope !== 'highlight';
+}

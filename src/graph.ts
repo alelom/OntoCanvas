@@ -1,5 +1,6 @@
 // import type { DataSet } from 'vis-network'; // Unused - kept for reference
 import type { GraphEdge, GraphNode, NodeDimensions } from './types';
+import type { SearchScope } from './lib/searchHighlight';
 
 export const COLORS = {
   labellable: '#2ecc71',
@@ -107,7 +108,7 @@ export interface FilterState {
   maxFontSize: number;
   relationshipFontSize?: number;
   searchQuery: string;
-  includeNeighbors: boolean;
+  searchScope: SearchScope;
   edgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: string }>;
   layoutMode: string;
 }
