@@ -1,3 +1,19 @@
+# [1.26.0](https://github.com/alelom/OntoCanvas/compare/v1.25.1...v1.26.0) (2026-10-07)
+
+
+### Bug Fixes
+
+* **#81:** classes defined elsewhere are found by the prefixed name shown ([e6a9733](https://github.com/alelom/OntoCanvas/commit/e6a9733a2f1763e8c462b34a78b0b53129c34b03)), closes [#81](https://github.com/alelom/OntoCanvas/issues/81)
+* **#81:** search finds data properties; suggestions show prefixed names ([c163165](https://github.com/alelom/OntoCanvas/commit/c163165dc435d98a29941583d5066bb96c4ad0cd)), closes [#81](https://github.com/alelom/OntoCanvas/issues/81)
+* **#81:** suggest what the canvas draws, including referenced external classes ([01236b9](https://github.com/alelom/OntoCanvas/commit/01236b9859c33f5daef2d14d157698abd3b78c38)), closes [#81](https://github.com/alelom/OntoCanvas/issues/81) [#81](https://github.com/alelom/OntoCanvas/issues/81)
+* **#84:** outline self-loop relationships (e.g. foaf:fundedBy) around their loop ([40d8512](https://github.com/alelom/OntoCanvas/commit/40d8512703a2894d59850c01b51f631264677987)), closes [#84](https://github.com/alelom/OntoCanvas/issues/84)
+
+
+### Features
+
+* **#84:** pulsing outline around what the search matched ([cc2f132](https://github.com/alelom/OntoCanvas/commit/cc2f13241dcb06d1e8430cd20ebd32c4710ae184)), closes [#84](https://github.com/alelom/OntoCanvas/issues/84) [#84](https://github.com/alelom/OntoCanvas/issues/84)
+* **#85:** search options popup with three result scopes ([ebc2422](https://github.com/alelom/OntoCanvas/commit/ebc24226f1c1bcacdf4d0fd60a91e2bebec3f63c)), closes [#85](https://github.com/alelom/OntoCanvas/issues/85)
+
 ## [1.25.1](https://github.com/alelom/OntoCanvas/compare/v1.25.0...v1.25.1) (2026-10-06)
 
 
