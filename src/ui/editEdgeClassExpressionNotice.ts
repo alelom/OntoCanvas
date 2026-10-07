@@ -102,7 +102,7 @@ export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: Cla
     `<div style="margin-bottom:5px;">${chips}</div>` +
     (group.nested && group.formula ? `<div style="margin-bottom:5px;">Full expression: <code>${escapeHtml(group.formula)}</code></div>` : '') +
     `<div style="color:#6a5a85;">The ${where} of <b>${escapeHtml(group.propertyName)}</b> is ${what}; ` +
-    `the same expression applies to every relationship drawn from it. Editing it isn't available yet — ` +
-    `adjust it in the ontology source.</div>`;
+    `the same expression applies to every relationship drawn from it, so this relationship is read-only in ` +
+    `the editor for now — adjust the expression in the ontology source.</div>`;
   el.style.display = 'block';
 }

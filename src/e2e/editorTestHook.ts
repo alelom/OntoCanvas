@@ -309,6 +309,17 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       if (!store) return null;
       return storeToTurtle(store, getExternalOntologyReferences());
     },
+    /** Quads in the live store matching subject / predicate (full IRIs; null = any), as plain objects. */
+    getQuads: (subject: string | null, predicate: string | null): Array<{ subject: string; predicate: string; objectType: string; object: string }> => {
+      const store = getTtlStore();
+      if (!store) return [];
+      return store.getQuads(subject, predicate, null, null).map((q) => ({
+        subject: q.subject.value,
+        predicate: q.predicate.value,
+        objectType: q.object.termType,
+        object: q.object.value,
+      }));
+    },
     openAddObjectPropertyModal: (): void => {
       document.getElementById('addRelationshipTypeBtn')?.click();
     },
