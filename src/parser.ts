@@ -20,6 +20,7 @@ import {
 } from './rdf/restrictions';
 import { describeDataRange } from './rdf/dataRanges';
 import { removeBlankNodeClosure } from './rdf/blankNodes';
+import { isExternalPropertyUri } from './rdf/propertyNamespace';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -436,17 +437,7 @@ function buildParseResultFromStore(
         
         // Preserve full URI for external properties, use local name for local properties
         const propUri = (onProperty.object as { value: string }).value;
-        const mainBase = getMainOntologyBase(store);
-        // Check if property is external by comparing URI base
-        let isExternalProperty = false;
-        if (mainBase) {
-          // Extract base IRI (before #) from both the ontology URI and property URI
-          const mainBaseIri = mainBase.includes('#') ? mainBase.slice(0, mainBase.indexOf('#')) : mainBase.replace(/#$/, '');
-          const propBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.split('/').slice(0, -1).join('/');
-          isExternalProperty = propBase !== mainBaseIri;
-        } else {
-          isExternalProperty = !propUri.startsWith(BASE_IRI);
-        }
+        const isExternalProperty = isExternalPropertyUri(propUri, getMainOntologyBase(store), BASE_IRI);
         const propName = isExternalProperty ? propUri : extractLocalName(propUri);
 
         // Create a unique key for this restriction to avoid processing duplicates (per kind, so a ∀ and a
@@ -734,8 +725,9 @@ function buildParseResultFromStore(
     
     const OWL_THING = OWL + 'Thing';
     
-    // Use full URI for external properties, local name for local properties
-    const isExternalProperty = !propUri.startsWith(BASE_IRI);
+    // Use full URI for external properties, local name for local properties — decided exactly as for
+    // restriction edges, so one property is one edge type (#87).
+    const isExternalProperty = isExternalPropertyUri(propUri, getMainOntologyBase(store), BASE_IRI);
     const propName = isExternalProperty ? propUri : op.name;
     
     // Collect valid domains and ranges
