@@ -1,3 +1,20 @@
+# [1.27.0](https://github.com/alelom/OntoCanvas/compare/v1.26.0...v1.27.0) (2026-10-07)
+
+
+### Bug Fixes
+
+* **#63:** OWL edge cases from the PR review ([3e02878](https://github.com/alelom/OntoCanvas/commit/3e028789f3c6570c51da9eca9848ad1f34a20655)), closes [#63](https://github.com/alelom/OntoCanvas/issues/63)
+* **#63:** read OWL 2 qualified cardinalities on data-property restrictions ([cd6cde8](https://github.com/alelom/OntoCanvas/commit/cd6cde8826a19d8d6df2a1d23de0a63138ff727a)), closes [#63](https://github.com/alelom/OntoCanvas/issues/63) [#63](https://github.com/alelom/OntoCanvas/issues/63)
+* **#86:** class-expression marks on a self-loop become corner badges ([e49d6e1](https://github.com/alelom/OntoCanvas/commit/e49d6e10b2257bdbe1b8d10e6d75682546f8e0e9)), closes [#86](https://github.com/alelom/OntoCanvas/issues/86)
+
+
+### Features
+
+* **#63:** draw ∀, hasValue, hasSelf and unqualified-cardinality restrictions ([62ad979](https://github.com/alelom/OntoCanvas/commit/62ad9797583ab7d498a0f0111cbdec835c6e3cc3)), closes [#63](https://github.com/alelom/OntoCanvas/issues/63) [#63](https://github.com/alelom/OntoCanvas/issues/63)
+* **#63:** read nested class expressions and show their full formula ([bb3e5ce](https://github.com/alelom/OntoCanvas/commit/bb3e5ce25e0fb112428601283d9c2b4e2e6b2a55)), closes [#63](https://github.com/alelom/OntoCanvas/issues/63) [#63](https://github.com/alelom/OntoCanvas/issues/63)
+* **#63:** read-only safety and full detail for restriction edges ([ec05112](https://github.com/alelom/OntoCanvas/commit/ec051124039f9794d40a9ac9af91a6cbd570336b)), closes [#63](https://github.com/alelom/OntoCanvas/issues/63) [#63](https://github.com/alelom/OntoCanvas/issues/63)
+* **#63:** show anonymous data ranges (facets, datatype unions) in the modal ([e7e8533](https://github.com/alelom/OntoCanvas/commit/e7e853391cacd106b6f5eaf404e7dff25f77cb08)), closes [#63](https://github.com/alelom/OntoCanvas/issues/63) [#63](https://github.com/alelom/OntoCanvas/issues/63)
+
 # [1.26.0](https://github.com/alelom/OntoCanvas/compare/v1.25.1...v1.26.0) (2026-10-07)
 
 
