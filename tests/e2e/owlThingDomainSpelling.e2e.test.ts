@@ -17,11 +17,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const EDITOR_URL = 'http://localhost:5173/';
 const FIXTURE = join(__dirname, '../fixtures/owl-thing-domain.ttl');
 const OWL_THING_URI = 'http://www.w3.org/2002/07/owl#Thing';
-/** Object properties are keyed by their full URI, which is what the edge-styles menu passes. */
-const PROPERTY = 'http://example.org/owlthing#relates';
-
 let browser: Browser;
 let page: Page;
+/** The key the Object Properties menu passes for :relates when its edit button is clicked: the edge type,
+ * read from the menu rather than assumed (a local name or a full URI depending on the ontology; #87). */
+let property: string;
 
 beforeAll(async () => {
   browser = await chromium.launch();
@@ -53,6 +53,11 @@ beforeEach(async () => {
     },
     { timeout: 5000 }
   );
+  property = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll<HTMLInputElement>('#edgeStylesContent .edge-show-cb')];
+    return rows.map((cb) => cb.dataset.type ?? '').find((t) => /(^|[#/])relates$/.test(t)) ?? '';
+  });
+  expect(property).not.toBe('');
 });
 
 afterEach(async () => {
@@ -84,9 +89,9 @@ function objectProperty(p: Page, name: string) {
 
 describe('owl:Thing spelling in the object-property domain field (E2E)', () => {
   it('records a global domain when the full owl#Thing URI is typed', async () => {
-    await setDomain(page, PROPERTY, OWL_THING_URI);
+    await setDomain(page, property, OWL_THING_URI);
 
-    const op = await objectProperty(page, PROPERTY);
+    const op = await objectProperty(page, property);
     expect(op?.hasGlobalDomain).toBe(true);
     expect(op?.domain).toBeUndefined();
 
@@ -95,17 +100,17 @@ describe('owl:Thing spelling in the object-property domain field (E2E)', () => {
   });
 
   it('records the same thing for the prefixed spelling', async () => {
-    await setDomain(page, PROPERTY, 'owl:Thing');
+    await setDomain(page, property, 'owl:Thing');
 
-    const op = await objectProperty(page, PROPERTY);
+    const op = await objectProperty(page, property);
     expect(op?.hasGlobalDomain).toBe(true);
     expect(op?.domain).toBeUndefined();
   });
 
   it('still treats a real class as a real domain', async () => {
-    await setDomain(page, PROPERTY, 'Beta');
+    await setDomain(page, property, 'Beta');
 
-    const op = await objectProperty(page, PROPERTY);
+    const op = await objectProperty(page, property);
     expect(op?.hasGlobalDomain).toBe(false);
     expect(op?.domain).toBe('Beta');
   });
