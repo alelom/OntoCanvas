@@ -68,7 +68,7 @@ import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
 import { buildSearchVocabulary } from './ui/searchVocabulary';
-import { buildSearchSuggestions } from './lib/searchSuggestions';
+import { buildSearchSuggestions, type SuggestionSource } from './lib/searchSuggestions';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -504,6 +504,8 @@ function flushDisplayConfigSave(): void {
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 let rawData: GraphData = { nodes: [], edges: [] };
+/** What the search bar can suggest: the terms the last render drew (set in buildNetworkData, #81). */
+let searchSuggestionSources: SuggestionSource[] = [];
 /** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
 let classExpressionFontRatios: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 /** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
@@ -2918,6 +2920,9 @@ function buildNetworkData(
     externalOntologyReferences,
     mainOntologyBase: ttlStore ? getMainOntologyBase(ttlStore) : null,
   });
+  // The suggestions offer exactly what is drawn — including referenced external classes such as
+  // skos:Concept, which aren't among the ontology's own classes (rawData.nodes).
+  searchSuggestionSources = searchVocabulary.sources;
   const searchSets = computeSearchSets(
     filteredNodes,
     filteredEdges,
@@ -8985,17 +8990,9 @@ function updateSearchAutocomplete(): void {
     list.classList.remove('visible');
     return;
   }
-  // Relationships, classes and data properties, shown by prefixed name (foaf:member) with the full IRI
-  // as a tooltip (#81).
-  const { sources } = buildSearchVocabulary({
-    nodes: rawData.nodes,
-    edgeTypes: getEdgeTypes(rawData.edges),
-    objectProperties,
-    dataProperties,
-    externalOntologyReferences,
-    mainOntologyBase: ttlStore ? getMainOntologyBase(ttlStore) : null,
-  });
-  const suggestions = buildSearchSuggestions(query, sources);
+  // Relationships, classes and data properties as drawn by the last render, shown by prefixed name
+  // (foaf:member) with the full IRI as a tooltip (#81).
+  const suggestions = buildSearchSuggestions(query, searchSuggestionSources);
   list.innerHTML = '';
   list.classList.remove('visible');
   list.dataset.highlight = '-1';

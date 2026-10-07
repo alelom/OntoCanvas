@@ -67,3 +67,46 @@ describe('Search suggestions E2E (#81)', () => {
     expect(await page.$$eval('#searchAutocomplete b', (els) => els.length)).toBe(0);
   });
 });
+
+/** Referenced external classes (drawn, but not part of the ontology's own classes) are suggested too:
+ * the dropdown offers what the canvas shows, e.g. skos:Concept in FOAF. */
+describe('Search suggestions for referenced external classes E2E (#81)', () => {
+  let browser: Browser;
+  let page: Page;
+  const EXT_TTL = `@prefix : <http://example.org/main#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/main> a owl:Ontology .
+:Theme a owl:Class ; rdfs:label "Theme" ; rdfs:subClassOf skos:Concept .
+`;
+
+  beforeAll(async () => {
+    browser = await chromium.launch({ headless: true });
+    page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    page.setDefaultTimeout(5000);
+    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
+    await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), EXT_TTL);
+    await page.waitForFunction(() => /Nodes: [1-9]/.test(document.body.innerText), { timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
+    await page.keyboard.press('Escape');
+  });
+
+  afterAll(async () => {
+    if (page) await page.close();
+    if (browser) await browser.close();
+  });
+
+  it('suggests a referenced external class from a partial prefixed name', async () => {
+    const drawn = await page.evaluate(() => Object.keys((window as any).__EDITOR_TEST__.getNetwork().body.nodes));
+    expect(drawn).toContain('http://www.w3.org/2004/02/skos/core#Concept'); // precondition: it is on the canvas
+    for (const q of ['skos:Co', 'Concept']) {
+      await page.fill('#searchQuery', q);
+      await expect
+        .poll(() => page.$$eval('#searchAutocomplete .suggestion', (els) => els.map((e) => e.textContent)))
+        .toContain('skos:Concept(class)');
+    }
+  });
+});
