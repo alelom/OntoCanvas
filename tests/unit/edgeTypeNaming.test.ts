@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph, removeObjectPropertyFromStore } from '../../src/parser';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples');
 
@@ -42,3 +42,18 @@ ext:uses a owl:ObjectProperty ; rdfs:domain :A ; rdfs:range :B .`;
   });
 });
 
+describe('deleting a property by its local name outside the default namespace (#87)', () => {
+  it('removes the declaration and its domain/range, not a non-existent default-base IRI', async () => {
+    const ttl = `@prefix : <http://example.org/other#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/other> a owl:Ontology .
+:A a owl:Class ; rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :linksTo ; owl:someValuesFrom :B ] .
+:B a owl:Class .
+:linksTo a owl:ObjectProperty ; rdfs:domain :A ; rdfs:range :B .`;
+    const { store } = await parseRdfToGraph(ttl, { path: 'x.ttl' });
+    expect(removeObjectPropertyFromStore(store, 'linksTo')).toBeGreaterThanOrEqual(0);
+    expect(store.getQuads('http://example.org/other#linksTo', null, null, null)).toHaveLength(0);
+    expect(store.getQuads(null, 'http://www.w3.org/2002/07/owl#onProperty', 'http://example.org/other#linksTo', null)).toHaveLength(0);
+  });
+});

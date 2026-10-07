@@ -4,6 +4,7 @@ import {
   validateAllRelationships,
 } from './ontologyValidator';
 import { Store, DataFactory } from 'n3';
+import { parseRdfToGraph } from '../parser';
 import type { CopiedRelationship } from './relationshipClipboard';
 import type { GraphData } from '../types';
 
@@ -314,5 +315,29 @@ describe('ontologyValidator', () => {
 
       expect(results).toEqual([]);
     });
+  });
+});
+
+/** In an ontology outside the default namespace, edge types are local names (#87): the domain/range check
+ * must still find the property and the classes from the store, not by prefixing the default base. */
+describe('validateRelationship outside the default namespace (#87)', async () => {
+  const ttl = `@prefix : <http://example.org/other#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/other> a owl:Ontology .
+:Person a owl:Class . :Student a owl:Class ; rdfs:subClassOf :Person . :Group a owl:Class . :Room a owl:Class .
+:memberOf a owl:ObjectProperty ; rdfs:domain :Person ; rdfs:range :Group .`;
+  const { store, graphData } = await parseRdfToGraph(ttl, { path: 'other.ttl' });
+  const rawData = { nodes: graphData.nodes, edges: [] };
+  const edge: CopiedRelationship = { from: 'Person', type: 'memberOf' };
+
+  it('accepts a paste whose source satisfies the domain (directly or as a subclass)', () => {
+    expect(validateRelationship(edge, 'Group', 'Person', store, rawData).valid).toBe(true);
+    expect(validateRelationship(edge, 'Group', 'Student', store, rawData).valid).toBe(true);
+  });
+
+  it('rejects a paste whose source or target is outside the domain or range', () => {
+    expect(validateRelationship(edge, 'Group', 'Room', store, rawData).reason).toContain('domain');
+    expect(validateRelationship(edge, 'Room', 'Person', store, rawData).reason).toContain('range');
   });
 });

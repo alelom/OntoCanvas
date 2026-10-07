@@ -1330,14 +1330,6 @@ function resolveClassBase(store: Store): string {
   return base;
 }
 
-function getPropertyUri(edgeType: string): string {
-  // If edgeType is already a full URI (starts with http:// or https://), return it as-is
-  if (edgeType.startsWith('http://') || edgeType.startsWith('https://')) {
-    return edgeType;
-  }
-  return BASE_IRI + edgeType;
-}
-
 /** Resolve object property name to full URI from store (so loaded ontologies use their base). */
 function getObjectPropertyUriFromStore(store: Store, name: string): string {
   if (name.startsWith('http://') || name.startsWith('https://')) return name;
@@ -2737,7 +2729,8 @@ export function renameDataPropertyInStore(
  */
 export function removeObjectPropertyFromStore(store: Store, propertyName: string): number {
   if (propertyName === 'subClassOf') return -1;
-  const propUri = getPropertyUri(propertyName);
+  // From the store, so a local name resolves in an ontology outside the default namespace (#87).
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const propNode = DataFactory.namedNode(propUri);
   const onPropertyPred = DataFactory.namedNode(OWL + 'onProperty');
   const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');
