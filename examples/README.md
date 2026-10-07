@@ -17,6 +17,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | [complement.ttl](class-expressions/complement.ttl) | `owl:complementOf` (¬), including a self-loop case like FOAF `made` | #61 |
 | [oneOf.ttl](class-expressions/oneOf.ttl) | `owl:oneOf` enumerations ({}) of individuals and literals | #62 |
 | [all-class-expressions.ttl](class-expressions/all-class-expressions.ttl) | All four constructors side by side | #59–#62 |
+| [self-loop-restriction.ttl](class-expressions/self-loop-restriction.ttl) | A ∪ / ¬ member that is also a restriction self-loop: corner badge, not a mark on the loop | #86 |
 | [nested.ttl](class-expressions/nested.ttl) | Nested expressions and their full formula, e.g. `¬(Agent ∪ OnlineAccount)` | #63 |
 
 ## Restrictions and data ranges

@@ -1,0 +1,32 @@
+@prefix : <http://example.org/examples/self-loop-restriction#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Class expressions whose member is the class at the other end, when a restriction on the same property
+# also draws that class's self-loop (issue #86). The loop is too short, and under its own label, to
+# carry a mark, so the mark is a corner badge on Person instead:
+#   knows    range  Person ∪ Group   ∪ on the Person → Group edge, and a ∪ corner badge on Person
+#   mentors  range  ¬Person          a ¬ corner badge on Person
+# Both properties also show their restriction loop on Person: "∃ knows [1..*]", "∃ mentors [1..*]".
+
+<http://example.org/examples/self-loop-restriction> rdf:type owl:Ontology ;
+    rdfs:label "Class expressions next to a restriction self-loop" .
+
+:Person rdf:type owl:Class ;
+    rdfs:label "Person" ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :knows ; owl:someValuesFrom :Person ] ,
+                    [ rdf:type owl:Restriction ; owl:onProperty :mentors ; owl:someValuesFrom :Person ] .
+
+:Group rdf:type owl:Class ;
+    rdfs:label "Group" .
+
+:knows rdf:type owl:ObjectProperty ;
+    rdfs:label "knows" ;
+    rdfs:domain :Person ;
+    rdfs:range [ rdf:type owl:Class ; owl:unionOf ( :Person :Group ) ] .
+
+:mentors rdf:type owl:ObjectProperty ;
+    rdfs:label "mentors" ;
+    rdfs:domain :Person ;
+    rdfs:range [ rdf:type owl:Class ; owl:complementOf :Person ] .

@@ -60,7 +60,7 @@ export function dataStubId(net: OverlayNet, classId: string, propertyName: strin
   return null;
 }
 
-/** The from→to edge of a property (by vis edge id), or null if it isn't drawn — e.g. a self-loop, which
+/** The from→to edge of a property (by vis edge id), or null if it isn't drawn — e.g. a domain / range self-loop, which
  * the parser never creates. */
 export function findPropertyEdge(net: OverlayNet, from: string, to: string, propertyName: string, propertyUri?: string): EdgeLike | null {
   const edges = net.body?.edges;

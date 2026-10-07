@@ -118,6 +118,13 @@ describe('partitionByEdge: members whose edge to the counterpart is not drawn', 
     expect(partitionByEdge(['Agent', 'Doc'], 'Agent', has)).toEqual({ withEdge: ['Doc'], withoutEdge: ['Agent'] });
     expect(partitionByEdge(['A', 'B'], 'C', has)).toEqual({ withEdge: ['A', 'B'], withoutEdge: [] });
   });
+
+  it('treats a drawn self-loop as no edge, so its mark is a corner badge (#86)', () => {
+    // A restriction (Person ⊑ ∃knows.Person) draws a Person→Person loop for the same property as a
+    // range Person ∪ Group: the loop is too short and label-covered to carry a mark legibly.
+    const drawn = () => true;
+    expect(partitionByEdge(['Person', 'Group'], 'Person', drawn)).toEqual({ withEdge: ['Group'], withoutEdge: ['Person'] });
+  });
 });
 
 describe('propertyEdgeIds: vis edge ids are `${from}->${to}:${type}`', () => {

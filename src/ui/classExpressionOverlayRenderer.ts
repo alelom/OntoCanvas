@@ -14,8 +14,9 @@
  *   enumeration of untyped individuals, or on the expression's own classes when the property has no
  *   other end (no range / domain, or owl:Thing).
  * - Missing edges: a member whose edge to the counterpart isn't drawn (a self-loop — FOAF `made`:
- *   domain Agent, range ¬Agent) gets a corner badge on the counterpart instead of an edge mark, rather
- *   than a mark floating over the node's centre. Edges are looked up by property (vis edge id), so a
+ *   domain Agent, range ¬Agent), or is a self-loop drawn for a restriction on the same property (#86),
+ *   gets a corner badge on the counterpart instead of an edge mark, rather than a mark at the node's
+ *   centre or squeezed under the loop's label. Edges are looked up by property (vis edge id), so a
  *   mark never lands on another property's edge between the same classes.
  *
  * Object-property marks are drawn once per counterpart (the class on the opposite end), so an
