@@ -69,6 +69,8 @@ import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
 import { buildSearchVocabulary } from './ui/searchVocabulary';
 import { buildSearchSuggestions, type SuggestionSource } from './lib/searchSuggestions';
+import { outlineTargets, type OutlineTargets } from './graph/searchOutline';
+import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -506,6 +508,8 @@ function flushDisplayConfigSave(): void {
 let rawData: GraphData = { nodes: [], edges: [] };
 /** What the search bar can suggest: the terms the last render drew (set in buildNetworkData, #81). */
 let searchSuggestionSources: SuggestionSource[] = [];
+/** What the search outline surrounds after the last render (set in buildNetworkData, #84). */
+let searchOutlineTargets: OutlineTargets = { nodeIds: [], dataPropertyNames: [], edgeIds: [] };
 /** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
 let classExpressionFontRatios: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 /** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
@@ -2932,6 +2936,8 @@ function buildNetworkData(
     { ...searchVocabulary.extras, dataProperties: searchVocabulary.dataProperties }
   );
   const { matchingNodeIds, neighborNodeIds } = searchSets;
+  // What the pulsing search outline surrounds: direct matches only (#84).
+  searchOutlineTargets = outlineTargets(searchSets, searchQuery);
 
   if (searchQuery) {
     // Keep ALL nodes and edges - don't filter them out.
@@ -4030,6 +4036,8 @@ function setupNetworkSelectionAndNavigation(
   );
   // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
   hideEdgeLinesUnderNodes(net);
+  // A pulsing outline around what the search matched, in an SVG layer that follows the view (#84).
+  attachSearchOutline(net as unknown as Parameters<typeof attachSearchOutline>[0], container, () => searchOutlineTargets);
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
