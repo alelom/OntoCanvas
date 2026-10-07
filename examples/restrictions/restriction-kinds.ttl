@@ -11,8 +11,9 @@
 #   Person → Person     "⟲ knows"              (hasSelf: a loop)
 #   Sheet → Revision    "hasRevision [2..2]"   (unqualified cardinality: drawn to the property range)
 #   DrawingSet → Sheet  "contains [1..*]"      (qualified cardinality, editable)
-# Open "Edit edge" on any of them to read what the restriction means. Only the last two kinds
-# (∃ and qualified cardinality) are editable; the others are read-only for now.
+# Open "Edit edge" on any of them to read what the restriction means. Only ∃ (someValuesFrom) and
+# qualified cardinality (onClass) are editable. ∀, ∋, ⟲ and unqualified cardinality are read-only for
+# now, and so is an edge that mixes them with ∃ (Room → Wall). Here only DrawingSet → Sheet is editable.
 
 <http://example.org/examples/restrictions> rdf:type owl:Ontology ;
     rdfs:label "Restriction kinds" .

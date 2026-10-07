@@ -2491,8 +2491,15 @@ export function removeRestrictionFromStore(
  * removeEdgeFromStore, knowing only ∃/onClass, would mishandle) go cleanly. Returns how many were removed.
  */
 export function removeRestrictionEdgeFromStore(store: Store, from: string, to: string, edgeType: string): number {
+  // Restriction edges name both ends by local name; a class may be declared outside the main namespace.
   const base = resolveClassBase(store);
-  const uriOf = (name: string) => (/^https?:\/\//.test(name) ? name : base + name);
+  const declared = store
+    .getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null)
+    .map((q) => q.subject)
+    .filter((s) => s.termType === 'NamedNode')
+    .map((s) => s.value);
+  const uriOf = (name: string) =>
+    /^https?:\/\//.test(name) ? name : declared.find((uri) => extractLocalName(uri) === name) ?? base + name;
   const propUri = getObjectPropertyUriFromStore(store, edgeType);
   if (!propUri) return 0;
   const subjectUri = uriOf(from);

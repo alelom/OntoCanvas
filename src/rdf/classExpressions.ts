@@ -46,8 +46,8 @@ export function readRdfList(store: Store, listHead: RdfTerm): RdfTerm[] {
 interface ClassExpression {
   operator: ClassExpressionOperator;
   /** URIs of the classes the expression is drawn against: its named operands, collected through nested
-   * unions / intersections / complements (restriction operands contribute none), or the types of a
-   * oneOf's individuals. */
+   * unions / intersections / complements / enumerations (restriction operands contribute none), or the
+   * types of a oneOf's individuals. */
   classUris: string[];
   /** oneOf only: the enumerated individuals (local names) or literal values. */
   values?: string[];
@@ -69,6 +69,12 @@ export function individualTypeUris(store: Store, individual: RdfTerm): string[] 
     .map((q) => q.object)
     .filter((o) => o.termType === 'NamedNode' && ![OWL, RDF, RDFS].some((ns) => o.value.startsWith(ns)))
     .map((o) => o.value);
+}
+
+/** Whether a term is the boolean true (`true`, `"true"^^xsd:boolean` or `"1"^^xsd:boolean`), as owl:hasSelf
+ * must be: `owl:hasSelf false` is valid RDF that does not make a self restriction. */
+export function isTrueLiteral(term: RdfTerm | undefined): boolean {
+  return term?.termType === 'Literal' && (term.value === 'true' || term.value === '1');
 }
 
 const objectOfNode = (store: Store, node: RdfTerm, pred: string) =>
@@ -104,7 +110,7 @@ function restrictionFormula(store: Store, node: RdfTerm, seen: Set<string>): str
   if (all) return `∀${p}.${all}`;
   const value = objectOfNode(store, node, OWL + 'hasValue');
   if (value) return `∃${p}.{${value.termType === 'NamedNode' ? extractLocalName(value.value!) : literalDisplay(value)}}`;
-  if (objectOfNode(store, node, OWL + 'hasSelf')) return `∃${p}.Self`;
+  if (isTrueLiteral(objectOfNode(store, node, OWL + 'hasSelf'))) return `∃${p}.Self`;
   const onClass = filler('onClass') ?? filler('onDataRange');
   const suffix = onClass ? `.${onClass}` : '';
   const count = (pred: string) => objectOfNode(store, node, OWL + pred)?.value;
@@ -138,7 +144,7 @@ function readClassExpressionInner(store: Store, node: RdfTerm, seen: Set<string>
     if (t.termType === 'NamedNode' && t.value) return [t.value];
     if (t.termType !== 'BlankNode' || !t.value || seen.has(t.value)) return [];
     const sub = readClassExpressionInner(store, t, new Set(seen).add(t.value));
-    return sub && sub.operator !== 'oneOf' ? sub.classUris : [];
+    return sub ? sub.classUris : [];
   };
   const unique = (uris: string[]) => [...new Set(uris)];
 

@@ -13,7 +13,7 @@
 import { DataFactory, type Store } from 'n3';
 import type { GraphEdge, RestrictionKind } from '../types';
 import { extractLocalName } from '../utils/localName';
-import { individualTypeUris, type RdfTerm } from './classExpressions';
+import { individualTypeUris, isTrueLiteral, type RdfTerm } from './classExpressions';
 import { removeBlankNodeClosure } from './blankNodes';
 
 const OWL = 'http://www.w3.org/2002/07/owl#';
@@ -78,7 +78,7 @@ export function readObjectRestriction(store: Store, blank: RdfTerm, subjectUri: 
     return typeUri ? { kind: 'value', propertyUri, targetUri: typeUri, value: extractLocalName(value.value) } : null;
   }
 
-  if (objectOf('hasSelf')) return { kind: 'self', propertyUri, targetUri: subjectUri };
+  if (isTrueLiteral(objectOf('hasSelf'))) return { kind: 'self', propertyUri, targetUri: subjectUri };
 
   if (objectOf('minCardinality') || objectOf('maxCardinality') || objectOf('cardinality')) {
     const range = store.getQuads(DataFactory.namedNode(propertyUri), DataFactory.namedNode(RDFS + 'range'), null, null)
@@ -103,13 +103,13 @@ export function findRestrictionBlanks(store: Store, subjectUri: string, property
     });
 }
 
-/** Remove one restriction of `subjectUri`: its rdfs:subClassOf link and the restriction's own triples,
- * leaving no orphaned blank nodes. */
+/** Remove one restriction of `subjectUri`: its rdfs:subClassOf link and, once no other class refers to it
+ * (a labelled blank node can be shared), the restriction's own triples, leaving no orphaned blank nodes. */
 export function removeRestrictionBlank(store: Store, subjectUri: string, blank: RdfTerm): void {
   for (const q of store.getQuads(DataFactory.namedNode(subjectUri), DataFactory.namedNode(RDFS + 'subClassOf'), blank as never, null)) {
     store.removeQuad(q);
   }
-  removeBlankNodeClosure(store, blank);
+  if (store.getQuads(null, null, blank as never, null).length === 0) removeBlankNodeClosure(store, blank);
 }
 
 /** Plain-language detail of a restriction edge, one line per kind (for the read-only Edit-edge notice). */

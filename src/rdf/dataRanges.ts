@@ -50,7 +50,13 @@ function describeDatatypeRestriction(store: Store, base: string, facetList: RdfT
 export function describeDataRange(store: Store, range: RdfTerm): string | null {
   if (range.termType !== 'BlankNode') return null;
   const objectOf = (pred: string) => store.getQuads(range as never, DataFactory.namedNode(OWL + pred), null, null)[0]?.object as RdfTerm | undefined;
-  const operand = (t: RdfTerm): string => (t.termType === 'NamedNode' && t.value ? shortDatatype(t.value) : describeDataRange(store, t) ?? '?');
+  // An anonymous operand with spaces at the top level (a union, an intersection, a faceted range) is
+  // parenthesised, so ¬(A ∪ B) never reads as ¬A ∪ B.
+  const operand = (t: RdfTerm): string => {
+    if (t.termType === 'NamedNode' && t.value) return shortDatatype(t.value);
+    const inner = describeDataRange(store, t) ?? '?';
+    return inner.includes(' ') && !inner.startsWith('{') ? `(${inner})` : inner;
+  };
 
   const onDatatype = objectOf('onDatatype');
   if (onDatatype) return describeDatatypeRestriction(store, operand(onDatatype), objectOf('withRestrictions'));

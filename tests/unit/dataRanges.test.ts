@@ -43,7 +43,7 @@ describe('describeDataRange (#63)', async () => {
 
   it('describes unions, intersections (recursively), complements and enumerations of datatypes', () => {
     expect(describeProp('either')).toBe('xsd:string ∪ xsd:integer');
-    expect(describeProp('both')).toBe('xsd:decimal ∩ xsd:decimal [0, ∞)');
+    expect(describeProp('both')).toBe('xsd:decimal ∩ (xsd:decimal [0, ∞))'); // an anonymous operand keeps its grouping
     expect(describeProp('notText')).toBe('¬xsd:string');
     expect(describeProp('size')).toBe('{A0, A1}');
   });
