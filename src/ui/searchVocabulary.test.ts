@@ -50,3 +50,20 @@ describe('search vocabulary (#81)', () => {
     expect(vocab.dataProperties.find((d) => d.name === 'name')?.classIds).toEqual(['Group', 'Agent']);
   });
 });
+
+describe('classes defined elsewhere with a local id (as in FOAF)', () => {
+  it('are suggested and found by the prefixed name the canvas shows (foaf:Agent)', () => {
+    const nodes: GraphNode[] = [{ id: 'Agent', label: 'Agent', labellableRoot: null, isDefinedBy: FOAF } as GraphNode];
+    const vocab = buildSearchVocabulary({
+      nodes,
+      edgeTypes: [],
+      objectProperties: [],
+      dataProperties: [],
+      externalOntologyReferences: [{ url: FOAF, usePrefix: true, prefix: 'foaf' }],
+      mainOntologyBase: 'http://example.org/main#',
+    });
+    expect(buildSearchSuggestions('foaf:Ag', vocab.sources).map((s) => s.display)).toEqual(['foaf:Agent']);
+    const sets = computeSearchSets(nodes, [], 'foaf:Agent', false, true, vocab.extras);
+    expect(sets.directNodeMatchIds).toEqual(new Set(['Agent']));
+  });
+});

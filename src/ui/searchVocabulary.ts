@@ -9,7 +9,7 @@ import type { ExternalOntologyReference } from '../storage';
 import type { SearchExtras, SearchableDataProperty } from '../lib/searchHighlight';
 import { prefixedName, type SuggestionSource } from '../lib/searchSuggestions';
 import { appliesToClass } from '../lib/dataPropertyDisplay';
-import { getPrefixForUri } from './externalRefs';
+import { getNodePrefix, getPrefixForUri } from './externalRefs';
 import { getRelationshipLabel } from './relationshipUtils';
 
 export interface SearchVocabularyInput {
@@ -45,10 +45,12 @@ export function buildSearchVocabulary(input: SearchVocabularyInput): SearchVocab
     return { kind: 'relationship', display, title: iri, names };
   });
 
-  // Classes: matched by label/id already; an external class (IRI id) also by its prefixed name.
+  // Classes: matched by label/id already, and also by the prefixed name the canvas shows — for a class
+  // defined elsewhere, whether its id is a full IRI (skos:Concept) or a local name (FOAF's Agent).
   const nodeNameMap = new Map<string, string[]>();
   const classSources: SuggestionSource[] = nodes.map((n) => {
-    const display = isIri(n.id) ? prefixedName(n.id, prefixOf(n.id)) : n.label || n.id;
+    const prefix = getNodePrefix(n, refs) ?? (isIri(n.id) ? prefixOf(n.id) : null);
+    const display = prefix ? prefixedName(n.id, prefix) : isIri(n.id) ? prefixedName(n.id, null) : n.label || n.id;
     const names = [display, n.label || '', n.id];
     nodeNameMap.set(n.id, names);
     return { kind: 'class', display, title: n.id, names };
