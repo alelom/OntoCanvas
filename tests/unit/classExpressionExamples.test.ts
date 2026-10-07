@@ -14,6 +14,7 @@ describe('examples/class-expressions', () => {
     ['complement.ttl', { complement: 4 }],
     ['oneOf.ttl', { oneOf: 4 }],
     ['all-class-expressions.ttl', { union: 2, oneOf: 2, intersection: 2, complement: 1 }],
+    ['self-loop-restriction.ttl', { union: 1, complement: 1 }],
   ];
   for (const [file, expected] of cases) {
     it(`${file} surfaces its class expressions`, async () => {
@@ -23,4 +24,11 @@ describe('examples/class-expressions', () => {
       expect(counts).toEqual(expected);
     });
   }
+
+  it('self-loop-restriction.ttl draws the restriction loops the marks must avoid (#86)', async () => {
+    const file = 'self-loop-restriction.ttl';
+    const r = await parseRdfToGraph(readFileSync(join(EXAMPLES, file), 'utf-8'), { path: file });
+    const loops = r.graphData.edges.filter((e) => e.from === e.to).map((e) => `${e.from}:${e.type}`);
+    expect(loops.sort()).toEqual(['Person:knows', 'Person:mentors']);
+  });
 });

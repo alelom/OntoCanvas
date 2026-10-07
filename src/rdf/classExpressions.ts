@@ -45,19 +45,25 @@ export function readRdfList(store: Store, listHead: RdfTerm): RdfTerm[] {
 /** An anonymous class expression read from the store. */
 interface ClassExpression {
   operator: ClassExpressionOperator;
-  /** URIs of the classes the expression is drawn against (operands, or the types of a oneOf's individuals). */
+  /** URIs of the classes the expression is drawn against: its named operands, collected through nested
+   * unions / intersections / complements / enumerations (restriction operands contribute none), or the
+   * types of a oneOf's individuals. */
   classUris: string[];
   /** oneOf only: the enumerated individuals (local names) or literal values. */
   values?: string[];
+  /** The whole expression in description-logic notation, e.g. `¬(Agent ∪ OnlineAccount)`. */
+  formula: string;
+  /** Whether any operand is itself anonymous (a nested expression or a restriction). */
+  nested: boolean;
 }
 
-const LIST_OPERATORS: Array<[ClassExpressionOperator, string]> = [
-  ['union', OWL + 'unionOf'],
-  ['intersection', OWL + 'intersectionOf'],
+const LIST_OPERATORS: Array<[ClassExpressionOperator, string, string]> = [
+  ['union', OWL + 'unionOf', ' ∪ '],
+  ['intersection', OWL + 'intersectionOf', ' ∩ '],
 ];
 
 /** Named rdf:types of an individual, excluding OWL/RDF(S) vocabulary such as owl:NamedIndividual. */
-function individualTypeUris(store: Store, individual: RdfTerm): string[] {
+export function individualTypeUris(store: Store, individual: RdfTerm): string[] {
   return store
     .getQuads(individual as never, DataFactory.namedNode(RDF + 'type'), null, null)
     .map((q) => q.object)
@@ -65,22 +71,102 @@ function individualTypeUris(store: Store, individual: RdfTerm): string[] {
     .map((o) => o.value);
 }
 
+/** Whether a term is the boolean true (`true`, `"true"^^xsd:boolean` or `"1"^^xsd:boolean`), as owl:hasSelf
+ * must be: `owl:hasSelf false` is valid RDF that does not make a self restriction. */
+export function isTrueLiteral(term: RdfTerm | undefined): boolean {
+  return term?.termType === 'Literal' && (term.value === 'true' || term.value === '1');
+}
+
+const objectOfNode = (store: Store, node: RdfTerm, pred: string) =>
+  store.getQuads(node as never, DataFactory.namedNode(pred), null, null)[0]?.object as RdfTerm | undefined;
+
+/** Whether a formula has a binary ∪ / ∩ at its top level (outside any parentheses). */
+function isCompound(formula: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < formula.length; i++) {
+    const c = formula[i];
+    if (c === '(' || c === '{') depth++;
+    else if (c === ')' || c === '}') depth--;
+    else if (depth === 0 && (c === '∪' || c === '∩') && formula[i - 1] === ' ') return true;
+  }
+  return false;
+}
+
+/** Wrap a compound formula in parentheses, for use as an operand. */
+const asOperand = (formula: string) => (isCompound(formula) ? `(${formula})` : formula);
+
+/** A restriction in DL notation: ∃p.C, ∀p.C, ∃p.{a}, ∃p.Self, ≥n p.C / ≤n p / =n p.C; null if not one. */
+function restrictionFormula(store: Store, node: RdfTerm, seen: Set<string>): string | null {
+  const property = objectOfNode(store, node, OWL + 'onProperty');
+  if (!property?.value) return null;
+  const p = extractLocalName(property.value);
+  const filler = (pred: string) => {
+    const t = objectOfNode(store, node, OWL + pred);
+    return t ? asOperand(termFormula(store, t, seen)) : null;
+  };
+  const some = filler('someValuesFrom');
+  if (some) return `∃${p}.${some}`;
+  const all = filler('allValuesFrom');
+  if (all) return `∀${p}.${all}`;
+  const value = objectOfNode(store, node, OWL + 'hasValue');
+  if (value) return `∃${p}.{${value.termType === 'NamedNode' ? extractLocalName(value.value!) : literalDisplay(value)}}`;
+  if (isTrueLiteral(objectOfNode(store, node, OWL + 'hasSelf'))) return `∃${p}.Self`;
+  const onClass = filler('onClass') ?? filler('onDataRange');
+  const suffix = onClass ? `.${onClass}` : '';
+  const count = (pred: string) => objectOfNode(store, node, OWL + pred)?.value;
+  const exact = count('qualifiedCardinality') ?? count('cardinality');
+  if (exact != null) return `=${exact} ${p}${suffix}`;
+  const min = count('minQualifiedCardinality') ?? count('minCardinality');
+  const max = count('maxQualifiedCardinality') ?? count('maxCardinality');
+  const bounds = [min != null ? `≥${min} ${p}${suffix}` : null, max != null ? `≤${max} ${p}${suffix}` : null].filter(Boolean);
+  return bounds.length > 0 ? bounds.join(' ∩ ') : null;
+}
+
+/** Any class term in DL notation: a named class's local name, an expression, or a restriction. */
+function termFormula(store: Store, term: RdfTerm, seen: Set<string>): string {
+  if (term.termType === 'NamedNode' && term.value) return extractLocalName(term.value);
+  if (term.termType !== 'BlankNode' || !term.value || seen.has(term.value)) return '?';
+  const inner = new Set(seen).add(term.value);
+  return readClassExpressionInner(store, term, inner)?.formula ?? restrictionFormula(store, term, inner) ?? '?';
+}
+
 /** Read the class expression a blank node denotes, or null if it isn't one of the handled constructors.
- * Only named operands are kept (nested anonymous operands are not drawn). */
+ * Nested operands are read recursively into the formula; only named classes become classUris. */
 function readClassExpression(store: Store, node: RdfTerm): ClassExpression | null {
   if (node.termType !== 'BlankNode' || !node.value) return null;
-  const objectOf = (pred: string) => store.getQuads(node as never, DataFactory.namedNode(pred), null, null)[0]?.object as RdfTerm | undefined;
-  for (const [operator, pred] of LIST_OPERATORS) {
+  return readClassExpressionInner(store, node, new Set([node.value]));
+}
+
+function readClassExpressionInner(store: Store, node: RdfTerm, seen: Set<string>): ClassExpression | null {
+  const objectOf = (pred: string) => objectOfNode(store, node, pred);
+  // Named classes reachable through nested unions / intersections / complements (not restrictions).
+  const namedClasses = (t: RdfTerm): string[] => {
+    if (t.termType === 'NamedNode' && t.value) return [t.value];
+    if (t.termType !== 'BlankNode' || !t.value || seen.has(t.value)) return [];
+    const sub = readClassExpressionInner(store, t, new Set(seen).add(t.value));
+    return sub ? sub.classUris : [];
+  };
+  const unique = (uris: string[]) => [...new Set(uris)];
+
+  for (const [operator, pred, glyph] of LIST_OPERATORS) {
     const list = objectOf(pred);
     if (!list) continue;
-    const classUris = readRdfList(store, list)
-      .filter((t) => t.termType === 'NamedNode' && t.value)
-      .map((t) => t.value!);
-    return { operator, classUris };
+    const operands = readRdfList(store, list);
+    return {
+      operator,
+      classUris: unique(operands.flatMap(namedClasses)),
+      formula: operands.map((t) => asOperand(termFormula(store, t, seen))).join(glyph),
+      nested: operands.some((t) => t.termType !== 'NamedNode'),
+    };
   }
   const complemented = objectOf(OWL + 'complementOf');
   if (complemented) {
-    return { operator: 'complement', classUris: complemented.termType === 'NamedNode' && complemented.value ? [complemented.value] : [] };
+    return {
+      operator: 'complement',
+      classUris: unique(namedClasses(complemented)),
+      formula: `¬${asOperand(termFormula(store, complemented, seen))}`,
+      nested: complemented.termType !== 'NamedNode',
+    };
   }
   const enumeration = objectOf(OWL + 'oneOf');
   if (enumeration) {
@@ -91,7 +177,7 @@ function readClassExpression(store: Store, node: RdfTerm): ClassExpression | nul
       for (const uri of individualTypeUris(store, item)) if (!classUris.includes(uri)) classUris.push(uri);
     }
     const values = items.map((t) => (t.termType === 'NamedNode' ? extractLocalName(t.value!) : literalDisplay(t)));
-    return { operator: 'oneOf', classUris, values };
+    return { operator: 'oneOf', classUris, values, formula: `{${values.join(', ')}}`, nested: false };
   }
   return null;
 }
@@ -125,13 +211,16 @@ function isDrawable(
   members: string[],
   values: string[] | undefined,
   anchorAvailable: boolean,
+  nested: boolean,
 ): boolean {
   switch (operator) {
     case 'union':
     case 'intersection':
-      return members.length >= 2; // a one-operand union/intersection isn't worth grouping
+      // A one-class union/intersection is only worth a mark when it also has anonymous operands
+      // (e.g. Employee ∩ ∃hasBadge.Badge); the formula then says what the edge alone can't.
+      return members.length >= 2 || (nested && members.length === 1);
     case 'complement':
-      return members.length === 1;
+      return members.length >= 1;
     case 'oneOf':
       return (values?.length ?? 0) > 0 && (members.length > 0 || anchorAvailable);
   }
@@ -174,11 +263,13 @@ export function extractClassExpressionGroups(store: Store, seenClasses: Set<stri
           const counterparts = sideClasses(store, subj, otherSide, seenClasses);
           const stubOwners = exprSide === 'domain' ? members : counterparts;
           const anchorAvailable = propertyKind === 'data' ? stubOwners.length > 0 : counterparts.length > 0;
-          if (!isDrawable(expr.operator, members, expr.values, anchorAvailable)) continue;
+          if (!isDrawable(expr.operator, members, expr.values, anchorAvailable, expr.nested)) continue;
           groups.push({
             operator: expr.operator,
             members,
             ...(expr.values ? { values: expr.values } : {}),
+            formula: expr.formula,
+            nested: expr.nested,
             propertyName: extractLocalName(propUri),
             propertyUri: propUri,
             counterparts,

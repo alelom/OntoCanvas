@@ -86,10 +86,11 @@ export interface RangeDisplay {
  * itself declares no rdfs:range — but it is attributed to the restriction, not to the property.
  */
 export function describeRange(
-  dp: Pick<DataPropertyInfo, 'range' | 'inheritedRange'> | undefined,
+  dp: Pick<DataPropertyInfo, 'range' | 'inheritedRange' | 'rangeExpression'> | undefined,
   restrictionDataRange?: string | null
 ): RangeDisplay {
-  const asserted = dp?.range;
+  // A named datatype, or an anonymous range (union, complement, enumeration) shown as declared (#63).
+  const asserted = dp?.range ? formatRangeUri(dp.range) : dp?.rangeExpression;
   if (!asserted && restrictionDataRange) {
     const label = formatRangeUri(restrictionDataRange);
     return {
@@ -100,12 +101,11 @@ export function describeRange(
     };
   }
   if (asserted) {
-    const label = formatRangeUri(asserted);
     return {
       source: 'asserted',
-      labelSuffix: ` (${label})`,
-      menuLabel: label,
-      tooltipNote: `rdfs:range ${label}`,
+      labelSuffix: ` (${asserted})`,
+      menuLabel: asserted,
+      tooltipNote: `rdfs:range ${asserted}`,
     };
   }
 

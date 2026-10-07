@@ -59,3 +59,13 @@ describe('expressionExample (plain-language modal example)', () => {
     expect(expressionExample(g({ operator: 'oneOf', values: ['<x>'], position: 'range' }))).toContain('&lt;x&gt;');
   });
 });
+
+describe('nested expressions in the tooltip (#63)', () => {
+  it('shows the full formula of a nested expression', () => {
+    const g: ClassExpressionGroup = {
+      ...base, operator: 'complement', members: ['Agent', 'OnlineAccount'], propertyName: 'currentProject', position: 'range',
+      formula: '¬(Agent ∪ OnlineAccount)', nested: true,
+    };
+    expect(describeClassExpression(g).split('\n')[0]).toBe('Range complement: ¬(Agent ∪ OnlineAccount)');
+  });
+});

@@ -86,9 +86,10 @@ export function nodeBadgeTargets(group: ClassExpressionGroup): string[] {
   return group.counterparts.length > 0 ? group.counterparts : group.members;
 }
 
-/** Split members by whether their edge to `counterpart` is drawn. A missing edge (e.g. a self-loop,
- * which the parser never draws — FOAF `made`: domain Agent, range ¬Agent) can't carry an edge mark,
- * so the renderer puts a corner badge on the counterpart node instead. */
+/** Split members by whether their edge to `counterpart` can carry an edge mark. A missing edge (e.g. a
+ * domain / range self-loop, which the parser never draws — FOAF `made`: domain Agent, range ¬Agent)
+ * can't, and neither can a drawn self-loop (a restriction's, #86): too short, and under its own label.
+ * The renderer puts a corner badge on the counterpart node instead. */
 export function partitionByEdge(
   members: string[],
   counterpart: string,
@@ -96,7 +97,7 @@ export function partitionByEdge(
 ): { withEdge: string[]; withoutEdge: string[] } {
   const withEdge: string[] = [];
   const withoutEdge: string[] = [];
-  for (const m of members) (hasEdge(m, counterpart) ? withEdge : withoutEdge).push(m);
+  for (const m of members) (m !== counterpart && hasEdge(m, counterpart) ? withEdge : withoutEdge).push(m);
   return { withEdge, withoutEdge };
 }
 

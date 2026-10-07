@@ -16,6 +16,8 @@ export const OPERATOR_INFO: Record<ClassExpressionOperator, { word: string; glyp
 
 /** The expression in symbolic form: "A ∪ B", "A ∩ B", "¬A", "{a, b}". */
 function formula(group: ClassExpressionGroup): string {
+  // The parser's formula, when present, covers nested operands too (e.g. ¬(Agent ∪ OnlineAccount)).
+  if (group.formula) return group.formula;
   switch (group.operator) {
     case 'complement':
       return `¬${group.members[0] ?? '?'}`;
@@ -110,6 +112,8 @@ export function showClassExpressionModal(group: ClassExpressionGroup): void {
   // The opposite end of the property: its range when the expression is on the domain, and vice versa.
   const counterpartLabel = group.position === 'domain' ? 'Range' : 'Domain';
   const lines: string[] = [];
+  // Nested operands (expressions, restrictions) aren't in the chips above: give the whole expression.
+  if (group.nested && group.formula) lines.push(`Full expression: <code>${escapeHtml(group.formula)}</code>`);
   if (group.counterparts.length > 0) {
     lines.push(`${counterpartLabel}: ${group.counterparts.map((c) => `<code>${escapeHtml(c)}</code>`).join(', ')}`);
   }

@@ -97,6 +97,9 @@ export interface DataPropertyInfo {
    * declared as a name only must stay distinguishable from a property that asserts xsd:string.
    */
   range: string | null;
+  /** When rdfs:range is an anonymous data range (facets, union, …): its readable form, e.g.
+   * `xsd:decimal [0.0, 1.0]`. `range` then holds just the base type, when there is one (#63). */
+  rangeExpression?: string;
   /**
    * Range this property inherits through rdfs:subPropertyOf from a super-property whose range is
    * declared *in the same loaded document*. Only set when `range` is null. Never resolved by
@@ -131,7 +134,16 @@ export interface GraphEdge {
   onClass?: string;
   /** Whether this edge comes from an OWL restriction (true) or from domain/range definition (false/undefined) */
   isRestriction?: boolean;
+  /** The restriction kinds this edge stands for (several when e.g. both ∃ and ∀ restrict the same
+   * property to the same class). See src/rdf/restrictions.ts (#63). */
+  restrictionKinds?: RestrictionKind[];
+  /** For a `value` (owl:hasValue) restriction: the individual's local name. */
+  restrictionValue?: string;
 }
+
+/** OWL restriction kinds drawn as edges: ∃ some, ∀ only, ∋ value, ⟲ self, and qualified / unqualified
+ * cardinality (#63). */
+export type RestrictionKind = 'some' | 'only' | 'value' | 'self' | 'qualified' | 'unqualified';
 
 /**
  * An anonymous OWL class expression (e.g. owl:unionOf) that appears in a property's rdfs:domain.
@@ -151,6 +163,11 @@ export interface ClassExpressionGroup {
   members: string[];
   /** oneOf only: the enumerated individuals (local names) or literal values, in list order. */
   values?: string[];
+  /** The whole expression in description-logic notation, e.g. `¬(Agent ∪ OnlineAccount)` (#63). */
+  formula?: string;
+  /** Whether the expression has anonymous operands (nested expressions or restrictions), so the members
+   * alone don't say it all and the formula should be shown. */
+  nested?: boolean;
   /** Local name of the property whose domain or range is this expression. */
   propertyName: string;
   /** Full URI of the property. */

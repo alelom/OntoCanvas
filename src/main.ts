@@ -7,6 +7,7 @@ import {
   addEdgeToStore,
   addRestrictionToStore,
   removeEdgeFromStore,
+  removeRestrictionEdgeFromStore,
   removeRestrictionFromStore,
   addNodeToStore,
   removeNodeFromStore,
@@ -72,6 +73,9 @@ import { buildSearchSuggestions, type SuggestionSource } from './lib/searchSugge
 import { outlineTargets, type OutlineTargets } from './graph/searchOutline';
 import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
+import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
+import { showDataRangeNotice } from './ui/dataRangeNotice';
+import { isEditableRestriction } from './rdf/restrictions';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
 import {
@@ -781,9 +785,17 @@ function performDeleteSelection(): boolean {
   // subClassOf quads to still exist for removeEdgeFromStore to find and remove them.
   // Note: rawData.edges contains at most one edge per from/to/type combination.
   debugLog(`[DELETE] Starting edge deletion. edgesToRemove: ${edgesToRemove.length} edges`);
+  const readOnlyEdgesKept: string[] = [];
   for (const { from, to, type } of edgesToRemove) {
     debugLog(`[DELETE] Processing edge deletion: ${from} -> ${to} : ${type}`);
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    // Restriction kinds the editor can't write back (∀ ∋ ⟲, unqualified cardinality): removeEdgeFromStore
+    // knows only ∃/onClass and would remove the wrong triples, and undo would re-add them as ∃ (#63).
+    if (edge && !isEditableRestriction(edge)) {
+      if (nodesToRemove.includes(from) || nodesToRemove.includes(to)) continue; // goes with its class, below
+      readOnlyEdgesKept.push(`${from} → ${to} (${type})`);
+      continue;
+    }
     debugLog(`[DELETE] Found edge in rawData:`, edge ? { from: edge.from, to: edge.to, type: edge.type, isRestriction: edge.isRestriction } : 'NOT FOUND');
     const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     // Del key deletion should remove both restriction and domain/range
@@ -850,10 +862,21 @@ function performDeleteSelection(): boolean {
     }
   }
   debugLog(`[DELETE] Finished edge deletion. Remaining edges in rawData: ${rawData.edges.length}`);
+  if (readOnlyEdgesKept.length > 0) {
+    alert(`These OWL restrictions can't be deleted in the editor yet (adjust them in the ontology source):\n${readOnlyEdgesKept.join('\n')}`);
+  }
 
   for (const { from, to, type } of connectedEdges) {
-    if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    if (edge && !isEditableRestriction(edge)) {
+      // Deleting its class takes a read-only restriction with it: remove exactly its restriction(s). No undo
+      // is offered — addEdgeToStore would re-add it as ∃ (#63).
+      removeRestrictionEdgeFromStore(ttlStore, from, to, type);
+      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) rawData.edges.splice(idx, 1);
+      continue;
+    }
+    if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
     const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     try {
       removeEdgeFromStore(ttlStore, from, to, type);
@@ -2388,6 +2411,8 @@ function showEditDataPropertyModal(name: string): void {
   rangeSel.disabled = isImported;
   rangeSel.style.opacity = isImported ? '0.5' : '1';
   rangeSel.title = isImported ? 'Range cannot be changed for imported properties.' : '';
+  // An anonymous data range (facets, datatype union, …) can't be shown in the dropdown: spell it out (#63).
+  showDataRangeNotice(rangeSel, dp?.rangeExpression);
   const originalDomains = dp ? [...(dp.domains || [])] : [];
   (modal as HTMLElement).dataset.originalDomains = JSON.stringify(originalDomains);
   if (domainsListEl && dp) {
@@ -3510,6 +3535,9 @@ function buildNetworkData(
       
       // Build tooltip: include comment if present, and add import hint if imported
       let tooltip = dp?.comment || '';
+      if (dp?.rangeExpression) {
+        tooltip = tooltip ? `${tooltip}\n\nRange: ${dp.rangeExpression}` : `Range: ${dp.rangeExpression}`;
+      }
       if (rangeDisplay.source !== 'asserted') {
         tooltip = tooltip ? `${tooltip}\n\n${rangeDisplay.tooltipNote}` : rangeDisplay.tooltipNote;
       }
@@ -5186,6 +5214,8 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
 
   // Cleared up-front; each branch re-shows it if this edge's domain belongs to a union (owl:unionOf).
   showEditEdgeClassExpressionNotice(modal, null);
+  // Likewise the restriction detail, which also unlocks a form a read-only restriction locked (#63).
+  showEditEdgeRestrictionNotice(modal, null, '');
 
   const isDataPropertyEdge = edgeType === 'dataprop';
 
@@ -5421,6 +5451,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
     showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType));
+    showEditEdgeRestrictionNotice(modal, edge ?? null, getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences));
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
@@ -5444,6 +5475,7 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   const maxCardInput = document.getElementById('editEdgeMaxCard') as HTMLInputElement;
 
   showEditEdgeClassExpressionNotice(modal, null);
+  showEditEdgeRestrictionNotice(modal, null, '');
   modal.dataset.mode = 'add';
   pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;
@@ -5668,6 +5700,11 @@ function confirmEditEdge(): void {
   const newFrom = fromSel.value;
   const newTo = toSel.value;
   const oldEdge = rawData.edges.find((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+  // A read-only restriction (the form is locked, but Enter could still submit): never write it back (#63).
+  if (oldEdge && !isEditableRestriction(oldEdge)) {
+    hideEditEdgeModalWithCleanup();
+    return;
+  }
   
   // Get isRestriction checkbox value - cardinality only applies to restrictions
   const isRestrictionCb = document.getElementById('editEdgeIsRestriction') as HTMLInputElement;

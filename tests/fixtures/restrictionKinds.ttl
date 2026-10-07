@@ -1,0 +1,37 @@
+@prefix : <http://example.org/rk#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# One restriction of each kind (issue #63).
+
+<http://example.org/rk> rdf:type owl:Ontology .
+
+:Room rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasPart ; owl:someValuesFrom :Wall ] ,
+                    [ rdf:type owl:Restriction ; owl:onProperty :hasPart ; owl:allValuesFrom :Wall ] .
+:Wall rdf:type owl:Class .
+:Building rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasFloor ; owl:allValuesFrom :Floor ] .
+:Floor rdf:type owl:Class .
+:Status rdf:type owl:Class .
+:Current rdf:type owl:NamedIndividual , :Status .
+:Revision rdf:type owl:Class .
+:Sheet rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasStatus ; owl:hasValue :Current ] ,
+                    [ rdf:type owl:Restriction ; owl:onProperty :hasRevision ; owl:cardinality "2"^^xsd:nonNegativeInteger ] ,
+                    [ rdf:type owl:Restriction ; owl:onProperty :hasNote ; owl:minCardinality "1"^^xsd:nonNegativeInteger ] .
+:Person rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :knows ; owl:hasSelf "true"^^xsd:boolean ] .
+:DrawingSet rdf:type owl:Class ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:onClass :Sheet ;
+                      owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ] .
+
+:hasPart rdf:type owl:ObjectProperty .
+:hasFloor rdf:type owl:ObjectProperty .
+:hasStatus rdf:type owl:ObjectProperty .
+:hasRevision rdf:type owl:ObjectProperty ; rdfs:range :Revision .
+:hasNote rdf:type owl:ObjectProperty .
+:knows rdf:type owl:ObjectProperty .
+:contains rdf:type owl:ObjectProperty .

@@ -11,6 +11,15 @@ import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
+import {
+  findRestrictionBlanks,
+  mergeRestrictionKinds,
+  readObjectRestriction,
+  readRestrictionCardinality,
+  removeRestrictionBlank,
+} from './rdf/restrictions';
+import { describeDataRange } from './rdf/dataRanges';
+import { removeBlankNodeClosure } from './rdf/blankNodes';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -411,15 +420,13 @@ function buildParseResultFromStore(
         const minCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'minCardinality');
         const maxCard = allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'maxCardinality');
         
-        const targetQuad = someValuesFrom ?? onClass;
-        if (!onProperty || !targetQuad) {
+        // Which kind of restriction this is, and the named class its edge points to (#63): ∃ some, ∀ only,
+        // ∋ hasValue (the individual's class), ⟲ hasSelf (the subject), qualified/unqualified cardinality.
+        const restriction = onProperty ? readObjectRestriction(store, candidateBlank as RdfTerm, subjUri) : null;
+        if (!onProperty || !restriction) {
           continue; // Skip this blank node, continue to next one
         }
-        const target = targetQuad.object;
-        if (target.termType !== 'NamedNode') {
-          continue; // Skip this blank node, continue to next one
-        }
-        const targetUri = (target as { value: string }).value;
+        const targetUri = restriction.targetUri;
         const targetName = extractLocalName(targetUri);
         
         // Check if target class exists
@@ -442,8 +449,9 @@ function buildParseResultFromStore(
         }
         const propName = isExternalProperty ? propUri : extractLocalName(propUri);
 
-        // Create a unique key for this restriction to avoid processing duplicates
-        const restrictionKey = `${subjName}:${propUri}:${targetUri}`;
+        // Create a unique key for this restriction to avoid processing duplicates (per kind, so a ∀ and a
+        // ∃ on the same property and class are both read, then merged into one edge below)
+        const restrictionKey = `${subjName}:${propUri}:${targetUri}:${restriction.kind}`;
         if (processedRestrictions.has(restrictionKey)) {
           continue; // Already processed this restriction
         }
@@ -454,8 +462,13 @@ function buildParseResultFromStore(
           foundDescribesRestriction = true;
         }
 
+        // Only ∃ and qualified restrictions carry an implied [1..*]; owl:cardinality (unqualified, exact) is
+        // read like qualifiedCardinality.
+        const exactCard = qualCard ?? allBlankQuads.find(q => (q.predicate as { value: string }).value === OWL + 'cardinality');
         const cardinality = parseCardinalityFromRestriction(
-          minQual, maxQual, qualCard, minCard, maxCard, someValuesFrom, propName, onClass
+          minQual, maxQual, exactCard, minCard, maxCard,
+          restriction.kind === 'some' ? someValuesFrom : undefined, propName,
+          restriction.kind === 'qualified' ? onClass : undefined
         );
 
         const key = `${subjName}->${targetName}:${propName}`;
@@ -465,12 +478,25 @@ function buildParseResultFromStore(
           (e) => e.from === subjName && e.to === targetName && e.type === propName
         );
         
+        // A second restriction on the same property and class (e.g. ∀ next to ∃) joins the existing edge.
+        const existingRestriction = existingEdgeIndex >= 0 && edges[existingEdgeIndex].isRestriction ? edges[existingEdgeIndex] : null;
+        if (existingRestriction) {
+          existingRestriction.restrictionKinds = mergeRestrictionKinds(existingRestriction.restrictionKinds, restriction.kind);
+          if (existingRestriction.minCardinality == null && existingRestriction.maxCardinality == null) {
+            Object.assign(existingRestriction, cardinality);
+          }
+          if (restriction.value) existingRestriction.restrictionValue = restriction.value;
+          continue;
+        }
+
         const restrictionEdge: GraphEdge = { 
           from: subjName, 
           to: targetName, 
           type: propName, 
           ...cardinality,
           isRestriction: true, // Mark as restriction (from OWL restriction)
+          restrictionKinds: [restriction.kind],
+          ...(restriction.value ? { restrictionValue: restriction.value } : {}),
         };
         
         // Debug: Log restriction edge creation for contains edges
@@ -824,18 +850,8 @@ function buildParseResultFromStore(
     const propUri = (onProp.object as { value: string }).value;
     const propName = extractLocalName(propUri);
     referencedDataPropUris.add(propUri); // Track full URI
-    const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
-    const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
-    const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
-    const toInt = (quad: import('n3').Quad | undefined): number | null =>
-      quad?.object?.value != null ? parseInt(String(quad.object.value), 10) : null;
-    let minCard: number | null = toInt(minQ);
-    let maxCard: number | null = toInt(maxQ);
-    const n = toInt(cardQ);
-    if (n !== null && !isNaN(n)) {
-      minCard = n;
-      maxCard = n;
-    }
+    // Qualified (OWL 2, the form used with owl:onDataRange) or unqualified cardinality (#63).
+    const { min: minCard, max: maxCard } = readRestrictionCardinality(store, obj as RdfTerm);
     const subjName = extractLocalName((subj as { value: string }).value);
     const node = nodes.find((n) => n.id === subjName);
     if (node && node.dataPropertyRestrictions) {
@@ -858,6 +874,7 @@ function buildParseResultFromStore(
       let label = propName;
       let comment: string | undefined = undefined;
       let range: string | null = null;
+      let rangeExpression: string | undefined;
       let domains: string[] = [];
       let hasGlobalDomain = false;
       
@@ -869,6 +886,7 @@ function buildParseResultFromStore(
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'range') {
           range = resolveDatatypeRangeValue(store, q.object as RdfTerm);
+          rangeExpression = describeDataRange(store, q.object as RdfTerm) ?? undefined;
         } else if (pred === RDFS + 'domain') {
           const domainUri = (q.object as { value?: string }).value;
           if (domainUri === OWL + 'Thing') {
@@ -905,6 +923,7 @@ function buildParseResultFromStore(
         label: String(label),
         comment,
         range,
+        ...(rangeExpression ? { rangeExpression } : {}),
         inheritedRange: range ? null : findInheritedRange(store, propUri),
         domains,
         hasGlobalDomain,
@@ -1052,6 +1071,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     // substituting a default, so a typing stub stays distinguishable from an asserted xsd:string.
     const rangeQuad = store.getQuads(subj, RDFS + 'range', null, null)[0];
     const range = resolveDatatypeRangeValue(store, rangeQuad?.object as RdfTerm | undefined);
+    const rangeExpression = rangeQuad ? describeDataRange(store, rangeQuad.object as RdfTerm) : null;
     
     // Extract domain(s) - rdfs:domain can appear multiple times
     const domainQuads = store.getQuads(subj, RDFS + 'domain', null, null);
@@ -1081,6 +1101,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       label: String(label),
       comment: comment || undefined,
       range,
+      ...(rangeExpression ? { rangeExpression } : {}),
       inheritedRange: range ? null : findInheritedRange(store, subjUri),
       domains,
       hasGlobalDomain,
@@ -2007,7 +2028,12 @@ export function updateDataPropertyRangeInStore(
   const rangePred = DataFactory.namedNode(RDFS + 'range');
   const rangeQuads = store.getQuads(subject, rangePred, null, null);
   const graph = rangeQuads[0]?.graph ?? subjectQuads[0]?.graph ?? DataFactory.defaultGraph();
-  for (const rq of rangeQuads) store.removeQuad(rq);
+  for (const rq of rangeQuads) {
+    store.removeQuad(rq);
+    // An anonymous range (datatype restriction with facets, datatype union, …) goes with it entirely,
+    // rather than staying behind as stray blank-node triples (#63).
+    if (store.getQuads(null, null, rq.object, null).length === 0) removeBlankNodeClosure(store, rq.object as RdfTerm);
+  }
   if (rangeUri) {
     store.addQuad(subject, rangePred, DataFactory.namedNode(rangeUri), graph);
   }
@@ -2242,18 +2268,8 @@ export function getDataPropertyRestrictionsForClass(
     const onDataRange = store.getQuads(obj, DataFactory.namedNode(OWL_ON_DATA_RANGE), null, null)[0];
     if (!onProp || !onDataRange) continue;
     const propName = extractLocalName((onProp.object as { value: string }).value);
-    const minQ = store.getQuads(obj, OWL + 'minCardinality', null, null)[0];
-    const maxQ = store.getQuads(obj, OWL + 'maxCardinality', null, null)[0];
-    const cardQ = store.getQuads(obj, OWL + 'cardinality', null, null)[0];
-    const toInt = (quad: import('n3').Quad | undefined): number | null =>
-      quad?.object?.value != null ? parseInt(String(quad.object.value), 10) : null;
-    let minCard: number | null = toInt(minQ);
-    let maxCard: number | null = toInt(maxQ);
-    const n = toInt(cardQ);
-    if (n !== null && !isNaN(n)) {
-      minCard = n;
-      maxCard = n;
-    }
+    // Qualified (OWL 2, the form used with owl:onDataRange) or unqualified cardinality (#63).
+    const { min: minCard, max: maxCard } = readRestrictionCardinality(store, obj as RdfTerm);
     result.push({
       propertyName: propName,
       minCardinality: minCard ?? undefined,
@@ -2466,6 +2482,30 @@ export function removeRestrictionFromStore(
   for (const q of blankQuads) store.removeQuad(q);
   const blankAsObjQuads = store.getQuads(null, null, blank, null);
   for (const q of blankAsObjQuads) store.removeQuad(q);
+}
+
+/**
+ * Remove the OWL restriction(s) drawn as the edge from→to for `edgeType` — any kind (∃ ∀ ∋ ⟲,
+ * qualified or unqualified cardinality; see src/rdf/restrictions.ts) — leaving the property's
+ * domain/range alone. Used when a class is deleted, so its read-only restriction edges (which
+ * removeEdgeFromStore, knowing only ∃/onClass, would mishandle) go cleanly. Returns how many were removed.
+ */
+export function removeRestrictionEdgeFromStore(store: Store, from: string, to: string, edgeType: string): number {
+  // Restriction edges name both ends by local name; a class may be declared outside the main namespace.
+  const base = resolveClassBase(store);
+  const declared = store
+    .getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null)
+    .map((q) => q.subject)
+    .filter((s) => s.termType === 'NamedNode')
+    .map((s) => s.value);
+  const uriOf = (name: string) =>
+    /^https?:\/\//.test(name) ? name : declared.find((uri) => extractLocalName(uri) === name) ?? base + name;
+  const propUri = getObjectPropertyUriFromStore(store, edgeType);
+  if (!propUri) return 0;
+  const subjectUri = uriOf(from);
+  const blanks = findRestrictionBlanks(store, subjectUri, propUri, uriOf(to));
+  for (const blank of blanks) removeRestrictionBlank(store, subjectUri, blank);
+  return blanks.length;
 }
 
 /**
