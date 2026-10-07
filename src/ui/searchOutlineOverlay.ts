@@ -11,10 +11,12 @@
  */
 import type { NodeBox, Point } from '../graph/classExpressionOverlay';
 import {
+  edgeSamplePoints,
   outlineRect,
   polylinePath,
   polylinesOutsideBoxes,
   viewMatrix,
+  type DrawnEdge,
   type OutlineTargets,
 } from '../graph/searchOutline';
 
@@ -43,15 +45,7 @@ interface OutlineNet {
   on(event: 'afterDrawing', cb: () => void): void;
   body: {
     nodes: Record<string, unknown>;
-    edges: Record<
-      string,
-      {
-        fromId?: string;
-        toId?: string;
-        edgeType?: { getPoint?(t: number): Point };
-        labelModule?: { size?: { left: number; top: number; width: number; height: number } };
-      }
-    >;
+    edges: Record<string, DrawnEdge & { labelModule?: { size?: { left: number; top: number; width: number; height: number } } }>;
   };
 }
 
@@ -86,14 +80,8 @@ function rectMarkup(box: NodeBox): string {
  * and under its own label, so it reads as drawn beneath them like the edge itself. */
 function edgeMarkup(net: OutlineNet, id: string, nodeBoxes: NodeBox[]): string {
   const edge = net.body.edges[id];
-  const getPoint = edge?.edgeType?.getPoint;
-  if (!edge || !getPoint) return '';
-  let points: Point[];
-  try {
-    points = Array.from({ length: EDGE_SAMPLES + 1 }, (_, i) => getPoint.call(edge.edgeType, i / EDGE_SAMPLES));
-  } catch {
-    return '';
-  }
+  if (!edge) return '';
+  const points = edgeSamplePoints(edge, EDGE_SAMPLES);
   const boxes = [...nodeBoxes];
   const label = edge.labelModule?.size;
   if (label && Number.isFinite(label.left)) {

@@ -15,6 +15,7 @@ const TTL = `@prefix : <http://example.org/main#> .
 :Group a owl:Class ; rdfs:label "Group" .
 :Agent a owl:Class ; rdfs:label "Agent" .
 :member a owl:ObjectProperty ; rdfs:label "member" ; rdfs:domain :Group ; rdfs:range :Agent .
+:knows a owl:ObjectProperty ; rdfs:label "knows" ; rdfs:domain :Agent ; rdfs:range :Agent .
 :yahooChatID a owl:DatatypeProperty ; rdfs:label "Yahoo chat ID" ; rdfs:domain :Agent ; rdfs:range xsd:string .
 `;
 
@@ -62,6 +63,12 @@ describe('Search outline E2E (#84)', () => {
 
   it('outlines a matched relationship along its curve, not its endpoints', async () => {
     await search('member');
+    await expect.poll(async () => (await shapes()).paths, { timeout: 5000 }).toBeGreaterThan(0);
+    expect((await shapes()).rects).toBe(0);
+  });
+
+  it('outlines a self-loop relationship around its loop (like foaf:fundedBy on owl:Thing)', async () => {
+    await search('knows');
     await expect.poll(async () => (await shapes()).paths, { timeout: 5000 }).toBeGreaterThan(0);
     expect((await shapes()).rects).toBe(0);
   });

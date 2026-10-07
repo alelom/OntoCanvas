@@ -60,3 +60,33 @@ export function polylinesOutsideBoxes(points: Point[], boxes: NodeBox[]): Point[
 export function polylinePath(points: Point[]): string {
   return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${+p.x.toFixed(2)} ${+p.y.toFixed(2)}`).join(' ');
 }
+
+/** The parts of a vis edge that say where it is drawn. */
+export interface DrawnEdge {
+  fromId?: string;
+  toId?: string;
+  edgeType?: {
+    getPoint?(t: number): Point;
+    /** A self-loop's circle `[x, y, radius]` (vis draws it beside the node). */
+    _getCircleData?(): [number, number, number];
+  };
+}
+
+/** `samples + 1` points along where the edge is drawn. A self-loop (foaf:fundedBy, owl:Thing to itself)
+ * is a circle beside its node: its getPoint only returns the node centre, so follow the circle instead,
+ * the way vis draws it. Empty when vis offers no geometry. */
+export function edgeSamplePoints(edge: DrawnEdge, samples: number): Point[] {
+  const type = edge.edgeType;
+  const ts = Array.from({ length: samples + 1 }, (_, i) => i / samples);
+  try {
+    if (edge.fromId !== undefined && edge.fromId === edge.toId) {
+      if (!type?._getCircleData) return [];
+      const [cx, cy, r] = type._getCircleData();
+      return ts.map((t) => ({ x: cx + r * Math.cos(t * 2 * Math.PI), y: cy - r * Math.sin(t * 2 * Math.PI) }));
+    }
+    const getPoint = type?.getPoint;
+    return getPoint ? ts.map((t) => getPoint.call(type, t)) : [];
+  } catch {
+    return [];
+  }
+}

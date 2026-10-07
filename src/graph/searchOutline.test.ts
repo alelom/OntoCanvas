@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { outlineTargets, viewMatrix, outlineRect, polylinesOutsideBoxes, polylinePath } from './searchOutline';
+import { outlineTargets, viewMatrix, outlineRect, polylinesOutsideBoxes, polylinePath, edgeSamplePoints } from './searchOutline';
 import { computeSearchSets } from '../lib/searchHighlight';
 import type { GraphEdge, GraphNode } from '../types';
 
@@ -69,5 +69,24 @@ describe('polylinesOutsideBoxes: the edge stroke, cut where it runs under boxes'
 describe('polylinePath', () => {
   it('writes an SVG path', () => {
     expect(polylinePath([{ x: 0, y: 0 }, { x: 10, y: 5.5 }])).toBe('M0 0 L10 5.5');
+  });
+});
+
+describe('edgeSamplePoints: where a relationship is drawn', () => {
+  it('samples an edge between two nodes along its curve', () => {
+    const edgeType = { getPoint: (t: number) => ({ x: t * 100, y: 0 }) };
+    expect(edgeSamplePoints({ fromId: 'A', toId: 'B', edgeType }, 4).map((p) => p.x)).toEqual([0, 25, 50, 75, 100]);
+  });
+
+  it('samples a self-loop (foaf:fundedBy on owl:Thing) around its circle, not at the node centre', () => {
+    // vis draws a self-loop as a circle beside the node; its getPoint just returns the node centre.
+    const edgeType = { getPoint: () => ({ x: 0, y: 0 }), _getCircleData: () => [100, 50, 20] as [number, number, number] };
+    const pts = edgeSamplePoints({ fromId: 'Thing', toId: 'Thing', edgeType }, 4);
+    expect(pts.map((p) => [Math.round(p.x), Math.round(p.y)])).toEqual([[120, 50], [100, 30], [80, 50], [100, 70], [120, 50]]);
+  });
+
+  it('gives nothing when vis offers no geometry', () => {
+    expect(edgeSamplePoints({ fromId: 'A', toId: 'A', edgeType: {} }, 4)).toEqual([]);
+    expect(edgeSamplePoints({ fromId: 'A', toId: 'B' }, 4)).toEqual([]);
   });
 });
