@@ -1,4 +1,5 @@
 import type { BorderLineType } from './types';
+import type { SearchScope } from './lib/searchHighlight';
 
 // IndexedDB database names and store names
 const IDB_NAME = 'OntologyEditor';
@@ -24,7 +25,10 @@ export interface DisplayConfig {
   dataPropertyFontSize?: number;
   layoutMode: string;
   searchQuery: string;
-  includeNeighbors: boolean;
+  /** How search shows results (#85); configs from before it only have includeNeighbors. */
+  searchScope?: SearchScope;
+  /** Legacy (before #85): true for the "matches and their neighbours" scope. */
+  includeNeighbors?: boolean;
   /** When true (default), search matches whole names rather than substrings. */
   exactMatch?: boolean;
   annotationStyleConfig?: unknown;

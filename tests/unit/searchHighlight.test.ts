@@ -9,7 +9,10 @@ import { describe, it, expect } from 'vitest';
 import {
   computeSearchSets,
   getNodeSearchOpacity,
-  getFreeStandingNodeSearchOpacity,
+  getDataPropertySearchOpacity,
+  searchScopeFromConfig,
+  scopeIncludesNeighbours,
+  scopeDimsGraph,
   getEdgeSearchOpacity,
   OPACITY_MATCH,
   OPACITY_RELATED,
@@ -172,27 +175,116 @@ describe('empty query', () => {
   });
 });
 
-describe('free-standing nodes (data properties with no rdfs:domain)', () => {
-  it('is fully opaque when no search is active', () => {
-    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate (xsd:dateTime)', '')).toBe(OPACITY_MATCH);
-    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate (xsd:dateTime)', '   ')).toBe(OPACITY_MATCH);
+describe('data properties (#81)', () => {
+  // Sheet --hasPart--> Wall; data properties: paperSize on Sheet, createdDate free-standing (no domain).
+  const nodes = [node('Sheet'), node('Wall'), node('Room')];
+  const edges = [edge('Sheet', 'Wall', 'hasPart'), edge('Room', 'Wall', 'contains')];
+  const dataProperties = [
+    { name: 'paperSize', names: ['paperSize', 'paper size', 'http://example.org/o#paperSize', 'ex:paperSize'], classIds: ['Sheet'] },
+    { name: 'createdDate', names: ['createdDate', 'prov:createdDate'], classIds: [] },
+  ];
+  const sets = (q: string, inc = false, exact = false) => computeSearchSets(nodes, edges, q, inc, exact, { dataProperties });
+  const dpOp = (sets_: ReturnType<typeof computeSearchSets>, name: string, classId: string | null, q: string) =>
+    getDataPropertySearchOpacity(name, classId, sets_, q);
+
+  it('matches a data property by name, label or prefixed name, and highlights the classes it is on', () => {
+    for (const q of ['paperSize', 'paper size', 'ex:paperSize']) {
+      const s_ = sets(q);
+      expect(s_.matchingDataPropertyNames).toEqual(new Set(['paperSize']));
+      expect(s_.matchingNodeIds).toEqual(new Set(['Sheet']));
+    }
   });
 
-  it('is judged on its own name, not inherited from a class', () => {
-    expect(getFreeStandingNodeSearchOpacity('createdDate', 'prov:createdDate', 'created')).toBe(OPACITY_MATCH);
-    expect(getFreeStandingNodeSearchOpacity('createdDate', 'prov:createdDate', 'Sheet')).toBe(OPACITY_DIM);
+  it('shows the matched data property box at full opacity, others under dimmed classes dimmed', () => {
+    const s_ = sets('paperSize');
+    expect(dpOp(s_, 'paperSize', 'Sheet', 'paperSize')).toBe(OPACITY_MATCH);
+    expect(dpOp(s_, 'createdDate', null, 'paperSize')).toBe(OPACITY_DIM);
+    expect(dpOp(sets('Room'), 'paperSize', 'Sheet', 'Room')).toBe(OPACITY_DIM);
   });
 
-  it('dims a non-match rather than leaving it the brightest thing on the canvas', () => {
-    // The whole point: with a query active, an unmatched free-standing node must dim like any
-    // unmatched class, not stay at full opacity while the classes around it fade.
-    const unmatched = getFreeStandingNodeSearchOpacity('generatedAtTime', 'prov:generatedAtTime', 'Drawing');
-    const unmatchedClass = getNodeSearchOpacity('SomeClass', new Set(['Drawing']), new Set());
-    expect(unmatched).toBe(unmatchedClass);
+  it("a box under a matched class keeps that class's opacity (unchanged behaviour)", () => {
+    const s_ = sets('Sheet');
+    expect(dpOp(s_, 'paperSize', 'Sheet', 'Sheet')).toBe(OPACITY_MATCH);
   });
 
-  it('honours exact-match mode', () => {
-    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate', 'created', true)).toBe(OPACITY_DIM);
-    expect(getFreeStandingNodeSearchOpacity('createdDate', 'createdDate', 'createdDate', true)).toBe(OPACITY_MATCH);
+  it('other boxes of a class highlighted only through what was searched are faded, so the match stands out', () => {
+    // Searching paperSize highlights Sheet; Sheet's other data property (sheetCode) is faded, not full.
+    const s_ = computeSearchSets(nodes, edges, 'paperSize', false, false, {
+      dataProperties: [...dataProperties, { name: 'sheetCode', names: ['sheetCode'], classIds: ['Sheet'] }],
+    });
+    expect(dpOp(s_, 'paperSize', 'Sheet', 'paperSize')).toBe(OPACITY_MATCH);
+    expect(dpOp(s_, 'sheetCode', 'Sheet', 'paperSize')).toBe(OPACITY_RELATED);
+    // Likewise for a relationship search: its endpoints' boxes are faded.
+    expect(dpOp(sets('hasPart'), 'paperSize', 'Sheet', 'hasPart')).toBe(OPACITY_RELATED);
+  });
+
+  it("include neighbours: the matched data property's classes act like matched nodes", () => {
+    const s_ = sets('paperSize', true);
+    expect(s_.neighborNodeIds).toEqual(new Set(['Wall']));
+  });
+
+  it('exact mode matches whole names only', () => {
+    expect(sets('paper', false, true).matchingDataPropertyNames.size).toBe(0);
+    expect(sets('paperSize', false, true).matchingDataPropertyNames).toEqual(new Set(['paperSize']));
+  });
+
+  // Free-standing data properties (no rdfs:domain): judged on their own name.
+  it('free-standing: fully opaque when no search is active', () => {
+    expect(dpOp(sets(''), 'createdDate', null, '')).toBe(OPACITY_MATCH);
+    expect(dpOp(sets('   '), 'createdDate', null, '   ')).toBe(OPACITY_MATCH);
+  });
+
+  it('free-standing: judged on its own name, not inherited from a class', () => {
+    expect(dpOp(sets('created'), 'createdDate', null, 'created')).toBe(OPACITY_MATCH);
+    expect(dpOp(sets('Sheet'), 'createdDate', null, 'Sheet')).toBe(OPACITY_DIM);
+  });
+
+  it('free-standing: a non-match dims like an unmatched class, not left the brightest thing on the canvas', () => {
+    const s_ = sets('Sheet');
+    expect(dpOp(s_, 'createdDate', null, 'Sheet')).toBe(getNodeSearchOpacity('Room', s_.matchingNodeIds, s_.neighborNodeIds));
+  });
+
+  it('free-standing: honours exact-match mode', () => {
+    expect(dpOp(sets('created', false, true), 'createdDate', null, 'created')).toBe(OPACITY_DIM);
+    expect(dpOp(sets('createdDate', false, true), 'createdDate', null, 'createdDate')).toBe(OPACITY_MATCH);
+  });
+});
+
+describe('relationships and classes by prefixed name or label (#81)', () => {
+  const nodes = [node('http://xmlns.com/foaf/0.1/Agent', 'Agent'), node('Group')];
+  const edges = [edge('Group', 'http://xmlns.com/foaf/0.1/Agent', 'http://xmlns.com/foaf/0.1/member')];
+  const extra = {
+    edgeNames: (type: string) => (type.endsWith('/member') ? ['foaf:member', 'member'] : []),
+    nodeNames: (id: string) => (id.endsWith('/Agent') ? ['foaf:Agent'] : []),
+  };
+  it('finds a relationship by its prefixed name, as the suggestions show it', () => {
+    const s_ = computeSearchSets(nodes, edges, 'foaf:member', false, false, extra);
+    expect(s_.matchingEdgeIds.size).toBe(1);
+    expect(computeSearchSets(nodes, edges, 'foaf:member', false, true, extra).matchingEdgeIds.size).toBe(1);
+  });
+  it('finds a class by its prefixed name', () => {
+    expect(computeSearchSets(nodes, edges, 'foaf:Agent', false, true, extra).directNodeMatchIds).toEqual(
+      new Set(['http://xmlns.com/foaf/0.1/Agent']),
+    );
+  });
+  it('without extra names, behaves exactly as before', () => {
+    expect(computeSearchSets(nodes, edges, 'foaf:member', false, false).matchingEdgeIds.size).toBe(0);
+    expect(computeSearchSets(nodes, edges, 'member', false, false).matchingEdgeIds.size).toBe(1);
+  });
+});
+
+describe('search scope: three display options (#85)', () => {
+  it('reads the scope from a saved config, falling back to the old includeNeighbors', () => {
+    expect(searchScopeFromConfig({ searchScope: 'highlight' })).toBe('highlight');
+    expect(searchScopeFromConfig({ searchScope: 'neighbours', includeNeighbors: false })).toBe('neighbours');
+    expect(searchScopeFromConfig({ includeNeighbors: true })).toBe('neighbours');
+    expect(searchScopeFromConfig({ includeNeighbors: false })).toBe('matches');
+    expect(searchScopeFromConfig({})).toBe('matches'); // the default, as before
+    expect(searchScopeFromConfig({ searchScope: 'bogus' as never })).toBe('matches');
+  });
+
+  it('only "neighbours" collects neighbours; only "highlight" leaves the graph undimmed', () => {
+    expect(['highlight', 'neighbours', 'matches'].map((s) => scopeIncludesNeighbours(s as never))).toEqual([false, true, false]);
+    expect(['highlight', 'neighbours', 'matches'].map((s) => scopeDimsGraph(s as never))).toEqual([false, true, true]);
   });
 });

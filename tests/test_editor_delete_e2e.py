@@ -22,9 +22,8 @@ def run_delete_test(page, use_search: bool) -> None:
         search_input = page.locator("input#searchQuery")
         search_input.fill("Drawing content")
         page.wait_for_timeout(200)
-        neighbors_cb = page.locator("#searchIncludeNeighbors")
-        if not neighbors_cb.is_checked():
-            neighbors_cb.check()
+        page.locator("#searchOptionsToggle").click()
+        page.locator('input[name="searchScope"][value="neighbours"]').check()
         page.wait_for_timeout(200)
 
     select_ok = page.evaluate("() => window.__EDITOR_TEST__.selectNodeByLabel('Drawing content')")
