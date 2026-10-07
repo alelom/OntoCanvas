@@ -2,8 +2,9 @@
  * Unit tests for source preservation functionality
  */
 
-import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from '../../src/rdf/sourcePreservation';
 import { parseTtlToGraph, storeToTurtle, updateLabelInStore, extractLocalName } from '../../src/parser';
@@ -15,6 +16,15 @@ import type { NodeFormData } from '../../src/ui/nodeModalForm';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 
 describe('sourcePreservation', () => {
+  // Saved output goes to a temp dir, never into tests/fixtures: a test run must not modify tracked files (#88).
+  let outputDir: string;
+  beforeAll(() => {
+    outputDir = mkdtempSync(join(tmpdir(), 'ontocanvas-source-preservation-'));
+  });
+  afterAll(() => {
+    rmSync(outputDir, { recursive: true, force: true });
+  });
+
   describe('parseTurtleWithPositions', () => {
     it('should parse simple Turtle file with positions', async () => {
       const content = `@prefix : <http://example.org#> .
@@ -803,15 +813,6 @@ describe('sourcePreservation', () => {
             // Save
             const modifiedContent = await storeToTurtle(store, undefined, undefined, cache);
             
-            // DEBUG: Write out the generated content to inspect syntax errors
-            if (i === 0) {
-              const debugPath = join(__dirname, '../fixtures/debug-round-trip-output.ttl');
-              writeFileSync(debugPath, modifiedContent, 'utf-8');
-              console.log('[DEBUG] Wrote generated TTL to:', debugPath);
-              console.log('[DEBUG] First 500 chars:', modifiedContent.substring(0, 500));
-              console.log('[DEBUG] Line 70-75:', modifiedContent.split('\n').slice(69, 75).join('\n'));
-            }
-            
             // Parse again
             parseResult = await parseTtlToGraph(modifiedContent);
             store = parseResult.store;
@@ -948,7 +949,7 @@ describe('sourcePreservation', () => {
     describe('targeted modification verification', () => {
       it('should rename Drawing Element label when using full URI nodeId (GUI workflow)', async () => {
         const originalFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata.ttl');
-        const modifiedFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata_drawing_element_renamed_test.ttl');
+        const outputPath = join(outputDir, 'aec_drawing_metadata_drawing_element_renamed_test.ttl');
         
         // Read original file
         const originalContent = readFileSync(originalFixturePath, 'utf-8');
@@ -1039,13 +1040,13 @@ describe('sourcePreservation', () => {
         });
         
         const modifiedContent = saveResult.ttlString;
-        writeFileSync(modifiedFixturePath, modifiedContent, 'utf-8');
+        writeFileSync(outputPath, modifiedContent, 'utf-8');
         
         // Verify file was created
-        expect(existsSync(modifiedFixturePath)).toBe(true);
+        expect(existsSync(outputPath)).toBe(true);
         
         // Read both files for comparison
-        const savedContent = readFileSync(modifiedFixturePath, 'utf-8');
+        const savedContent = readFileSync(outputPath, 'utf-8');
         
         // Check what format was used in saved content
         const usesPrefixedNames = savedContent.includes(':DrawingElement rdf:type') || 
@@ -1164,7 +1165,7 @@ describe('sourcePreservation', () => {
         // SKIPPED: This test expects cache-based reconstruction behavior
         // Cache-based reconstruction is disabled by default. To enable, pass useCacheBasedReconstruction: true
         const originalFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata.ttl');
-        const modifiedFixturePath = join(__dirname, '../fixtures/aec_drawing_metadata_drawing_sheet_renamed.ttl');
+        const outputPath = join(outputDir, 'aec_drawing_metadata_drawing_sheet_renamed.ttl');
         
         // Read original file
         const originalContent = readFileSync(originalFixturePath, 'utf-8');
@@ -1202,13 +1203,13 @@ describe('sourcePreservation', () => {
         
         // Save to new file
         const modifiedContent = await storeToTurtle(store, undefined, undefined, cache);
-        writeFileSync(modifiedFixturePath, modifiedContent, 'utf-8');
+        writeFileSync(outputPath, modifiedContent, 'utf-8');
         
         // Verify file was created
-        expect(existsSync(modifiedFixturePath)).toBe(true);
+        expect(existsSync(outputPath)).toBe(true);
         
         // Read both files for comparison
-        const savedContent = readFileSync(modifiedFixturePath, 'utf-8');
+        const savedContent = readFileSync(outputPath, 'utf-8');
         
         // Verify the modification: new label should be present
         expect(savedContent).toContain(newLabel);
@@ -1301,11 +1302,6 @@ describe('sourcePreservation', () => {
         // Original label should not appear (or appear less, if it appears in comments)
         expect(originalLabelInSaved).toBeLessThan(originalLabelOccurrences);
         
-        // Clean up: remove the test file (optional, but good practice)
-        // Uncomment if you want to clean up after test
-        // if (existsSync(modifiedFixturePath)) {
-        //   writeFileSync(modifiedFixturePath, ''); // Clear it, or delete it
-        // }
       });
 
       it.skip('should preserve prefixed names in inline blank node restrictions', async () => {
