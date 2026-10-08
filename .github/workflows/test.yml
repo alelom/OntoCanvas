@@ -117,18 +117,9 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests with coverage
-        run: npm run test:e2e -- --coverage
+      # No --coverage: Vitest's v8 coverage instruments only the Node process running the test files, while
+      # the app under test runs in Chromium, so it measured a few imported modules, not the app (#96).
+      - name: Run E2E tests
+        run: npm run test:e2e
         env:
           EDITOR_E2E_URL: http://localhost:5173/
-
-      - name: Get commit SHA
-        id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Upload E2E test coverage data
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-e2e-${{ steps.sha.outputs.sha }}
-          path: coverage/
-          retention-days: 90

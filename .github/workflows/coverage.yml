@@ -32,7 +32,8 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Wait for both test jobs and get their run IDs
+      # Unit coverage only: E2E tests drive the app in Chromium, which Vitest's coverage can't see (#96).
+      - name: Wait for the unit test job and get its run ID
         uses: actions/github-script@v7
         id: wait-for-tests
         with:
@@ -41,9 +42,9 @@ jobs:
             const isManual = '${{ github.event_name }}' === 'workflow_dispatch';
             const maxAttempts = 60; // 5 minutes max wait
             const delayMs = 5000; // 5 seconds between attempts
-            
+
             let workflowRunId;
-            
+
             if (isManual) {
               // Find the latest Tests workflow run for this commit
               core.info(`Manual trigger: Finding latest Tests workflow run for commit ${sha}`);
@@ -54,24 +55,24 @@ jobs:
                 head_sha: sha,
                 per_page: 10,
               });
-              
+
               // Find the most recent successful run
               const successfulRun = workflowRuns.data.workflow_runs.find(
                 run => run.status === 'completed' && run.conclusion === 'success'
               );
-              
+
               if (!successfulRun) {
                 core.setFailed(`No successful Tests workflow run found for commit ${sha}`);
                 return { ready: false };
               }
-              
+
               workflowRunId = successfulRun.id;
               core.info(`Found Tests workflow run: ${workflowRunId}`);
             } else {
               // Use the workflow_run that triggered this
               workflowRunId = ${{ github.event.workflow_run.id }};
             }
-            
+
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
               // Get the workflow run and its jobs
               const workflowRun = await github.rest.actions.getWorkflowRun({
@@ -79,58 +80,43 @@ jobs:
                 repo: context.repo.repo,
                 run_id: workflowRunId,
               });
-              
+
               const jobs = await github.rest.actions.listJobsForWorkflowRun({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 run_id: workflowRunId,
               });
-              
+
               const unitTestsJob = jobs.data.jobs.find(j => j.name === 'Unit Tests');
-              const e2eTestsJob = jobs.data.jobs.find(j => j.name === 'E2E Tests');
-              
-              // Check if both jobs completed successfully
-              if (unitTestsJob && e2eTestsJob && 
-                  unitTestsJob.status === 'completed' && 
-                  e2eTestsJob.status === 'completed' &&
-                  unitTestsJob.conclusion === 'success' && 
-                  e2eTestsJob.conclusion === 'success') {
-                
+
+              if (unitTestsJob && unitTestsJob.status === 'completed' && unitTestsJob.conclusion === 'success') {
+
                 // Check if artifacts exist
                 const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   run_id: workflowRunId,
                 });
-                
+
                 const unitArtifact = artifacts.data.artifacts.find(
                   a => a.name === `coverage-unit-${sha}`
                 );
-                const e2eArtifact = artifacts.data.artifacts.find(
-                  a => a.name === `coverage-e2e-${sha}`
-                );
-                
-                if (unitArtifact && e2eArtifact) {
-                  core.info(`Both artifacts found after ${attempt + 1} attempts`);
+
+                if (unitArtifact) {
+                  core.info(`Unit coverage artifact found after ${attempt + 1} attempts`);
                   core.setOutput('unitRunId', String(workflowRunId));
-                  core.setOutput('e2eRunId', String(workflowRunId));
                   core.setOutput('ready', 'true');
-                  return { 
-                    ready: true, 
-                    attempts: attempt + 1,
-                    unitRunId: workflowRunId,
-                    e2eRunId: workflowRunId
-                  };
+                  return { ready: true, attempts: attempt + 1, unitRunId: workflowRunId };
                 }
               }
-              
+
               if (attempt < maxAttempts - 1) {
-                core.info(`Waiting for both test jobs to complete... (attempt ${attempt + 1}/${maxAttempts})`);
+                core.info(`Waiting for the unit test job to complete... (attempt ${attempt + 1}/${maxAttempts})`);
                 await new Promise(resolve => setTimeout(resolve, delayMs));
               }
             }
-            
-            core.setFailed('Timeout waiting for both test jobs to complete and upload artifacts');
+
+            core.setFailed('Timeout waiting for the unit test job to complete and upload its coverage');
             return { ready: false };
 
       - name: Download unit test coverage
@@ -141,41 +127,22 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ steps.wait-for-tests.outputs.unitRunId }}
 
-      - name: Download E2E test coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-e2e-${{ steps.sha.outputs.sha }}
-          path: coverage-e2e/
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.wait-for-tests.outputs.e2eRunId }}
-
       - name: Debug coverage file structure
         run: |
           echo "=== Coverage Unit Structure ==="
           find coverage-unit -type f -name "*.json" -o -name "*.info" -o -name "*.lcov" | head -20
           echo ""
-          echo "=== Coverage E2E Structure ==="
-          find coverage-e2e -type f -name "*.json" -o -name "*.info" -o -name "*.lcov" | head -20
-          echo ""
           echo "=== Checking specific files ==="
           ls -la coverage-unit/coverage/coverage-final.json 2>&1 || echo "Unit coverage-final.json NOT FOUND"
           ls -la coverage-unit/coverage/lcov.info 2>&1 || echo "Unit lcov.info NOT FOUND"
-          ls -la coverage-e2e/coverage/coverage-final.json 2>&1 || echo "E2E coverage-final.json NOT FOUND"
-          ls -la coverage-e2e/coverage/lcov.info 2>&1 || echo "E2E lcov.info NOT FOUND"
 
-      - name: Merge coverage reports
+      - name: Collect coverage reports
         run: |
-          # Create merged coverage directory
           mkdir -p coverage
-          # Copy unit test coverage as base
           if [ -d "coverage-unit" ] && [ "$(ls -A coverage-unit 2>/dev/null)" ]; then
             cp -r coverage-unit/* coverage/ 2>/dev/null || true
           fi
-          # Merge E2E coverage
-          if [ -d "coverage-e2e" ] && [ "$(ls -A coverage-e2e 2>/dev/null)" ]; then
-            cp -r coverage-e2e/* coverage/ 2>/dev/null || true
-          fi
-          echo "Coverage reports merged"
+          echo "Coverage reports collected"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -233,12 +200,12 @@ jobs:
           # Copy coverage reports to a directory in the branch
           mkdir -p coverage-reports/${{ steps.sha.outputs.sha }}
           cp -r coverage/* coverage-reports/${{ steps.sha.outputs.sha }}/ || true
-          
+
           # Generate badges (using a badge generation tool or static badges)
           # For now, we'll create a simple coverage summary
           echo "# Coverage Report for ${{ steps.sha.outputs.sha }}" > coverage-reports/${{ steps.sha.outputs.sha }}/README.md
           echo "Generated: $(date)" >> coverage-reports/${{ steps.sha.outputs.sha }}/README.md
-          
+
           git add coverage-reports/
           git commit -m "Add coverage report for ${{ steps.sha.outputs.sha }}" || exit 0
           git push origin coverage-reports
@@ -251,14 +218,4 @@ jobs:
           files: ./coverage-unit/coverage/coverage-final.json,./coverage-unit/coverage/lcov.info
           flags: unittests
           name: codecov-unit
-          fail_ci_if_error: false
-
-      - name: Upload E2E coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-e2e/coverage/coverage-final.json,./coverage-e2e/coverage/lcov.info
-          flags: e2e
-          name: codecov-e2e
           fail_ci_if_error: false
