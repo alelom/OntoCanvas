@@ -85,3 +85,33 @@ describe('restoreQuadsToStore and undo round-trip', () => {
     expect((rangeQuads[0].object as { value: string }).value).toBe(PM + 'Person');
   });
 });
+
+describe('restrictions drawn as edges to an external class (#99 review)', () => {
+  // Every restriction the expansion draws to an external class must be removable, or applyFilter redraws it.
+  const build = () => {
+    const store = new Store();
+    const task = DataFactory.namedNode(TA + 'Task');
+    const blank = DataFactory.blankNode('only1');
+    store.addQuad(task, DataFactory.namedNode(RDFS + 'subClassOf'), blank);
+    store.addQuad(blank, DataFactory.namedNode(OWL + 'onProperty'), DataFactory.namedNode(TA + 'assignedTo'));
+    store.addQuad(blank, DataFactory.namedNode(OWL + 'allValuesFrom'), DataFactory.namedNode(PM + 'Person'));
+    return { store, task };
+  };
+  const subClassOfCount = (store: Store) =>
+    store.getQuads(DataFactory.namedNode(TA + 'Task'), DataFactory.namedNode(RDFS + 'subClassOf'), null, null).length;
+
+  it('removes an allValuesFrom restriction on the external class', () => {
+    const { store } = build();
+    removeExternalClassReferencesFromStore(store, PM + 'Person');
+    expect(subClassOfCount(store)).toBe(0);
+  });
+
+  it('captures it for undo, and restoring brings it back', () => {
+    const { store } = build();
+    const removed = getQuadsRemovedForExternalClass(store, PM + 'Person');
+    expect(removed).toHaveLength(1);
+    removeExternalClassReferencesFromStore(store, PM + 'Person');
+    restoreQuadsToStore(store, removed);
+    expect(subClassOfCount(store)).toBe(1);
+  });
+});

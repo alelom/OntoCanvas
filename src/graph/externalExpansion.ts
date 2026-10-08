@@ -320,6 +320,8 @@ export function expandWithExternalRefs(
 
   // Restrictions on a local class whose filler is an external class (#99). The parser draws only restrictions
   // between this ontology's classes, so these were dropped although the filler can be drawn here.
+  // Classes are matched by full IRI: an imported lib:Book is not the local :Book.
+  const localClassUris = new Set(rawData.nodes.map((n) => n.uri).filter((u): u is string => !!u));
   for (const q of subClassOfQuads) {
     if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'BlankNode') continue;
     const subjectUri = q.subject.value;
@@ -328,26 +330,33 @@ export function expandWithExternalRefs(
     const restriction = readObjectRestriction(store, q.object as RdfTerm, subjectUri);
     if (!restriction) continue;
     const to = restriction.targetUri;
-    if (localNodeIds.has(extractLocalName(to)) || isLocalUri(to, mainBase)) continue; // drawn by the parser
+    if (localClassUris.has(to) || isLocalUri(to, mainBase)) continue; // drawn by the parser
     if (!addExternalClassNode(to)) continue;
     const propUri = restriction.propertyUri;
     const type = isExternalPropertyUri(propUri, mainBase, BASE_IRI) ? propUri : extractLocalName(propUri);
-    // A second restriction on the same property and filler (e.g. ∀ next to ∃) joins the edge, as in the parser.
-    const existing = newEdges.find((e) => e.from === from && e.to === to && e.type === type && e.isRestriction);
-    if (existing) {
-      existing.restrictionKinds = mergeRestrictionKinds(existing.restrictionKinds, restriction.kind);
-      continue;
-    }
     const { min, max } = readRestrictionCardinality(store, q.object as RdfTerm);
     const implied = min == null && max == null && (restriction.kind === 'some' || restriction.kind === 'qualified');
+    const cardinality = { minCardinality: implied ? 1 : min, maxCardinality: max };
+    const sameEdge = (e: GraphEdge) => e.from === from && e.to === to && (e.type === type || e.type === propUri);
+    // A second restriction on the same property and filler (e.g. ∀ next to ∃) joins the edge, as in the parser.
+    const existing = newEdges.find((e) => sameEdge(e) && e.isRestriction);
+    if (existing) {
+      existing.restrictionKinds = mergeRestrictionKinds(existing.restrictionKinds, restriction.kind);
+      if (existing.minCardinality == null && existing.maxCardinality == null) Object.assign(existing, cardinality);
+      if (restriction.value) existing.restrictionValue = restriction.value;
+      continue;
+    }
+    // The restriction replaces a domain/range edge for the same property and class (as in the parser): it is
+    // more specific, and its lock keeps the edge read-only.
+    const domainRangeIndex = newEdges.findIndex((e) => sameEdge(e) && !e.isRestriction);
+    if (domainRangeIndex >= 0) newEdges.splice(domainRangeIndex, 1);
     newEdges.push({
       from,
       to,
       type,
       isRestriction: true,
       restrictionKinds: [restriction.kind],
-      minCardinality: implied ? 1 : min,
-      maxCardinality: max,
+      ...cardinality,
       ...(restriction.value ? { restrictionValue: restriction.value } : {}),
       externalTarget: true,
     });
@@ -405,7 +414,8 @@ export function expandWithExternalRefs(
     // Build semantic signature: normalize to local names for comparison
     // This catches duplicates regardless of URI vs local name format
     const fromLocal = extractLocalName(edge.from);
-    const toLocal = extractLocalName(edge.to);
+    // An edge to an imported class keeps its full IRI, so it isn't taken for one to a same-named local class.
+    const toLocal = edge.externalTarget ? edge.to : extractLocalName(edge.to);
     const typeLocal = extractLocalName(edge.type);
     
     // Also get the property info to normalize the type
