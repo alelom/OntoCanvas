@@ -1,3 +1,15 @@
+## [1.27.1](https://github.com/alelom/OntoCanvas/compare/v1.27.0...v1.27.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **#58:** edges drawn from a class expression are read-only ([b9284d5](https://github.com/alelom/OntoCanvas/commit/b9284d5a21714354de4180cb14f9c68318b66052)), closes [#58](https://github.com/alelom/OntoCanvas/issues/58)
+* **#58:** lock class-expression edges from where the parser drew them ([5b4cbdf](https://github.com/alelom/OntoCanvas/commit/5b4cbdfcbbefe7c51ae8d7724e2f81cb5cf4af04)), closes [#58](https://github.com/alelom/OntoCanvas/issues/58)
+* **#58:** start-up never opens the "Open ontology" dialog over a loaded ontology ([a3b0eb0](https://github.com/alelom/OntoCanvas/commit/a3b0eb01d9aaa13de4bd2ece93e76982a810bd07)), closes [#58](https://github.com/alelom/OntoCanvas/issues/58)
+* **#87:** one key rule for property names and edge types; validator prefers the main ontology ([e1a4ccb](https://github.com/alelom/OntoCanvas/commit/e1a4ccb84758d41447deaa70cddd2ea1f592e22e)), closes [#87](https://github.com/alelom/OntoCanvas/issues/87)
+* **#87:** one property, one edge type ([4b1e771](https://github.com/alelom/OntoCanvas/commit/4b1e771c849dfa5f4350b2638f555d92b69b5e6f)), closes [#87](https://github.com/alelom/OntoCanvas/issues/87) [#knows](https://github.com/alelom/OntoCanvas/issues/knows)
+* **#87:** resolve local property names from the store when deleting and validating ([d349fe7](https://github.com/alelom/OntoCanvas/commit/d349fe7f67f155a9e9d5768233774142abacb115))
+
 # [1.27.0](https://github.com/alelom/OntoCanvas/compare/v1.26.0...v1.27.0) (2026-10-07)
 
 
