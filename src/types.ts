@@ -143,6 +143,9 @@ export interface GraphEdge {
    * restriction edge drawn for such a pair. Writing it back as one domain/range pair would rewrite the
    * expression, so the editor keeps it read-only (#58). */
   fromClassExpression?: boolean;
+  /** A restriction whose filler is an imported class, drawn by the external expansion (#99). The store
+   * writers resolve a target as a class of this ontology, so the editor keeps it read-only. */
+  externalTarget?: boolean;
 }
 
 /** OWL restriction kinds drawn as edges: ∃ some, ∀ only, ∋ value, ⟲ self, and qualified / unqualified

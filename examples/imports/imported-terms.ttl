@@ -1,0 +1,25 @@
+@prefix : <http://example.org/examples/imported-terms#> .
+@prefix lib: <http://example.org/examples/library#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Terms used from an imported ontology (issues #99, #100, #101). This ontology imports "lib" and uses its
+# class and properties without declaring them. The import URL doesn't need to resolve. What you should see:
+#   - Loan → lib:Book "∃ lends [1..*]" edge, to the faded (imported) lib:Book node, even though the edge comes
+#     from a restriction (#99). Edit edge on it: the form is locked, as the editor can't write it back yet.
+#   - lib:dueDate (used in a data restriction) is listed under Data Properties only, not also under Object
+#     Properties (#100).
+#   - Edit lib:dueDate in the Data Properties menu: its identifier is "lib:dueDate", not the full IRI (#101).
+
+<http://example.org/examples/imported-terms> rdf:type owl:Ontology ;
+    rdfs:label "Imported terms" ;
+    owl:imports <http://example.org/examples/library> .
+
+:Loan rdf:type owl:Class ;
+    rdfs:label "Loan" ;
+    rdfs:subClassOf lib:Record ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty lib:lends ; owl:someValuesFrom lib:Book ] ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty lib:dueDate ; owl:onDataRange xsd:date ;
+                      owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] .

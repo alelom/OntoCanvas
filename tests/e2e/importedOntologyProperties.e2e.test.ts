@@ -295,16 +295,28 @@ describe('Imported Ontology Properties E2E', () => {
   });
 
   describe('F) Object Properties Connecting to Imported Classes', () => {
-    // Skipped: app bug. A restriction whose filler is an imported class (AnotherClass ⊑ ∃ base:importedObjectProp.base:BaseClass)
-    // draws no edge, even though base:BaseClass is drawn (via ExtendedClass's subClassOf); edges between local classes are drawn. See #99.
-    it.skip('should display imported classes when connected via object properties', async () => {
+    // A restriction whose filler is an imported class (AnotherClass ⊑ ∃ base:importedObjectProp.base:BaseClass) draws its edge (#99).
+    it('should display imported classes when connected via object properties', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'comprehensive-child.ttl');
       await loadTestFile(page, childFile);
 
       const node = await getRenderedNode(page, 'http://example.org/comprehensive-base#BaseClass');
       expect(node?.opacity).toBe(0.5);
       const edgeIds = await getRenderedEdgeIds(page);
-      expect(edgeIds).toContain('AnotherClass->http://example.org/comprehensive-base#BaseClass:http://example.org/comprehensive-base#importedObjectProp');
+      const edgeId = 'AnotherClass->http://example.org/comprehensive-base#BaseClass:http://example.org/comprehensive-base#importedObjectProp';
+      expect(edgeIds).toContain(edgeId);
+
+      // Read-only: the store writers resolve the filler as a class of this ontology.
+      await page.evaluate((id) => (window as any).__EDITOR_TEST__.editEdge(id), edgeId);
+      const modalState = () =>
+        page.evaluate(() => ({
+          open: (document.getElementById('editEdgeModal') as HTMLElement).style.display !== 'none',
+          confirmDisabled: (document.getElementById('editEdgeConfirm') as HTMLButtonElement).disabled,
+          notice: document.getElementById('editEdgeRestrictionNotice')?.textContent ?? '',
+        }));
+      await expect.poll(modalState).toMatchObject({ open: true, confirmDisabled: true });
+      expect((await modalState()).notice).toContain("isn't available yet");
+      await page.click('#editEdgeCancel');
     });
 
     it('should display edges connecting child classes to imported parent classes', async () => {

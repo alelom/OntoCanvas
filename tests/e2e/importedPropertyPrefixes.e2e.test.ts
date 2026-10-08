@@ -231,9 +231,8 @@ describe('Imported Property Prefixes E2E', () => {
       expect(names).toContain('ext:extProp'); // Imported: prefix
     });
 
-    // Skipped: app bug. For an imported data property the modal's identifier is the full IRI
-    // (http://example.org/data-base#createdDate), whereas the object property modal shows prefix:label (base:connectsTo). See #101.
-    it.skip('should display imported data property with prefix in Edit Data Property modal', async () => {
+    // The identifier is prefix:name, as in the Edit Object Property modal, not the full IRI (#101).
+    it('should display imported data property with prefix in Edit Data Property modal', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
       await loadTestFile(page, childFile);
 
@@ -241,9 +240,7 @@ describe('Imported Property Prefixes E2E', () => {
       await page.locator('#dataPropsContent .data-prop-edit-btn[data-name="createdDate"]').click();
       await page.waitForSelector('#editDataPropertyModal', { state: 'visible', timeout: 5000 });
 
-      const nameText = await textOf(page, '#editDataPropName');
-      const identifierText = await textOf(page, '#editDataPropIdentifier');
-      expect(nameText.includes('dpbase:') || identifierText.includes('dpbase:')).toBe(true);
+      expect((await textOf(page, '#editDataPropIdentifier')).trim()).toBe('dpbase:createdDate');
     });
 
     it('should NOT display local data property with prefix in Edit Data Property modal', async () => {

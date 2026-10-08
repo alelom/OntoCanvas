@@ -7,16 +7,19 @@
  * - `classExpression`: an edge drawn from a class expression in the property's domain or range (∪ ∩ ¬ {}).
  *   The writers treat an edge as one rdfs:domain / rdfs:range pair, so deleting it removed the range
  *   every member shares, and editing it added an rdfs:domain beside the union, turning OR into AND (#58).
+ * - `externalTarget`: a restriction whose filler is an imported class. The writers look the filler up as
+ *   a class of this ontology, so they would miss it or write a new restriction to a wrong IRI (#99).
  */
 import type { GraphEdge } from '../types';
 import { isEditableRestriction } from '../rdf/restrictions';
 
-export type EdgeLock = 'restriction' | 'classExpression';
+export type EdgeLock = 'restriction' | 'classExpression' | 'externalTarget';
 
 /** Decided from where the parser drew the edge (`fromClassExpression`), not from the display groups: those
  * leave out expressions too small to mark, and match properties by local name. */
-export function edgeLock(edge: Pick<GraphEdge, 'restrictionKinds' | 'fromClassExpression'>): EdgeLock | null {
+export function edgeLock(edge: Pick<GraphEdge, 'restrictionKinds' | 'fromClassExpression' | 'externalTarget'>): EdgeLock | null {
   if (!isEditableRestriction(edge)) return 'restriction';
   if (edge.fromClassExpression) return 'classExpression';
+  if (edge.externalTarget) return 'externalTarget';
   return null;
 }

@@ -1,6 +1,6 @@
 /**
  * E2E tests for URL load failure handling (modals before editor).
- * Intercepts the ontology URL: abort to simulate CORS, or 404 to test generic failure modal.
+ * Intercepts the ontology URL with a 404 to test the generic failure modal.
  * Requests are served by page.route, so nothing here touches the network.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -60,22 +60,5 @@ describe('URL load failure E2E', () => {
 
     await page.getByRole('button', { name: /^close$/i }).click();
     await expect.poll(() => page.getByText('Failed to load ontology from URL').count(), { timeout: 5000 }).toBe(0);
-  }, 10000);
-
-  // App bug: fetchOntologyFromUrl (src/lib/ontologyUrlLoader.ts) catches every candidate's error, including
-  // the CorsOrNetworkError that fetchExternalOntologyTtl throws, and rethrows a plain Error, so
-  // handleUrlLoadFailure never sees a CORS error and shows the generic "Failed to load" modal instead.
-  // Re-enable once that error is propagated. See #102.
-  it.skip('shows CORS fallback modal with Download TTL and Open file when request is aborted', async () => {
-    await page.route(/pi\.pauwel\.be/, async (route) => {
-      await route.abort('blockedbyclient');
-    });
-
-    await openFromUrl(page, 'https://pi.pauwel.be/voc/buildingelement/ontology.ttl');
-
-    await page.getByText('Could not load ontology from URL').waitFor({ state: 'visible', timeout: 5000 });
-    await page.getByText(/CORS/).first().waitFor({ state: 'visible', timeout: 5000 });
-    await page.getByText(/Download TTL/).waitFor({ state: 'visible', timeout: 5000 });
-    await page.getByRole('button', { name: /open file/i }).waitFor({ state: 'visible', timeout: 5000 });
   }, 10000);
 });

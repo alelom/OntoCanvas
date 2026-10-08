@@ -64,7 +64,7 @@ import {
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
@@ -75,7 +75,7 @@ import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
-import { edgeLock } from './lib/edgeEditability';
+import { edgeLock, type EdgeLock } from './lib/edgeEditability';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
 import {
@@ -176,6 +176,7 @@ import {
   sortExternalRefsByUrl,
   type ExternalRefsModalCallbacks,
   getPrefixForUri,
+  importedIdentifier,
   isUriFromExternalOntology,
   getOpacityForExternalOntology,
   getNodeOntologyUrl,
@@ -527,6 +528,20 @@ let searchOutlineTargets: OutlineTargets = { nodeIds: [], dataPropertyNames: [],
 let classExpressionFontRatios: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
 /** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
 let currentGraphDataForBuild: GraphData | null = null;
+
+/** The edge as drawn: from rawData, or else one only the external expansion draws (e.g. a restriction on an
+ * imported class, #99), so its read-only lock still applies. */
+function findShownEdge(from: string, to: string, type: string): GraphEdge | undefined {
+  const match = (e: GraphEdge) => e.from === from && e.to === to && e.type === type;
+  return rawData.edges.find(match) ?? currentGraphDataForBuild?.edges.find(match);
+}
+
+/** Why a locked edge can't be deleted, for the alert listing them. */
+const EDGE_LOCK_REASON: Record<EdgeLock, string> = {
+  restriction: 'an OWL restriction',
+  classExpression: 'drawn from a class expression',
+  externalTarget: 'a restriction on an imported class',
+};
 /** External class URIs we have seen in this session (from store or added by user). Not removed when user deletes an external node, so "Add from referenced ontology" still finds them. Cleared on load. */
 let knownExternalClassUris: Set<string> = new Set();
 /** External nodes the user added via "Add from referenced ontology" (not from domain/range). Kept so they get correct external styling (opacity, tooltip). Cleared on load; removed when user deletes that node. */
@@ -791,14 +806,15 @@ function performDeleteSelection(): boolean {
   const readOnlyEdgesKept: string[] = [];
   for (const { from, to, type } of edgesToRemove) {
     debugLog(`[DELETE] Processing edge deletion: ${from} -> ${to} : ${type}`);
-    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    const edge = findShownEdge(from, to, type);
     // Edges the editor can't write back: restriction kinds other than ∃/onClass (removeEdgeFromStore would
-    // remove the wrong triples, and undo would re-add them as ∃; #63), and edges drawn from a class
-    // expression (removing one would drop the range or domain every member shares; #58).
+    // remove the wrong triples, and undo would re-add them as ∃; #63), edges drawn from a class
+    // expression (removing one would drop the range or domain every member shares; #58), and restrictions on
+    // an imported class (#99).
     const lock = edge ? edgeLock(edge) : null;
     if (lock) {
       if (nodesToRemove.includes(from) || nodesToRemove.includes(to)) continue; // goes with its class, below
-      readOnlyEdgesKept.push(`${from} → ${to} (${type}): ${lock === 'restriction' ? 'an OWL restriction' : 'drawn from a class expression'}`);
+      readOnlyEdgesKept.push(`${from} → ${to} (${type}): ${EDGE_LOCK_REASON[lock]}`);
       continue;
     }
     debugLog(`[DELETE] Found edge in rawData:`, edge ? { from: edge.from, to: edge.to, type: edge.type, isRestriction: edge.isRestriction } : 'NOT FOUND');
@@ -1221,13 +1237,9 @@ function updateEditRelTypeIdentifierAndValidation(): void {
   if (identifierEl) {
     if (isImported && op) {
       // For imported properties, show with prefix format (e.g., "base:connectsTo")
-      const label = op.label || extractLocalName(op.uri || op.name || type);
-      const prefix = getPrefixForUri(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase);
-      if (prefix) {
-        identifierEl.textContent = `${prefix}:${label}`;
-      } else {
-        identifierEl.textContent = op.uri ?? baseWithHash + (op.name ?? type);
-      }
+      identifierEl.textContent = op.uri
+        ? importedIdentifier(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase)
+        : baseWithHash + (op.name ?? type);
     } else {
       const derived = labelToCamelCaseIdentifier(lbl) || (op?.name ?? type);
       identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
@@ -2037,7 +2049,10 @@ function updateEditDataPropIdentifierAndValidation(): void {
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
     if (isImported) {
-      identifierEl.textContent = dp?.uri ?? baseWithHash + (dp?.name ?? name);
+      // Shown as prefix:name, as for object properties (#101)
+      identifierEl.textContent = dp?.uri
+        ? importedIdentifier(dp.uri, newDefinedBy ?? dp.isDefinedBy, externalOntologyReferences, mainBase)
+        : baseWithHash + (dp?.name ?? name);
     } else {
       const derived = labelToCamelCaseIdentifier(lbl) || (dp?.name ?? name);
       identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
@@ -2308,7 +2323,6 @@ function showEditDataPropertyModal(name: string): void {
   const modal = document.getElementById('editDataPropertyModal')!;
   (modal as HTMLElement).dataset.dataPropName = name;
   const nameEl = document.getElementById('editDataPropName') as HTMLElement;
-  const identifierEl = document.getElementById('editDataPropIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editDataPropLabelValidation') as HTMLElement;
   const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
   const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
@@ -2316,7 +2330,6 @@ function showEditDataPropertyModal(name: string): void {
   const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
   const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
   const dp = dataProperties.find((p) => p.name === name);
-  const baseWithHash = getDisplayBase(ttlStore);
   const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
   // Check if imported: use isDefinedBy if present, otherwise check if URI belongs to external ontology
   const isImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
@@ -2401,10 +2414,6 @@ function showEditDataPropertyModal(name: string): void {
   }
   
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
-  if (identifierEl) {
-    const fullUri = dp?.uri ?? baseWithHash + (dp?.name ?? name);
-    identifierEl.textContent = fullUri;
-  }
   if (labelValidationEl) {
     labelValidationEl.style.display = 'none';
     labelValidationEl.textContent = '';
@@ -2445,8 +2454,9 @@ function showEditDataPropertyModal(name: string): void {
   if (domainsListEl && dp) {
     renderDomainsList(domainsListEl, dp.domains || [], dp.hasGlobalDomain);
   }
-  updateEditDataPropIdentifierAndValidation();
   modal.style.display = 'flex';
+  // After showing the modal: the update skips a hidden one. It also sets the identifier (#101).
+  updateEditDataPropIdentifierAndValidation();
   labelInput?.focus();
 }
 
@@ -5356,7 +5366,10 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
   } else {
     // Regular object property edge
     // Find all matching edges first
-    const allMatchingEdges = rawData.edges.filter((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType);
+    const isThisEdge = (e: GraphEdge) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType;
+    let allMatchingEdges = rawData.edges.filter(isThisEdge);
+    // An edge only the external expansion draws (#99)
+    if (allMatchingEdges.length === 0) allMatchingEdges = currentGraphDataForBuild?.edges.filter(isThisEdge) ?? [];
     
     // ALWAYS prioritize restriction edges - they have the actual cardinality constraints
     let edge = allMatchingEdges.find((e) => e.isRestriction === true);
@@ -5492,13 +5505,14 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
 
     // Locked from where the parser drew the edge, not from whether a mark is drawn for it (#58).
     const propertyLabel = getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences);
-    const lockedByExpression = !!edge && edgeLock(edge) === 'classExpression';
+    const lock = edge ? edgeLock(edge) : null;
+    const lockedByExpression = lock === 'classExpression';
     showEditEdgeClassExpressionNotice(
       modal,
       findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType),
       lockedByExpression ? propertyLabel : undefined,
     );
-    showEditEdgeRestrictionNotice(modal, edge ?? null, propertyLabel, lockedByExpression);
+    showEditEdgeRestrictionNotice(modal, edge ?? null, propertyLabel, lockedByExpression || lock === 'externalTarget');
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
@@ -5746,7 +5760,7 @@ function confirmEditEdge(): void {
   
   const newFrom = fromSel.value;
   const newTo = toSel.value;
-  const oldEdge = rawData.edges.find((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+  const oldEdge = findShownEdge(oldFrom, oldTo, oldType);
   // A read-only edge (the form is locked, but Enter could still submit): never write it back (#58, #63).
   if (oldEdge && edgeLock(oldEdge)) {
     hideEditEdgeModalWithCleanup();

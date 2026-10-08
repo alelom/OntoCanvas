@@ -577,10 +577,12 @@ function buildParseResultFromStore(
     const obj = q.object;
     if (!isBlankNode(obj)) continue;
     const onProperty = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
-    if (onProperty && onProperty.object.termType === 'NamedNode') {
-      const propUri = (onProperty.object as { value: string }).value;
-      referencedObjectPropUris.add(propUri);
-    }
+    if (!onProperty || onProperty.object.termType !== 'NamedNode') continue;
+    // A data restriction names a data property, listed with the data properties instead (#100).
+    if (store.getQuads(obj, OWL + 'onDataRange', null, null).length > 0) continue;
+    const propUri = (onProperty.object as { value: string }).value;
+    if (store.getQuads(DataFactory.namedNode(propUri), RDF + 'type', OWL + 'DatatypeProperty', null).length > 0) continue;
+    referencedObjectPropUris.add(propUri);
   }
   
   // Add referenced object properties that aren't declared in the store
