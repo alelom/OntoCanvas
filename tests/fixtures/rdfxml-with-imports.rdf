@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- An RDF/XML ontology that imports another one and uses a third namespace (#90). Saving it writes Turtle
+     through the rdflib serializer, since there is no Turtle source to preserve. -->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:lib="http://example.org/library#">
+  <owl:Ontology rdf:about="http://example.org/loans">
+    <rdfs:label>Loans</rdfs:label>
+    <owl:imports rdf:resource="http://example.org/library"/>
+  </owl:Ontology>
+  <owl:Class rdf:about="http://example.org/loans#Loan">
+    <rdfs:label>Loan</rdfs:label>
+    <rdfs:subClassOf rdf:resource="http://example.org/library#Record"/>
+  </owl:Class>
+  <owl:Class rdf:about="http://example.org/loans#ShortLoan">
+    <rdfs:subClassOf rdf:resource="http://example.org/loans#Loan"/>
+  </owl:Class>
+</rdf:RDF>

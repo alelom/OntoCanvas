@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
 import type { ExternalOntologyReference } from '../../src/storage';
+import { Parser } from 'n3';
+
+/** The owl:imports objects in saved Turtle, read from the parsed triples (rdflib may write them as
+ * prefixed names or comma lists, so the text is not a reliable count). */
+const importsIn = (turtle: string): string[] =>
+  new Parser().parse(turtle).filter((q) => q.predicate.value === 'http://www.w3.org/2002/07/owl#imports').map((q) => q.object.value);
 
 describe('owl:imports duplication prevention', () => {
   it('should not duplicate owl:imports when saving multiple times', async () => {
@@ -32,8 +38,7 @@ describe('owl:imports duplication prevention', () => {
     const firstSave = await storeToTurtle(store, externalRefs);
     
     // Count imports in first save
-    const firstSaveImports = (firstSave.match(/owl:imports\s+<[^>]+>/g) || []).length;
-    expect(firstSaveImports).toBe(2); // Should have 2 imports
+    expect(importsIn(firstSave)).toHaveLength(2);
 
     // Parse again (simulating reload)
     const reparseResult = await parseRdfToGraph(firstSave, { path: 'test.ttl' });
@@ -42,18 +47,10 @@ describe('owl:imports duplication prevention', () => {
     const secondSave = await storeToTurtle(reparseResult.store, externalRefs);
     
     // Count imports in second save
-    const secondSaveImports = (secondSave.match(/owl:imports\s+<[^>]+>/g) || []).length;
-    expect(secondSaveImports).toBe(2); // Should still have 2 imports, not 4
-
-    // Verify specific imports are present exactly once
-    const adiroCount = (secondSave.match(/owl:imports\s+<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO>/g) || []).length;
-    expect(adiroCount).toBe(1); // Should appear exactly once
-
-    const symbolsCount = (secondSave.match(/owl:imports\s+<https:\/\/burohappoldmachinelearning\.github\.io\/ADIRO\/aec-common-symbols#>/g) || []).length;
-    expect(symbolsCount).toBe(1); // Should appear exactly once
+    expect(importsIn(secondSave).sort()).toEqual(externalRefs.map((r) => r.url).sort()); // each once, not 4
   });
 
-  it.skip('should not add standard RDF/OWL namespaces as imports', async () => {
+  it('should not add standard RDF/OWL namespaces as imports', async () => {
     const ttl = `
 @prefix : <http://example.org/test#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -83,16 +80,9 @@ describe('owl:imports duplication prevention', () => {
     // Save
     const saved = await storeToTurtle(store, externalRefs);
     
-    // Standard namespaces should NOT be in the imports
-    expect(saved).not.toContain('owl:imports <http://www.w3.org/2002/07/owl#>');
-    expect(saved).not.toContain('owl:imports <http://www.w3.org/1999/02/22-rdf-syntax-ns#>');
-    expect(saved).not.toContain('owl:imports <http://www.w3.org/2000/01/rdf-schema#>');
-    expect(saved).not.toContain('owl:imports <http://www.w3.org/2001/XMLSchema#>');
-    expect(saved).not.toContain('owl:imports <http://www.w3.org/XML/1998/namespace#>');
-    
-    // But the non-standard one should be
-    expect(saved).toContain('owl:imports <https://example.org/custom-ontology>');
-  }, 15000); // Increase timeout to 15 seconds
+    // Only the non-standard one is imported
+    expect(importsIn(saved)).toEqual(['https://example.org/custom-ontology']);
+  });
 
   it('should handle URL normalization (trailing # and /) when detecting duplicates', async () => {
     const ttl = `

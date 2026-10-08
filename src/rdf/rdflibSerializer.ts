@@ -1,11 +1,12 @@
 /**
  * Serialize N3 Store to Turtle using rdflib
  */
-import { serialize, Store as RdflibStore } from 'rdflib';
+import { serialize, Store as RdflibStore, sym } from 'rdflib';
 import type { Store } from 'n3';
 import { convertN3QuadsToRdflibStatements } from './n3ToRdflib';
 import { applyFormattingStyleStep, type PostProcessingContext } from './postProcessing';
-import { addOwlImports, addAttribution } from '../turtlePostProcess';
+import { addAttribution } from '../turtlePostProcess';
+import { ontologyImportsToAdd } from './ontologyImports';
 
 export interface SerializeStoreOptions {
   /** Prefix map for @prefix declarations */
@@ -34,6 +35,12 @@ export async function serializeStoreWithRdflib(
     const kb = new RdflibStore();
     for (const statement of statements) {
       kb.add(statement);
+    }
+    // owl:imports for the external references go into the data, on the ontology's real subject (#90).
+    // Patching them into the text afterwards had to guess the subject and could write an undeclared ':Ontology'.
+    const toImport = options.externalRefs ? ontologyImportsToAdd(store, options.externalRefs) : null;
+    for (const url of toImport?.imports ?? []) {
+      kb.add(sym(toImport!.ontology), sym('http://www.w3.org/2002/07/owl#imports'), sym(url));
     }
 
     // Determine base IRI as string (rdflib serialize expects string, not NamedNode)
@@ -81,6 +88,11 @@ export async function serializeStoreWithRdflib(
       }
     }
 
+    // Let rdflib use these names (it can't use the empty prefix, so the main namespace gets one of its own).
+    for (const [prefix, namespace] of Object.entries(prefixes)) {
+      if (prefix) kb.setPrefixForURI(prefix, namespace);
+    }
+
     // Serialize using rdflib's callback-based API
     // NOTE: Passing base to rdflib serialize can cause it to create relative URIs, which breaks serialization
     // We pass null for base and handle prefixes manually instead
@@ -96,18 +108,14 @@ export async function serializeStoreWithRdflib(
           return;
         }
 
-        // Add prefix declarations at the start
-        const prefixLines: string[] = [];
-        for (const [prefix, namespace] of Object.entries(prefixes)) {
-          if (prefix === '') {
-            prefixLines.push(`@prefix : <${namespace}> .`);
-          } else {
-            prefixLines.push(`@prefix ${prefix}: <${namespace}> .`);
-          }
-        }
+        // Declare the prefixes rdflib didn't (e.g. ':') right before its own block, so each is declared once (#90)
+        const declared = new Set([...result.matchAll(/^@prefix\s+([\w-]*):\s*<([^>]*)>/gm)].map((m) => `${m[1]} ${m[2]}`));
+        const prefixLines = Object.entries(prefixes)
+          .filter(([prefix, namespace]) => !declared.has(`${prefix} ${namespace}`))
+          .map(([prefix, namespace]) => `@prefix ${prefix}: <${namespace}> .`);
 
-        let finalResult = prefixLines.length > 0 
-          ? prefixLines.join('\n') + '\n\n' + result
+        let finalResult = prefixLines.length > 0
+          ? prefixLines.join('\n') + '\n' + result
           : result;
 
         // Apply post-processing steps
@@ -119,11 +127,6 @@ export async function serializeStoreWithRdflib(
         
         // Apply formatting (section dividers temporarily disabled to debug parsing errors)
         finalResult = applyFormattingStyleStep(finalResult, postProcessingContext);
-        
-        // Add owl:imports if externalRefs are provided (using robust function from turtlePostProcess)
-        if (options.externalRefs && options.externalRefs.length > 0) {
-          finalResult = addOwlImports(finalResult, options.externalRefs);
-        }
         
         // Add attribution comment and remove attribution from rdfs:comment
         finalResult = addAttribution(finalResult);
