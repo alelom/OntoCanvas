@@ -20,6 +20,7 @@ import {
 } from './rdf/restrictions';
 import { describeDataRange } from './rdf/dataRanges';
 import { removeBlankNodeClosure } from './rdf/blankNodes';
+import { isExternalPropertyUri } from './rdf/propertyNamespace';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 const XSD_BOOLEAN = XSD + 'boolean';
@@ -127,17 +128,14 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
   const seen = new Set<string>();
   const mainBase = getMainOntologyBase(store);
-  const classNs = getClassNamespace(store);
   const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
   for (const q of opQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
     const subjUri = (subj as { value: string }).value;
     const localName = extractLocalName(subjUri);
-    const isFromMainOntology =
-      (mainBase != null && (subjUri === mainBase || subjUri.startsWith(mainBase) || subjUri === mainBase.slice(0, -1))) ||
-      (classNs != null && subjUri.startsWith(classNs)) ||
-      (mainBase == null && classNs == null && subjUri.startsWith(BASE_IRI));
+    // Decided exactly as for edge types, so a property's name here is the type its edges carry (#87).
+    const isFromMainOntology = !isExternalPropertyUri(subjUri, mainBase, BASE_IRI);
     // External (imported) properties always use full URI so we can show e.g. geo:hasGeometry in the UI.
     // Local (main ontology) properties use local name unless duplicate, then full URI so both appear in the list.
     const name = isFromMainOntology
@@ -436,17 +434,7 @@ function buildParseResultFromStore(
         
         // Preserve full URI for external properties, use local name for local properties
         const propUri = (onProperty.object as { value: string }).value;
-        const mainBase = getMainOntologyBase(store);
-        // Check if property is external by comparing URI base
-        let isExternalProperty = false;
-        if (mainBase) {
-          // Extract base IRI (before #) from both the ontology URI and property URI
-          const mainBaseIri = mainBase.includes('#') ? mainBase.slice(0, mainBase.indexOf('#')) : mainBase.replace(/#$/, '');
-          const propBase = propUri.includes('#') ? propUri.slice(0, propUri.indexOf('#')) : propUri.split('/').slice(0, -1).join('/');
-          isExternalProperty = propBase !== mainBaseIri;
-        } else {
-          isExternalProperty = !propUri.startsWith(BASE_IRI);
-        }
+        const isExternalProperty = isExternalPropertyUri(propUri, getMainOntologyBase(store), BASE_IRI);
         const propName = isExternalProperty ? propUri : extractLocalName(propUri);
 
         // Create a unique key for this restriction to avoid processing duplicates (per kind, so a ∀ and a
@@ -734,12 +722,16 @@ function buildParseResultFromStore(
     
     const OWL_THING = OWL + 'Thing';
     
-    // Use full URI for external properties, local name for local properties
-    const isExternalProperty = !propUri.startsWith(BASE_IRI);
+    // Use full URI for external properties, local name for local properties — decided exactly as for
+    // restriction edges, so one property is one edge type (#87).
+    const isExternalProperty = isExternalPropertyUri(propUri, getMainOntologyBase(store), BASE_IRI);
     const propName = isExternalProperty ? propUri : op.name;
     
     // Collect valid domains and ranges
     const validDomains: string[] = [];
+    // Classes reached through an anonymous expression rather than named directly: their edges are
+    // marked fromClassExpression, so the editor won't write them back as a plain pair (#58).
+    const expressionDomains = new Set<string>();
     let hasOwlThingDomain = false;
     for (const domainQuad of domainQuads) {
       const domObj = domainQuad.object;
@@ -761,13 +753,16 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, domObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (seenClasses.has(name) && !validDomains.includes(name)) validDomains.push(name);
+          if (!seenClasses.has(name)) continue;
+          expressionDomains.add(name);
+          if (!validDomains.includes(name)) validDomains.push(name);
         }
       }
     }
     
     // Collect valid ranges
     const validRanges: string[] = [];
+    const expressionRanges = new Set<string>();
     let hasOwlThingRange = false;
     for (const rangeQuad of rangeQuads) {
       const rangeObj = rangeQuad.object;
@@ -789,7 +784,9 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, rangeObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (seenClasses.has(name) && !validRanges.includes(name)) validRanges.push(name);
+          if (!seenClasses.has(name)) continue;
+          expressionRanges.add(name);
+          if (!validRanges.includes(name)) validRanges.push(name);
         }
       }
     }
@@ -808,6 +805,14 @@ function buildParseResultFromStore(
     // But only if a restriction edge doesn't already exist (restrictions are processed first)
     for (const domainName of validDomains) {
       for (const rangeName of validRanges) {
+        const fromClassExpression = expressionDomains.has(domainName) || expressionRanges.has(rangeName);
+        // A restriction edge already drawn for this pair (self-loops included) stands in for the expression's
+        // edge: deleting it would also remove the domain/range it shares, so it is marked too.
+        if (fromClassExpression) {
+          const restrictionEdge = edges.find((e) => e.from === domainName && e.to === rangeName && e.type === propName);
+          if (restrictionEdge) restrictionEdge.fromClassExpression = true;
+        }
+
         // Skip self-loops unless explicitly allowed
         if (domainName === rangeName) continue;
         
@@ -822,6 +827,7 @@ function buildParseResultFromStore(
             to: rangeName, 
             type: propName,
             isRestriction: false, // Mark as non-restriction (from domain/range, not OWL restriction)
+            ...(fromClassExpression ? { fromClassExpression: true } : {}),
           };
           edges.push(edge);
           
@@ -1336,14 +1342,6 @@ function resolveClassBase(store: Store): string {
   let base = getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI;
   if (!base.endsWith('#') && !base.endsWith('/')) base += '#';
   return base;
-}
-
-function getPropertyUri(edgeType: string): string {
-  // If edgeType is already a full URI (starts with http:// or https://), return it as-is
-  if (edgeType.startsWith('http://') || edgeType.startsWith('https://')) {
-    return edgeType;
-  }
-  return BASE_IRI + edgeType;
 }
 
 /** Resolve object property name to full URI from store (so loaded ontologies use their base). */
@@ -2745,7 +2743,8 @@ export function renameDataPropertyInStore(
  */
 export function removeObjectPropertyFromStore(store: Store, propertyName: string): number {
   if (propertyName === 'subClassOf') return -1;
-  const propUri = getPropertyUri(propertyName);
+  // From the store, so a local name resolves in an ontology outside the default namespace (#87).
+  const propUri = getObjectPropertyUriFromStore(store, propertyName);
   const propNode = DataFactory.namedNode(propUri);
   const onPropertyPred = DataFactory.namedNode(OWL + 'onProperty');
   const subClassOfPred = DataFactory.namedNode(RDFS + 'subClassOf');

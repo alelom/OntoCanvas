@@ -1,0 +1,37 @@
+@prefix : <http://example.org/examples/one-edge-type#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# One property, one relationship type (issue #87). Each property below is drawn by more than one kind of
+# edge: an OWL restriction and its rdfs:domain / rdfs:range. All of its edges must share one type, so the
+# Object Properties menu and the Edges legend list it once, in one colour:
+#   worksFor   Employee → Organisation   (restriction ∃ worksFor and domain/range)
+#   manages    Manager → Team            (restriction ∃ manages) and Manager → Department (domain/range)
+# Before #87 the domain/range edges were typed by full IRI, so each property appeared twice.
+
+<http://example.org/examples/one-edge-type> rdf:type owl:Ontology ;
+    rdfs:label "One edge type per property" .
+
+:Organisation rdf:type owl:Class ; rdfs:label "Organisation" .
+:Department rdf:type owl:Class ; rdfs:label "Department" .
+:Team rdf:type owl:Class ; rdfs:label "Team" .
+
+:Employee rdf:type owl:Class ;
+    rdfs:label "Employee" ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :worksFor ; owl:someValuesFrom :Organisation ] .
+
+:Manager rdf:type owl:Class ;
+    rdfs:label "Manager" ;
+    rdfs:subClassOf :Employee ,
+        [ rdf:type owl:Restriction ; owl:onProperty :manages ; owl:someValuesFrom :Team ] .
+
+:worksFor rdf:type owl:ObjectProperty ;
+    rdfs:label "works for" ;
+    rdfs:domain :Employee ;
+    rdfs:range :Organisation .
+
+:manages rdf:type owl:ObjectProperty ;
+    rdfs:label "manages" ;
+    rdfs:domain :Manager ;
+    rdfs:range :Department .

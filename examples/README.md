@@ -18,7 +18,14 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | [oneOf.ttl](class-expressions/oneOf.ttl) | `owl:oneOf` enumerations ({}) of individuals and literals | #62 |
 | [all-class-expressions.ttl](class-expressions/all-class-expressions.ttl) | All four constructors side by side | #59–#62 |
 | [self-loop-restriction.ttl](class-expressions/self-loop-restriction.ttl) | A ∪ / ¬ member that is also a restriction self-loop: corner badge, not a mark on the loop | #86 |
+| [read-only-edges.ttl](class-expressions/read-only-edges.ttl) | Relationships drawn from a class expression are read-only: locked Edit-edge form, refused delete | #58 |
 | [nested.ttl](class-expressions/nested.ttl) | Nested expressions and their full formula, e.g. `¬(Agent ∪ OnlineAccount)` | #63 |
+
+## Relationships
+
+| Example | Shows | Issue |
+|---|---|---|
+| [one-edge-type-per-property.ttl](relationships/one-edge-type-per-property.ttl) | A property drawn by both a restriction and its domain/range is one relationship type, listed once | #87 |
 
 ## Restrictions and data ranges
 

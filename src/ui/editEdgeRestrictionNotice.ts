@@ -22,11 +22,12 @@ function setLocked(locked: boolean): void {
 }
 
 /** Show the restriction detail for `edge` (hide it for null or a non-restriction edge), locking the form
- * when the restriction can't be edited safely. Returns whether the form is read-only. */
-export function showEditEdgeRestrictionNotice(modal: HTMLElement, edge: GraphEdge | null, propertyLabel: string): boolean {
+ * when the restriction can't be edited safely — or when `forceReadOnly` (an edge drawn from a class
+ * expression, #58). Returns whether the form is read-only. */
+export function showEditEdgeRestrictionNotice(modal: HTMLElement, edge: GraphEdge | null, propertyLabel: string, forceReadOnly = false): boolean {
   let el = document.getElementById(NOTICE_ID) as HTMLDivElement | null;
   const lines = edge ? describeRestriction(edge, propertyLabel) : [];
-  const readOnly = !!edge && !isEditableRestriction(edge);
+  const readOnly = forceReadOnly || (!!edge && !isEditableRestriction(edge));
   setLocked(readOnly);
   if (lines.length === 0) {
     if (el) el.style.display = 'none';

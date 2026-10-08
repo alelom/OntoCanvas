@@ -2,7 +2,10 @@ import type { Store } from 'n3';
 import { DataFactory } from 'n3';
 import type { CopiedRelationship } from './relationshipClipboard';
 import type { GraphData } from '../types';
+import { getMainOntologyBase } from '../parser';
+import { isExternalPropertyUri } from '../rdf/propertyNamespace';
 
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
@@ -15,24 +18,24 @@ export interface ValidationResult {
   reason?: string;
 }
 
-/**
- * Convert local name to full class URI.
- */
-function toClassUri(localName: string): string {
-  if (localName.startsWith('http://') || localName.startsWith('https://')) {
-    return localName;
-  }
-  return BASE_IRI + localName;
-}
+const localNameOf = (uri: string) => uri.slice(Math.max(uri.lastIndexOf('#'), uri.lastIndexOf('/')) + 1);
 
 /**
- * Get property URI from edge type (handles both local and external properties).
+ * The URI of a term of type `rdfType` named by a node id or edge type: a full URI as-is, else the declared
+ * term with that local name — so an ontology outside the default namespace resolves correctly (#87). A local
+ * key means the main ontology's term, so when an imported term shares the local name (`:contains` and
+ * `ext:contains`) the one in the main namespace wins, whatever the declaration order. Falls back to the
+ * default base for a term not declared yet.
  */
-function getPropertyUri(edgeType: string): string {
-  if (edgeType.startsWith('http://') || edgeType.startsWith('https://')) {
-    return edgeType;
-  }
-  return BASE_IRI + edgeType;
+function uriFromStore(store: Store, name: string, rdfType: string): string {
+  if (name.startsWith('http://') || name.startsWith('https://')) return name;
+  const declared = store
+    .getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(rdfType), null)
+    .map((q) => q.subject)
+    .filter((t) => t.termType === 'NamedNode' && localNameOf(t.value) === name)
+    .map((t) => t.value);
+  const mainBase = getMainOntologyBase(store);
+  return declared.find((uri) => !isExternalPropertyUri(uri, mainBase, BASE_IRI)) ?? declared[0] ?? BASE_IRI + name;
 }
 
 /**
@@ -89,13 +92,13 @@ export function validateRelationship(
   const OWL_THING = OWL + 'Thing';
 
   // Check domain constraints (source node must be compatible with property domain)
-  const propUri = getPropertyUri(edge.type);
+  const propUri = uriFromStore(store, edge.type, OWL + 'ObjectProperty');
   const propNode = DataFactory.namedNode(propUri);
   const domainPred = DataFactory.namedNode(RDFS + 'domain');
   
   const domainQuads = store.getQuads(propNode, domainPred, null, null);
   if (domainQuads.length > 0) {
-    const sourceUri = toClassUri(sourceNodeId);
+    const sourceUri = uriFromStore(store, sourceNodeId, OWL + 'Class');
     let domainMatch = false;
     
     for (const quad of domainQuads) {
@@ -128,7 +131,7 @@ export function validateRelationship(
   const rangeQuads = store.getQuads(propNode, rangePred, null, null);
   
   if (rangeQuads.length > 0) {
-    const targetUri = toClassUri(targetNodeId);
+    const targetUri = uriFromStore(store, targetNodeId, OWL + 'Class');
     let rangeMatch = false;
     
     for (const quad of rangeQuads) {

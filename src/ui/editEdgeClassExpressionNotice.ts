@@ -62,10 +62,12 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 }
 
-/** Show (or, when `group` is null, hide) the class-expression notice inside the Edit-edge modal. */
-export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: ClassExpressionGroup | null): void {
+/** Show (or, when `group` is null, hide) the class-expression notice inside the Edit-edge modal. An edge
+ * drawn from an expression too small to mark has no group but is still read-only (#58): pass its property's
+ * label as `lockedProperty` to explain that instead. */
+export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: ClassExpressionGroup | null, lockedProperty?: string): void {
   let el = document.getElementById(NOTICE_ID) as HTMLDivElement | null;
-  if (!group) {
+  if (!group && !lockedProperty) {
     if (el) el.style.display = 'none';
     return;
   }
@@ -83,6 +85,14 @@ export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: Cla
     } else if (content) {
       content.insertBefore(el, content.firstChild);
     }
+  }
+  if (!group) {
+    el.innerHTML =
+      `<div style="color:#6a5a85;">This relationship is drawn from a class expression in the domain or range of ` +
+      `<b>${escapeHtml(lockedProperty!)}</b>, so it is read-only in the editor for now — adjust the expression in ` +
+      `the ontology source.</div>`;
+    el.style.display = 'block';
+    return;
   }
   const info = OPERATOR_INFO[group.operator];
   const chip = (m: string) =>
@@ -102,7 +112,7 @@ export function showEditEdgeClassExpressionNotice(modal: HTMLElement, group: Cla
     `<div style="margin-bottom:5px;">${chips}</div>` +
     (group.nested && group.formula ? `<div style="margin-bottom:5px;">Full expression: <code>${escapeHtml(group.formula)}</code></div>` : '') +
     `<div style="color:#6a5a85;">The ${where} of <b>${escapeHtml(group.propertyName)}</b> is ${what}; ` +
-    `the same expression applies to every relationship drawn from it. Editing it isn't available yet — ` +
-    `adjust it in the ontology source.</div>`;
+    `the same expression applies to every relationship drawn from it, so this relationship is read-only in ` +
+    `the editor for now — adjust the expression in the ontology source.</div>`;
   el.style.display = 'block';
 }
