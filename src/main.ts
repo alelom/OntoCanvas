@@ -161,6 +161,7 @@ import {
   showOpenOntologyModal,
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
+import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust } from './utils/urlParams';
 import {
@@ -6788,7 +6789,10 @@ async function loadTtlAndRender(
     
     // Store the store early so tests can detect when parsing is complete
     ttlStore = store;
-    
+    // A loaded ontology is never left under the "Open ontology" dialog, whichever way it arrived — including
+    // one loaded while start-up was still deciding whether to show that dialog.
+    hideOpenOntologyModal();
+
     // Store original file cache for source preservation
     originalFileCache = cache ?? null;
     
@@ -9136,20 +9140,22 @@ setupEventListeners();
 if (isDebugMode()) {
   setTimeout(() => updateSerializerDropdown(), 0);
 }
-// Check for URL parameter and load ontology if present, otherwise show modal
-setTimeout(async () => {
-  const loadedFromParam = await handleUrlParameterLoad(
-    loadFromUrl,
-    async (content: string, fileName: string, pathHint: string) => {
-      await loadTtlAndRender(content, fileName, null, pathHint);
-    },
+// Load the ontology named by the URL parameter, otherwise show the "Open ontology" dialog — unless an
+// ontology was loaded meanwhile, which the dialog would otherwise cover.
+setTimeout(() => {
+  void openOnStartup({
+    loadFromUrlParameter: () =>
+      handleUrlParameterLoad(
+        loadFromUrl,
+        async (content: string, fileName: string, pathHint: string) => {
+          await loadTtlAndRender(content, fileName, null, pathHint);
+        },
+        showOpenOntologyModal,
+        hideOpenOntologyModal
+      ),
+    hasOntology: () => ttlStore !== null,
     showOpenOntologyModal,
-    hideOpenOntologyModal
-  );
-  if (!loadedFromParam) {
-    // No URL parameter found, show modal as usual
-    showOpenOntologyModal();
-  }
+  });
 }, 100);
 
 // Internal log collection for testing
