@@ -729,6 +729,9 @@ function buildParseResultFromStore(
     
     // Collect valid domains and ranges
     const validDomains: string[] = [];
+    // Classes reached through an anonymous expression rather than named directly: their edges are
+    // marked fromClassExpression, so the editor won't write them back as a plain pair (#58).
+    const expressionDomains = new Set<string>();
     let hasOwlThingDomain = false;
     for (const domainQuad of domainQuads) {
       const domObj = domainQuad.object;
@@ -750,13 +753,16 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, domObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (seenClasses.has(name) && !validDomains.includes(name)) validDomains.push(name);
+          if (!seenClasses.has(name)) continue;
+          expressionDomains.add(name);
+          if (!validDomains.includes(name)) validDomains.push(name);
         }
       }
     }
     
     // Collect valid ranges
     const validRanges: string[] = [];
+    const expressionRanges = new Set<string>();
     let hasOwlThingRange = false;
     for (const rangeQuad of rangeQuads) {
       const rangeObj = rangeQuad.object;
@@ -778,7 +784,9 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, rangeObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (seenClasses.has(name) && !validRanges.includes(name)) validRanges.push(name);
+          if (!seenClasses.has(name)) continue;
+          expressionRanges.add(name);
+          if (!validRanges.includes(name)) validRanges.push(name);
         }
       }
     }
@@ -797,6 +805,14 @@ function buildParseResultFromStore(
     // But only if a restriction edge doesn't already exist (restrictions are processed first)
     for (const domainName of validDomains) {
       for (const rangeName of validRanges) {
+        const fromClassExpression = expressionDomains.has(domainName) || expressionRanges.has(rangeName);
+        // A restriction edge already drawn for this pair (self-loops included) stands in for the expression's
+        // edge: deleting it would also remove the domain/range it shares, so it is marked too.
+        if (fromClassExpression) {
+          const restrictionEdge = edges.find((e) => e.from === domainName && e.to === rangeName && e.type === propName);
+          if (restrictionEdge) restrictionEdge.fromClassExpression = true;
+        }
+
         // Skip self-loops unless explicitly allowed
         if (domainName === rangeName) continue;
         
@@ -811,6 +827,7 @@ function buildParseResultFromStore(
             to: rangeName, 
             type: propName,
             isRestriction: false, // Mark as non-restriction (from domain/range, not OWL restriction)
+            ...(fromClassExpression ? { fromClassExpression: true } : {}),
           };
           edges.push(edge);
           

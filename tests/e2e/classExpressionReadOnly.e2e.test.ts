@@ -97,3 +97,66 @@ describe('Read-only class-expression edges E2E (#58)', () => {
     expect(await propertyAxioms()).toEqual({ ranges: ['NamedNode'], domains: ['BlankNode'] });
   });
 });
+
+/** Two cases from the PR review: an expression with one visible member draws no mark but is still locked,
+ * and a restriction edge drawn for an expression's pair loses its restriction when its class is deleted. */
+describe('Read-only class-expression edges: edge cases (#58)', () => {
+  let browser: Browser;
+  let page: Page;
+  const TTL2 = `@prefix : <http://example.org/o2#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/o2> a owl:Ontology .
+:Section a owl:Class . :Value a owl:Class . :Person a owl:Class . :Group a owl:Class .
+:hasValue a owl:ObjectProperty ; rdfs:domain [ a owl:Class ; owl:unionOf ( :Section ext:Other ) ] ; rdfs:range :Value .
+:knows a owl:ObjectProperty ; rdfs:domain :Person ; rdfs:range [ a owl:Class ; owl:unionOf ( :Person :Group ) ] .
+:Person rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :knows ; owl:someValuesFrom :Group ] .`;
+  const O2 = 'http://example.org/o2#';
+
+  beforeAll(async () => {
+    browser = await chromium.launch({ headless: true });
+    page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    page.setDefaultTimeout(5000);
+    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
+    await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL2);
+    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, { timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
+    await page.keyboard.press('Escape');
+  });
+
+  afterAll(async () => {
+    if (page) await page.close();
+    if (browser) await browser.close();
+  });
+
+  it('locks an edge whose expression has a single visible member, and says why', async () => {
+    await page.evaluate(() => (window as any).__EDITOR_TEST__.editEdge('Section->Value:hasValue'));
+    await expect
+      .poll(() => page.evaluate(() => ({
+        confirmDisabled: (document.getElementById('editEdgeConfirm') as HTMLButtonElement).disabled,
+        notice: document.getElementById('editEdgeClassExpressionNotice')?.textContent ?? '',
+      })), { timeout: 5000 })
+      .toMatchObject({ confirmDisabled: true, notice: expect.stringContaining('read-only') });
+    await page.click('#editEdgeCancel');
+  });
+
+  it("deleting a restriction edge's target class removes the restriction, not the property's domain/range", async () => {
+    await page.evaluate(() => {
+      const hook = (window as any).__EDITOR_TEST__;
+      hook.selectNodeById('Group');
+      hook.performDelete();
+    });
+    const someValuesFrom = () =>
+      page.evaluate(() => (window as any).__EDITOR_TEST__.getQuads(null, 'http://www.w3.org/2002/07/owl#someValuesFrom').map((q: any) => q.object));
+    await expect.poll(someValuesFrom, { timeout: 5000 }).not.toContain(O2 + 'Group');
+    const axioms = await page.evaluate((p) => {
+      const hook = (window as any).__EDITOR_TEST__;
+      const kinds = (pred: string) => hook.getQuads(p, pred).map((q: any) => q.objectType);
+      return { domains: kinds('http://www.w3.org/2000/01/rdf-schema#domain'), ranges: kinds('http://www.w3.org/2000/01/rdf-schema#range') };
+    }, O2 + 'knows');
+    expect(axioms).toEqual({ domains: ['NamedNode'], ranges: ['BlankNode'] });
+  });
+});

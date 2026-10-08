@@ -8,17 +8,15 @@
  *   The writers treat an edge as one rdfs:domain / rdfs:range pair, so deleting it removed the range
  *   every member shares, and editing it added an rdfs:domain beside the union, turning OR into AND (#58).
  */
-import type { ClassExpressionGroup, GraphEdge } from '../types';
+import type { GraphEdge } from '../types';
 import { isEditableRestriction } from '../rdf/restrictions';
-import { findClassExpressionGroupForEdge } from '../ui/editEdgeClassExpressionNotice';
 
 export type EdgeLock = 'restriction' | 'classExpression';
 
-export function edgeLock(
-  edge: Pick<GraphEdge, 'from' | 'to' | 'type' | 'restrictionKinds'>,
-  groups: ClassExpressionGroup[] | undefined,
-): EdgeLock | null {
+/** Decided from where the parser drew the edge (`fromClassExpression`), not from the display groups: those
+ * leave out expressions too small to mark, and match properties by local name. */
+export function edgeLock(edge: Pick<GraphEdge, 'restrictionKinds' | 'fromClassExpression'>): EdgeLock | null {
   if (!isEditableRestriction(edge)) return 'restriction';
-  if (findClassExpressionGroupForEdge(groups, edge.from, edge.to, edge.type)) return 'classExpression';
+  if (edge.fromClassExpression) return 'classExpression';
   return null;
 }

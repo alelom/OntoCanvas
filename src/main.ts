@@ -792,7 +792,7 @@ function performDeleteSelection(): boolean {
     // Edges the editor can't write back: restriction kinds other than ∃/onClass (removeEdgeFromStore would
     // remove the wrong triples, and undo would re-add them as ∃; #63), and edges drawn from a class
     // expression (removing one would drop the range or domain every member shares; #58).
-    const lock = edge ? edgeLock(edge, rawData.classExpressions) : null;
+    const lock = edge ? edgeLock(edge) : null;
     if (lock) {
       if (nodesToRemove.includes(from) || nodesToRemove.includes(to)) continue; // goes with its class, below
       readOnlyEdgesKept.push(`${from} → ${to} (${type}): ${lock === 'restriction' ? 'an OWL restriction' : 'drawn from a class expression'}`);
@@ -870,13 +870,19 @@ function performDeleteSelection(): boolean {
 
   for (const { from, to, type } of connectedEdges) {
     const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
-    const lock = edge ? edgeLock(edge, rawData.classExpressions) : null;
+    const lock = edge ? edgeLock(edge) : null;
     if (lock === 'classExpression') {
       // Leave the expression and the property's domain/range to removeNodeFromStore, which drops only the
       // axioms naming the deleted class; removeEdgeFromStore would drop the range all members share (#58).
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx < 0) continue;
       const [removedEdge] = rawData.edges.splice(idx, 1);
+      if (removedEdge.isRestriction) {
+        // A restriction drawn for the expression's pair names the deleted class inside its blank node, which
+        // removeNodeFromStore doesn't reach: remove just the restriction. No undo, as for #63's kinds.
+        removeRestrictionEdgeFromStore(ttlStore, from, to, type);
+        continue;
+      }
       edgeUndoActions.push(() => {
         if (!edgeExistsInRawData(from, to, type)) rawData.edges.push(removedEdge);
       });
@@ -5468,9 +5474,15 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     // Show cardinality section only if this is a restriction (cardinality only makes sense for restrictions)
     cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
-    const expressionGroup = findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType);
-    showEditEdgeClassExpressionNotice(modal, expressionGroup);
-    showEditEdgeRestrictionNotice(modal, edge ?? null, getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences), !!expressionGroup);
+    // Locked from where the parser drew the edge, not from whether a mark is drawn for it (#58).
+    const propertyLabel = getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences);
+    const lockedByExpression = !!edge && edgeLock(edge) === 'classExpression';
+    showEditEdgeClassExpressionNotice(
+      modal,
+      findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType),
+      lockedByExpression ? propertyLabel : undefined,
+    );
+    showEditEdgeRestrictionNotice(modal, edge ?? null, propertyLabel, lockedByExpression);
 
     updateEditEdgeCommentDisplayLocal();
     modal.querySelector('h3')!.textContent = 'Edit edge';
@@ -5720,7 +5732,7 @@ function confirmEditEdge(): void {
   const newTo = toSel.value;
   const oldEdge = rawData.edges.find((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
   // A read-only edge (the form is locked, but Enter could still submit): never write it back (#58, #63).
-  if (oldEdge && edgeLock(oldEdge, rawData.classExpressions)) {
+  if (oldEdge && edgeLock(oldEdge)) {
     hideEditEdgeModalWithCleanup();
     return;
   }

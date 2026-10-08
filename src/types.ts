@@ -139,6 +139,10 @@ export interface GraphEdge {
   restrictionKinds?: RestrictionKind[];
   /** For a `value` (owl:hasValue) restriction: the individual's local name. */
   restrictionValue?: string;
+  /** Drawn from an anonymous class expression in the property's rdfs:domain or rdfs:range (∪ ∩ ¬ {}), or a
+   * restriction edge drawn for such a pair. Writing it back as one domain/range pair would rewrite the
+   * expression, so the editor keeps it read-only (#58). */
+  fromClassExpression?: boolean;
 }
 
 /** OWL restriction kinds drawn as edges: ∃ some, ∀ only, ∋ value, ⟲ self, and qualified / unqualified
