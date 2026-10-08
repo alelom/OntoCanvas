@@ -5113,7 +5113,6 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
     typeInput.value = match.displayLabel;
     updateEditEdgeTypeSections();
     resultsDiv.style.display = 'none';
-    updateEditEdgeCommentDisplayLocal();
   } else {
     // Match dropdown width to input field width and align it properly
     // The dropdown is positioned absolutely within the label (which has position: relative)

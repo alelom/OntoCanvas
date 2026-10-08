@@ -1,0 +1,24 @@
+@prefix : <http://example.org/examples/add-relationship-then-ok#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Add a relationship and click OK straight away (issue #98). Two unconnected classes and one relationship
+# type with a comment. To try it:
+#   1. Click Add Edge in the graph's toolbar, then drag from Author to Book: the Add edge dialog opens.
+#   2. Replace "subClassOf" in Relationship with "wri": it fills in "writes", and its comment and the
+#      cardinality fields appear.
+#   3. Without leaving the field, click OK.
+# Expected: the dialog closes and an Author → Book "writes" edge is drawn. Before #98 the comment and
+# cardinality sections only appeared when the field lost focus, which moved OK under the mouse during the
+# click, so the click did nothing and the dialog stayed open.
+
+<http://example.org/examples/add-relationship-then-ok> rdf:type owl:Ontology ;
+    rdfs:label "Add a relationship, then OK" .
+
+:Author rdf:type owl:Class ; rdfs:label "Author" .
+:Book rdf:type owl:Class ; rdfs:label "Book" .
+
+:writes rdf:type owl:ObjectProperty ;
+    rdfs:label "writes" ;
+    rdfs:comment "Links an author to a book they wrote. Shown under the Relationship field once it is chosen." .

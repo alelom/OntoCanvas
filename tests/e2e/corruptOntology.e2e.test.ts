@@ -15,32 +15,25 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
+/** Which outcome the load reported. Throws if it reported neither, rather than guessing one. */
 async function waitForErrorOrGraph(page: Page, timeout = 5000): Promise<'error' | 'graph'> {
-  try {
-    await page.waitForFunction(
-      () => {
-        const errorMsg = document.getElementById('errorMsg');
-        const vizControls = document.getElementById('vizControls');
-        const hasError = errorMsg && errorMsg.style.display !== 'none' && errorMsg.textContent?.trim() !== '';
-        const hasGraph = vizControls && vizControls.style.display !== 'none';
-        return hasError || hasGraph;
-      },
-      undefined,
-      { timeout }
-    );
-    
-    const errorMsg = await page.evaluate(() => {
-      const el = document.getElementById('errorMsg');
-      return el && el.style.display !== 'none' && el.textContent?.trim() !== '' ? el.textContent : null;
-    });
-    
-    if (errorMsg) {
-      return 'error';
-    }
-    return 'graph';
-  } catch {
-    return 'error'; // Timeout likely means error
-  }
+  await page.waitForFunction(
+    () => {
+      const errorMsg = document.getElementById('errorMsg');
+      const vizControls = document.getElementById('vizControls');
+      const hasError = errorMsg && errorMsg.style.display !== 'none' && errorMsg.textContent?.trim() !== '';
+      const hasGraph = vizControls && vizControls.style.display !== 'none';
+      return hasError || hasGraph;
+    },
+    undefined,
+    { timeout }
+  );
+
+  const errorMsg = await page.evaluate(() => {
+    const el = document.getElementById('errorMsg');
+    return el && el.style.display !== 'none' && el.textContent?.trim() !== '' ? el.textContent : null;
+  });
+  return errorMsg ? 'error' : 'graph';
 }
 
 /**
@@ -90,29 +83,16 @@ describe('Corrupt ontology handling E2E', () => {
 
     await loadAfterClearing(page, testFile);
     
-    const result = await waitForErrorOrGraph(page, 5000);
-    
-    if (result === 'error') {
-      const errorText = await page.evaluate(() => {
-        const el = document.getElementById('errorMsg');
-        return el?.textContent || '';
-      });
-      
-      // Should show validation error about circular reference or invalid structure
-      expect(errorText).toBeTruthy();
-      expect(errorText.length).toBeGreaterThan(0);
-      
-      // Should not show graph (vizControls should be hidden)
-      const vizControlsVisible = await page.evaluate(() => {
-        const el = document.getElementById('vizControls');
-        return el && el.style.display !== 'none';
-      });
-      expect(vizControlsVisible).toBe(false);
-    } else {
-      // If graph loaded, that's also acceptable if we fixed the issue
-      // But we should still log a warning
-      console.warn('Graph loaded successfully - circular reference may have been handled gracefully');
-    }
+    expect(await waitForErrorOrGraph(page, 5000)).toBe('error');
+
+    // Should show a validation error, and no graph
+    const errorText = await page.evaluate(() => document.getElementById('errorMsg')?.textContent?.trim() ?? '');
+    expect(errorText).not.toBe('');
+    const vizControlsVisible = await page.evaluate(() => {
+      const el = document.getElementById('vizControls');
+      return el && el.style.display !== 'none';
+    });
+    expect(vizControlsVisible).toBe(false);
   }, 10000);
 
   it('shows meaningful error for circular reference (A->B->C->A)', async () => {
@@ -120,31 +100,19 @@ describe('Corrupt ontology handling E2E', () => {
     expect(existsSync(testFile)).toBe(true);
 
     await loadAfterClearing(page, testFile);
-    
-    const result = await waitForErrorOrGraph(page, 5000);
-    
-    if (result === 'error') {
-      // Click on the error message to open the detailed error modal
-      await page.click('#errorMsg');
-      await page.locator('#validationErrorModal').waitFor({ state: 'visible', timeout: 5000 });
-      
-      // Check the detailed error in the modal
-      const modalErrorText = await page.evaluate(() => {
-        const modal = document.getElementById('validationErrorModal');
-        if (!modal) return '';
-        return modal.textContent || '';
-      });
-      
-      expect(modalErrorText).toBeTruthy();
-      // Error message should contain "circular", "self", or "reference"
-      expect(modalErrorText.toLowerCase()).toMatch(/circular|self|reference/);
-      
-      const vizControlsVisible = await page.evaluate(() => {
-        const el = document.getElementById('vizControls');
-        return el && el.style.display !== 'none';
-      });
-      expect(vizControlsVisible).toBe(false);
-    }
+    expect(await waitForErrorOrGraph(page, 5000)).toBe('error');
+
+    // Click on the error message to open the detailed error modal
+    await page.click('#errorMsg');
+    await page.locator('#validationErrorModal').waitFor({ state: 'visible', timeout: 5000 });
+    const modalErrorText = await page.evaluate(() => document.getElementById('validationErrorModal')?.textContent ?? '');
+    expect(modalErrorText.toLowerCase()).toMatch(/circular|self|reference/);
+
+    const vizControlsVisible = await page.evaluate(() => {
+      const el = document.getElementById('vizControls');
+      return el && el.style.display !== 'none';
+    });
+    expect(vizControlsVisible).toBe(false);
   }, 10000);
 
   it('shows meaningful error for self-referential class', async () => {
@@ -152,41 +120,25 @@ describe('Corrupt ontology handling E2E', () => {
     expect(existsSync(testFile)).toBe(true);
 
     await loadAfterClearing(page, testFile);
-    
-    const result = await waitForErrorOrGraph(page, 5000);
-    
-    if (result === 'error') {
-      // Check if modal is already open, or click to open it
-      const modalInfo = await page.evaluate(() => {
-        const modal = document.getElementById('validationErrorModal');
-        const isVisible = modal && (modal as HTMLElement).style.display !== 'none' && 
-                          window.getComputedStyle(modal).display !== 'none';
-        return { exists: !!modal, isVisible };
-      });
-      
-      if (!modalInfo.isVisible) {
-        // Click on the error message to open the detailed error modal
-        await page.click('#errorMsg');
-        await page.locator('#validationErrorModal').waitFor({ state: 'visible', timeout: 5000 });
-      }
-      
-      // Check the detailed error in the modal
-      const modalErrorText = await page.evaluate(() => {
-        const modal = document.getElementById('validationErrorModal');
-        if (!modal) return '';
-        return modal.textContent || '';
-      });
-      
-      expect(modalErrorText).toBeTruthy();
-      // Error message should contain "circular", "self", or "reference"
-      expect(modalErrorText.toLowerCase()).toMatch(/circular|self|reference/);
-      
-      const vizControlsVisible = await page.evaluate(() => {
-        const el = document.getElementById('vizControls');
-        return el && el.style.display !== 'none';
-      });
-      expect(vizControlsVisible).toBe(false);
+    expect(await waitForErrorOrGraph(page, 5000)).toBe('error');
+
+    // Open the detailed error modal unless it is already open
+    const modalVisible = await page.evaluate(() => {
+      const modal = document.getElementById('validationErrorModal');
+      return !!modal && getComputedStyle(modal).display !== 'none';
+    });
+    if (!modalVisible) {
+      await page.click('#errorMsg');
+      await page.locator('#validationErrorModal').waitFor({ state: 'visible', timeout: 5000 });
     }
+    const modalErrorText = await page.evaluate(() => document.getElementById('validationErrorModal')?.textContent ?? '');
+    expect(modalErrorText.toLowerCase()).toMatch(/circular|self|reference/);
+
+    const vizControlsVisible = await page.evaluate(() => {
+      const el = document.getElementById('vizControls');
+      return el && el.style.display !== 'none';
+    });
+    expect(vizControlsVisible).toBe(false);
   }, 10000);
 
   it('opens an ontology that only references an undeclared class (no error)', async () => {
