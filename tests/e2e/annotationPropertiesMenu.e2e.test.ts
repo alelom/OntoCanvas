@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -37,8 +38,8 @@ beforeEach(async () => {
   page = await browser.newPage();
   // Auto-accept the delete confirm() dialog (Playwright dismisses by default).
   page.on('dialog', (d) => d.accept());
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(300);
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
 });
 
 afterEach(async () => {
@@ -46,26 +47,7 @@ afterEach(async () => {
 });
 
 async function loadFixture(p: Page): Promise<void> {
-  await p.evaluate(() => {
-    const fi = document.getElementById('fileInput') as HTMLInputElement | null;
-    if (fi) {
-      fi.style.display = 'block';
-      fi.style.visibility = 'visible';
-      fi.style.position = 'absolute';
-      fi.style.width = '1px';
-      fi.style.height = '1px';
-    }
-  });
-  await p.locator('input#fileInput').setInputFiles(FIXTURE, { timeout: 5000 });
-  // Wait until the network has rendered the class nodes (cap 5s).
-  await p.waitForFunction(
-    () => {
-      const t = (window as any).__EDITOR_TEST__;
-      const net = t?.getNetwork?.();
-      return !!net?.body?.data?.nodes?.get && net.body.data.nodes.get('ClassB');
-    }, undefined,
-    { timeout: 5000 }
-  );
+  await loadTestFile(p, FIXTURE);
 }
 
 function nodeBackgrounds(p: Page, ids: string[]): Promise<Record<string, string | undefined>> {
@@ -125,7 +107,7 @@ describe('Annotation Properties menu (E2E)', () => {
 
     // ClassA was coloured by flagA=true; after deletion it has no governing property (it doesn't
     // carry flagB), so it falls back to the configurable default style.
-    const colors = await nodeBackgrounds(page, ['ClassA']);
-    expect(colors.ClassA).toBe(DEFAULT_FILL);
+    // The re-colour follows the deletion's re-render, so wait for it.
+    await expect.poll(async () => (await nodeBackgrounds(page, ['ClassA'])).ClassA, { timeout: 5000 }).toBe(DEFAULT_FILL);
   });
 });

@@ -15,31 +15,18 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
-async function waitForWarningOrGraph(page: Page, timeout = 5000): Promise<'warning' | 'graph'> {
-  try {
-    await page.waitForFunction(
-      () => {
-        const warningMsg = document.getElementById('warningMsg');
-        const vizControls = document.getElementById('vizControls');
-        const hasWarning = warningMsg && warningMsg.style.display !== 'none';
-        const hasGraph = vizControls && vizControls.style.display !== 'none';
-        return hasWarning || hasGraph;
-      }, undefined,
-      { timeout }
-    );
-    
-    const warningVisible = await page.evaluate(() => {
-      const el = document.getElementById('warningMsg');
-      return el && el.style.display !== 'none';
-    });
-    
-    if (warningVisible) {
-      return 'warning';
-    }
-    return 'graph';
-  } catch {
-    return 'warning'; // Timeout likely means warning
-  }
+function isWarningVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const el = document.getElementById('warningMsg');
+    return !!el && el.style.display !== 'none';
+  });
+}
+
+function isAddNodeModalVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const modal = document.getElementById('addNodeModal');
+    return !!modal && (modal as HTMLElement).style.display !== 'none';
+  });
 }
 
 describe('No classes ontology E2E', () => {
@@ -53,12 +40,10 @@ describe('No classes ontology E2E', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -71,15 +56,14 @@ describe('No classes ontology E2E', () => {
     expect(existsSync(testFile)).toBe(true);
 
     await loadTestFile(page, testFile);
-    
-    const result = await waitForWarningOrGraph(page, 10000);
-    expect(result).toBe('warning');
-    
+
+    await expect.poll(() => isWarningVisible(page), { timeout: 5000 }).toBe(true);
+
     const warningText = await page.evaluate(() => {
       const el = document.getElementById('warningMsgText');
       return el?.textContent || '';
     });
-    
+
     expect(warningText).toContain('no classes');
     expect(warningText).toContain('canvas is empty');
   }, 10000);
@@ -88,25 +72,22 @@ describe('No classes ontology E2E', () => {
     const testFile = join(TEST_FIXTURES_DIR, 'no-classes-ontology.ttl');
     expect(existsSync(testFile)).toBe(true);
 
+    // loadTestFile waits for the app to be ready, which includes vizControls being shown.
     await loadTestFile(page, testFile);
-    await waitForWarningOrGraph(page, 10000);
-    
-    // Wait a bit for everything to settle
-    await page.waitForTimeout(500);
-    
+
     const vizControlsVisible = await page.evaluate(() => {
       const el = document.getElementById('vizControls');
       return el && el.style.display !== 'none';
     });
-    
+
     expect(vizControlsVisible).toBe(true);
-    
+
     // Check that Add node button is visible
     const addNodeButtonVisible = await page.evaluate(() => {
       const el = document.querySelector('.vis-add');
       return el && (el as HTMLElement).style.display !== 'none';
     });
-    
+
     expect(addNodeButtonVisible).toBe(true);
   }, 10000);
 
@@ -115,27 +96,17 @@ describe('No classes ontology E2E', () => {
     expect(existsSync(testFile)).toBe(true);
 
     await loadTestFile(page, testFile);
-    await waitForWarningOrGraph(page, 10000);
-    await page.waitForTimeout(500);
-    
+
     // Close any open modals first
     await page.evaluate(() => {
       const modal = document.getElementById('addNodeModal');
       if (modal) (modal as HTMLElement).style.display = 'none';
     });
-    await page.waitForTimeout(200);
-    
+
     // Double-click on the canvas
     await page.locator('#network').dblclick({ position: { x: 400, y: 300 } });
-    await page.waitForTimeout(300);
-    
-    // Check if Add node modal is visible
-    const addModalVisible = await page.evaluate(() => {
-      const modal = document.getElementById('addNodeModal');
-      return modal && (modal as HTMLElement).style.display !== 'none';
-    });
-    
-    expect(addModalVisible).toBe(true);
+
+    await expect.poll(() => isAddNodeModalVisible(page), { timeout: 5000 }).toBe(true);
   }, 10000);
 
   it('allows clicking Add node button then canvas to open Add node modal when ontology has no classes', async () => {
@@ -143,23 +114,20 @@ describe('No classes ontology E2E', () => {
     expect(existsSync(testFile)).toBe(true);
 
     await loadTestFile(page, testFile);
-    await waitForWarningOrGraph(page, 10000);
-    await page.waitForTimeout(500);
-    
+
     // Close any open modals first
     await page.evaluate(() => {
       const modal = document.getElementById('addNodeModal');
       if (modal) (modal as HTMLElement).style.display = 'none';
     });
-    await page.waitForTimeout(200);
-    
+
     // Verify Add node button is visible
     const addButtonVisible = await page.evaluate(() => {
       const btn = document.querySelector('.vis-add');
       return btn && (btn as HTMLElement).style.display !== 'none';
     });
     expect(addButtonVisible).toBe(true);
-    
+
     // Use the test hook to open the Add node modal directly
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
@@ -167,48 +135,31 @@ describe('No classes ontology E2E', () => {
         testHook.openAddNodeModal(400, 300);
       }
     });
-    await page.waitForTimeout(500);
-    
-    // Check if Add node modal is visible
-    const addModalVisible = await page.evaluate(() => {
-      const modal = document.getElementById('addNodeModal');
-      return modal && (modal as HTMLElement).style.display !== 'none';
-    });
-    
-    expect(addModalVisible).toBe(true);
+
+    await expect.poll(() => isAddNodeModalVisible(page), { timeout: 5000 }).toBe(true);
   }, 10000);
 
   it('does not show warning when ontology has object properties referencing external classes (owl:Thing)', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'no-classes-2-object-properties.ttl');
     expect(existsSync(testFile)).toBe(true);
 
-    await loadTestFile(page, testFile);
-    
-    // Wait for graph to render (should not show warning)
-    // Reduced from 10000ms to 5000ms since we've optimized loading
-    await page.waitForFunction(
-      () => {
-        const vizControls = document.getElementById('vizControls');
-        return vizControls && vizControls.style.display !== 'none';
-      }, undefined,
-      { timeout: 5000 }
-    );
-    await page.waitForTimeout(500);
-    
-    // Verify warning is NOT shown
-    const warningVisible = await page.evaluate(() => {
-      const el = document.getElementById('warningMsg');
-      return el && el.style.display !== 'none';
+    // Close any Add node modal left open by the previous test so it cannot cover the page.
+    await page.evaluate(() => {
+      const modal = document.getElementById('addNodeModal');
+      if (modal) (modal as HTMLElement).style.display = 'none';
     });
-    
-    expect(warningVisible).toBe(false);
-    
-    // Verify graph is rendered (should have external owl:Thing node and edges)
+
+    await loadTestFile(page, testFile);
+
+    // The warning is decided before the graph renders, and loadTestFile waits for the render to settle,
+    // so its state is final here.
+    expect(await isWarningVisible(page)).toBe(false);
+
     const vizControlsVisible = await page.evaluate(() => {
       const el = document.getElementById('vizControls');
       return el && el.style.display !== 'none';
     });
-    
+
     expect(vizControlsVisible).toBe(true);
   }, 10000);
 });

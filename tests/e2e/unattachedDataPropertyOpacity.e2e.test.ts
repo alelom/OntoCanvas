@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { OPACITY_DIM } from '../../src/lib/searchHighlight';
@@ -33,27 +34,9 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(300);
-  await page.evaluate(() => {
-    const fi = document.getElementById('fileInput') as HTMLInputElement | null;
-    if (fi) {
-      fi.style.display = 'block';
-      fi.style.visibility = 'visible';
-      fi.style.position = 'absolute';
-      fi.style.width = '1px';
-      fi.style.height = '1px';
-    }
-  });
-  await page.locator('input#fileInput').setInputFiles(FIXTURE, { timeout: 5000 });
-  await page.waitForFunction(
-    (id) => {
-      const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
-      return !!net?.body?.data?.nodes?.get?.(id);
-    },
-    UNATTACHED_NODE,
-    { timeout: 5000 }
-  );
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+  await loadTestFile(page, FIXTURE);
 });
 
 afterEach(async () => {
@@ -66,7 +49,8 @@ async function search(p: Page, query: string): Promise<void> {
     input.value = q;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }, query);
-  await p.waitForTimeout(500);
+  // The input handler re-renders the graph with the search applied; wait for that render to settle.
+  await waitForAppReady(p);
 }
 
 /** Rendered opacity of a node, or 1 when the node carries none. */

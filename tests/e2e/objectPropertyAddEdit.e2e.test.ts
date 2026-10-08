@@ -14,6 +14,13 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
+function isAddObjectPropertyModalVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const modal = document.getElementById('addRelationshipTypeModal');
+    return !!modal && (modal as HTMLElement).style.display !== 'none';
+  });
+}
+
 describe('Object Property Add/Edit E2E Tests', () => {
   let browser: Browser;
   let page: Page;
@@ -25,12 +32,10 @@ describe('Object Property Add/Edit E2E Tests', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -50,22 +55,18 @@ describe('Object Property Add/Edit E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openAddObjectPropertyModal) testHook.openAddObjectPropertyModal();
       });
-      await page.waitForTimeout(150);
 
-      const addModalVisible = await page.evaluate(() => {
-        const modal = document.getElementById('addRelationshipTypeModal');
-        return modal && (modal as HTMLElement).style.display !== 'none';
-      });
-      expect(addModalVisible).toBe(true);
+      await expect.poll(() => isAddObjectPropertyModalVisible(page), { timeout: 5000 }).toBe(true);
 
       await page.locator('#addRelTypeLabel').fill('references');
-      await page.waitForTimeout(100);
-
       await page.locator('#addRelTypeConfirm').click();
-      await page.waitForTimeout(300);
 
+      await expect
+        .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__?.getObjectPropertiesListText?.() ?? ''), {
+          timeout: 5000,
+        })
+        .toContain('references');
       const listText = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getObjectPropertiesListText?.() ?? '');
-      expect(listText).toContain('references');
       expect(listText).toContain('contains');
 
       const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());
@@ -88,14 +89,23 @@ describe('Object Property Add/Edit E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openAddObjectPropertyModal) testHook.openAddObjectPropertyModal();
       });
-      await page.waitForTimeout(150);
 
       await page.locator('#addRelTypeLabel').fill('contains');
-      await page.waitForTimeout(200);
 
-      const state = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getAddObjectPropertyModalState?.());
-      expect(state).toBeDefined();
-      expect(state.okDisabled === true || (state.validationText && state.validationText.toLowerCase().includes('already exists'))).toBe(true);
+      // Validation runs on input; wait for it to flag the duplicate.
+      await expect
+        .poll(
+          async () => {
+            const state = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getAddObjectPropertyModalState?.());
+            return (
+              !!state &&
+              (state.okDisabled === true ||
+                (!!state.validationText && state.validationText.toLowerCase().includes('already exists')))
+            );
+          },
+          { timeout: 5000 }
+        )
+        .toBe(true);
     });
   });
 
@@ -111,7 +121,12 @@ describe('Object Property Add/Edit E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openEditObjectPropertyModal) testHook.openEditObjectPropertyModal('contains');
       });
-      await page.waitForTimeout(200);
+
+      await expect
+        .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditObjectPropertyIdentifierText?.() ?? null), {
+          timeout: 5000,
+        })
+        .toContain('contains');
 
       const identifierText = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditObjectPropertyIdentifierText?.());
       expect(identifierText).not.toBeNull();

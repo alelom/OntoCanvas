@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { contrastRatio, MIN_CONTRAST_AA } from '../../src/lib/textContrast';
@@ -43,8 +44,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(300);
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
 });
 
 afterEach(async () => {
@@ -52,23 +53,9 @@ afterEach(async () => {
 });
 
 async function loadFixture(p: Page, fixture: string, awaitedNodeId: string): Promise<void> {
-  await p.evaluate(() => {
-    const fi = document.getElementById('fileInput') as HTMLInputElement | null;
-    if (fi) {
-      fi.style.display = 'block';
-      fi.style.visibility = 'visible';
-      fi.style.position = 'absolute';
-      fi.style.width = '1px';
-      fi.style.height = '1px';
-    }
-  });
-  await p.locator('input#fileInput').setInputFiles(fixture, { timeout: 5000 });
+  await loadTestFile(p, fixture);
   await p.waitForFunction(
-    (id) => {
-      const t = (window as any).__EDITOR_TEST__;
-      const net = t?.getNetwork?.();
-      return !!net?.body?.data?.nodes?.get && !!net.body.data.nodes.get(id);
-    },
+    (id) => !!(window as any).__EDITOR_TEST__?.getNetwork?.()?.body?.data?.nodes?.get?.(id),
     awaitedNodeId,
     { timeout: 5000 }
   );

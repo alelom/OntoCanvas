@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile } from './testHelpers';
+import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -28,13 +28,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(500);
-  
-  // Enable debug mode for tests
-  await page.evaluate(() => {
-    localStorage.setItem('ontologyEditorDebug', 'true');
-  });
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
   
   // Close any existing pages to ensure clean state
   const pages = browser.contexts().flatMap(ctx => ctx.pages());
@@ -68,7 +63,7 @@ describe('Data Property Node Display E2E', () => {
     });
     
     // Wait for graph to rebuild
-    await page.waitForTimeout(1500);
+    await waitForAppReady(page);
     
     // Get all node information and log it
     const result = await page.evaluate(() => {
@@ -83,7 +78,7 @@ describe('Data Property Node Display E2E', () => {
       
       const allNodes = network.body.data.nodes.get();
       const classNodes = allNodes
-        .filter((n: any) => !n.id?.startsWith('__dataprop__'))
+        .filter((n: any) => !n.id?.startsWith('__dataprop'))
         .map((n: any) => ({
           id: n.id,
           label: n.label,
@@ -92,7 +87,7 @@ describe('Data Property Node Display E2E', () => {
         }));
       
       const dataPropertyNodes = allNodes
-        .filter((n: any) => n.id?.startsWith('__dataprop__'))
+        .filter((n: any) => n.id?.startsWith('__dataprop'))
         .map((n: any) => ({
           id: n.id,
           label: n.label,
@@ -115,26 +110,18 @@ describe('Data Property Node Display E2E', () => {
     });
     
     // Log everything for debugging
-    console.log('[TEST] Raw data nodes:', JSON.stringify(result.rawData?.nodes || [], null, 2));
-    console.log('[TEST] External refs:', JSON.stringify(result.externalRefs, null, 2));
-    console.log('[TEST] Class nodes in network:', JSON.stringify(result.classNodes, null, 2));
-    console.log('[TEST] Data property nodes in network:', JSON.stringify(result.dataPropertyNodes, null, 2));
     
     // Verify createdDate data property node has prefix
     const createdDateNode = result.dataPropertyNodes.find((n: any) => 
       n.label?.includes('createdDate') || n.label?.includes('created date') || n.id?.includes('createdDate')
     );
     
-    if (createdDateNode) {
-      console.log('[TEST] ✓ createdDate data property node found:', createdDateNode);
-      expect(createdDateNode.label).toMatch(/dpbase:\s*(createdDate|created date)/i);
-      expect(createdDateNode.label).toMatch(/\(xsd:(dateTime|string)\)/);
-      expect(createdDateNode.title).toContain('Imported from');
-      expect(createdDateNode.title).toContain('http://example.org/data-base');
-    } else {
-      console.warn('[TEST] ✗ createdDate data property node not found');
-      console.warn('[TEST] Available data property nodes:', result.dataPropertyNodes.map((n: any) => ({ id: n.id, label: n.label })));
-    }
+    // ExtendedEntity restricts dpbase:createdDate, so it is drawn as a __dataproprestrict__ node.
+    expect(createdDateNode, 'createdDate data property node').toBeDefined();
+    expect(createdDateNode.label).toMatch(/dpbase:\s*(createdDate|created date)/i);
+    expect(createdDateNode.label).toMatch(/\(xsd:(dateTime|string)\)/);
+    expect(createdDateNode.title).toContain('Imported from');
+    expect(createdDateNode.title).toContain('http://example.org/data-base');
   });
   
   it('should display external class node with prefix in data-props-child.ttl', async () => {
@@ -153,7 +140,7 @@ describe('Data Property Node Display E2E', () => {
     });
     
     // Wait for graph to rebuild
-    await page.waitForTimeout(1500);
+    await waitForAppReady(page);
     
     // Get all node information and log it
     const result = await page.evaluate(() => {
@@ -167,7 +154,7 @@ describe('Data Property Node Display E2E', () => {
       
       const allNodes = network.body.data.nodes.get();
       const nodes = allNodes
-        .filter((n: any) => !n.id?.startsWith('__dataprop__'))
+        .filter((n: any) => !n.id?.startsWith('__dataprop'))
         .map((n: any) => ({
           id: n.id,
           label: n.label,
@@ -189,23 +176,14 @@ describe('Data Property Node Display E2E', () => {
     });
     
     // Log everything for debugging
-    console.log('[TEST] Raw data nodes:', JSON.stringify(result.rawData?.nodes || [], null, 2));
-    console.log('[TEST] Class nodes in network:', JSON.stringify(result.nodes, null, 2));
     
     // Check BaseEntity class node
-    const baseEntityNode = result.nodes.find((n: any) => 
-      (n.id?.includes('BaseEntity') || n.label?.includes('Base Entity')) && n.isExternal
-    );
-    
-    if (baseEntityNode) {
-      console.log('[TEST] ✓ External BaseEntity node found:', baseEntityNode);
-      expect(baseEntityNode.label).toMatch(/dpbase:\s*Base Entity/i);
-      expect(baseEntityNode.title).toContain('Imported from');
-      expect(baseEntityNode.title).toContain('http://example.org/data-base');
-    } else {
-      console.warn('[TEST] ✗ External BaseEntity node not found');
-      console.warn('[TEST] Available external nodes:', result.nodes.filter((n: any) => n.isExternal).map((n: any) => ({ id: n.id, label: n.label })));
-      console.warn('[TEST] All nodes:', result.nodes.map((n: any) => ({ id: n.id, label: n.label, isExternal: n.isExternal })));
-    }
+    // An external class node is keyed by its full IRI (the rendered node carries no isExternal flag).
+    const baseEntityNode = result.nodes.find((n: any) => n.id === 'http://example.org/data-base#BaseEntity');
+    expect(baseEntityNode, 'external BaseEntity node').toBeDefined();
+    // The imported ontology is not loaded, so there is no rdfs:label and the local name is shown.
+    expect(baseEntityNode.label).toMatch(/dpbase:\s*Base\s?Entity/i);
+    expect(baseEntityNode.title).toContain('Imported from');
+    expect(baseEntityNode.title).toContain('http://example.org/data-base');
   });
 });

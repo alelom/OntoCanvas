@@ -16,6 +16,14 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
+/** A node's rendered position, rounded to whole pixels, or null when it is not in the network. */
+async function nodePosition(page: Page, nodeId: string): Promise<{ x: number; y: number } | null> {
+  return page.evaluate((id) => {
+    const pos = (window as any).__EDITOR_TEST__?.getNetwork?.()?.getPositions([id])?.[id];
+    return pos ? { x: Math.round(pos.x), y: Math.round(pos.y) } : null;
+  }, nodeId);
+}
+
 describe('Data Property Drag Coupling E2E Tests', () => {
   let browser: Browser;
   let page: Page;
@@ -27,12 +35,10 @@ describe('Data Property Drag Coupling E2E Tests', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -79,7 +85,10 @@ describe('Data Property Drag Coupling E2E Tests', () => {
         },
         { classId, newClassX, newClassY }
       );
-      await page.waitForTimeout(200);
+        // Wait for the coupled move to land on the data property node.
+      await expect
+        .poll(() => nodePosition(page, dataPropId), { timeout: 5000 })
+        .toEqual({ x: Math.round(initialDataProp.x + 80), y: Math.round(initialDataProp.y + 60) });
 
       const positionsAfter = await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
@@ -133,7 +142,9 @@ describe('Data Property Drag Coupling E2E Tests', () => {
         },
         { dataPropId }
       );
-      await page.waitForTimeout(200);
+        await expect
+        .poll(() => nodePosition(page, dataPropId), { timeout: 5000 })
+        .toEqual({ x: Math.round(initialPositions![dataPropId].x + 50), y: Math.round(initialPositions![dataPropId].y + 40) });
 
       const positionsAfter = await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;

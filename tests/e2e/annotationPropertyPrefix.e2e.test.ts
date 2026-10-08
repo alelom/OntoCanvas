@@ -27,13 +27,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(500);
-  
-  // Enable debug mode for tests
-  await page.evaluate(() => {
-    localStorage.setItem('ontologyEditorDebug', 'true');
-  });
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
 });
 
 afterEach(async () => {
@@ -64,7 +59,6 @@ describe('Annotation Property Prefix E2E', () => {
       };
     });
     
-    console.log('[TEST] Annotation properties:', JSON.stringify(annotationProps, null, 2));
     
     // Verify that labellableRoot appears with prefix "core:"
     const labellableRootItem = annotationProps.items.find((item: any) => 
@@ -72,7 +66,6 @@ describe('Annotation Property Prefix E2E', () => {
     );
     
     if (labellableRootItem) {
-      console.log('[TEST] Found labellableRoot item:', labellableRootItem);
       const itemText = labellableRootItem.text || labellableRootItem.html;
       // Should contain the prefix
       expect(itemText).toContain('core:labellableRoot');

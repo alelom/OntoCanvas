@@ -27,13 +27,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(500);
-  
-  // Enable debug mode for tests
-  await page.evaluate(() => {
-    localStorage.setItem('ontologyEditorDebug', 'true');
-  });
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
 });
 
 afterEach(async () => {
@@ -62,13 +57,11 @@ describe('Annotation Property Range E2E', () => {
       };
     });
     
-    console.log('[TEST] Annotation properties:', JSON.stringify(annotationProps, null, 2));
     
     // Find labellableRoot annotation property
     const labellableRootProp = annotationProps.items.find((ap: any) => ap.name === 'labellableRoot');
     
     if (labellableRootProp) {
-      console.log('[TEST] Found labellableRoot property:', labellableRootProp);
       // Verify it's detected as a boolean property
       expect(labellableRootProp.isBoolean).toBe(true);
       // Verify the range is set to xsd:boolean

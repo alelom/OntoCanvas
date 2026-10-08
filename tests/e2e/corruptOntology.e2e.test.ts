@@ -71,12 +71,12 @@ describe('Corrupt ontology handling E2E', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
-    await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
-    });
-    await page.waitForTimeout(100);
+    // With no ontology, the app shows the "Open ontology" dialog shortly after startup, and a failed load
+    // never hides it. Wait for it and hide it, so it can't reappear over the error message tests click.
+    const openOntologyModal = page.locator('#openOntologyModal');
+    await openOntologyModal.waitFor({ state: 'visible', timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__.hideOpenOntologyModal());
+    await openOntologyModal.waitFor({ state: 'hidden', timeout: 5000 });
   });
 
   afterAll(async () => {
@@ -126,7 +126,7 @@ describe('Corrupt ontology handling E2E', () => {
     if (result === 'error') {
       // Click on the error message to open the detailed error modal
       await page.click('#errorMsg');
-      await page.waitForTimeout(500);
+      await page.locator('#validationErrorModal').waitFor({ state: 'visible', timeout: 5000 });
       
       // Check the detailed error in the modal
       const modalErrorText = await page.evaluate(() => {
@@ -167,7 +167,7 @@ describe('Corrupt ontology handling E2E', () => {
       if (!modalInfo.isVisible) {
         // Click on the error message to open the detailed error modal
         await page.click('#errorMsg');
-        await page.waitForTimeout(500);
+        await page.locator('#validationErrorModal').waitFor({ state: 'visible', timeout: 5000 });
       }
       
       // Check the detailed error in the modal

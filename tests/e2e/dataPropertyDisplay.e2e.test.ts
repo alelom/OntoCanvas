@@ -25,12 +25,10 @@ describe('Data Property Display E2E Tests', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -111,7 +109,7 @@ describe('Data Property Display E2E Tests', () => {
         nodeId
       );
 
-      await page.waitForTimeout(300);
+      await page.locator('#editDataPropertyModal').waitFor({ state: 'visible', timeout: 5000 });
 
       // Verify the Edit data property modal is open
       const modalTitle = await page.evaluate(() => {
@@ -144,7 +142,7 @@ describe('Data Property Display E2E Tests', () => {
         edgeId
       );
 
-      await page.waitForTimeout(300);
+      await page.locator('#editDataPropertyModal').waitFor({ state: 'visible', timeout: 5000 });
 
       // Verify the Edit data property modal is open
       const modalTitle = await page.evaluate(() => {

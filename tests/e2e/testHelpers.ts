@@ -75,6 +75,15 @@ export async function waitForGraphRender(page: Page, timeout = 5000): Promise<vo
 }
 
 /**
+ * Fail every request that isn't to the local dev server. Fixtures with owl:imports make the app fetch their
+ * imported ontologies (e.g. http://example.org/...); blocking them keeps tests offline and deterministic.
+ * Call before the page loads anything.
+ */
+export async function blockExternalRequests(page: Page): Promise<void> {
+  await page.route((url) => url.hostname !== 'localhost', (route) => route.abort());
+}
+
+/**
  * Choose a file in the file input without waiting for it to load: for tests whose load is expected to fail
  * (a corrupt ontology) and that wait for the error themselves.
  */

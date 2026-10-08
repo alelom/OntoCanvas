@@ -42,7 +42,7 @@ describe('Embedded in a real iframe E2E', () => {
       permissions: ['clipboard-read', 'clipboard-write'],
     });
     page = await context.newPage();
-    page.setDefaultTimeout(10000);
+    page.setDefaultTimeout(5000);
     await page.route(HOST_URL, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: HOST_HTML }));
     await page.route(ONTO_URL, (r) => r.fulfill({ status: 200, contentType: 'text/turtle', body: TTL }));
     await page.goto(HOST_URL, { waitUntil: 'domcontentloaded' });
@@ -53,9 +53,10 @@ describe('Embedded in a real iframe E2E', () => {
         const nc = document.getElementById('nodeCount')?.textContent ?? '';
         return !!document.getElementById('maxFontSize') && Number(nc) > 0;
       }, undefined,
-      { timeout: 10000 }
+      { timeout: 5000 }
     );
-    await page.waitForTimeout(500);
+    // The same readiness waitForAppReady checks, inside the iframe: loaded, no dialog, view settled.
+    await frame.waitForFunction(() => (window as any).__EDITOR_TEST__?.isAppReady?.() === true, undefined, { timeout: 5000 });
   });
 
   afterAll(async () => {

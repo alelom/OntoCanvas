@@ -30,11 +30,7 @@ describe('OWL URL load E2E', () => {
   });
 
   beforeEach(async () => {
-    // Close previous page if it exists (full refresh between tests)
-    if (page) {
-      await page.close();
-    }
-    
+    // A new page per test (afterEach closes it): a full refresh between tests.
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
@@ -42,14 +38,13 @@ describe('OWL URL load E2E', () => {
     // Full page reload for each test
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
-    
-    // Hide open ontology modal
-    await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
-    });
-    await page.waitForTimeout(100);
+
+    // With no ontology, the app shows the "Open ontology" dialog shortly after startup. Wait for it, then
+    // hide it so the test opens it from the toolbar like a user (hiding it earlier would let it reappear).
+    const openOntologyModal = page.locator('#openOntologyModal');
+    await openOntologyModal.waitFor({ state: 'visible', timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__.hideOpenOntologyModal());
+    await openOntologyModal.waitFor({ state: 'hidden', timeout: 5000 });
   });
 
   afterEach(async () => {

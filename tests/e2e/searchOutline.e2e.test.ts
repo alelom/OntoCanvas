@@ -81,14 +81,18 @@ describe('Search outline E2E (#84)', () => {
   });
 
   it('follows a pan by moving the group only (shapes unchanged)', async () => {
-    // Let any view animation started by the search settle first, or it would undo the pan.
+    // Let the search's re-render fit the view, and any animation it started end, or it would undo the pan:
+    // the view is still once two polls 150 ms apart read the same position.
+    await waitForAppReady(page);
     const viewNow = () => page.evaluate(() => JSON.stringify((window as any).__EDITOR_TEST__.getNetwork().getViewPosition()));
+    let previousView: string | null = null;
     await expect
       .poll(async () => {
-        const a = await viewNow();
-        await page.waitForTimeout(150);
-        return a === (await viewNow());
-      }, { timeout: 5000 })
+        const now = await viewNow();
+        const still = now === previousView;
+        previousView = now;
+        return still;
+      }, { timeout: 5000, intervals: [150] })
       .toBe(true);
     const before = await shapes();
     await page.evaluate(() => {

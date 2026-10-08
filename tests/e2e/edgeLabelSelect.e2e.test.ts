@@ -43,7 +43,7 @@ describe('Edge label single-click selection E2E', () => {
     // Ensure no modal overlay is intercepting canvas clicks.
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    await waitForAppReady(page);
   });
 
   afterAll(async () => {

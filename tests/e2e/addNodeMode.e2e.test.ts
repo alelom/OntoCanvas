@@ -25,6 +25,13 @@ function getNodeCount(page: Page): Promise<number> {
   });
 }
 
+function isAddNodeModalVisible(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const modal = document.getElementById('addNodeModal');
+    return !!modal && (modal as HTMLElement).style.display !== 'none';
+  });
+}
+
 describe('Add node mode E2E', () => {
   let browser: Browser;
   let page: Page;
@@ -36,12 +43,10 @@ describe('Add node mode E2E', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -61,42 +66,23 @@ describe('Add node mode E2E', () => {
 
     // 1) Click Add node toolbar button, then click canvas → modal opens
     await page.locator('.vis-add').click();
-    await page.waitForTimeout(100);
     await page.locator('#network').click({ position: { x: 300, y: 250 } });
-    await page.waitForTimeout(200);
-
-    let addModalVisible = await page.evaluate(() => {
-      const modal = document.getElementById('addNodeModal');
-      return modal && (modal as HTMLElement).style.display !== 'none';
-    });
-    expect(addModalVisible).toBe(true);
+    await expect.poll(() => isAddNodeModalVisible(page), { timeout: 5000 }).toBe(true);
 
     await page.locator('#addNodeInput').fill('FirstNode');
-    await page.waitForTimeout(80);
     await page.locator('#addNodeConfirm').click();
-    await page.waitForTimeout(300);
 
-    const afterFirst = await getNodeCount(page);
-    expect(afterFirst).toBe(2);
+    await expect.poll(() => getNodeCount(page), { timeout: 5000 }).toBe(2);
+    await expect.poll(() => isAddNodeModalVisible(page), { timeout: 5000 }).toBe(false);
 
     // 2) Click Add node again, then canvas again → modal must open (regression: was not opening)
     await page.locator('.vis-add').click();
-    await page.waitForTimeout(100);
     await page.locator('#network').click({ position: { x: 400, y: 300 } });
-    await page.waitForTimeout(200);
-
-    addModalVisible = await page.evaluate(() => {
-      const modal = document.getElementById('addNodeModal');
-      return modal && (modal as HTMLElement).style.display !== 'none';
-    });
-    expect(addModalVisible).toBe(true);
+    await expect.poll(() => isAddNodeModalVisible(page), { timeout: 5000 }).toBe(true);
 
     await page.locator('#addNodeInput').fill('SecondNode');
-    await page.waitForTimeout(80);
     await page.locator('#addNodeConfirm').click();
-    await page.waitForTimeout(300);
 
-    const afterSecond = await getNodeCount(page);
-    expect(afterSecond).toBe(3);
+    await expect.poll(() => getNodeCount(page), { timeout: 5000 }).toBe(3);
   });
 });

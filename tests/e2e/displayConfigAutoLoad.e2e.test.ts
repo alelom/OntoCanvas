@@ -32,12 +32,10 @@ describe('Display config auto-load E2E', () => {
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -77,8 +75,7 @@ describe('Display config auto-load E2E', () => {
     
     await loadTestFile(page, ontologyPath);
     
-    // Should show warning for no classes, but no error
-    await page.waitForTimeout(500);
+    // Should show warning for no classes, but no error. loadTestFile waited for this load to finish.
     
     const errorMsg = await page.evaluate(() => {
       const el = document.getElementById('errorMsg');

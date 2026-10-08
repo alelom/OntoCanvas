@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, waitForGraphRender } from './testHelpers';
+import { loadTestFile, waitForAppReady, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -36,12 +36,10 @@ describe('Edit property modal — OK with no changes does not rename (issue #33)
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
     await loadTestFile(page, FIXTURE);
     await waitForGraphRender(page);
     // Baseline: a freshly loaded file has nothing to save.
@@ -62,7 +60,8 @@ describe('Edit property modal — OK with no changes does not rename (issue #33)
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.openEditObjectPropertyModal?.('assertedBy'));
     await page.locator('#editRelationshipTypeModal').waitFor({ state: 'visible', timeout: 3000 });
     await page.locator('#editRelTypeConfirm').click();
-    await page.waitForTimeout(200);
+    await page.locator('#editRelationshipTypeModal').waitFor({ state: 'hidden', timeout: 5000 });
+    await waitForAppReady(page);
 
     const after = await page.evaluate(
       () => (window as any).__EDITOR_TEST__?.getObjectPropertyByName?.('assertedBy')?.uri ?? null
@@ -82,7 +81,8 @@ describe('Edit property modal — OK with no changes does not rename (issue #33)
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.openEditDataPropertyModal?.('capturedCaption'));
     await page.locator('#editDataPropertyModal').waitFor({ state: 'visible', timeout: 3000 });
     await page.locator('#editDataPropConfirm').click();
-    await page.waitForTimeout(200);
+    await page.locator('#editDataPropertyModal').waitFor({ state: 'hidden', timeout: 5000 });
+    await waitForAppReady(page);
 
     const after = await page.evaluate(
       () => (window as any).__EDITOR_TEST__?.getDataPropertyByName?.('capturedCaption')?.uri ?? null

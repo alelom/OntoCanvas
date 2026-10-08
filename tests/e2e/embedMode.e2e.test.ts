@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { waitForAppReady } from './testHelpers';
 
 const TTL = `@prefix : <http://example.org/o#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -24,16 +25,22 @@ async function open(browser: Browser, url: string): Promise<Page> {
   await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
   await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
   await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
-  await page.waitForFunction(
-    () => {
-      const n = (window as any).__EDITOR_TEST__?.getNetwork?.();
-      return n && Object.keys(n.body?.edges || {}).length > 0;
-    }, undefined,
-    { timeout: 5000 }
-  );
-  await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
-  await page.waitForTimeout(400);
+  await waitForAppReady(page);
   return page;
+}
+
+/**
+ * Double-click the page at (x, y) and wait until the double-click has reached `window`. The app handles it
+ * in a capture listener on the graph container, which runs before the event bubbles up to `window`, so
+ * once this returns the app has either opened a modal or deliberately ignored the double-click.
+ */
+async function dblclickHandled(page: Page, x: number, y: number): Promise<void> {
+  await page.evaluate(() => {
+    (window as any).__e2eDblclickSeen = false;
+    window.addEventListener('dblclick', () => { (window as any).__e2eDblclickSeen = true; }, { once: true });
+  });
+  await page.mouse.dblclick(x, y);
+  await page.waitForFunction(() => (window as any).__e2eDblclickSeen === true, undefined, { timeout: 5000 });
 }
 
 function snapshot(page: Page) {
@@ -69,8 +76,7 @@ describe('Embedded mode E2E', () => {
     expect(snap.dragView).toBe(true);
 
     // Double-clicking empty canvas must NOT open the create-node modal.
-    await page.mouse.dblclick(250, 250);
-    await page.waitForTimeout(200);
+    await dblclickHandled(page, 250, 250);
     const addModalShown = await page.evaluate(() => {
       const m = document.getElementById('addNodeModal');
       return m ? getComputedStyle(m).display !== 'none' : false;
@@ -87,8 +93,7 @@ describe('Embedded mode E2E', () => {
     expect(snap.legendHidden).toBe(false);
     expect(snap.dragView).toBe(false);
 
-    await page.mouse.dblclick(250, 250);
-    await page.waitForTimeout(200);
+    await dblclickHandled(page, 250, 250);
     const addModalShown = await page.evaluate(() => {
       const m = document.getElementById('addNodeModal');
       return m ? getComputedStyle(m).display !== 'none' : false;

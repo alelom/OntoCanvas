@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, waitForGraphRender } from './testHelpers';
+import { loadTestFile, waitForAppReady, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -40,21 +40,6 @@ async function edgeTypeExistsInRawData(page: Page, edgeType: string): Promise<bo
   );
 }
 
-// Helper to check if edge with specific type is visible by checking edge count changes
-// When "Show" is unchecked, the edge count should decrease
-async function isEdgeTypeVisible(page: Page, edgeType: string): Promise<boolean> {
-  // Check if edge exists in rawData first
-  const existsInRawData = await edgeTypeExistsInRawData(page, edgeType);
-  if (!existsInRawData) return false;
-  
-  // For now, we'll use a simpler approach: check if the edge count changes
-  // when we toggle the checkbox. This is indirect but more reliable.
-  // Actually, let's just verify the edge exists in rawData and assume
-  // it's visible if the edge count is > 0 and the type exists
-  const edgeCount = await getEdgeCount(page);
-  return edgeCount > 0 && existsInRawData;
-}
-
 // Helper to check if edge label checkbox is checked
 async function hasEdgeLabel(page: Page, edgeType: string): Promise<boolean> {
   return await page.evaluate(
@@ -64,7 +49,7 @@ async function hasEdgeLabel(page: Page, edgeType: string): Promise<boolean> {
       let checkbox = document.querySelector(
         `.edge-label-cb[data-type="${escapedType}"]`
       ) as HTMLInputElement;
-      
+
       // If not found, try with full URI format
       if (!checkbox && edgeType.includes('#')) {
         const localName = edgeType.split('#').pop() || edgeType;
@@ -73,7 +58,7 @@ async function hasEdgeLabel(page: Page, edgeType: string): Promise<boolean> {
           `.edge-label-cb[data-type="${escapedLocal}"]`
         ) as HTMLInputElement;
       }
-      
+
       // If still not found, try with base URI
       if (!checkbox && !edgeType.includes('http')) {
         const fullUri = `http://example.org/edge-style-test#${edgeType}`;
@@ -82,7 +67,7 @@ async function hasEdgeLabel(page: Page, edgeType: string): Promise<boolean> {
           `.edge-label-cb[data-type="${escapedFull}"]`
         ) as HTMLInputElement;
       }
-      
+
       // If checkbox is not found, report as not checked so tests fail loudly
       return checkbox ? checkbox.checked : false;
     },
@@ -90,40 +75,36 @@ async function hasEdgeLabel(page: Page, edgeType: string): Promise<boolean> {
   );
 }
 
+/** Set an edge-style checkbox (`edge-show-cb` / `edge-label-cb`) and fire its change event; fails if absent. */
+async function setEdgeStyleCheckbox(page: Page, cbClass: string, edgeType: string, checked: boolean): Promise<void> {
+  const found = await page.evaluate(
+    ({ cbClass, edgeType, checked }) => {
+      const checkbox = document.querySelector(
+        `.${cbClass}[data-type="${CSS.escape(edgeType)}"]`
+      ) as HTMLInputElement | null;
+      if (!checkbox) return false;
+      checkbox.checked = checked;
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    },
+    { cbClass, edgeType, checked }
+  );
+  expect(found).toBe(true);
+}
+
 // Helper to toggle edge show checkbox
 async function toggleEdgeShowCheckbox(page: Page, edgeType: string, checked: boolean): Promise<void> {
-  await page.evaluate(
-    ({ edgeType, checked }) => {
-      const escapedType = CSS.escape(edgeType);
-      const checkbox = document.querySelector(
-        `.edge-show-cb[data-type="${escapedType}"]`
-      ) as HTMLInputElement;
-      if (checkbox) {
-        checkbox.checked = checked;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    },
-    { edgeType, checked }
-  );
-  await page.waitForTimeout(200);
+  await setEdgeStyleCheckbox(page, 'edge-show-cb', edgeType, checked);
 }
 
 // Helper to toggle edge label checkbox
 async function toggleEdgeLabelCheckbox(page: Page, edgeType: string, checked: boolean): Promise<void> {
-  await page.evaluate(
-    ({ edgeType, checked }) => {
-      const escapedType = CSS.escape(edgeType);
-      const checkbox = document.querySelector(
-        `.edge-label-cb[data-type="${escapedType}"]`
-      ) as HTMLInputElement;
-      if (checkbox) {
-        checkbox.checked = checked;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    },
-    { edgeType, checked }
-  );
-  await page.waitForTimeout(200);
+  await setEdgeStyleCheckbox(page, 'edge-label-cb', edgeType, checked);
+}
+
+/** Text of the "Edges:" colour legend in the status bar. */
+async function getEdgeLegendText(page: Page): Promise<string> {
+  return (await page.locator('#edgeColorsLegend').textContent()) ?? '';
 }
 
 describe('Edge Style Checkboxes E2E', () => {
@@ -135,11 +116,10 @@ describe('Edge Style Checkboxes E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
-    
+
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
-    
+
     // Enable debug mode for test logging
     await page.evaluate(() => {
       try {
@@ -148,21 +128,19 @@ describe('Edge Style Checkboxes E2E', () => {
         // localStorage may not be available
       }
     });
-    
+
     // Hide open ontology modal
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
-    
-    // Clear display config
+
+    // Clear display config (awaited: clearDisplayConfig resolves once IndexedDB is cleared)
     try {
       await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.clearDisplayConfig) return testHook.clearDisplayConfig();
       });
-      await page.waitForTimeout(50);
     } catch {
       // IndexedDB may not exist yet
     }
@@ -176,7 +154,6 @@ describe('Edge Style Checkboxes E2E', () => {
     const testFile = join(TEST_FIXTURES_DIR, 'edge-style-test.ttl');
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Verify "hasProperty" edge exists in rawData (check both local name and full URI)
     const hasPropertyExistsLocal = await edgeTypeExistsInRawData(page, 'hasProperty');
@@ -203,12 +180,10 @@ describe('Edge Style Checkboxes E2E', () => {
 
     // Uncheck "Show" checkbox for "hasProperty"
     await toggleEdgeShowCheckbox(page, edgeTypeInCheckbox || 'hasProperty', false);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Edge count should be reduced from 3 to 2 (edge is hidden from graph)
-    const edgeCountAfter = await getEdgeCount(page);
-    expect(edgeCountAfter).toBe(2);
+    await expect.poll(() => getEdgeCount(page), { timeout: 5000 }).toBe(2);
+    await waitForAppReady(page);
 
     // Edge should still exist in rawData (just hidden from display)
     const stillExistsInRawData = await edgeTypeExistsInRawData(page, 'hasProperty');
@@ -216,19 +191,16 @@ describe('Edge Style Checkboxes E2E', () => {
 
     // Re-check "Show" checkbox
     await toggleEdgeShowCheckbox(page, edgeTypeInCheckbox || 'hasProperty', true);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Edge count should be restored to 3
-    const edgeCountRestored = await getEdgeCount(page);
-    expect(edgeCountRestored).toBe(3);
+    await expect.poll(() => getEdgeCount(page), { timeout: 5000 }).toBe(3);
+    await waitForAppReady(page);
   });
 
   it('should hide edge labels when "Label" checkbox is unchecked', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'edge-style-test.ttl');
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Verify "contains" edge exists in rawData
     const containsExists = await edgeTypeExistsInRawData(page, 'contains');
@@ -257,32 +229,23 @@ describe('Edge Style Checkboxes E2E', () => {
 
     // Uncheck "Label" checkbox for "contains"
     await toggleEdgeLabelCheckbox(page, edgeTypeInCheckbox || 'contains', false);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500);
+    await expect.poll(() => hasEdgeLabel(page, edgeTypeInCheckbox || 'contains'), { timeout: 5000 }).toBe(false);
+    await waitForAppReady(page);
 
     // Edge count should remain the same (edge is still visible, only label is hidden)
     const edgeCountAfter = await getEdgeCount(page);
     expect(edgeCountAfter).toBe(initialEdgeCount);
 
-    // Verify label checkbox is now unchecked
-    const hasLabelAfter = await hasEdgeLabel(page, edgeTypeInCheckbox || 'contains');
-    expect(hasLabelAfter).toBe(false);
-
     // Re-check "Label" checkbox
     await toggleEdgeLabelCheckbox(page, edgeTypeInCheckbox || 'contains', true);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500);
-
-    // Verify label checkbox is checked again
-    const hasLabelRestored = await hasEdgeLabel(page, edgeTypeInCheckbox || 'contains');
-    expect(hasLabelRestored).toBe(true);
+    await expect.poll(() => hasEdgeLabel(page, edgeTypeInCheckbox || 'contains'), { timeout: 5000 }).toBe(true);
+    await waitForAppReady(page);
   });
 
   it('should hide both edge and label when both checkboxes are unchecked', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'edge-style-test.ttl');
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Get initial edge count
     const initialEdgeCount = await getEdgeCount(page);
@@ -291,12 +254,10 @@ describe('Edge Style Checkboxes E2E', () => {
     // Uncheck both "Show" and "Label" for "subClassOf"
     await toggleEdgeShowCheckbox(page, 'subClassOf', false);
     await toggleEdgeLabelCheckbox(page, 'subClassOf', false);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Edge count should be reduced from 3 to 2 (subClassOf edge is hidden)
-    const edgeCountAfter = await getEdgeCount(page);
-    expect(edgeCountAfter).toBe(2);
+    await expect.poll(() => getEdgeCount(page), { timeout: 5000 }).toBe(2);
+    await waitForAppReady(page);
 
     // Verify label checkbox is unchecked
     const hasLabelAfter = await hasEdgeLabel(page, 'subClassOf');
@@ -307,7 +268,6 @@ describe('Edge Style Checkboxes E2E', () => {
     const testFile = join(TEST_FIXTURES_DIR, 'edge-style-test.ttl');
     await loadTestFile(page, testFile);
     await waitForGraphRender(page);
-    await page.waitForTimeout(500);
 
     // Find the correct edge type format used in checkboxes
     const edgeTypeInCheckbox = await page.evaluate(() => {
@@ -322,52 +282,15 @@ describe('Edge Style Checkboxes E2E', () => {
     });
     expect(edgeTypeInCheckbox).toBeTruthy();
 
-    // Wait a bit for legend to be populated (don't use waitForFunction to avoid timeout)
-    await page.waitForTimeout(1000);
+    // The legend lists every visible relationship type, including "has property".
+    await expect.poll(() => getEdgeLegendText(page), { timeout: 5000 }).toMatch(/has property/i);
+    const legendBefore = await getEdgeLegendText(page);
 
-    // Get initial legend text
-    const legendBefore = await page.evaluate(() => {
-      const statusBar = document.getElementById('statusBar');
-      return statusBar?.textContent || '';
-    });
-    
-    // If legend is empty, skip the test (legend might not be populated in this environment)
-    if (legendBefore.length === 0) {
-      console.log('Legend is empty, skipping legend update test');
-      return;
-    }
-    
-    // Check for both local name and full URI format
-    const containsHasProperty = legendBefore.includes('hasProperty') || 
-                                legendBefore.includes('has property') ||
-                                legendBefore.toLowerCase().includes('hasproperty');
-    
-    // If legend doesn't contain hasProperty, that's also okay - we'll just verify it changes
-
-    // Uncheck "Show" for "hasProperty"
+    // Uncheck "Show" for "hasProperty": it should drop out of the legend, the other types stay.
     await toggleEdgeShowCheckbox(page, edgeTypeInCheckbox || 'hasProperty', false);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(1000); // Wait longer for legend update
-
-    // Get legend text after (don't wait for function, just check directly)
-    const legendAfter = await page.evaluate(() => {
-      const statusBar = document.getElementById('statusBar');
-      return statusBar?.textContent || '';
-    });
-
-    // Legend should be updated
-    // If it contained hasProperty before, it should no longer contain it
-    if (containsHasProperty) {
-      const stillContainsHasProperty = legendAfter.includes('hasProperty') || 
-                                       legendAfter.includes('has property') ||
-                                       legendAfter.toLowerCase().includes('hasproperty');
-      expect(stillContainsHasProperty).toBe(false);
-    }
-    
-    // At minimum, the legend should have changed (or be the same if legend wasn't populated)
-    // If legend was populated, it should have changed
-    if (legendBefore.length > 0) {
-      expect(legendBefore).not.toEqual(legendAfter);
-    }
+    await expect.poll(() => getEdgeLegendText(page), { timeout: 5000 }).not.toMatch(/has property/i);
+    const legendAfter = await getEdgeLegendText(page);
+    expect(legendAfter).toMatch(/contains/i);
+    expect(legendAfter).not.toEqual(legendBefore);
   });
 });

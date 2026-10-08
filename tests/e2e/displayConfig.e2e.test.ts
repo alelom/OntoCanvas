@@ -3,15 +3,26 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, waitForGraphRender } from './testHelpers';
+import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { existsSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
+const TEST_FILE_NAME = 'edge-style-test.ttl';
+const TEST_FILE = join(TEST_FIXTURES_DIR, TEST_FILE_NAME);
+/** A class node of TEST_FILE. */
+const MOVED_NODE_ID = 'ClassA';
+
+type Positions = Record<string, { x: number; y: number }>;
+interface StoredDisplayConfig {
+  nodePositions?: Positions;
+  edgeStyleConfig?: Record<string, { show: boolean }>;
+}
 
 async function clearDisplayConfigDB(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -19,20 +30,66 @@ async function clearDisplayConfigDB(page: Page): Promise<void> {
       const req = indexedDB.open('OntologyEditorDisplay', 1);
       req.onerror = () => reject(req.error);
       req.onsuccess = () => resolve(req.result);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains('config')) req.result.createObjectStore('config');
+      };
     });
     const tx = db.transaction('config', 'readwrite');
     tx.objectStore('config').clear();
     await new Promise<void>((resolve) => {
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        resolve(); // Ignore errors
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+    db.close();
+  });
+}
+
+/** The display config the app saved to IndexedDB for `key` (the file name), or null. */
+async function readStoredDisplayConfig(page: Page, key: string): Promise<StoredDisplayConfig | null> {
+  return page.evaluate(async (k) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('OntologyEditorDisplay', 1);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve(req.result);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains('config')) req.result.createObjectStore('config');
       };
     });
-  });
+    const value = await new Promise<unknown>((resolve) => {
+      const req = db.transaction('config', 'readonly').objectStore('config').get(k);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+    db.close();
+    return value as StoredDisplayConfig | null;
+  }, key);
+}
+
+async function getPositions(page: Page): Promise<Positions> {
+  return page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork()?.getPositions() ?? {});
+}
+
+/** Move a node the way a drag does: move it, then emit dragEnd (which persists positions). */
+async function dragNodeTo(page: Page, nodeId: string, x: number, y: number): Promise<void> {
+  await page.evaluate(
+    ({ id, x, y }) => {
+      const network = (window as any).__EDITOR_TEST__.getNetwork();
+      network.moveNode(id, x, y);
+      network.emit('dragEnd', { nodes: [id], edges: [] });
+    },
+    { id: nodeId, x, y }
+  );
+}
+
+/** Whether `pos` is within `tolerance` of (x, y). */
+function isNear(pos: { x: number; y: number } | undefined, x: number, y: number, tolerance: number): boolean {
+  return !!pos && Math.abs(pos.x - x) < tolerance && Math.abs(pos.y - y) < tolerance;
+}
+
+async function reloadEditor(page: Page): Promise<void> {
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+  await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
 }
 
 describe('Display Config E2E Tests', () => {
@@ -40,14 +97,13 @@ describe('Display Config E2E Tests', () => {
   let page: Page;
 
   beforeAll(async () => {
+    expect(existsSync(TEST_FILE)).toBe(true);
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage();
-    await page.goto(EDITOR_URL);
-    // Hide the open ontology modal
-    await page.evaluate(() => {
-      (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__?.hideOpenOntologyModal?.();
-    });
-    await page.waitForTimeout(100);
+    page.setDefaultTimeout(5000);
+    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+    await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
   });
 
   afterAll(async () => {
@@ -55,196 +111,78 @@ describe('Display Config E2E Tests', () => {
   });
 
   it('should save and load display config preserving node positions', async () => {
-    const testFile = join(TEST_FIXTURES_DIR, 'simple_ontology.ttl');
-    if (!(await import('node:fs')).existsSync(testFile)) {
-      console.warn('Test file not found, skipping test');
-      return;
-    }
-
-    // Clear any existing config
     await clearDisplayConfigDB(page);
+    await loadTestFile(page, TEST_FILE);
 
-    // Load ontology
-    await loadTestFile(page, testFile);
-    await waitForGraphRender(page);
+    const initialPositions = await getPositions(page);
+    expect(initialPositions[MOVED_NODE_ID]).toBeDefined();
+    // The target must differ from where the layout put the node, or the test proves nothing.
+    expect(isNear(initialPositions[MOVED_NODE_ID], 100, 200, 50)).toBe(false);
 
-    // Get initial node positions
-    const initialPositions = await page.evaluate(() => {
-      const network = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network;
-      return network?.getPositions() || {};
-    });
+    await dragNodeTo(page, MOVED_NODE_ID, 100, 200);
+    await expect
+      .poll(async () => (await readStoredDisplayConfig(page, TEST_FILE_NAME))?.nodePositions?.[MOVED_NODE_ID] ?? null, {
+        timeout: 5000,
+      })
+      .toEqual({ x: 100, y: 200 });
 
-    expect(Object.keys(initialPositions).length).toBeGreaterThan(0);
+    await reloadEditor(page);
+    await loadTestFile(page, TEST_FILE);
 
-    // Move a node by simulating drag
-    await page.evaluate(() => {
-      const network = (window as unknown as { network?: { moveNode: (id: string, x: number, y: number) => void } }).network;
-      if (network) {
-        const positions = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network?.getPositions() || {};
-        const firstNodeId = Object.keys(positions)[0];
-        if (firstNodeId) {
-          network.moveNode(firstNodeId, 100, 200);
-        }
-      }
-    });
-    await page.waitForTimeout(200);
-
-    // Trigger dragEnd to save positions
-    await page.evaluate(() => {
-      const network = (window as unknown as { network?: { emit: (event: string) => void } }).network;
-      network?.emit('dragEnd');
-    });
-    await page.waitForTimeout(500); // Wait for debounced save
-
-    // Get positions after drag
-    const positionsAfterDrag = await page.evaluate(() => {
-      const network = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network;
-      return network?.getPositions() || {};
-    });
-
-    // Reload the page to test persistence
-    await page.reload();
-    await page.waitForTimeout(100);
-    await page.evaluate(() => {
-      (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__?.hideOpenOntologyModal?.();
-    });
-    await page.waitForTimeout(100);
-
-    // Load the same file again
-    await loadTestFile(page, testFile);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500); // Wait for config to load
-
-    // Check if positions were restored
-    const restoredPositions = await page.evaluate(() => {
-      const network = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network;
-      return network?.getPositions() || {};
-    });
-
-    // At least one node should have a position close to where we moved it
-    const movedNodeId = Object.keys(positionsAfterDrag)[0];
-    if (movedNodeId && positionsAfterDrag[movedNodeId]) {
-      const expectedPos = positionsAfterDrag[movedNodeId];
-      const actualPos = restoredPositions[movedNodeId];
-      if (actualPos) {
-        // Allow some tolerance for layout differences
-        expect(Math.abs(actualPos.x - expectedPos.x)).toBeLessThan(50);
-        expect(Math.abs(actualPos.y - expectedPos.y)).toBeLessThan(50);
-      }
-    }
+    await expect
+      .poll(async () => isNear((await getPositions(page))[MOVED_NODE_ID], 100, 200, 50), { timeout: 5000 })
+      .toBe(true);
   });
 
   it('should save and load edge style config', async () => {
-    const testFile = join(TEST_FIXTURES_DIR, 'simple_ontology.ttl');
-    if (!(await import('node:fs')).existsSync(testFile)) {
-      console.warn('Test file not found, skipping test');
-      return;
-    }
-
-    // Clear any existing config
     await clearDisplayConfigDB(page);
+    await loadTestFile(page, TEST_FILE);
 
-    // Load ontology
-    await loadTestFile(page, testFile);
-    await waitForGraphRender(page);
-
-    // Change an edge style (e.g., hide subClassOf)
+    const showCb = page.locator('.edge-show-cb[data-type="subClassOf"]');
+    await expect.poll(() => showCb.isChecked(), { timeout: 5000 }).toBe(true);
     await page.evaluate(() => {
-      const showCb = document.querySelector('.edge-show-cb[data-type="subClassOf"]') as HTMLInputElement;
-      if (showCb) {
-        showCb.checked = false;
-        showCb.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      const cb = document.querySelector('.edge-show-cb[data-type="subClassOf"]') as HTMLInputElement;
+      cb.checked = false;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await page.waitForTimeout(500); // Wait for debounced save
+    await expect
+      .poll(async () => (await readStoredDisplayConfig(page, TEST_FILE_NAME))?.edgeStyleConfig?.subClassOf?.show ?? null, {
+        timeout: 5000,
+      })
+      .toBe(false);
 
-    // Reload the page
-    await page.reload();
-    await page.waitForTimeout(100);
-    await page.evaluate(() => {
-      (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__?.hideOpenOntologyModal?.();
-    });
-    await page.waitForTimeout(100);
+    await reloadEditor(page);
+    await loadTestFile(page, TEST_FILE);
 
-    // Load the same file again
-    await loadTestFile(page, testFile);
-    await waitForGraphRender(page);
-    await page.waitForTimeout(500); // Wait for config to load
-
-    // Check if edge style was restored
-    const subClassOfHidden = await page.evaluate(() => {
-      const showCb = document.querySelector('.edge-show-cb[data-type="subClassOf"]') as HTMLInputElement;
-      return showCb ? !showCb.checked : null;
-    });
-
-    expect(subClassOfHidden).toBe(true);
+    await expect.poll(() => showCb.isChecked(), { timeout: 5000 }).toBe(false);
   });
 
-  it('should preserve node positions after refresh without changing layout', async () => {
-    const testFile = join(TEST_FIXTURES_DIR, 'simple_ontology.ttl');
-    if (!(await import('node:fs')).existsSync(testFile)) {
-      console.warn('Test file not found, skipping test');
-      return;
-    }
-
-    // Clear any existing config
+  it('should preserve node positions after re-render without changing layout', async () => {
     await clearDisplayConfigDB(page);
+    await loadTestFile(page, TEST_FILE);
 
-    // Load ontology
-    await loadTestFile(page, testFile);
-    await waitForGraphRender(page);
+    await dragNodeTo(page, MOVED_NODE_ID, 150, 250);
+    await expect
+      .poll(async () => (await readStoredDisplayConfig(page, TEST_FILE_NAME))?.nodePositions?.[MOVED_NODE_ID] ?? null, {
+        timeout: 5000,
+      })
+      .toEqual({ x: 150, y: 250 });
 
-    // Move a node
+    // Re-render the graph: changing the wrap width re-applies the filter, which replaces the network's data.
     await page.evaluate(() => {
-      const network = (window as unknown as { network?: { moveNode: (id: string, x: number, y: number) => void } }).network;
-      if (network) {
-        const positions = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network?.getPositions() || {};
-        const firstNodeId = Object.keys(positions)[0];
-        if (firstNodeId) {
-          network.moveNode(firstNodeId, 150, 250);
-        }
-      }
+      (window as any).__e2ePreviousNodes = (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes;
+      const wrapChars = document.getElementById('wrapChars') as HTMLInputElement;
+      wrapChars.value = String((parseInt(wrapChars.value, 10) || 12) + 1);
+      wrapChars.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await page.waitForTimeout(200);
+    await page.waitForFunction(
+      () => (window as any).__EDITOR_TEST__.getNetwork()?.body.data.nodes !== (window as any).__e2ePreviousNodes,
+      undefined,
+      { timeout: 5000 }
+    );
+    await waitForAppReady(page);
 
-    // Trigger dragEnd
-    await page.evaluate(() => {
-      const network = (window as unknown as { network?: { emit: (event: string) => void } }).network;
-      network?.emit('dragEnd');
-    });
-    await page.waitForTimeout(500);
-
-    // Get positions
-    const savedPositions = await page.evaluate(() => {
-      const network = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network;
-      return network?.getPositions() || {};
-    });
-
-    // Apply filter (simulating a refresh/rerender)
-    await page.evaluate(() => {
-      const applyFilterBtn = document.querySelector('button') as HTMLElement;
-      // Trigger applyFilter by changing a filter setting
-      const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
-      if (searchInput) {
-        searchInput.value = '';
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    });
-    await page.waitForTimeout(500);
-
-    // Check positions are still preserved
-    const positionsAfterFilter = await page.evaluate(() => {
-      const network = (window as unknown as { network?: { getPositions: () => Record<string, { x: number; y: number }> } }).network;
-      return network?.getPositions() || {};
-    });
-
-    const movedNodeId = Object.keys(savedPositions)[0];
-    if (movedNodeId && savedPositions[movedNodeId] && positionsAfterFilter[movedNodeId]) {
-      const saved = savedPositions[movedNodeId];
-      const after = positionsAfterFilter[movedNodeId];
-      // Positions should be preserved (within small tolerance)
-      expect(Math.abs(after.x - saved.x)).toBeLessThan(10);
-      expect(Math.abs(after.y - saved.y)).toBeLessThan(10);
-    }
+    const after = (await getPositions(page))[MOVED_NODE_ID];
+    expect(isNear(after, 150, 250, 10)).toBe(true);
   });
 });

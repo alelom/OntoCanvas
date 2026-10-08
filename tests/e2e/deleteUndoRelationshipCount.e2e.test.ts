@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile } from './testHelpers';
+import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -30,46 +30,26 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  // Reduced from 15000ms to 10000ms (max allowed per project rule)
-  page.setDefaultTimeout(10000);
-  page.setDefaultNavigationTimeout(10000);
-  
-  try {
-    // Reduced from 15000ms to 10000ms (max allowed per project rule)
-    await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 10000 });
-  } catch (err) {
-    throw new Error(`Failed to load ${EDITOR_URL}. Is the dev server running? Error: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  
-  await page.waitForTimeout(1000);
-  
+  page.setDefaultTimeout(5000);
+  page.setDefaultNavigationTimeout(5000);
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(
+    () => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined,
+    undefined,
+    { timeout: 5000 }
+  );
+
   // Enable debug mode for tests
   await page.evaluate(() => {
     localStorage.setItem('ontologyEditorDebug', 'true');
   });
-  
-  // Wait for testHook to be available (use polling to avoid timeout)
-  let attempts = 0;
-  while (attempts < 30) {
-    const hasTestHook = await page.evaluate(() => {
-      return (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined;
-    });
-    if (hasTestHook) break;
-    await page.waitForTimeout(500);
-    attempts++;
-  }
-  
-  if (attempts >= 30) {
-    throw new Error('testHook not available after 15 seconds. App may not have loaded properly.');
-  }
-  
+
   // Close any open modals
   await page.evaluate(() => {
     const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
     if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
   });
-  await page.waitForTimeout(200);
-}, 20000);
+});
 
 afterEach(async () => {
   if (page && !page.isClosed()) {
@@ -97,16 +77,14 @@ describe('Delete and Undo Relationship Count Bug', () => {
     // Get initial edge count
     const initialEdgeCount = await getEdgeCount(page);
     expect(initialEdgeCount).toBeGreaterThan(0);
-    console.log(`[TEST] Initial edge count: ${initialEdgeCount}`);
     
-    // Select "Drawing sheet" node
+    // Select "Drawing sheet" node (setSelection is synchronous)
     const selected = await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (!testHook?.selectNodeByLabel) return false;
       return testHook.selectNodeByLabel('Drawing sheet');
     });
     expect(selected).toBe(true);
-    await page.waitForTimeout(200);
     
     // Delete the node
     const deleted = await page.evaluate(() => {
@@ -116,25 +94,9 @@ describe('Delete and Undo Relationship Count Bug', () => {
     });
     expect(deleted).toBe(true);
     
-    // Wait for delete to complete and status bar to update
-    await page.waitForFunction(
-      (expectedInitialCount) => {
-        const edgeCountEl = document.getElementById('edgeCount');
-        const count = parseInt(edgeCountEl?.textContent?.trim() || '0', 10) || 0;
-        // Wait until edge count is less than initial (delete completed)
-        return count < expectedInitialCount;
-      },
-      initialEdgeCount,
-      { timeout: 5000 }
-    ).catch(() => {
-      // If timeout, continue anyway
-    });
-    await page.waitForTimeout(300);
-    
-    // Verify edge count decreased (edges connected to deleted node should be removed)
-    const edgeCountAfterDelete = await getEdgeCount(page);
-    console.log(`[TEST] Edge count after delete: ${edgeCountAfterDelete}`);
-    expect(edgeCountAfterDelete).toBeLessThan(initialEdgeCount);
+    // Edges connected to the deleted node should be removed from the status bar count
+    await expect.poll(() => getEdgeCount(page), { timeout: 5000 }).toBeLessThan(initialEdgeCount);
+    await waitForAppReady(page);
     
     // Undo
     await page.evaluate(() => {
@@ -143,28 +105,10 @@ describe('Delete and Undo Relationship Count Bug', () => {
       testHook.performUndo();
     });
     
-    // Wait for undo to complete and status bar to update
-    await page.waitForFunction(
-      (expectedInitialCount) => {
-        const edgeCountEl = document.getElementById('edgeCount');
-        const count = parseInt(edgeCountEl?.textContent?.trim() || '0', 10) || 0;
-        // Wait until edge count is back to at least initial (undo completed)
-        return count >= expectedInitialCount;
-      },
-      initialEdgeCount,
-      { timeout: 5000 }
-    ).catch(() => {
-      // If timeout, continue anyway
-    });
-    await page.waitForTimeout(300);
-    
-    // Get edge count after undo
-    const edgeCountAfterUndo = await getEdgeCount(page);
-    console.log(`[TEST] Edge count after undo: ${edgeCountAfterUndo}`);
-    console.log(`[TEST] Initial edge count: ${initialEdgeCount}`);
-    
-    // The bug: edge count should be 29 (same as initial), but it's 35 (6 extra edges!)
-    // This test should FAIL until the bug is fixed
-    expect(edgeCountAfterUndo).toBe(initialEdgeCount);
-  }, 25000);
+    // The bug: edge count should be back to the initial count (29), but it was 35 (6 extra edges!)
+    await expect.poll(() => getEdgeCount(page), { timeout: 5000 }).toBe(initialEdgeCount);
+    // ...and it stays there once the re-render has settled.
+    await waitForAppReady(page);
+    expect(await getEdgeCount(page)).toBe(initialEdgeCount);
+  }, 10000);
 });
