@@ -46,8 +46,17 @@ header comment promises: labels, groups, counts. That way the comment can't sile
 
 ## 3. Index it
 
-Add a row to [`examples/README.md`](../../../examples/README.md): file, what it shows, issue/PR. The README
-is the durable index. Its links are repo-relative, so they keep working after the branch is deleted.
+Add a row to [`examples/README.md`](../../../examples/README.md): file, what it shows, issue/PR, source. The
+README is the durable index. The file name links to the deployed editor opening the file from `main`, so a
+click shows the example; the **TTL** column links to the file itself (repo-relative):
+
+```js
+const open = (path) => `https://alelom.github.io/OntoCanvas/?onto=${encodeURIComponent(
+  `https://raw.githubusercontent.com/alelom/OntoCanvas/main/examples/${path}`)}`;
+// | [name.ttl](${open('area/name.ttl')}) | What it shows | #N | [TTL](area/name.ttl) |
+```
+
+The editor link works once the PR is merged to `main`; during review, use the branch links of step 4.
 
 ## 4. Add "Try it" to the PR body
 
