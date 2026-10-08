@@ -1,0 +1,43 @@
+@prefix : <http://example.org/examples/read-only-edges#> .
+@prefix ext: <http://example.org/examples/elsewhere#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Relationships drawn from a class expression are read-only in the editor (issue #58). Editing or deleting
+# one as a plain domain/range pair would rewrite the expression: removing the range every member shares, or
+# adding an rdfs:domain beside a union (OR becomes AND). Double-click any of these edges: the Edit-edge form
+# is locked and says why; select one and press Delete: it is refused.
+#   hasOrientation   Section → Orientation, Detail → Orientation   (domain Section ∪ Detail, marked ∪)
+#   hasValue         Sheet → Value          (domain Sheet ∪ ext:Other: one member drawn, so no mark, still locked)
+#   knows            Person → Group         (range Person ∪ Group; the ∃ knows restriction stands in for the edge)
+# Deleting the class Group drops its edges and the ∃ knows restriction, but keeps knows's domain and range.
+
+<http://example.org/examples/read-only-edges> rdf:type owl:Ontology ;
+    rdfs:label "Read-only class-expression edges" .
+
+:Section rdf:type owl:Class ; rdfs:label "Section" .
+:Detail rdf:type owl:Class ; rdfs:label "Detail" .
+:Orientation rdf:type owl:Class ; rdfs:label "Orientation" .
+:Sheet rdf:type owl:Class ; rdfs:label "Sheet" .
+:Value rdf:type owl:Class ; rdfs:label "Value" .
+:Group rdf:type owl:Class ; rdfs:label "Group" .
+
+:Person rdf:type owl:Class ;
+    rdfs:label "Person" ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :knows ; owl:someValuesFrom :Group ] .
+
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "has orientation" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Section :Detail ) ] ;
+    rdfs:range :Orientation .
+
+:hasValue rdf:type owl:ObjectProperty ;
+    rdfs:label "has value" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Sheet ext:Other ) ] ;
+    rdfs:range :Value .
+
+:knows rdf:type owl:ObjectProperty ;
+    rdfs:label "knows" ;
+    rdfs:domain :Person ;
+    rdfs:range [ rdf:type owl:Class ; owl:unionOf ( :Person :Group ) ] .
