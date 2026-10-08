@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { loadOntologyFromContent } from '../lib/loadOntology';
 import { parseTtlToGraph } from '../parser';
 import { expandWithExternalRefs, isExternalNodeId } from './externalExpansion';
+import { edgeLock } from '../lib/edgeEditability';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AEC_DRAWING_PATH = resolve(__dirname, '../../tests/fixtures/aec_drawing_ontology.ttl');
@@ -143,6 +144,107 @@ ta:forProject a owl:ObjectProperty ;
       (e) => e.from === 'http://example.org/project-mgmt#Person' && e.to === 'http://example.org/project-mgmt#Organisation'
     );
     expect(personOrgEdge).toBeDefined();
+  });
+
+  describe('restrictions whose filler is an imported class (#99)', () => {
+    const TTL = `
+@prefix : <http://example.org/child#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<http://example.org/child> a owl:Ontology ; owl:imports <http://example.org/ext> .
+:A a owl:Class ; rdfs:subClassOf [ a owl:Restriction ; owl:onProperty ext:p ; owl:someValuesFrom ext:X ] .
+:B a owl:Class ; rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:onClass ext:Y ; owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger ] .
+:q a owl:ObjectProperty .
+`;
+    const REFS = [{ url: 'http://example.org/ext', usePrefix: true, prefix: 'ext' }];
+    const expand = async () => {
+      const { parseResult } = await loadOntologyFromContent(TTL, 'http://example.org/child.ttl');
+      return expandWithExternalRefs(parseResult.graphData, parseResult.store, REFS, { displayExternalReferences: true, externalNodeLayout: 'auto' });
+    };
+
+    it('draws the imported class and a read-only restriction edge to it', async () => {
+      const result = await expand();
+      expect(result.nodes.find((n) => n.id === 'http://example.org/ext#X')?.isExternal).toBe(true);
+      const edge = result.edges.find((e) => e.from === 'A' && e.to === 'http://example.org/ext#X');
+      expect(edge).toMatchObject({ type: 'http://example.org/ext#p', isRestriction: true, restrictionKinds: ['some'], minCardinality: 1, externalTarget: true });
+      expect(edgeLock(edge!)).toBe('externalTarget');
+    });
+
+    it('keeps a local property local and reads its cardinality', async () => {
+      const result = await expand();
+      const edge = result.edges.find((e) => e.from === 'B' && e.to === 'http://example.org/ext#Y');
+      expect(edge).toMatchObject({ type: 'q', restrictionKinds: ['qualified'], minCardinality: 2, maxCardinality: null });
+    });
+
+    it('draws nothing for a filler whose ontology is not an external reference', async () => {
+      const { parseResult } = await loadOntologyFromContent(TTL, 'http://example.org/child.ttl');
+      const result = expandWithExternalRefs(parseResult.graphData, parseResult.store, [{ url: 'http://example.org/other', usePrefix: false }], { displayExternalReferences: true, externalNodeLayout: 'auto' });
+      expect(result.edges.filter((e) => e.to.startsWith('http://example.org/ext#'))).toEqual([]);
+    });
+    it('merges a second restriction\'s cardinality and individual into the edge', async () => {
+      const ttl = `
+@prefix : <http://example.org/child#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<http://example.org/child> a owl:Ontology ; owl:imports <http://example.org/ext> .
+:p a owl:ObjectProperty .
+ext:x1 a ext:X .
+:A a owl:Class ;
+  rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom ext:X ] ,
+    [ a owl:Restriction ; owl:onProperty :p ; owl:onClass ext:X ; owl:minQualifiedCardinality "2"^^xsd:nonNegativeInteger ] ,
+    [ a owl:Restriction ; owl:onProperty :p ; owl:hasValue ext:x1 ] .
+`;
+      const { parseResult } = await loadOntologyFromContent(ttl, 'http://example.org/child.ttl');
+      const result = expandWithExternalRefs(parseResult.graphData, parseResult.store, REFS, { displayExternalReferences: true, externalNodeLayout: 'auto' });
+      const edges = result.edges.filter((e) => e.from === 'A' && e.to === 'http://example.org/ext#X');
+      expect(edges).toHaveLength(1);
+      expect(edges[0].restrictionKinds).toEqual(expect.arrayContaining(['only', 'qualified', 'value']));
+      expect(edges[0]).toMatchObject({ minCardinality: 2, restrictionValue: 'x1' });
+    });
+
+    it('does not collapse a local class and an imported class with the same local name', async () => {
+      const ttl = `
+@prefix : <http://example.org/child#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/child> a owl:Ontology ; owl:imports <http://example.org/ext> .
+:p a owl:ObjectProperty .
+:Book a owl:Class .
+:A a owl:Class ;
+  rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :Book ] ,
+    [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom ext:Book ] .
+`;
+      const { parseResult } = await loadOntologyFromContent(ttl, 'http://example.org/child.ttl');
+      const local = parseResult.graphData.edges.find((e) => e.from === 'A' && e.to === 'Book');
+      expect(local?.restrictionKinds).toEqual(['some']); // the parser must not merge ext:Book into :Book
+      const result = expandWithExternalRefs(parseResult.graphData, parseResult.store, REFS, { displayExternalReferences: true, externalNodeLayout: 'auto' });
+      expect(result.edges.find((e) => e.from === 'A' && e.to === 'Book')?.restrictionKinds).toEqual(['some']);
+      expect(result.edges.find((e) => e.from === 'A' && e.to === 'http://example.org/ext#Book')).toMatchObject({ restrictionKinds: ['only'], externalTarget: true });
+    });
+
+    it('replaces the domain/range edge for the same property and class with the restriction', async () => {
+      const ttl = `
+@prefix : <http://example.org/child#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+<http://example.org/child> a owl:Ontology ; owl:imports <http://example.org/ext> .
+:p a owl:ObjectProperty ; rdfs:domain :A ; rdfs:range ext:X .
+:A a owl:Class ;
+  rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:onClass ext:X ; owl:maxQualifiedCardinality "3"^^xsd:nonNegativeInteger ] .
+`;
+      const { parseResult } = await loadOntologyFromContent(ttl, 'http://example.org/child.ttl');
+      const result = expandWithExternalRefs(parseResult.graphData, parseResult.store, REFS, { displayExternalReferences: true, externalNodeLayout: 'auto' });
+      const edges = result.edges.filter((e) => e.from === 'A' && e.to === 'http://example.org/ext#X');
+      expect(edges).toHaveLength(1);
+      expect(edges[0]).toMatchObject({ isRestriction: true, maxCardinality: 3, externalTarget: true });
+    });
   });
 });
 

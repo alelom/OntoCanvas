@@ -1,36 +1,42 @@
 # Example ontologies
 
 Small, self-contained ontologies that each demonstrate an OntoCanvas feature. Every file's header comment
-says what it shows and what you should see. Open one in OntoCanvas with **Open ontology → Open ontology from
-URL**, using the file's raw GitHub URL, or locally with
-`http://localhost:5173/?onto=<url-encoded raw URL>` while `npm run dev` is running.
+says what it shows and what you should see. Click an example's name to open it in
+[OntoCanvas](https://alelom.github.io/OntoCanvas/); **TTL** links to the file itself. To try one against a local
+build, run `npm run dev` and open `http://localhost:5173/?onto=<url-encoded raw URL>`.
 
 Each example is pinned by a unit test (`tests/unit/*Examples.test.ts`), so its description stays accurate.
 New feature PRs add to this collection; see [`.claude/skills/feature-examples`](../.claude/skills/feature-examples/SKILL.md).
 
 ## Class expressions
 
-| Example | Shows | Issue |
-|---|---|---|
-| [union.ttl](class-expressions/union.ttl) | `owl:unionOf` (∪) in domains and ranges, including a domain-only union | #59 |
-| [intersection.ttl](class-expressions/intersection.ttl) | `owl:intersectionOf` (∩) | #60 |
-| [complement.ttl](class-expressions/complement.ttl) | `owl:complementOf` (¬), including a self-loop case like FOAF `made` | #61 |
-| [oneOf.ttl](class-expressions/oneOf.ttl) | `owl:oneOf` enumerations ({}) of individuals and literals | #62 |
-| [all-class-expressions.ttl](class-expressions/all-class-expressions.ttl) | All four constructors side by side | #59–#62 |
-| [self-loop-restriction.ttl](class-expressions/self-loop-restriction.ttl) | A ∪ / ¬ member that is also a restriction self-loop: corner badge, not a mark on the loop | #86 |
-| [read-only-edges.ttl](class-expressions/read-only-edges.ttl) | Relationships drawn from a class expression are read-only: locked Edit-edge form, refused delete | #58 |
-| [nested.ttl](class-expressions/nested.ttl) | Nested expressions and their full formula, e.g. `¬(Agent ∪ OnlineAccount)` | #63 |
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [union.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Funion.ttl) | `owl:unionOf` (∪) in domains and ranges, including a domain-only union | #59 | [TTL](class-expressions/union.ttl) |
+| [intersection.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Fintersection.ttl) | `owl:intersectionOf` (∩) | #60 | [TTL](class-expressions/intersection.ttl) |
+| [complement.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Fcomplement.ttl) | `owl:complementOf` (¬), including a self-loop case like FOAF `made` | #61 | [TTL](class-expressions/complement.ttl) |
+| [oneOf.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2FoneOf.ttl) | `owl:oneOf` enumerations ({}) of individuals and literals | #62 | [TTL](class-expressions/oneOf.ttl) |
+| [all-class-expressions.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Fall-class-expressions.ttl) | All four constructors side by side | #59–#62 | [TTL](class-expressions/all-class-expressions.ttl) |
+| [self-loop-restriction.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Fself-loop-restriction.ttl) | A ∪ / ¬ member that is also a restriction self-loop: corner badge, not a mark on the loop | #86 | [TTL](class-expressions/self-loop-restriction.ttl) |
+| [read-only-edges.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Fread-only-edges.ttl) | Relationships drawn from a class expression are read-only: locked Edit-edge form, refused delete | #58 | [TTL](class-expressions/read-only-edges.ttl) |
+| [nested.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fclass-expressions%2Fnested.ttl) | Nested expressions and their full formula, e.g. `¬(Agent ∪ OnlineAccount)` | #63 | [TTL](class-expressions/nested.ttl) |
+
+## Imported terms
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [imported-terms.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Fimported-terms.ttl) | Terms used from an imported ontology: a restriction edge to an imported class (read-only), a data property listed once, prefixed identifiers | #99–#101 | [TTL](imports/imported-terms.ttl) |
 
 ## Relationships
 
-| Example | Shows | Issue |
-|---|---|---|
-| [one-edge-type-per-property.ttl](relationships/one-edge-type-per-property.ttl) | A property drawn by both a restriction and its domain/range is one relationship type, listed once | #87 |
-| [add-relationship-then-ok.ttl](relationships/add-relationship-then-ok.ttl) | Adding a relationship: type its name and click OK straight away; the edge is added | #98 |
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [one-edge-type-per-property.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Frelationships%2Fone-edge-type-per-property.ttl) | A property drawn by both a restriction and its domain/range is one relationship type, listed once | #87 | [TTL](relationships/one-edge-type-per-property.ttl) |
+| [add-relationship-then-ok.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Frelationships%2Fadd-relationship-then-ok.ttl) | Adding a relationship: type its name and click OK straight away; the edge is added | #98 | [TTL](relationships/add-relationship-then-ok.ttl) |
 
 ## Restrictions and data ranges
 
-| Example | Shows | Issue |
-|---|---|---|
-| [restriction-kinds.ttl](restrictions/restriction-kinds.ttl) | ∃ ∀ ∋ ⟲ restrictions and cardinalities as edge labels; read-only kinds | #63 |
-| [data-ranges.ttl](restrictions/data-ranges.ttl) | Datatype facets, datatype unions/complements, qualified data cardinalities | #63 |
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [restriction-kinds.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Frestrictions%2Frestriction-kinds.ttl) | ∃ ∀ ∋ ⟲ restrictions and cardinalities as edge labels; read-only kinds | #63 | [TTL](restrictions/restriction-kinds.ttl) |
+| [data-ranges.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Frestrictions%2Fdata-ranges.ttl) | Datatype facets, datatype unions/complements, qualified data cardinalities | #63 | [TTL](restrictions/data-ranges.ttl) |

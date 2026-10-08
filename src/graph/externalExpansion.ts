@@ -8,8 +8,11 @@ import { DataFactory, type Store } from 'n3';
 import type { GraphData, GraphEdge, GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import type { ExternalNodeLayout } from '../storage';
-import { getMainOntologyBase, getObjectProperties, extractLocalName, findRestrictionBlank } from '../parser';
+import { getMainOntologyBase, getObjectProperties, extractLocalName, findRestrictionBlank, BASE_IRI } from '../parser';
 import { getCachedExternalClasses } from '../externalOntologySearch';
+import { readObjectRestriction, readRestrictionCardinality, mergeRestrictionKinds } from '../rdf/restrictions';
+import { isExternalPropertyUri } from '../rdf/propertyNamespace';
+import type { RdfTerm } from '../rdf/classExpressions';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 
@@ -153,6 +156,24 @@ export function expandWithExternalRefs(
   const externalClassNodes = new Map<string, GraphNode>();
   const newEdges: GraphEdge[] = [];
 
+  /** Add a node for an external class, if it belongs to one of the external references. */
+  const addExternalClassNode = (uri: string): boolean => {
+    const ref = findRefForUri(uri, externalRefs);
+    if (!ref) return false;
+    if (!externalClassNodes.has(uri)) {
+      externalClassNodes.set(uri, {
+        id: uri,
+        label: getExternalClassLabel(uri, getCachedExternalClasses(ref.url)),
+        labellableRoot: null,
+        isExternal: true,
+        externalOntologyUrl: ref.url,
+        x: options.nodePositions?.[uri]?.x,
+        y: options.nodePositions?.[uri]?.y,
+      });
+    }
+    return true;
+  };
+
   const RDFS_DOMAIN = RDFS + 'domain';
   const RDFS_RANGE = RDFS + 'range';
 
@@ -259,38 +280,8 @@ export function expandWithExternalRefs(
 
         newEdges.push({ from: fromId, to: toId, type: propUri, isRestriction: false });
 
-        if (!domainIsLocal) {
-          const ref = findRefForUri(domainUri, externalRefs);
-          if (ref && !externalClassNodes.has(domainUri)) {
-            const cached = getCachedExternalClasses(ref.url);
-            const label = getExternalClassLabel(domainUri, cached);
-            externalClassNodes.set(domainUri, {
-              id: domainUri,
-              label,
-              labellableRoot: null,
-              isExternal: true,
-              externalOntologyUrl: ref.url,
-              x: options.nodePositions?.[domainUri]?.x,
-              y: options.nodePositions?.[domainUri]?.y,
-            });
-          }
-        }
-        if (!rangeIsLocal) {
-          const ref = findRefForUri(rangeUri, externalRefs);
-          if (ref && !externalClassNodes.has(rangeUri)) {
-            const cached = getCachedExternalClasses(ref.url);
-            const label = getExternalClassLabel(rangeUri, cached);
-            externalClassNodes.set(rangeUri, {
-              id: rangeUri,
-              label,
-              labellableRoot: null,
-              isExternal: true,
-              externalOntologyUrl: ref.url,
-              x: options.nodePositions?.[rangeUri]?.x,
-              y: options.nodePositions?.[rangeUri]?.y,
-            });
-          }
-        }
+        if (!domainIsLocal) addExternalClassNode(domainUri);
+        if (!rangeIsLocal) addExternalClassNode(rangeUri);
       }
     }
   }
@@ -312,20 +303,7 @@ export function expandWithExternalRefs(
     const superClassIsLocal =
       localNodeIds.has(extractLocalName(superClassUri)) || isLocalUri(superClassUri, mainBase);
     if (!superClassIsLocal) {
-      const ref = findRefForUri(superClassUri, externalRefs);
-      if (ref && !externalClassNodes.has(superClassUri)) {
-        const cached = getCachedExternalClasses(ref.url);
-        const label = getExternalClassLabel(superClassUri, cached);
-        externalClassNodes.set(superClassUri, {
-          id: superClassUri,
-          label,
-          labellableRoot: null,
-          isExternal: true,
-          externalOntologyUrl: ref.url,
-          x: options.nodePositions?.[superClassUri]?.x,
-          y: options.nodePositions?.[superClassUri]?.y,
-        });
-      }
+      addExternalClassNode(superClassUri);
       // Also create the subClassOf edge if the subclass is local
       const subClassUri = (q.subject as { value: string }).value;
       const subClassIsLocal = isLocalUri(subClassUri, mainBase);
@@ -338,6 +316,50 @@ export function expandWithExternalRefs(
         }
       }
     }
+  }
+
+  // Restrictions on a local class whose filler is an external class (#99). The parser draws only restrictions
+  // between this ontology's classes, so these were dropped although the filler can be drawn here.
+  // Classes are matched by full IRI: an imported lib:Book is not the local :Book.
+  const localClassUris = new Set(rawData.nodes.map((n) => n.uri).filter((u): u is string => !!u));
+  for (const q of subClassOfQuads) {
+    if (q.subject.termType !== 'NamedNode' || q.object.termType !== 'BlankNode') continue;
+    const subjectUri = q.subject.value;
+    const from = extractLocalName(subjectUri);
+    if (!localNodeIds.has(from)) continue;
+    const restriction = readObjectRestriction(store, q.object as RdfTerm, subjectUri);
+    if (!restriction) continue;
+    const to = restriction.targetUri;
+    if (localClassUris.has(to) || isLocalUri(to, mainBase)) continue; // drawn by the parser
+    if (!addExternalClassNode(to)) continue;
+    const propUri = restriction.propertyUri;
+    const type = isExternalPropertyUri(propUri, mainBase, BASE_IRI) ? propUri : extractLocalName(propUri);
+    const { min, max } = readRestrictionCardinality(store, q.object as RdfTerm);
+    const implied = min == null && max == null && (restriction.kind === 'some' || restriction.kind === 'qualified');
+    const cardinality = { minCardinality: implied ? 1 : min, maxCardinality: max };
+    const sameEdge = (e: GraphEdge) => e.from === from && e.to === to && (e.type === type || e.type === propUri);
+    // A second restriction on the same property and filler (e.g. ∀ next to ∃) joins the edge, as in the parser.
+    const existing = newEdges.find((e) => sameEdge(e) && e.isRestriction);
+    if (existing) {
+      existing.restrictionKinds = mergeRestrictionKinds(existing.restrictionKinds, restriction.kind);
+      if (existing.minCardinality == null && existing.maxCardinality == null) Object.assign(existing, cardinality);
+      if (restriction.value) existing.restrictionValue = restriction.value;
+      continue;
+    }
+    // The restriction replaces a domain/range edge for the same property and class (as in the parser): it is
+    // more specific, and its lock keeps the edge read-only.
+    const domainRangeIndex = newEdges.findIndex((e) => sameEdge(e) && !e.isRestriction);
+    if (domainRangeIndex >= 0) newEdges.splice(domainRangeIndex, 1);
+    newEdges.push({
+      from,
+      to,
+      type,
+      isRestriction: true,
+      restrictionKinds: [restriction.kind],
+      ...cardinality,
+      ...(restriction.value ? { restrictionValue: restriction.value } : {}),
+      externalTarget: true,
+    });
   }
 
   let externalNodesList = Array.from(externalClassNodes.values());
@@ -392,7 +414,8 @@ export function expandWithExternalRefs(
     // Build semantic signature: normalize to local names for comparison
     // This catches duplicates regardless of URI vs local name format
     const fromLocal = extractLocalName(edge.from);
-    const toLocal = extractLocalName(edge.to);
+    // An edge to an imported class keeps its full IRI, so it isn't taken for one to a same-named local class.
+    const toLocal = edge.externalTarget ? edge.to : extractLocalName(edge.to);
     const typeLocal = extractLocalName(edge.type);
     
     // Also get the property info to normalize the type

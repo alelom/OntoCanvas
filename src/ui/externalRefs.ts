@@ -3,6 +3,7 @@ import type { GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { saveExternalRefsToIndexedDB } from '../storage';
 import { debugLog } from '../utils/debug';
+import { extractLocalName } from '../utils/localName';
 
 /**
  * Extract external ontology references from owl:imports statements in the store.
@@ -388,6 +389,20 @@ export function getPrefixForUri(
   if (uri.includes('w3.org/2000/01/rdf-schema#')) return 'rdfs';
   if (uri.includes('w3.org/2002/07/owl#')) return 'owl';
   return null;
+}
+
+/**
+ * How the edit dialogs show an imported term's identifier: `prefix:localName` when one of the external
+ * references gives it a prefix, otherwise its full IRI (#101).
+ */
+export function importedIdentifier(
+  uri: string,
+  isDefinedBy: string | null | undefined,
+  externalOntologyReferences: ExternalOntologyReference[],
+  mainOntologyBase: string | null
+): string {
+  const prefix = getPrefixForUri(uri, isDefinedBy, externalOntologyReferences, mainOntologyBase);
+  return prefix ? `${prefix}:${extractLocalName(uri)}` : uri;
 }
 
 /**

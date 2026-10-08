@@ -258,6 +258,8 @@ function buildParseResultFromStore(
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenClasses = new Set<string>();
+  /** Full IRI of each class by its node id (local name), so a same-named class elsewhere isn't taken for it. */
+  const classUriByName = new Map<string, string>();
   let annotationProps = getAnnotationProperties(store);
   
   // Merge additional annotation properties (e.g., used but not declared ones from external ontologies)
@@ -292,6 +294,7 @@ function buildParseResultFromStore(
     const localName = extractLocalName(uri);
     if (seenClasses.has(localName)) continue;
     seenClasses.add(localName);
+    classUriByName.set(localName, uri);
 
     const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
     const label = labelQuad?.object?.value ?? localName;
@@ -427,8 +430,9 @@ function buildParseResultFromStore(
         const targetUri = restriction.targetUri;
         const targetName = extractLocalName(targetUri);
         
-        // Check if target class exists
-        if (!seenClasses.has(targetName)) {
+        // Check the target is this ontology's class: an imported class with the same local name (lib:Book next
+        // to :Book) is drawn by the external expansion instead
+        if (classUriByName.get(targetName) !== targetUri) {
           continue; // Skip this blank node, continue to next one
         }
         
@@ -577,10 +581,12 @@ function buildParseResultFromStore(
     const obj = q.object;
     if (!isBlankNode(obj)) continue;
     const onProperty = store.getQuads(obj, OWL + 'onProperty', null, null)[0];
-    if (onProperty && onProperty.object.termType === 'NamedNode') {
-      const propUri = (onProperty.object as { value: string }).value;
-      referencedObjectPropUris.add(propUri);
-    }
+    if (!onProperty || onProperty.object.termType !== 'NamedNode') continue;
+    // A data restriction names a data property, listed with the data properties instead (#100).
+    if (store.getQuads(obj, OWL + 'onDataRange', null, null).length > 0) continue;
+    const propUri = (onProperty.object as { value: string }).value;
+    if (store.getQuads(DataFactory.namedNode(propUri), RDF + 'type', OWL + 'DatatypeProperty', null).length > 0) continue;
+    referencedObjectPropUris.add(propUri);
   }
   
   // Add referenced object properties that aren't declared in the store

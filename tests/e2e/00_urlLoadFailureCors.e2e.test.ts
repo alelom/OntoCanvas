@@ -62,10 +62,11 @@ describe('URL load failure E2E', () => {
     await expect.poll(() => page.getByText('Failed to load ontology from URL').count(), { timeout: 5000 }).toBe(0);
   }, 10000);
 
-  // App bug: fetchOntologyFromUrl (src/lib/ontologyUrlLoader.ts) catches every candidate's error, including
-  // the CorsOrNetworkError that fetchExternalOntologyTtl throws, and rethrows a plain Error, so
+  // Kept skipped, not fixed: #102 was closed as "Error too specific to be interesting for users". The bug:
+  // fetchOntologyFromUrl (src/lib/ontologyUrlLoader.ts) catches every candidate's error, including the
+  // CorsOrNetworkError that fetchExternalOntologyTtl throws, and rethrows a plain Error, so
   // handleUrlLoadFailure never sees a CORS error and shows the generic "Failed to load" modal instead.
-  // Re-enable once that error is propagated. See #102.
+  // If #102 is reopened, propagate that error and re-enable this test.
   it.skip('shows CORS fallback modal with Download TTL and Open file when request is aborted', async () => {
     await page.route(/pi\.pauwel\.be/, async (route) => {
       await route.abort('blockedbyclient');

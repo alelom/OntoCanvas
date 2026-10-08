@@ -87,6 +87,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
 
   (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ = {
     hideOpenOntologyModal: (): void => hideOpenOntologyModal(),
+    getExternalOntologyReferences: (): ExternalOntologyReference[] => getExternalOntologyReferences(),
     selectNodeByLabel: (label: string): boolean => {
       const rawData = getRawData();
       const network = getNetwork();

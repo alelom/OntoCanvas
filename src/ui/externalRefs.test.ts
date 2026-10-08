@@ -10,6 +10,7 @@ import {
   getNodeOntologyUrl,
   getNodePrefix,
   formatNodeLabelWithPrefix,
+  importedIdentifier,
   formatRelationshipLabelWithPrefix,
   sortExternalRefsByUrl,
 } from './externalRefs';
@@ -450,5 +451,21 @@ describe('externalRefs', () => {
         'http://www.opengis.net/ont/geosparql',
       ]);
     });
+  });
+});
+
+describe('importedIdentifier (#101)', () => {
+  const refs = [{ url: 'http://example.org/data-base', usePrefix: true, prefix: 'dpbase' }];
+
+  it('shows prefix:localName for a term of a prefixed external reference', () => {
+    expect(importedIdentifier('http://example.org/data-base#createdDate', null, refs, 'http://example.org/child#')).toBe('dpbase:createdDate');
+  });
+
+  it('uses the local name, not the label, so the identifier has no spaces', () => {
+    expect(importedIdentifier('http://example.org/data-base#connectsTo', 'http://example.org/data-base', refs, null)).toBe('dpbase:connectsTo');
+  });
+
+  it('falls back to the full IRI when no reference gives a prefix', () => {
+    expect(importedIdentifier('http://example.org/other#p', null, refs, null)).toBe('http://example.org/other#p');
   });
 });
