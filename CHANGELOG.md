@@ -1,3 +1,11 @@
+## [1.27.3](https://github.com/alelom/OntoCanvas/compare/v1.27.2...v1.27.3) (2026-10-08)
+
+
+### Bug Fixes
+
+* **#106 review:** external restriction edges keep metadata, lock and identity; deletable ([0be579b](https://github.com/alelom/OntoCanvas/commit/0be579baecf9aeff8b60f98e97bf7290e5217c3f)), closes [#106](https://github.com/alelom/OntoCanvas/issues/106) [#102](https://github.com/alelom/OntoCanvas/issues/102)
+* **#99, #100, #101:** imported terms: restriction edges, property kind, prefixed identifier ([b2011bb](https://github.com/alelom/OntoCanvas/commit/b2011bb65d2f08902774ddaa531670f01725ffd3)), closes [#99](https://github.com/alelom/OntoCanvas/issues/99) [#101](https://github.com/alelom/OntoCanvas/issues/101) [#102](https://github.com/alelom/OntoCanvas/issues/102)
+
 ## [1.27.2](https://github.com/alelom/OntoCanvas/compare/v1.27.1...v1.27.2) (2026-10-08)
 
 
