@@ -4980,6 +4980,19 @@ let selectedEdgeType: string | null = null;
 let selectedExternalObjectProperty: ExternalObjectPropertyInfo | null = null;
 
 // Wrapper for updateEditEdgeCommentDisplay that updates the DOM
+/**
+ * Show the cardinality and comment sections that depend on the chosen relationship type. Called as soon as
+ * a type is chosen: doing it only when the field lost focus moved the OK button on the mousedown of a click
+ * on OK, so the click landed off the button and did nothing (#98).
+ */
+function updateEditEdgeTypeSections(): void {
+  const cardWrap = document.getElementById('editEdgeCardinalityWrap');
+  if (cardWrap && selectedEdgeType) {
+    cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
+  }
+  updateEditEdgeCommentDisplayLocal();
+}
+
 function updateEditEdgeCommentDisplayLocal(): void {
   const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
   const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
@@ -5098,6 +5111,7 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
       selectedExternalObjectProperty = null;
     }
     typeInput.value = match.displayLabel;
+    updateEditEdgeTypeSections();
     resultsDiv.style.display = 'none';
     updateEditEdgeCommentDisplayLocal();
   } else {
@@ -5168,7 +5182,7 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
         typeInput.value = match.displayLabel;
         resultsDiv.style.display = 'none';
         hideRelationshipTooltip();
-        updateEditEdgeCommentDisplayLocal();
+        updateEditEdgeTypeSections();
       });
     });
   }
@@ -8486,14 +8500,8 @@ function setupEventListeners(): void {
     }
   });
   
-  // Update cardinality display when edge type changes
-  document.getElementById('editEdgeType')?.addEventListener('focusout', () => {
-    const cardWrap = document.getElementById('editEdgeCardinalityWrap');
-    if (cardWrap && selectedEdgeType) {
-      cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
-    }
-    updateEditEdgeCommentDisplayLocal();
-  });
+  // Keep the sections in step with the type on leaving the field too (a no-op once a type was chosen).
+  document.getElementById('editEdgeType')?.addEventListener('focusout', updateEditEdgeTypeSections);
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModalWithCleanup();
   });
