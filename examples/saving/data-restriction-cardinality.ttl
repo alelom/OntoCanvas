@@ -1,0 +1,35 @@
+@prefix : <http://example.org/examples/datacardinality#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Data-property restrictions are saved in the OWL 2 qualified form (issue #75). Book's "title"
+# restriction below uses the older unqualified form (owl:minCardinality next to owl:onDataRange),
+# which strict OWL tools reject. Both forms are read; the box shows "title [1..*]" and "isbn [1..1]".
+#
+# Try it: double-click the "title" box, set Max to 3, press OK, then Save. The saved restriction is
+#   [ rdf:type owl:Restriction ; owl:onProperty :title ; owl:onDataRange xsd:string ;
+#     owl:minQualifiedCardinality 1 ; owl:maxQualifiedCardinality 3 ]
+
+<http://example.org/examples/datacardinality> rdf:type owl:Ontology ;
+    rdfs:label "Data restriction cardinality" .
+
+:title rdf:type owl:DatatypeProperty ;
+    rdfs:label "title" ;
+    rdfs:range xsd:string .
+
+:isbn rdf:type owl:DatatypeProperty ;
+    rdfs:label "isbn" ;
+    rdfs:range xsd:string .
+
+:Book rdf:type owl:Class ;
+    rdfs:label "Book" ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ;
+                      owl:onProperty :title ;
+                      owl:onDataRange xsd:string ;
+                      owl:minCardinality "1"^^xsd:nonNegativeInteger ] ,
+                    [ rdf:type owl:Restriction ;
+                      owl:onProperty :isbn ;
+                      owl:onDataRange xsd:string ;
+                      owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] .

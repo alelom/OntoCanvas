@@ -2228,11 +2228,14 @@ export function addDataPropertyRestrictionToClass(
   store.addQuad(blank, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Restriction'), graph);
   store.addQuad(blank, DataFactory.namedNode(OWL + 'onProperty'), DataFactory.namedNode(propUri), graph);
   store.addQuad(blank, DataFactory.namedNode(OWL_ON_DATA_RANGE), DataFactory.namedNode(rangeUri), graph);
+  // owl:onDataRange goes with the qualified forms in OWL 2 (#75); the reader accepts both forms.
+  const addCount = (pred: string, n: number) =>
+    store.addQuad(blank, DataFactory.namedNode(OWL + pred), DataFactory.literal(n, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
   if (min != null && max != null && min === max) {
-    store.addQuad(blank, DataFactory.namedNode(OWL + 'cardinality'), DataFactory.literal(min, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
+    addCount('qualifiedCardinality', min);
   } else {
-    if (min != null) store.addQuad(blank, DataFactory.namedNode(OWL + 'minCardinality'), DataFactory.literal(min, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
-    if (max != null) store.addQuad(blank, DataFactory.namedNode(OWL + 'maxCardinality'), DataFactory.literal(max, DataFactory.namedNode(XSD_NS + 'nonNegativeInteger')), graph);
+    if (min != null) addCount('minQualifiedCardinality', min);
+    if (max != null) addCount('maxQualifiedCardinality', max);
   }
   return true;
 }

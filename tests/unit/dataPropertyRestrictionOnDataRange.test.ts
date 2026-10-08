@@ -66,4 +66,27 @@ describe('owl:onDataRange on a data-property restriction', () => {
     ).toBe(true);
     expect(restrictionFor(store, 'untypedProp')?.onDataRange).toBe(RDFS_LITERAL);
   });
+
+  // owl:onDataRange belongs with the qualified forms in OWL 2 (#75); strict tools reject it next to
+  // owl:minCardinality and friends.
+  const cardinalityPredicates = (store: import('n3').Store, prop: string) => {
+    const OWL = 'http://www.w3.org/2002/07/owl#';
+    const blank = store.getQuads(null, OWL + 'onProperty', null, null)
+      .find((q) => q.object.value.endsWith('#' + prop))!.subject;
+    return store.getQuads(blank, null, null, null).map((q) => q.predicate.value.replace(OWL, 'owl:'))
+      .filter((p) => p.includes('ardinality')).sort();
+  };
+
+  it.each([
+    [{ minCardinality: 1 }, ['owl:minQualifiedCardinality']],
+    [{ maxCardinality: 3 }, ['owl:maxQualifiedCardinality']],
+    [{ minCardinality: 1, maxCardinality: 3 }, ['owl:maxQualifiedCardinality', 'owl:minQualifiedCardinality']],
+    [{ minCardinality: 2, maxCardinality: 2 }, ['owl:qualifiedCardinality']],
+  ])('writes qualified cardinality next to owl:onDataRange (%o) (#75)', async (cardinality, expected) => {
+    const store = await load();
+    expect(addDataPropertyRestrictionToClass(store, 'Entity', 'untypedProp', cardinality)).toBe(true);
+    expect(cardinalityPredicates(store, 'untypedProp')).toEqual(expected);
+    const after = restrictionFor(store, 'untypedProp')!;
+    expect([after.minCardinality ?? null, after.maxCardinality ?? null]).toEqual([cardinality.minCardinality ?? null, cardinality.maxCardinality ?? null]);
+  });
 });

@@ -40,3 +40,9 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 |---|---|---|---|
 | [restriction-kinds.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Frestrictions%2Frestriction-kinds.ttl) | ∃ ∀ ∋ ⟲ restrictions and cardinalities as edge labels; read-only kinds | #63 | [TTL](restrictions/restriction-kinds.ttl) |
 | [data-ranges.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Frestrictions%2Fdata-ranges.ttl) | Datatype facets, datatype unions/complements, qualified data cardinalities | #63 | [TTL](restrictions/data-ranges.ttl) |
+
+## Saving
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [data-restriction-cardinality.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fdata-restriction-cardinality.ttl) | Data-property restrictions are saved in the OWL 2 qualified form; the older unqualified form is still read | #75 | [TTL](saving/data-restriction-cardinality.ttl) |

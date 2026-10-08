@@ -108,7 +108,7 @@ describe('Group L — data-property restriction on a class', () => {
     expect(addDataPropertyRestrictionToClass(store, 'Zone', 'hasArea', { minCardinality: 1, maxCardinality: null })).toBe(true);
     const out = await serialize();
     expect(out).toContain('owl:onProperty :hasArea');
-    expect(out).toContain('owl:minCardinality');
+    expect(out).toContain('owl:minQualifiedCardinality'); // qualified, as owl:onDataRange requires (#75)
     const reparsed = await parseRdfToGraph(out, { path: 'reparse.ttl' });
     expect(reparsed.store).toBeTruthy();
   });
