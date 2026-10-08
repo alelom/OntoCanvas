@@ -1,3 +1,12 @@
+## [1.27.2](https://github.com/alelom/OntoCanvas/compare/v1.27.1...v1.27.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **#93:** tell tests when the app is ready; Escape cancels pending search suggestions ([8102179](https://github.com/alelom/OntoCanvas/commit/8102179f54d53b8d7a5ef2d26a177cbe20ee8236)), closes [#93](https://github.com/alelom/OntoCanvas/issues/93)
+* **#94 review:** pin corrupt-ontology outcomes, add [#98](https://github.com/alelom/OntoCanvas/issues/98) example, drop duplicate update ([4d2f058](https://github.com/alelom/OntoCanvas/commit/4d2f05851ca18a26e0f5aed3eda1f09e8830ba84)), closes [#94](https://github.com/alelom/OntoCanvas/issues/94)
+* **#98:** clicking OK right after typing a relationship adds the edge ([05f3872](https://github.com/alelom/OntoCanvas/commit/05f387259050f09779f1ee1a6e77076ad5c8898f)), closes [#98](https://github.com/alelom/OntoCanvas/issues/98)
+
 ## [1.27.1](https://github.com/alelom/OntoCanvas/compare/v1.27.0...v1.27.1) (2026-10-08)
 
 
