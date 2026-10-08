@@ -128,17 +128,14 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
   const seen = new Set<string>();
   const mainBase = getMainOntologyBase(store);
-  const classNs = getClassNamespace(store);
   const opQuads = store.getQuads(null, RDF + 'type', OWL + 'ObjectProperty', null);
   for (const q of opQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
     const subjUri = (subj as { value: string }).value;
     const localName = extractLocalName(subjUri);
-    const isFromMainOntology =
-      (mainBase != null && (subjUri === mainBase || subjUri.startsWith(mainBase) || subjUri === mainBase.slice(0, -1))) ||
-      (classNs != null && subjUri.startsWith(classNs)) ||
-      (mainBase == null && classNs == null && subjUri.startsWith(BASE_IRI));
+    // Decided exactly as for edge types, so a property's name here is the type its edges carry (#87).
+    const isFromMainOntology = !isExternalPropertyUri(subjUri, mainBase, BASE_IRI);
     // External (imported) properties always use full URI so we can show e.g. geo:hasGeometry in the UI.
     // Local (main ontology) properties use local name unless duplicate, then full URI so both appear in the list.
     const name = isFromMainOntology

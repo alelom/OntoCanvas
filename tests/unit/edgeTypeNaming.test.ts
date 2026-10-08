@@ -57,3 +57,39 @@ describe('deleting a property by its local name outside the default namespace (#
     expect(store.getQuads(null, 'http://www.w3.org/2002/07/owl#onProperty', 'http://example.org/other#linksTo', null)).toHaveLength(0);
   });
 });
+
+/** The property list and the edges must key a property the same way, at parse time, so the Object
+ * Properties menu, edge styles and deletion agree without any later re-keying (#87 review). */
+describe('one key per property: property list and edges agree', () => {
+  const cases: Array<[string, string]> = [
+    ['ontology IRI differs from the term namespace', `@prefix : <http://example.org/vocab#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/onto> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:linksTo a owl:ObjectProperty ; rdfs:domain :A ; rdfs:range :B .
+:unused a owl:ObjectProperty .`],
+    ['term namespace equals the ontology', `@prefix : <http://example.org/other#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/other> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:linksTo a owl:ObjectProperty ; rdfs:domain :A ; rdfs:range :B .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :linksTo ; owl:someValuesFrom :A ] .`],
+    ['a slash ontology like FOAF', `@prefix f: <http://xmlns.example/v/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://xmlns.example/v/> a owl:Ontology .
+f:Group a owl:Class . f:Agent a owl:Class .
+f:member a owl:ObjectProperty ; rdfs:domain f:Group ; rdfs:range f:Agent .`],
+  ];
+  for (const [name, ttl] of cases) {
+    it(name, async () => {
+      const r = await parseRdfToGraph(ttl, { path: 'x.ttl' });
+      const names = new Set(r.objectProperties.map((op) => op.name));
+      const types = [...new Set(r.graphData.edges.map((e) => e.type).filter((t) => t !== 'subClassOf'))];
+      expect(types.length).toBeGreaterThan(0);
+      for (const t of types) expect(names).toContain(t);
+    });
+  }
+});

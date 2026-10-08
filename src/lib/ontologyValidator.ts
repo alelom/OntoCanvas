@@ -2,6 +2,8 @@ import type { Store } from 'n3';
 import { DataFactory } from 'n3';
 import type { CopiedRelationship } from './relationshipClipboard';
 import type { GraphData } from '../types';
+import { getMainOntologyBase } from '../parser';
+import { isExternalPropertyUri } from '../rdf/propertyNamespace';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -20,15 +22,20 @@ const localNameOf = (uri: string) => uri.slice(Math.max(uri.lastIndexOf('#'), ur
 
 /**
  * The URI of a term of type `rdfType` named by a node id or edge type: a full URI as-is, else the declared
- * term with that local name — so an ontology outside the default namespace resolves correctly (#87) —
- * falling back to the default base for a term not declared yet.
+ * term with that local name — so an ontology outside the default namespace resolves correctly (#87). A local
+ * key means the main ontology's term, so when an imported term shares the local name (`:contains` and
+ * `ext:contains`) the one in the main namespace wins, whatever the declaration order. Falls back to the
+ * default base for a term not declared yet.
  */
 function uriFromStore(store: Store, name: string, rdfType: string): string {
   if (name.startsWith('http://') || name.startsWith('https://')) return name;
   const declared = store
     .getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(rdfType), null)
-    .find((q) => q.subject.termType === 'NamedNode' && localNameOf(q.subject.value) === name);
-  return declared ? declared.subject.value : BASE_IRI + name;
+    .map((q) => q.subject)
+    .filter((t) => t.termType === 'NamedNode' && localNameOf(t.value) === name)
+    .map((t) => t.value);
+  const mainBase = getMainOntologyBase(store);
+  return declared.find((uri) => !isExternalPropertyUri(uri, mainBase, BASE_IRI)) ?? declared[0] ?? BASE_IRI + name;
 }
 
 /**

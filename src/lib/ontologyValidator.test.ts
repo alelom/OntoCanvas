@@ -341,3 +341,26 @@ describe('validateRelationship outside the default namespace (#87)', async () =>
     expect(validateRelationship(edge, 'Room', 'Person', store, rawData).reason).toContain('range');
   });
 });
+
+/** A local key resolves to the main ontology's term even when an imported term shares its local name and
+ * is declared first (#87 review). */
+describe('validateRelationship with a local and an imported term of the same name', async () => {
+  const ttl = `@prefix : <http://example.org/main#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/main> a owl:Ontology .
+ext:Person a owl:Class . ext:Group a owl:Class .
+ext:Room a owl:Class .
+ext:linksTo a owl:ObjectProperty ; rdfs:domain ext:Room ; rdfs:range ext:Group .
+:Person a owl:Class . :Group a owl:Class . :Room a owl:Class .
+:linksTo a owl:ObjectProperty ; rdfs:domain :Person ; rdfs:range :Group .`;
+  const { store, graphData } = await parseRdfToGraph(ttl, { path: 'main.ttl' });
+  const rawData = { nodes: graphData.nodes, edges: [] };
+  const edge: CopiedRelationship = { from: 'Person', type: 'linksTo' };
+
+  it("checks the main ontology's property against the main ontology's classes", () => {
+    expect(validateRelationship(edge, 'Group', 'Person', store, rawData).valid).toBe(true);
+    expect(validateRelationship(edge, 'Group', 'Room', store, rawData).reason).toContain('domain');
+  });
+});
