@@ -162,6 +162,8 @@ import {
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import { openOnStartup } from './ui/startupOpen';
+import { debounced } from './utils/debounced';
+import { beginViewSettle, viewSettled } from './ui/viewSettle';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust } from './utils/urlParams';
 import {
@@ -6770,6 +6772,9 @@ async function loadTtlAndRender(
   handle?: FileSystemFileHandle | null,
   pathHint?: string
 ): Promise<void> {
+  // The view is unsettled from the start of a load, not only once its render begins: the new store is set
+  // before rendering, and the previous render's "settled" must not count for this load (#93).
+  beginViewSettle();
   const errorMsg = document.getElementById('errorMsg') as HTMLElement;
   const warningMsg = document.getElementById('warningMsg') as HTMLElement;
   const vizControls = document.getElementById('vizControls') as HTMLElement;
@@ -7589,6 +7594,8 @@ function applyFilter(preserveView = false): void {
   // Legend must use displayed edges (graphDataForBuild) so domain/range edges from expandWithExternalRefs appear
   updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences, graphDataForBuild.edges);
 
+  // The view keeps moving until this render's fit (or restored position) is applied (#93).
+  const settleToken = beginViewSettle();
   if (network) {
     network.setData(data);
     network.setOptions({
@@ -7607,12 +7614,19 @@ function applyFilter(preserveView = false): void {
           scale: savedScale!,
           animation: false,
         });
+        viewSettled(settleToken);
       });
     } else if (layoutMode === 'force') {
-      network.once('stabilizationIterationsDone', () => network!.fit());
+      network.once('stabilizationIterationsDone', () => {
+        network!.fit();
+        viewSettled(settleToken);
+      });
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
-      setTimeout(() => network!.fit(), 100);
+      setTimeout(() => {
+        network!.fit();
+        viewSettled(settleToken);
+      }, 100);
     }
   } else {
     const opts = {
@@ -7623,10 +7637,16 @@ function applyFilter(preserveView = false): void {
     };
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
-      network.once('stabilizationIterationsDone', () => network!.fit());
+      network.once('stabilizationIterationsDone', () => {
+        network!.fit();
+        viewSettled(settleToken);
+      });
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
-      setTimeout(() => network!.fit(), 100);
+      setTimeout(() => {
+        network!.fit();
+        viewSettled(settleToken);
+      }, 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
     const resizeNetwork = () => {
@@ -8955,7 +8975,11 @@ function setupEventListeners(): void {
   const searchList = document.getElementById('searchAutocomplete');
   const searchClearBtn = document.getElementById('searchClearBtn');
   if (searchInput && searchList) {
-    let debounceTimer: number;
+    // Escape cancels a pending update, or the suggestions would reopen after being dismissed (#93).
+    const suggestionsUpdate = debounced(updateSearchAutocomplete, 150);
+    searchInput.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') suggestionsUpdate.cancel();
+    });
     let animationId: number | null = null;
     
     // Function to clear the search bar
@@ -9024,8 +9048,7 @@ function setupEventListeners(): void {
     searchInput.addEventListener('input', () => {
       updateSearchBarStyle();
       applyFilter();
-      clearTimeout(debounceTimer);
-      debounceTimer = window.setTimeout(updateSearchAutocomplete, 150);
+      suggestionsUpdate.schedule();
     });
     searchInput.addEventListener('focus', () => {
       updateSearchBarStyle();

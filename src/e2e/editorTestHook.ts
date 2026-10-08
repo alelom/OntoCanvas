@@ -8,6 +8,7 @@ import type { Store } from 'n3';
 import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo, AnnotationPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { parseEdgeId } from '../utils/edgeId';
+import { isViewSettled } from '../ui/viewSettle';
 
 /** Use getters for state that is set after app init (e.g. when a file is loaded) so the hook always sees current values. */
 export interface EditorTestDeps {
@@ -210,8 +211,13 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     saveTtl: (): Promise<void> => saveTtl(),
     setHasUnsavedChanges: (value: boolean): void => setHasUnsavedChanges(value),
     updateSaveButtonVisibility: (): void => updateSaveButtonVisibility(),
+    /** Load a Turtle string and resolve once the graph view has settled, so a test can act straight away (#93). */
     loadTtlDirectly: async (ttlString: string, fileName?: string, pathHint?: string): Promise<void> => {
       await loadTtlDirectly(ttlString, fileName, pathHint);
+      const deadline = performance.now() + 5000;
+      while (!isViewSettled() && performance.now() < deadline) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
     },
     getSaveButtonState: (): { visible: boolean; hasUnsavedChanges: boolean; ttlStoreExists: boolean } => {
       const saveGroup = document.getElementById('saveGroup');
@@ -308,6 +314,24 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
       const store = getTtlStore();
       if (!store) return null;
       return storeToTurtle(store, getExternalOntologyReferences());
+    },
+    /** The loaded store (a new object for each load) and graph data, for waiting on a load in E2E helpers. */
+    getTtlStore: (): Store | null => getTtlStore(),
+    getRawData: (): GraphData => getRawData(),
+    /** Whether the graph view has stopped moving after the latest render (its fit or restored view). */
+    isViewSettled: (): boolean => isViewSettled(),
+    /**
+     * Whether the app is ready for a test to act on: an ontology is loaded, no loading or "Open ontology"
+     * dialog covers the page, the toolbar is shown and the view has settled. Tests wait for this instead
+     * of sleeping (#93); see waitForAppReady in tests/e2e/testHelpers.ts.
+     */
+    isAppReady: (): boolean => {
+      const hidden = (id: string) => {
+        const el = document.getElementById(id);
+        return !el || getComputedStyle(el).display === 'none';
+      };
+      return getTtlStore() !== null && getNetwork() !== null && hidden('loadingModal') && hidden('openOntologyModal') &&
+        !hidden('vizControls') && isViewSettled();
     },
     /** Quads in the live store matching subject / predicate (full IRIs; null = any), as plain objects. */
     getQuads: (subject: string | null, predicate: string | null): Array<{ subject: string; predicate: string; objectType: string; object: string }> => {
