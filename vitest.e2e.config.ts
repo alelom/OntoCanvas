@@ -9,6 +9,10 @@ export default defineConfig({
     testTimeout: 10000, // Max 10s per project rule - tests use loadTtlDirectly for faster loading
     dangerouslyIgnoreUnhandledErrors: true,
     hookTimeout: 10000, // dev server startup; max 10s per project rule
+    // Each test file drives its own browser against the one dev server. Uncapped, a many-core machine ran
+    // ~13 at once and page loads timed out under the load; 4 is close to CI's runners, so local runs match
+    // CI (#93).
+    maxWorkers: 4,
     globalSetup: ['tests/e2e/globalSetup.ts'],
     globalTeardown: ['tests/e2e/globalTeardown.ts'],
     coverage: {
