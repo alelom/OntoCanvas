@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -44,56 +45,6 @@ afterEach(async () => {
     await page.close();
   }
 });
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  // Use loadTtlDirectly for faster loading (bypasses file input UI and slow operations)
-  const { readFileSync } = await import('node:fs');
-  const ttlContent = readFileSync(filePath, 'utf-8');
-  const fileName = filePath.split(/[/\\]/).pop() || 'test.ttl';
-  
-  // Wait for test hook to be available
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      return testHook && testHook.loadTtlDirectly;
-    },
-    { timeout: 2000 }
-  );
-  
-  // Load TTL directly via test hook (much faster)
-  page.evaluate(async ({ content, name, pathHint }: { content: string; name: string; pathHint: string }) => {
-    const testHook = (window as any).__EDITOR_TEST__;
-    if (testHook?.loadTtlDirectly) {
-      testHook.loadTtlDirectly(content, name, pathHint).catch(() => {
-        // Ignore errors - we'll detect them via checks below
-      });
-    }
-  }, { content: ttlContent, name: fileName, pathHint: filePath });
-  
-  // Wait for ttlStore to be populated (set early in loadTtlAndRender)
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getTtlStore) return false;
-      const ttlStore = testHook.getTtlStore();
-      return ttlStore !== null;
-    },
-    { timeout: 3000 }
-  );
-  
-  await page.waitForTimeout(200);
-}
-
-async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const vizControls = document.getElementById('vizControls');
-      return vizControls && vizControls.style.display !== 'none';
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(300);
-}
 
 async function renameClass(page: Page, nodeId: string, newLabel: string): Promise<void> {
   // Open rename modal by double-clicking the node
@@ -142,7 +93,7 @@ async function renameClass(page: Page, nodeId: string, newLabel: string): Promis
     () => {
       const modal = document.getElementById('renameModal');
       return !modal || (modal as HTMLElement).style.display === 'none';
-    },
+    }, undefined,
     { timeout: 3000 }
   );
   
@@ -176,7 +127,7 @@ async function saveWithOverwrite(page: Page): Promise<void> {
       const errorMsg = document.getElementById('errorMsg');
       const hasError = errorMsg && (errorMsg as HTMLElement).style.display !== 'none';
       return (!saveGroup || (saveGroup as HTMLElement).style.display === 'none') && !hasError;
-    },
+    }, undefined,
     { timeout: 5000 }
   );
   

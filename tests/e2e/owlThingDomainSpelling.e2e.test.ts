@@ -50,7 +50,7 @@ beforeEach(async () => {
     () => {
       const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
       return !!net?.body?.data?.nodes?.get?.('Alpha');
-    },
+    }, undefined,
     { timeout: 5000 }
   );
   property = await page.evaluate(() => {
@@ -68,7 +68,7 @@ afterEach(async () => {
 async function setDomain(p: Page, property: string, domain: string): Promise<void> {
   await p.evaluate((name) => (window as any).__EDITOR_TEST__.openEditObjectPropertyModal(name), property);
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display !== 'none',
+    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display !== 'none', undefined,
     { timeout: 5000 }
   );
   await p.evaluate((value) => {
@@ -78,7 +78,7 @@ async function setDomain(p: Page, property: string, domain: string): Promise<voi
   }, domain);
   await p.evaluate(() => (document.getElementById('editRelTypeConfirm') as HTMLButtonElement).click());
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display === 'none',
+    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display === 'none', undefined,
     { timeout: 5000 }
   );
 }

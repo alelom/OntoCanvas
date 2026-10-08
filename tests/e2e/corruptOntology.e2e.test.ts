@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { chooseFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync, readFileSync } from 'node:fs';
@@ -13,25 +14,6 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(200);
-}
 
 async function waitForErrorOrGraph(page: Page, timeout = 5000): Promise<'error' | 'graph'> {
   try {
@@ -43,6 +25,7 @@ async function waitForErrorOrGraph(page: Page, timeout = 5000): Promise<'error' 
         const hasGraph = vizControls && vizControls.style.display !== 'none';
         return hasError || hasGraph;
       },
+      undefined,
       { timeout }
     );
     
@@ -60,6 +43,23 @@ async function waitForErrorOrGraph(page: Page, timeout = 5000): Promise<'error' 
   }
 }
 
+/**
+ * Choose `filePath` after clearing the previous test's outcome. The tests share one page, so a leftover
+ * error from the previous file (e.g. "circular reference") would otherwise satisfy waitForErrorOrGraph
+ * before this load reports anything (#93).
+ */
+async function loadAfterClearing(page: Page, filePath: string): Promise<void> {
+  await page.evaluate(() => {
+    const errorMsg = document.getElementById('errorMsg');
+    if (errorMsg) {
+      errorMsg.textContent = '';
+      errorMsg.style.display = 'none';
+    }
+    document.getElementById('validationErrorModal')?.remove();
+  });
+  await chooseFile(page, filePath);
+}
+
 describe('Corrupt ontology handling E2E', () => {
   let browser: Browser;
   let page: Page;
@@ -70,7 +70,7 @@ describe('Corrupt ontology handling E2E', () => {
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.waitForTimeout(250);
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
@@ -88,9 +88,9 @@ describe('Corrupt ontology handling E2E', () => {
     const testFile = join(TEST_FIXTURES_DIR, 'potentially-corrupt-ontology-01.ttl');
     expect(existsSync(testFile)).toBe(true);
 
-    await loadTestFile(page, testFile);
+    await loadAfterClearing(page, testFile);
     
-    const result = await waitForErrorOrGraph(page, 10000);
+    const result = await waitForErrorOrGraph(page, 5000);
     
     if (result === 'error') {
       const errorText = await page.evaluate(() => {
@@ -119,9 +119,9 @@ describe('Corrupt ontology handling E2E', () => {
     const testFile = join(TEST_FIXTURES_DIR, 'potentially-corrupt-ontology-02-circular.ttl');
     expect(existsSync(testFile)).toBe(true);
 
-    await loadTestFile(page, testFile);
+    await loadAfterClearing(page, testFile);
     
-    const result = await waitForErrorOrGraph(page, 10000);
+    const result = await waitForErrorOrGraph(page, 5000);
     
     if (result === 'error') {
       // Click on the error message to open the detailed error modal
@@ -151,9 +151,9 @@ describe('Corrupt ontology handling E2E', () => {
     const testFile = join(TEST_FIXTURES_DIR, 'potentially-corrupt-ontology-03-self-reference.ttl');
     expect(existsSync(testFile)).toBe(true);
 
-    await loadTestFile(page, testFile);
+    await loadAfterClearing(page, testFile);
     
-    const result = await waitForErrorOrGraph(page, 10000);
+    const result = await waitForErrorOrGraph(page, 5000);
     
     if (result === 'error') {
       // Check if modal is already open, or click to open it
@@ -189,28 +189,14 @@ describe('Corrupt ontology handling E2E', () => {
     }
   }, 10000);
 
-  it('shows meaningful error for missing class reference', async () => {
+  it('opens an ontology that only references an undeclared class (no error)', async () => {
+    // :ExistingClass rdfs:subClassOf :NonExistentClass. A reference to a class declared nowhere is tolerated
+    // (as for classes from other ontologies), so the graph opens. This test used to expect an error and
+    // passed by reading the previous file's leftover message (#93).
     const testFile = join(TEST_FIXTURES_DIR, 'potentially-corrupt-ontology-04-missing-class.ttl');
     expect(existsSync(testFile)).toBe(true);
 
-    await loadTestFile(page, testFile);
-    
-    const result = await waitForErrorOrGraph(page, 10000);
-    
-    if (result === 'error') {
-      const errorText = await page.evaluate(() => {
-        const el = document.getElementById('errorMsg');
-        return el?.textContent || '';
-      });
-      
-      expect(errorText).toBeTruthy();
-      expect(errorText.toLowerCase()).toMatch(/missing|reference|class/);
-      
-      const vizControlsVisible = await page.evaluate(() => {
-        const el = document.getElementById('vizControls');
-        return el && el.style.display !== 'none';
-      });
-      expect(vizControlsVisible).toBe(false);
-    }
+    await loadAfterClearing(page, testFile);
+    expect(await waitForErrorOrGraph(page, 5000)).toBe('graph');
   }, 10000);
 });

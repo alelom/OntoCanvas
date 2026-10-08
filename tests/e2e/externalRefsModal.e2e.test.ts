@@ -55,7 +55,7 @@ describe('External refs modal E2E', () => {
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     // App shows Open Ontology modal after 100ms; wait for that then hide it so the modal doesn't intercept clicks
     await page.waitForTimeout(150);
     await page.evaluate(() => {
@@ -66,7 +66,7 @@ describe('External refs modal E2E', () => {
       () => {
         const m = document.getElementById('openOntologyModal');
         return !m || (m as HTMLElement).style.display === 'none';
-      },
+      }, undefined,
       { timeout: 2000 }
     );
     await page.locator('#openOntologyBtn').waitFor({ state: 'visible', timeout: 5000 });

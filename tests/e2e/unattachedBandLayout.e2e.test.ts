@@ -54,7 +54,7 @@ beforeEach(async () => {
     () => {
       const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
       return !!net?.body?.data?.nodes?.get?.('Anchor');
-    },
+    }, undefined,
     { timeout: 5000 }
   );
   await page.waitForTimeout(400);

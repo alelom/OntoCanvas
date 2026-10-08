@@ -73,7 +73,7 @@ describe('Public ontology URL load E2E', () => {
               Number.isFinite(Number(nodeCount)) &&
               Number(nodeCount) >= 1
             );
-          },
+          }, undefined,
           { timeout: 5000 } // Reduced from 10000ms to 5000ms
         );
         const nodeCount = await page.locator('#nodeCount').textContent();

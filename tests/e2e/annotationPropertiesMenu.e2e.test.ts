@@ -63,7 +63,7 @@ async function loadFixture(p: Page): Promise<void> {
       const t = (window as any).__EDITOR_TEST__;
       const net = t?.getNetwork?.();
       return !!net?.body?.data?.nodes?.get && net.body.data.nodes.get('ClassB');
-    },
+    }, undefined,
     { timeout: 5000 }
   );
 }
@@ -113,7 +113,7 @@ describe('Annotation Properties menu (E2E)', () => {
     expect(clicked).toBe(true);
 
     await page.waitForFunction(
-      () => !(window as any).__EDITOR_TEST__.getAnnotationProperties().some((p: any) => p.name === 'flagA'),
+      () => !(window as any).__EDITOR_TEST__.getAnnotationProperties().some((p: any) => p.name === 'flagA'), undefined,
       { timeout: 5000 }
     );
 

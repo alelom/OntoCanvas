@@ -52,7 +52,7 @@ describe('Embedded in a real iframe E2E', () => {
       () => {
         const nc = document.getElementById('nodeCount')?.textContent ?? '';
         return !!document.getElementById('maxFontSize') && Number(nc) > 0;
-      },
+      }, undefined,
       { timeout: 10000 }
     );
     await page.waitForTimeout(500);

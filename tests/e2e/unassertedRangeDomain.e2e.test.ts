@@ -47,7 +47,7 @@ beforeEach(async () => {
     () => {
       const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
       return !!net?.body?.data?.nodes?.get && !!net.body.data.nodes.get('FieldAssertion');
-    },
+    }, undefined,
     { timeout: 5000 }
   );
 });

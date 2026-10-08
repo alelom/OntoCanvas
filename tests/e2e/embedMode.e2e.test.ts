@@ -21,14 +21,14 @@ async function open(browser: Browser, url: string): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   page.setDefaultTimeout(5000);
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 5000 });
-  await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
   await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
   await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
   await page.waitForFunction(
     () => {
       const n = (window as any).__EDITOR_TEST__?.getNetwork?.();
       return n && Object.keys(n.body?.edges || {}).length > 0;
-    },
+    }, undefined,
     { timeout: 5000 }
   );
   await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());

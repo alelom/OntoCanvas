@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -12,52 +13,6 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
-
-// Helper function to load test file into editor
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(150);
-}
-
-async function waitForGraphRender(page: Page, timeout = 4000): Promise<void> {
-  // Wait for the graph to render. The counts can be 0 (e.g., after deleting all nodes/edges),
-  // so we check that the elements exist and have valid numeric values (including 0).
-  // Note: This is NOT a timing issue - the function was incorrectly requiring non-zero counts,
-  // which would cause infinite waits when the last node/edge was deleted.
-  await page.waitForFunction(
-    () => {
-      const nodeCountEl = document.getElementById('nodeCount');
-      const edgeCountEl = document.getElementById('edgeCount');
-      const nodeCount = nodeCountEl?.textContent?.trim();
-      const edgeCount = edgeCountEl?.textContent?.trim();
-      // Require counts to be present, non-empty, and parse as valid finite numbers (including 0)
-      return (
-        nodeCount !== undefined &&
-        nodeCount !== '' &&
-        Number.isFinite(Number(nodeCount)) &&
-        edgeCount !== undefined &&
-        edgeCount !== '' &&
-        Number.isFinite(Number(edgeCount))
-      );
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(100);
-}
 
 // Helper function to find edge in graph
 async function findEdgeInGraph(
@@ -184,7 +139,7 @@ describe('Edit Edge Modal E2E Tests', () => {
     });
     
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.waitForTimeout(250);
     
     // Enable debug mode for tests to capture all diagnostic logs
@@ -473,7 +428,7 @@ describe('Edit Edge Modal E2E Tests', () => {
           const nodeCountEl = document.getElementById('nodeCount');
           const n = nodeCountEl?.textContent?.trim();
           return n !== undefined && n !== '' && parseInt(n, 10) >= 1;
-        },
+        }, undefined,
         { timeout: 5000 }
       );
       await page.waitForTimeout(100);
@@ -531,12 +486,11 @@ describe('Edit Edge Modal E2E Tests', () => {
       await page.waitForTimeout(80);
 
       await page.locator('#editEdgeConfirm').click();
-      await page.waitForTimeout(300);
 
-      const edgeData = await page.evaluate(
-        (id) => (window as any).__EDITOR_TEST__?.getEdgeData?.(id) ?? null,
-        edgeId!
-      );
+      // Wait for the edit to be applied rather than sleeping (#93).
+      const readEdge = () => page.evaluate((id) => (window as any).__EDITOR_TEST__?.getEdgeData?.(id) ?? null, edgeId!);
+      await expect.poll(async () => (await readEdge())?.isRestriction, { timeout: 5000 }).toBe(true);
+      const edgeData = await readEdge();
       expect(edgeData).not.toBeNull();
       expect(edgeData?.isRestriction).toBe(true);
       expect(edgeData?.minCardinality).toBe(0);

@@ -41,7 +41,7 @@ describe('OWL URL load E2E', () => {
     
     // Full page reload for each test
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.waitForTimeout(250);
     
     // Hide open ontology modal
@@ -86,7 +86,7 @@ describe('OWL URL load E2E', () => {
     await page.locator('#vizControls').waitFor({ state: 'visible', timeout: 5000 });
     // Graph should have one node (status bar updates after render); wait for it
     await page.waitForFunction(
-      () => document.getElementById('nodeCount')?.textContent?.trim() === '1',
+      () => document.getElementById('nodeCount')?.textContent?.trim() === '1', undefined,
       { timeout: 3000 }
     );
     const nodeCount = await page.locator('#nodeCount').textContent();

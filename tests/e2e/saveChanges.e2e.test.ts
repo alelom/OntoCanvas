@@ -65,7 +65,7 @@ async function loadTestFileFromString(page: Page, ttlContent: string, fileName: 
       () => {
         const testHook = (window as any).__EDITOR_TEST__;
         return testHook && testHook.loadTtlDirectly;
-      },
+      }, undefined,
       { timeout: 2000 }
     );
     
@@ -88,7 +88,7 @@ async function loadTestFileFromString(page: Page, ttlContent: string, fileName: 
         if (!testHook?.getTtlStore) return false;
         const ttlStore = testHook.getTtlStore();
         return ttlStore !== null;
-      },
+      }, undefined,
       { timeout: 3000 }
     );
   } catch (err) {
@@ -119,7 +119,7 @@ async function loadTestFileFromString(page: Page, ttlContent: string, fileName: 
         () => {
           const loadingModal = document.getElementById('loadingModal');
           return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
-        },
+        }, undefined,
         { timeout: 4000 }
       );
       
@@ -129,7 +129,7 @@ async function loadTestFileFromString(page: Page, ttlContent: string, fileName: 
           if (!testHook?.getTtlStore) return false;
           const ttlStore = testHook.getTtlStore();
           return ttlStore !== null;
-        },
+        }, undefined,
         { timeout: 4000 }
       );
       
@@ -165,7 +165,7 @@ describe('Save Changes Button E2E Tests', () => {
         if (!testHook?.getTtlStore) return false;
         const ttlStore = testHook.getTtlStore();
         return ttlStore !== null;
-      },
+      }, undefined,
       { timeout: 5000 }
     );
     
@@ -205,7 +205,7 @@ describe('Save Changes Button E2E Tests', () => {
         const rawData = testHook?.getRawData?.();
         const ttlStore = testHook?.getTtlStore?.();
         return rawData && ttlStore !== null;
-      },
+      }, undefined,
       { timeout: 10000 }
     );
     
@@ -237,7 +237,7 @@ describe('Save Changes Button E2E Tests', () => {
         const rawData = testHook?.getRawData?.();
         const ttlStore = testHook?.getTtlStore?.();
         return rawData && ttlStore !== null;
-      },
+      }, undefined,
       { timeout: 10000 }
     );
     
@@ -291,7 +291,7 @@ describe('Save Changes Button E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         const rawData = testHook?.getRawData?.();
         return rawData && (rawData.nodes.length > 0 || rawData.edges.length > 0);
-      },
+      }, undefined,
       { timeout: 10000 }
     );
     
@@ -381,7 +381,7 @@ describe('Save Changes Button E2E Tests', () => {
         const rawData = testHook?.getRawData?.();
         const ttlStore = testHook?.getTtlStore?.();
         return rawData && ttlStore !== null;
-      },
+      }, undefined,
       { timeout: 10000 }
     );
     

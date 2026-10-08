@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -12,25 +13,6 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 const FIXTURES_DIR = join(__dirname, '../fixtures');
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(500);
-}
 
 async function getNodeCount(page: Page): Promise<number> {
   await page.waitForTimeout(300);
@@ -64,7 +46,7 @@ describe('External refs visualization E2E', () => {
   });
 
   it('shows external class nodes by default (Display external references ON)', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -81,7 +63,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('undo restores store and edges after deleting an external node', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -123,7 +105,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('Edit Edge modal shows correct From/To and relationship for edge to external node', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -155,7 +137,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('Add from referenced ontology finds classes referenced in current file (e.g. Project)', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -195,7 +177,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('Add from referenced ontology finds Project after Project node was deleted from canvas', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -249,7 +231,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('re-added external node (Add from referenced ontology) has external styling (opacity and Imported-from tooltip)', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -315,7 +297,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('external nodes show (Imported from ...) tooltip on hover', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -337,7 +319,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('Add from referenced ontology shows yellow warning when class already exists in graph', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -377,7 +359,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('Add Edge modal shows correct From/To when target is re-added external node (Person)', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -453,7 +435,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('edge to external node (assigned to) uses color from Object properties menu', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -486,7 +468,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('adding one edge does not create extra edges of the same type', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -559,7 +541,7 @@ describe('External refs visualization E2E', () => {
   }, 10000);
 
   it('Edges legend in status bar shows all relationship types used in the graph', async () => {
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();

@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -40,65 +41,6 @@ afterEach(async () => {
     await page.close();
   }
 });
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  
-  // Wait for loading modal to appear (indicates file loading started)
-  await page.waitForSelector('#loadingModal', { state: 'visible', timeout: 3000 }).catch(() => {
-    // Loading modal might not appear if loading is very fast
-  });
-  
-  // Wait for loading modal to disappear (indicates file loading completed)
-  // Reduced from 10000ms to 5000ms since we've optimized loading
-  await page.waitForFunction(
-    () => {
-      const loadingModal = document.getElementById('loadingModal');
-      return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
-    },
-    { timeout: 5000 }
-  );
-  
-  // Wait for ttlStore to be populated (set early in loadTtlAndRender, so this should be fast)
-  // Reduced from 10000ms to 5000ms since ttlStore is set immediately after parsing
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getTtlStore) return false;
-      const ttlStore = testHook.getTtlStore();
-      return ttlStore !== null;
-    },
-    { timeout: 5000 }
-  );
-  
-  // Wait for rawData to be populated (after ttlStore is set)
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getRawData) return false;
-      const rawData = testHook.getRawData();
-      return (rawData.nodes.length > 0 || rawData.edges.length > 0);
-    },
-    { timeout: 5000 }
-  );
-  
-  // Additional wait to ensure requestAnimationFrame callbacks have completed
-  await page.waitForTimeout(500);
-}
 
 describe('Annotation Property Warning E2E', () => {
   // TODO: This test is timing out frequently. Timeouts indicate that the test is not properly waiting

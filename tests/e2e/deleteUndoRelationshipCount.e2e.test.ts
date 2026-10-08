@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -75,73 +76,6 @@ afterEach(async () => {
     await page.close();
   }
 });
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  
-  // Wait for loading modal to appear (indicates file loading started)
-  await page.waitForSelector('#loadingModal', { state: 'visible', timeout: 3000 }).catch(() => {
-    // Loading modal might not appear if loading is very fast
-  });
-  
-  // Wait for loading modal to disappear (indicates file loading completed)
-  // Reduced from 10000ms to 5000ms since we've optimized loading
-  await page.waitForFunction(
-    () => {
-      const loadingModal = document.getElementById('loadingModal');
-      return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
-    },
-    { timeout: 5000 }
-  );
-  
-  // Wait for rawData to be populated (ensures loadTtlAndRender completed)
-  // Wait for data to actually populate - use getAllEdges or getNodeIds which are available
-  let attempts = 0;
-  const maxAttempts = 40; // 40 * 500ms = 20 seconds max
-  while (attempts < maxAttempts) {
-    const hasData = await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      // Check if we have nodes or edges using available methods
-      if (testHook?.getNodeIds) {
-        const nodeIds = testHook.getNodeIds();
-        if (nodeIds && nodeIds.length > 0) return true;
-      }
-      if (testHook?.getAllEdges) {
-        const edges = testHook.getAllEdges();
-        if (edges && edges.length > 0) return true;
-      }
-      if (testHook?.getRawDataEdges) {
-        const edges = testHook.getRawDataEdges();
-        if (edges && edges.length > 0) return true;
-      }
-      return false;
-    });
-    if (hasData) break;
-    await page.waitForTimeout(500);
-    attempts++;
-  }
-  
-  if (attempts >= maxAttempts) {
-    throw new Error(`File did not load within timeout. No nodes or edges found.`);
-  }
-  
-  await page.waitForTimeout(500);
-}
-
 
 // Get edge count from the status bar UI (what the user actually sees)
 async function getEdgeCount(page: Page): Promise<number> {

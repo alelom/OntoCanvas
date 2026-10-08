@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { chromium, type Browser, type Page } from 'playwright';
+import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TTL = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../fixtures/restrictionKinds.ttl'), 'utf-8');
@@ -30,10 +31,11 @@ describe('Read-only restriction kinds E2E (#63)', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
-    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, { timeout: 5000 });
+    await waitForAppReady(page);
+    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, undefined, { timeout: 5000 });
     // The start-up "Open ontology" dialog can still cover the page after loading; close it (as other E2E tests do).
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.keyboard.press('Escape');

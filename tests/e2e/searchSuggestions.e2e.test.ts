@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
 
@@ -33,10 +34,11 @@ describe('Search suggestions E2E (#81)', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
-    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, { timeout: 5000 });
+    await waitForAppReady(page);
+    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.keyboard.press('Escape');
   });
@@ -86,10 +88,11 @@ describe('Search suggestions for referenced external classes E2E (#81)', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), EXT_TTL);
-    await page.waitForFunction(() => /Nodes: [1-9]/.test(document.body.innerText), { timeout: 5000 });
+    await waitForAppReady(page);
+    await page.waitForFunction(() => /Nodes: [1-9]/.test(document.body.innerText), undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.keyboard.press('Escape');
   });

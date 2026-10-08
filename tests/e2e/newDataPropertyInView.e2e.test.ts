@@ -46,7 +46,7 @@ beforeEach(async () => {
     () => {
       const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
       return !!net?.body?.data?.nodes?.get && !!net.body.data.nodes.get('FieldAssertion');
-    },
+    }, undefined,
     { timeout: 5000 }
   );
   // The initial render fits the graph from a deferred callback; let it run before setting a zoom.
@@ -85,7 +85,7 @@ async function isNodeInViewport(p: Page, nodeId: string): Promise<boolean> {
 async function addDataProperty(p: Page, label: string): Promise<void> {
   await p.evaluate(() => (document.getElementById('addDataPropertyBtn') as HTMLButtonElement).click());
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display !== 'none',
+    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display !== 'none', undefined,
     { timeout: 5000 }
   );
   await p.evaluate((text) => {
@@ -95,7 +95,7 @@ async function addDataProperty(p: Page, label: string): Promise<void> {
   }, label);
   await p.evaluate(() => (document.getElementById('addDataPropConfirm') as HTMLButtonElement).click());
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display === 'none',
+    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display === 'none', undefined,
     { timeout: 5000 }
   );
   // The reveal is animated; wait for the view to settle.

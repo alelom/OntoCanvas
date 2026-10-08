@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -49,87 +50,6 @@ afterEach(async () => {
     await page.close();
   }
 });
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  
-  // Wait for loading modal to appear (indicates file loading started)
-  await page.waitForSelector('#loadingModal', { state: 'visible', timeout: 3000 }).catch(() => {
-    // Loading modal might not appear if loading is very fast
-  });
-  
-  // Wait for loading modal to disappear (indicates file loading completed)
-  // Reduced from 10000ms to 5000ms since we've optimized loading
-  await page.waitForFunction(
-    () => {
-      const loadingModal = document.getElementById('loadingModal');
-      return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
-    },
-    { timeout: 5000 }
-  );
-  
-  // Wait for ttlStore to be populated (set early in loadTtlAndRender, so this should be fast)
-  // Reduced from 10000ms to 5000ms since ttlStore is set immediately after parsing
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getTtlStore) return false;
-      const ttlStore = testHook.getTtlStore();
-      return ttlStore !== null;
-    },
-    { timeout: 5000 }
-  );
-  
-  // Wait for rawData and network to be populated (after ttlStore is set)
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getRawData) return false;
-      const rawData = testHook.getRawData();
-      const network = testHook.getNetwork?.();
-      return (rawData.nodes.length > 0 || rawData.edges.length > 0) && network !== null;
-    },
-    { timeout: 5000 }
-  );
-  
-  await page.waitForTimeout(500);
-}
-
-async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const vizControls = document.getElementById('vizControls');
-      return vizControls && vizControls.style.display !== 'none';
-    },
-    { timeout }
-  );
-  
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getRawData) return false;
-      const rawData = testHook.getRawData();
-      const ttlStore = testHook.getTtlStore?.();
-      return (rawData.nodes.length > 0 || rawData.edges.length > 0) && ttlStore !== null;
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(300);
-}
 
 describe('Local File Opening E2E', () => {
   it.skip('should open local file in new tab when clicking "Open external ontology" on external node', async () => {
@@ -299,7 +219,7 @@ describe('Local File Opening E2E', () => {
                const rawData = testHook.getRawData?.();
                const ttlStore = testHook.getTtlStore?.();
                return (rawData && (rawData.nodes.length > 0 || rawData.edges.length > 0) && ttlStore !== null);
-             },
+             }, undefined,
              { timeout: 5000 } // Reduced from 10000ms to 5000ms
            );
            
@@ -308,7 +228,7 @@ describe('Local File Opening E2E', () => {
              () => {
                const modal = document.getElementById('openOntologyModal');
                return !modal || (modal as HTMLElement).style.display === 'none';
-             },
+             }, undefined,
              { timeout: 5000 }
            ).catch(() => {
              // Modal might not have been open, continue
