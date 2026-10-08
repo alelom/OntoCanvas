@@ -26,6 +26,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example | Shows | Issue |
 |---|---|---|
 | [one-edge-type-per-property.ttl](relationships/one-edge-type-per-property.ttl) | A property drawn by both a restriction and its domain/range is one relationship type, listed once | #87 |
+| [add-relationship-then-ok.ttl](relationships/add-relationship-then-ok.ttl) | Adding a relationship: type its name and click OK straight away; the edge is added | #98 |
 
 ## Restrictions and data ranges
 

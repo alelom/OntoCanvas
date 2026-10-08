@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { createRequire } from 'node:module';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -70,11 +71,12 @@ describe('Dependencies', () => {
     expect(existsSync(nodeModulesPath)).toBe(true);
   });
 
-  it('should be able to import critical dependencies', async () => {
-    // Test that we can actually import the dependencies
-    await expect(import('n3')).resolves.toBeDefined();
-    await expect(import('rdf-parse')).resolves.toBeDefined();
-    await expect(import('vis-data')).resolves.toBeDefined();
-    await expect(import('vis-network')).resolves.toBeDefined();
-  });
+  // Resolving each package checks it can be imported without loading it: importing rdf-parse and
+  // vis-network cold took over 10 s under a full parallel run (#83). The parser, graph and rendering
+  // tests import them for real.
+  for (const dep of ['n3', 'rdf-parse', 'vis-data', 'vis-network']) {
+    it(`should resolve ${dep} for import`, () => {
+      expect(() => createRequire(import.meta.url).resolve(dep)).not.toThrow();
+    });
+  }
 });

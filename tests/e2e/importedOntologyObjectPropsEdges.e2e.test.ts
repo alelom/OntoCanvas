@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, blockExternalRequests } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -13,35 +14,17 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures/imported-ontology');
+const CHILD_FILE = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
+const CONNECTS_TO_URI = 'http://example.org/object-base#connectsTo';
 
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(500);
-}
-
-async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
+/** Open the Add Edge modal from ChildClassA to ChildClassB and wait for it to show. */
+async function openAddEdgeModal(page: Page): Promise<void> {
+  await page.evaluate(() => (window as any).__EDITOR_TEST__.showAddEdgeModalForTest('ChildClassA', 'ChildClassB'));
   await page.waitForFunction(
-    () => {
-      const vizControls = document.getElementById('vizControls');
-      return vizControls && vizControls.style.display !== 'none';
-    },
-    { timeout }
+    () => getComputedStyle(document.getElementById('editEdgeModal')!).display !== 'none',
+    undefined,
+    { timeout: 5000 }
   );
-  await page.waitForTimeout(300);
 }
 
 describe('Imported Object Properties and Edges E2E', () => {
@@ -60,14 +43,11 @@ describe('Imported Object Properties and Edges E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
+    await blockExternalRequests(page);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
-    await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
-    });
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+    expect(existsSync(CHILD_FILE)).toBe(true);
+    await loadTestFile(page, CHILD_FILE);
   });
 
   afterEach(async () => {
@@ -75,196 +55,52 @@ describe('Imported Object Properties and Edges E2E', () => {
   });
 
   describe('Edge Visibility', () => {
-    // TODO: This test verifies vis-network edge rendering.
-    // The core logic for creating edges from restrictions is tested in unit tests (parser.test.ts).
-    // This E2E test frequently fails due to vis-network rendering timing and edge lookup.
-    // What we tried: waiting for graph render, checking rawData edges, multiple edge type formats.
-    // The edge creation logic works correctly (verified in unit tests), but vis-network rendering is flaky.
-    it.skip('should display edge connecting ChildClassA to ChildClassB when using imported connectsTo property', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      expect(existsSync(childFile)).toBe(true);
-
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-
-      // Wait for graph to fully render
-      await page.waitForTimeout(1000);
-
-      // Check if edge exists between ChildClassA and ChildClassB using connectsTo
-      const edgeExists = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        const rawData = testHook?.getRawData?.();
-        if (!rawData) return false;
-        
-        // Look for edge from ChildClassA to ChildClassB with connectsTo type
-        // The type might be 'connectsTo' (local) or 'http://example.org/object-base#connectsTo' (full URI)
-        const edge = rawData.edges.find((e: any) => 
-          e.from === 'ChildClassA' && 
-          e.to === 'ChildClassB' &&
-          (e.type === 'connectsTo' || 
-           e.type === 'http://example.org/object-base#connectsTo' ||
-           e.type.includes('connectsTo') || 
-           e.type.includes('connects to'))
-        );
-        return edge !== undefined;
+    it('should display edge connecting ChildClassA to ChildClassB when using imported connectsTo property', async () => {
+      const rendered = await page.evaluate(() => {
+        const network = (window as any).__EDITOR_TEST__.getNetwork();
+        return network.body.data.edges.get().map((e: any) => ({ from: e.from, to: e.to, id: String(e.id) }));
       });
-
-      expect(edgeExists).toBe(true);
+      expect(rendered).toContainEqual({
+        from: 'ChildClassA',
+        to: 'ChildClassB',
+        id: `ChildClassA->ChildClassB:${CONNECTS_TO_URI}`,
+      });
     });
 
-    // TODO: Same as above - vis-network rendering timing is flaky
-    it.skip('should display edges when classes are connected via imported object property', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
-
-      // Get edge count
-      const edgeCount = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        const rawData = testHook?.getRawData?.();
-        return rawData?.edges?.length ?? 0;
+    it('should display edges when classes are connected via imported object property', async () => {
+      // The status bar counts the drawn edges: just the one connectsTo restriction.
+      const counts = await page.evaluate(() => {
+        const hook = (window as any).__EDITOR_TEST__;
+        return { visible: hook.getVisibleEdgeCount(), rendered: hook.getNetwork().body.data.edges.get().length };
       });
-
-      // Should have at least one edge (between the two classes or to ParentClass)
-      expect(edgeCount).toBeGreaterThan(0);
+      expect(counts).toEqual({ visible: 1, rendered: 1 });
     });
   });
 
   describe('Add Edge Modal - Imported Properties', () => {
-    // TODO: This test verifies DOM autocomplete/search behavior in Add Edge modal.
-    // The core logic (getAllRelationshipTypes including external properties) is tested in unit tests.
-    // This E2E test frequently fails due to modal rendering timing and DOM interactions.
-    it.skip('should show imported object properties in Add Edge modal type selection', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+    it('should show imported object properties in Add Edge modal type selection', async () => {
+      await openAddEdgeModal(page);
 
-      // Open Add Edge modal by clicking on two nodes
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        const network = testHook?.getNetwork?.();
-        if (network) {
-          // Select two nodes
-          network.setSelection({ nodes: ['ChildClassA', 'ChildClassB'] });
-          // Trigger add edge
-          const manipulation = (network as any).manipulation;
-          if (manipulation && manipulation.addEdge) {
-            manipulation.addEdge({ from: 'ChildClassA', to: 'ChildClassB' }, () => {});
-          }
-        }
-      });
-      await page.waitForTimeout(500);
+      // "o" matches both subClassOf and base:connectsTo, so the results list is shown.
+      await page.locator('#editEdgeType').fill('o');
+      const results = page.locator('#editEdgeTypeResults .edit-edge-type-result');
+      await expect.poll(() => results.allTextContents(), { timeout: 5000 }).toContain('base:connectsTo');
 
-      // Check if the type input/dropdown is visible and contains imported properties
-      const hasImportedProperty = await page.evaluate(() => {
-        const modal = document.getElementById('editEdgeModal');
-        if (!modal || (modal as HTMLElement).style.display === 'none') return false;
-        
-        const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
-        if (!typeInput) return false;
-
-        // Check if we can find "connectsTo" or "connects to" in the type selection
-        // The input might be a searchable dropdown or autocomplete
-        const typeValue = typeInput.value || '';
-        const typeOptions = Array.from(document.querySelectorAll('#editEdgeType option, .autocomplete-option, [data-type]')) as HTMLElement[];
-        const typeTexts = typeOptions.map(el => el.textContent || el.value || '').join(' ');
-        
-        return typeValue.includes('connects') || 
-               typeTexts.includes('connects') ||
-               typeValue.includes('connectsTo') ||
-               typeTexts.includes('connectsTo');
-      });
-
-      expect(hasImportedProperty).toBe(true);
+      await results.filter({ hasText: 'base:connectsTo' }).click();
+      expect(await page.locator('#editEdgeType').inputValue()).toBe('base:connectsTo');
     });
 
-    // TODO: This test verifies DOM autocomplete/search behavior in Add Edge modal.
-    // The core logic (getAllRelationshipTypes including external properties) is tested in unit tests.
-    // This E2E test frequently fails due to modal rendering timing and DOM interactions.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should allow searching for imported object properties in Add Edge modal', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+    it('should allow searching for imported object properties in Add Edge modal', async () => {
+      await openAddEdgeModal(page);
 
-      // Open Add Edge modal
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        testHook?.showAddEdgeModal?.('ChildClassA', 'ChildClassB', () => {});
-      });
-      await page.waitForTimeout(500);
-
-      // Type in the type input to search
-      const typeInput = page.locator('#editEdgeType');
-      await typeInput.waitFor({ state: 'visible', timeout: 5000 });
-      await typeInput.fill('connects');
-      await page.waitForTimeout(300);
-
-      // Check if "connectsTo" or "connects to" appears in suggestions
-      const suggestionsVisible = await page.evaluate(() => {
-        // Look for autocomplete dropdown or suggestions
-        const suggestions = document.querySelectorAll('.autocomplete-list, .autocomplete-option, [role="listbox"]');
-        const suggestionsText = Array.from(suggestions).map(el => el.textContent || '').join(' ');
-        return suggestionsText.includes('connects') || suggestionsText.includes('connectsTo');
-      });
-
-      // If no suggestions dropdown, check if the input value contains the property
-      const inputContainsProperty = await typeInput.inputValue();
-      const hasProperty = suggestionsVisible || inputContainsProperty.includes('connects');
-
-      expect(hasProperty).toBe(true);
+      // A single match is selected straight away: the input then shows it in full.
+      await page.locator('#editEdgeType').fill('connects');
+      await expect.poll(() => page.locator('#editEdgeType').inputValue(), { timeout: 5000 }).toBe('base:connectsTo');
     });
 
-    // TODO: Core logic tested in unit tests. UI rendering is flaky due to modal state.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should display imported object properties with prefix in Add Edge modal', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
-
-      // Configure prefix for external ontology and trigger refresh
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        const externalRefs = testHook?.getExternalOntologyReferences?.() || [];
-        // Find the object-base reference and enable prefix
-        const baseRef = externalRefs.find((r: any) => r.url.includes('object-base'));
-        if (baseRef) {
-          baseRef.usePrefix = true;
-          baseRef.prefix = 'base';
-        }
-        // Trigger a filter refresh to update the UI
-        if (testHook?.applyFilter) {
-          testHook.applyFilter(true);
-        }
-      });
-      await page.waitForTimeout(1000);
-
-      // Open Add Edge modal
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        testHook?.showAddEdgeModal?.('ChildClassA', 'ChildClassB', () => {});
-      });
-      await page.waitForTimeout(500);
-
-      // Check if property is displayed with prefix
-      const hasPrefixedProperty = await page.evaluate(() => {
-        const modal = document.getElementById('editEdgeModal');
-        if (!modal || (modal as HTMLElement).style.display === 'none') return false;
-        
-        const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
-        const modalText = modal.textContent || '';
-        
-        return modalText.includes('base:connectsTo') || 
-               modalText.includes('base:connects to') ||
-               (typeInput && (typeInput.value.includes('base:') || typeInput.placeholder?.includes('base:')));
-      });
-
-      // Verify that the imported property is displayed with its prefix
-      expect(hasPrefixedProperty).toBe(true);
-    });
+    // "should display imported object properties with prefix in Add Edge modal" was removed: both tests
+    // above assert the imported property is shown with its prefix (base:connectsTo), and the prefix
+    // formatting itself is unit-tested in tests/unit/importedPropertyPrefixes.test.ts. Its setup relied on
+    // a test-hook function (getExternalOntologyReferences) that no longer exists.
   });
 });

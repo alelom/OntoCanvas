@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -26,13 +27,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(500);
-  
-  // Enable debug mode for tests
-  await page.evaluate(() => {
-    localStorage.setItem('ontologyEditorDebug', 'true');
-  });
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
 });
 
 afterEach(async () => {
@@ -40,25 +36,6 @@ afterEach(async () => {
     await page.close();
   }
 });
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(100);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(2000);
-}
 
 describe('Annotation Property Prefix E2E', () => {
   it('should display imported annotation properties with prefix in top menu dropdown', async () => {
@@ -82,7 +59,6 @@ describe('Annotation Property Prefix E2E', () => {
       };
     });
     
-    console.log('[TEST] Annotation properties:', JSON.stringify(annotationProps, null, 2));
     
     // Verify that labellableRoot appears with prefix "core:"
     const labellableRootItem = annotationProps.items.find((item: any) => 
@@ -90,7 +66,6 @@ describe('Annotation Property Prefix E2E', () => {
     );
     
     if (labellableRootItem) {
-      console.log('[TEST] Found labellableRoot item:', labellableRootItem);
       const itemText = labellableRootItem.text || labellableRootItem.html;
       // Should contain the prefix
       expect(itemText).toContain('core:labellableRoot');

@@ -162,6 +162,8 @@ import {
   hideOpenOntologyModal,
 } from './ui/openOntologyModal';
 import { openOnStartup } from './ui/startupOpen';
+import { debounced } from './utils/debounced';
+import { beginViewSettle, viewSettled } from './ui/viewSettle';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust } from './utils/urlParams';
 import {
@@ -4978,6 +4980,19 @@ let selectedEdgeType: string | null = null;
 let selectedExternalObjectProperty: ExternalObjectPropertyInfo | null = null;
 
 // Wrapper for updateEditEdgeCommentDisplay that updates the DOM
+/**
+ * Show the cardinality and comment sections that depend on the chosen relationship type. Called as soon as
+ * a type is chosen: doing it only when the field lost focus moved the OK button on the mousedown of a click
+ * on OK, so the click landed off the button and did nothing (#98).
+ */
+function updateEditEdgeTypeSections(): void {
+  const cardWrap = document.getElementById('editEdgeCardinalityWrap');
+  if (cardWrap && selectedEdgeType) {
+    cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
+  }
+  updateEditEdgeCommentDisplayLocal();
+}
+
 function updateEditEdgeCommentDisplayLocal(): void {
   const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
   const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
@@ -5096,8 +5111,8 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
       selectedExternalObjectProperty = null;
     }
     typeInput.value = match.displayLabel;
+    updateEditEdgeTypeSections();
     resultsDiv.style.display = 'none';
-    updateEditEdgeCommentDisplayLocal();
   } else {
     // Match dropdown width to input field width and align it properly
     // The dropdown is positioned absolutely within the label (which has position: relative)
@@ -5166,7 +5181,7 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
         typeInput.value = match.displayLabel;
         resultsDiv.style.display = 'none';
         hideRelationshipTooltip();
-        updateEditEdgeCommentDisplayLocal();
+        updateEditEdgeTypeSections();
       });
     });
   }
@@ -6770,6 +6785,9 @@ async function loadTtlAndRender(
   handle?: FileSystemFileHandle | null,
   pathHint?: string
 ): Promise<void> {
+  // The view is unsettled from the start of a load, not only once its render begins: the new store is set
+  // before rendering, and the previous render's "settled" must not count for this load (#93).
+  beginViewSettle();
   const errorMsg = document.getElementById('errorMsg') as HTMLElement;
   const warningMsg = document.getElementById('warningMsg') as HTMLElement;
   const vizControls = document.getElementById('vizControls') as HTMLElement;
@@ -7589,6 +7607,8 @@ function applyFilter(preserveView = false): void {
   // Legend must use displayed edges (graphDataForBuild) so domain/range edges from expandWithExternalRefs appear
   updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences, graphDataForBuild.edges);
 
+  // The view keeps moving until this render's fit (or restored position) is applied (#93).
+  const settleToken = beginViewSettle();
   if (network) {
     network.setData(data);
     network.setOptions({
@@ -7607,12 +7627,19 @@ function applyFilter(preserveView = false): void {
           scale: savedScale!,
           animation: false,
         });
+        viewSettled(settleToken);
       });
     } else if (layoutMode === 'force') {
-      network.once('stabilizationIterationsDone', () => network!.fit());
+      network.once('stabilizationIterationsDone', () => {
+        network!.fit();
+        viewSettled(settleToken);
+      });
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
-      setTimeout(() => network!.fit(), 100);
+      setTimeout(() => {
+        network!.fit();
+        viewSettled(settleToken);
+      }, 100);
     }
   } else {
     const opts = {
@@ -7623,10 +7650,16 @@ function applyFilter(preserveView = false): void {
     };
     network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
-      network.once('stabilizationIterationsDone', () => network!.fit());
+      network.once('stabilizationIterationsDone', () => {
+        network!.fit();
+        viewSettled(settleToken);
+      });
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
-      setTimeout(() => network!.fit(), 100);
+      setTimeout(() => {
+        network!.fit();
+        viewSettled(settleToken);
+      }, 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
     const resizeNetwork = () => {
@@ -8466,14 +8499,8 @@ function setupEventListeners(): void {
     }
   });
   
-  // Update cardinality display when edge type changes
-  document.getElementById('editEdgeType')?.addEventListener('focusout', () => {
-    const cardWrap = document.getElementById('editEdgeCardinalityWrap');
-    if (cardWrap && selectedEdgeType) {
-      cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
-    }
-    updateEditEdgeCommentDisplayLocal();
-  });
+  // Keep the sections in step with the type on leaving the field too (a no-op once a type was chosen).
+  document.getElementById('editEdgeType')?.addEventListener('focusout', updateEditEdgeTypeSections);
   document.getElementById('editEdgeModal')?.addEventListener('click', (e) => {
     if ((e.target as HTMLElement).id === 'editEdgeModal') hideEditEdgeModalWithCleanup();
   });
@@ -8955,7 +8982,11 @@ function setupEventListeners(): void {
   const searchList = document.getElementById('searchAutocomplete');
   const searchClearBtn = document.getElementById('searchClearBtn');
   if (searchInput && searchList) {
-    let debounceTimer: number;
+    // Escape cancels a pending update, or the suggestions would reopen after being dismissed (#93).
+    const suggestionsUpdate = debounced(updateSearchAutocomplete, 150);
+    searchInput.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Escape') suggestionsUpdate.cancel();
+    });
     let animationId: number | null = null;
     
     // Function to clear the search bar
@@ -9024,8 +9055,7 @@ function setupEventListeners(): void {
     searchInput.addEventListener('input', () => {
       updateSearchBarStyle();
       applyFilter();
-      clearTimeout(debounceTimer);
-      debounceTimer = window.setTimeout(updateSearchAutocomplete, 150);
+      suggestionsUpdate.schedule();
     });
     searchInput.addEventListener('focus', () => {
       updateSearchBarStyle();

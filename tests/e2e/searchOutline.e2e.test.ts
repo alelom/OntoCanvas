@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
 
@@ -43,10 +44,11 @@ describe('Search outline E2E (#84)', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
-    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, { timeout: 5000 });
+    await waitForAppReady(page);
+    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__?.getRawDataEdges?.() ?? []).length > 0, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.keyboard.press('Escape');
   });
@@ -79,14 +81,18 @@ describe('Search outline E2E (#84)', () => {
   });
 
   it('follows a pan by moving the group only (shapes unchanged)', async () => {
-    // Let any view animation started by the search settle first, or it would undo the pan.
+    // Let the search's re-render fit the view, and any animation it started end, or it would undo the pan:
+    // the view is still once two polls 150 ms apart read the same position.
+    await waitForAppReady(page);
     const viewNow = () => page.evaluate(() => JSON.stringify((window as any).__EDITOR_TEST__.getNetwork().getViewPosition()));
+    let previousView: string | null = null;
     await expect
       .poll(async () => {
-        const a = await viewNow();
-        await page.waitForTimeout(150);
-        return a === (await viewNow());
-      }, { timeout: 5000 })
+        const now = await viewNow();
+        const still = now === previousView;
+        previousView = now;
+        return still;
+      }, { timeout: 5000, intervals: [150] })
       .toBe(true);
     const before = await shapes();
     await page.evaluate(() => {

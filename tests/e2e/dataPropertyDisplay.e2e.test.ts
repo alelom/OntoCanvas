@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -12,49 +13,6 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
-
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(200);
-}
-
-async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
-  // Wait for the graph to render. The counts can be 0 (e.g., after deleting all nodes/edges),
-  // so we check that the elements exist and have valid numeric values (including 0).
-  await page.waitForFunction(
-    () => {
-      const nodeCountEl = document.getElementById('nodeCount');
-      const edgeCountEl = document.getElementById('edgeCount');
-      const nodeCount = nodeCountEl?.textContent?.trim();
-      const edgeCount = edgeCountEl?.textContent?.trim();
-      // Require counts to be present, non-empty, and parse as valid finite numbers (including 0)
-      return (
-        nodeCount !== undefined &&
-        nodeCount !== '' &&
-        Number.isFinite(Number(nodeCount)) &&
-        edgeCount !== undefined &&
-        edgeCount !== '' &&
-        Number.isFinite(Number(edgeCount))
-      );
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(150);
-}
 
 describe('Data Property Display E2E Tests', () => {
   let browser: Browser;
@@ -66,13 +24,11 @@ describe('Data Property Display E2E Tests', () => {
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -153,7 +109,7 @@ describe('Data Property Display E2E Tests', () => {
         nodeId
       );
 
-      await page.waitForTimeout(300);
+      await page.locator('#editDataPropertyModal').waitFor({ state: 'visible', timeout: 5000 });
 
       // Verify the Edit data property modal is open
       const modalTitle = await page.evaluate(() => {
@@ -186,7 +142,7 @@ describe('Data Property Display E2E Tests', () => {
         edgeId
       );
 
-      await page.waitForTimeout(300);
+      await page.locator('#editDataPropertyModal').waitFor({ state: 'visible', timeout: 5000 });
 
       // Verify the Edit data property modal is open
       const modalTitle = await page.evaluate(() => {

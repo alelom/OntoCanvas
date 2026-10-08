@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, openEditorWithTtl, blockExternalRequests } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -13,35 +14,59 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures/imported-ontology');
+const CHILD_FILE = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
+const PARENT_FILE = join(TEST_FIXTURES_DIR, 'object-props-parent.ttl');
+const CONNECTS_TO_URI = 'http://example.org/object-base#connectsTo';
 
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(500);
+/** Wait until the element's computed display is (or is not) `none`. */
+async function waitForDisplayed(page: Page, id: string, displayed: boolean): Promise<void> {
+  await page.waitForFunction(
+    ({ id, displayed }) => {
+      const el = document.getElementById(id);
+      return !!el && (getComputedStyle(el).display !== 'none') === displayed;
+    },
+    { id, displayed },
+    { timeout: 5000 }
+  );
 }
 
-async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const vizControls = document.getElementById('vizControls');
-      return vizControls && vizControls.style.display !== 'none';
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(300);
+/** Open the Object Properties menu and click the edit button of `type`, the way a user does, then wait for the modal. */
+async function openObjectPropertyEditor(page: Page, type: string): Promise<void> {
+  await page.locator('#edgeStylesMenu summary').click();
+  await page.locator(`#edgeStylesContent .edge-edit-btn[data-type="${type}"]`).click();
+  await waitForDisplayed(page, 'editRelationshipTypeModal', true);
+}
+
+/** State of the warning icon in the edit object property modal's header. */
+function warningIconInfo(page: Page) {
+  return page.evaluate(() => {
+    const modal = document.getElementById('editRelationshipTypeModal');
+    const warningIcon = modal?.querySelector('.modal-header-icons .imported-warning-icon') as HTMLElement | null;
+    return {
+      exists: warningIcon !== null,
+      visible: warningIcon !== null && warningIcon.offsetParent !== null && getComputedStyle(warningIcon).display !== 'none',
+      hasPulse: warningIcon?.classList.contains('warning-icon-pulse') ?? false,
+      animationName: warningIcon ? getComputedStyle(warningIcon).animationName : '',
+      text: warningIcon?.textContent?.trim() ?? '',
+      title: warningIcon?.title ?? '',
+    };
+  });
+}
+
+/**
+ * Click the modal's warning icon. It pulses forever by design, so it is never "stable" in Playwright's
+ * sense; `force` skips only that check and still clicks it with the mouse.
+ */
+async function clickWarningIcon(page: Page): Promise<void> {
+  await page.locator('#editRelationshipTypeModal .imported-warning-icon').click({ force: true });
+}
+
+/** Whether the warning popover in the edit object property modal is shown. */
+function popoverVisible(page: Page) {
+  return page.evaluate(() => {
+    const popover = document.querySelector('#editRelationshipTypeModal .modal-content .warning-icon-popover');
+    return popover !== null && popover.classList.contains('rename-popover-visible');
+  });
 }
 
 describe('Imported Object Property Edit Modal E2E', () => {
@@ -60,14 +85,9 @@ describe('Imported Object Property Edit Modal E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
+    await blockExternalRequests(page);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
-    await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
-    });
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
   });
 
   afterEach(async () => {
@@ -75,538 +95,161 @@ describe('Imported Object Property Edit Modal E2E', () => {
   });
 
   describe('Warning Icon and Field Editability', () => {
-    // TODO: This test verifies DOM structure (h3 title visibility).
-    // The core logic for determining if a property is imported (isUriFromExternalOntology) is tested in unit tests.
-    // This E2E test frequently fails due to modal rendering timing and DOM state management.
-    // What we tried: waiting for modal selector, checking offsetParent, checking computed styles, defensive modal state checks.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    // The modal structure is correct (verified manually), but timing is flaky in automated tests.
-    it.skip('should display h3 title "Edit object property" in the modal', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      expect(existsSync(childFile)).toBe(true);
+    it('should display h3 title "Edit object property" in the modal', async () => {
+      expect(existsSync(CHILD_FILE)).toBe(true);
+      await loadTestFile(page, CHILD_FILE);
+      await openObjectPropertyEditor(page, CONNECTS_TO_URI);
 
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
-
-      // Open edge styles menu
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      // Click edit button for connectsTo
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Check that h3 title is visible
       const h3Visible = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const h3 = modal?.querySelector('h3');
-        return h3 !== null && h3.textContent?.trim() === 'Edit object property' && 
-               h3.offsetParent !== null && 
-               window.getComputedStyle(h3).display !== 'none';
+        const h3 = document.getElementById('editRelationshipTypeModal')?.querySelector('h3');
+        return !!h3 && h3.textContent?.trim() === 'Edit object property' &&
+          h3.offsetParent !== null && getComputedStyle(h3).display !== 'none';
       });
-
       expect(h3Visible).toBe(true);
     });
 
-    // TODO: This test verifies DOM manipulation (warning icon display, field disabled state).
-    // The core logic (isUriFromExternalOntology, getPrefixForUri) is tested in unit tests.
-    // This E2E test frequently fails due to modal rendering timing and DOM state.
-    // What we tried: waiting for modal, checking header icons, checking input disabled state, defensive modal state checks.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    // The logic works correctly (verified in unit tests), but DOM timing is flaky.
-    it.skip('should show warning icon and disable all fields when object property has isDefinedBy set (from parent ontology)', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      expect(existsSync(childFile)).toBe(true);
+    it('should show warning icon and disable all fields when object property has isDefinedBy set (from parent ontology)', async () => {
+      expect(existsSync(CHILD_FILE)).toBe(true);
+      await loadTestFile(page, CHILD_FILE);
+      await openObjectPropertyEditor(page, CONNECTS_TO_URI);
 
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+      const warning = await warningIconInfo(page);
+      expect(warning.exists).toBe(true);
+      expect(warning.visible).toBe(true);
+      expect(warning.hasPulse).toBe(true);
+      expect(warning.text).toBe('⚠️');
 
-      // Open edge styles menu
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      // Click edit button for connectsTo (imported property with isDefinedBy)
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          // Find the button for connectsTo
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Check for warning icon in header
-      const warningIconInfo = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
+      const fields = await page.evaluate(() => {
+        const get = (id: string) => document.getElementById(id) as HTMLInputElement | null;
         return {
-          exists: warningIcon !== null,
-          visible: warningIcon !== null && warningIcon.offsetParent !== null && window.getComputedStyle(warningIcon).display !== 'none',
-          hasPulse: warningIcon?.classList.contains('warning-icon-pulse') ?? false,
-          text: warningIcon?.textContent?.trim() ?? '',
+          labelDisabled: get('editRelTypeLabel')?.disabled ?? false,
+          commentDisabled: get('editRelTypeComment')?.disabled ?? false,
+          domainDisabled: get('editRelTypeDomain')?.disabled ?? false,
+          rangeDisabled: get('editRelTypeRange')?.disabled ?? false,
+          subPropertyOfDisabled: get('editRelTypeSubPropertyOf')?.disabled ?? false,
+          definedByDisabled: get('editRelTypeDefinedBy')?.disabled ?? false,
+          definedBy: get('editRelTypeDefinedBy')?.value ?? '',
+          labelOpacity: get('editRelTypeLabel')?.style.opacity,
+          commentOpacity: get('editRelTypeComment')?.style.opacity,
         };
       });
+      expect(fields.labelDisabled).toBe(true);
+      expect(fields.commentDisabled).toBe(true);
+      expect(fields.domainDisabled).toBe(true);
+      expect(fields.rangeDisabled).toBe(true);
+      expect(fields.subPropertyOfDisabled).toBe(true);
+      expect(fields.definedByDisabled).toBe(true); // Always non-editable
+      expect(fields.definedBy).toBe('http://example.org/object-base');
+      expect(fields.labelOpacity).toBe('0.5');
+      expect(fields.commentOpacity).toBe('0.5');
+    });
 
-      expect(warningIconInfo.exists).toBe(true);
-      expect(warningIconInfo.visible).toBe(true);
-      expect(warningIconInfo.hasPulse).toBe(true);
-      expect(warningIconInfo.text).toBe('⚠️');
+    it('should show warning icon and disable fields when object property is imported but has no isDefinedBy (detected by URI)', async () => {
+      // ext:linksTo is declared here without rdfs:isDefinedBy; only its namespace says it is imported.
+      await openEditorWithTtl(page, `@prefix : <http://example.org/local#> .
+@prefix ext: <http://example.org/ext#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/local> rdf:type owl:Ontology ; owl:imports <http://example.org/ext> .
+ext:linksTo rdf:type owl:ObjectProperty .
+:A rdf:type owl:Class ; rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty ext:linksTo ; owl:someValuesFrom :B ] .
+:B rdf:type owl:Class .
+`);
+      const definedByQuads = await page.evaluate(() =>
+        (window as any).__EDITOR_TEST__.getQuads('http://example.org/ext#linksTo', 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy'));
+      expect(definedByQuads).toEqual([]);
 
-      // Check that all fields are disabled
-      const fieldsDisabled = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const labelInput = modal?.querySelector('#editRelTypeLabel') as HTMLInputElement;
-        const commentInput = modal?.querySelector('#editRelTypeComment') as HTMLTextAreaElement;
-        const domainInput = modal?.querySelector('#editRelTypeDomain') as HTMLInputElement;
-        const rangeInput = modal?.querySelector('#editRelTypeRange') as HTMLInputElement;
-        const subPropertyOfInput = modal?.querySelector('#editRelTypeSubPropertyOf') as HTMLInputElement;
-        const definedByInput = modal?.querySelector('#editRelTypeDefinedBy') as HTMLInputElement;
-        
+      await openObjectPropertyEditor(page, 'http://example.org/ext#linksTo');
+
+      const warning = await warningIconInfo(page);
+      expect(warning.exists).toBe(true);
+      expect(warning.visible).toBe(true);
+
+      const fields = await page.evaluate(() => {
+        const label = document.getElementById('editRelTypeLabel') as HTMLInputElement;
+        const comment = document.getElementById('editRelTypeComment') as HTMLTextAreaElement;
+        return { labelDisabled: label.disabled, commentDisabled: comment.disabled, labelOpacity: label.style.opacity };
+      });
+      expect(fields.labelDisabled).toBe(true);
+      expect(fields.commentDisabled).toBe(true);
+      expect(fields.labelOpacity).toBe('0.5');
+    });
+
+    it('should NOT show warning icon and enable fields when object property is locally defined', async () => {
+      expect(existsSync(PARENT_FILE)).toBe(true);
+      await loadTestFile(page, PARENT_FILE);
+      await openObjectPropertyEditor(page, 'connectsTo');
+
+      const warning = await warningIconInfo(page);
+      expect(warning.exists).toBe(false);
+
+      const fields = await page.evaluate(() => {
+        const get = (id: string) => document.getElementById(id) as HTMLInputElement;
         return {
-          labelDisabled: labelInput?.disabled ?? false,
-          commentDisabled: commentInput?.disabled ?? false,
-          domainDisabled: domainInput?.disabled ?? false,
-          rangeDisabled: rangeInput?.disabled ?? false,
-          subPropertyOfDisabled: subPropertyOfInput?.disabled ?? false,
-          definedByDisabled: definedByInput?.disabled ?? false,
-          labelOpacity: labelInput?.style.opacity,
-          commentOpacity: commentInput?.style.opacity,
+          labelEnabled: !get('editRelTypeLabel').disabled,
+          commentEnabled: !get('editRelTypeComment').disabled,
+          domainEnabled: !get('editRelTypeDomain').disabled,
+          rangeEnabled: !get('editRelTypeRange').disabled,
+          definedByDisabled: get('editRelTypeDefinedBy').disabled, // Always disabled
+          labelOpacity: get('editRelTypeLabel').style.opacity,
+          commentOpacity: get('editRelTypeComment').style.opacity,
         };
       });
-
-      expect(fieldsDisabled.labelDisabled).toBe(true);
-      expect(fieldsDisabled.commentDisabled).toBe(true);
-      expect(fieldsDisabled.domainDisabled).toBe(true);
-      expect(fieldsDisabled.rangeDisabled).toBe(true);
-      expect(fieldsDisabled.subPropertyOfDisabled).toBe(true);
-      expect(fieldsDisabled.definedByDisabled).toBe(true); // Always non-editable
-      expect(fieldsDisabled.labelOpacity).toBe('0.5');
-      expect(fieldsDisabled.commentOpacity).toBe('0.5');
+      expect(fields.labelEnabled).toBe(true);
+      expect(fields.commentEnabled).toBe(true);
+      expect(fields.domainEnabled).toBe(true);
+      expect(fields.rangeEnabled).toBe(true);
+      expect(fields.definedByDisabled).toBe(true); // Always non-editable
+      expect(fields.labelOpacity).not.toBe('0.5');
+      expect(fields.commentOpacity).not.toBe('0.5');
     });
 
-    // TODO: Same as above - core logic tested in unit tests, DOM manipulation is flaky
-    it.skip('should show warning icon and disable fields when object property is imported but has no isDefinedBy (detected by URI)', async () => {
-      // This test requires a fixture where a property is used from parent but doesn't have isDefinedBy
-      // We'll use the child ontology which uses connectsTo
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+    it('should show correct warning message tooltip on hover', async () => {
+      await loadTestFile(page, CHILD_FILE);
+      await openObjectPropertyEditor(page, CONNECTS_TO_URI);
 
-      // Open edge styles menu
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      // Click edit button for connectsTo
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Check for warning icon in header (should appear even without isDefinedBy if URI belongs to external ontology)
-      const warningIconInfo = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        return {
-          exists: warningIcon !== null,
-          visible: warningIcon !== null && warningIcon.offsetParent !== null && window.getComputedStyle(warningIcon).display !== 'none',
-        };
-      });
-
-      // Should show warning if property URI belongs to external ontology
-      expect(warningIconInfo.exists).toBe(true);
-      expect(warningIconInfo.visible).toBe(true);
-
-      // Check that fields are disabled
-      const fieldsDisabled = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const labelInput = modal?.querySelector('#editRelTypeLabel') as HTMLInputElement;
-        const commentInput = modal?.querySelector('#editRelTypeComment') as HTMLTextAreaElement;
-        
-        return {
-          labelDisabled: labelInput?.disabled ?? false,
-          commentDisabled: commentInput?.disabled ?? false,
-          labelOpacity: labelInput?.style.opacity,
-        };
-      });
-
-      expect(fieldsDisabled.labelDisabled).toBe(true);
-      expect(fieldsDisabled.commentDisabled).toBe(true);
-      expect(fieldsDisabled.labelOpacity).toBe('0.5');
+      // The hover tooltip is the icon's native title attribute.
+      const { title } = await warningIconInfo(page);
+      expect(title).toContain('external ontology http://example.org/object-base');
+      expect(title).toContain('must be edited by opening that ontology');
     });
 
-    // TODO: Same as above - core logic tested in unit tests, DOM manipulation is flaky.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should NOT show warning icon and enable fields when object property is locally defined', async () => {
-      // Load parent ontology which defines connectsTo locally
-      const parentFile = join(TEST_FIXTURES_DIR, 'object-props-parent.ttl');
-      expect(existsSync(parentFile)).toBe(true);
+    it('should show warning message popover when clicking warning icon', async () => {
+      await loadTestFile(page, CHILD_FILE);
+      await openObjectPropertyEditor(page, CONNECTS_TO_URI);
 
-      await loadTestFile(page, parentFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+      await clickWarningIcon(page);
+      await expect.poll(() => popoverVisible(page), { timeout: 5000 }).toBe(true);
 
-      // Open edge styles menu
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      // Click edit button for connectsTo
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Check that warning icon is NOT present
-      const warningIconInfo = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        return {
-          exists: warningIcon !== null,
-          visible: warningIcon !== null && warningIcon.offsetParent !== null && window.getComputedStyle(warningIcon).display !== 'none',
-        };
-      });
-
-      expect(warningIconInfo.exists).toBe(false);
-
-      // Check that fields are enabled (except definedBy which is always disabled)
-      const fieldsEnabled = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const labelInput = modal?.querySelector('#editRelTypeLabel') as HTMLInputElement;
-        const commentInput = modal?.querySelector('#editRelTypeComment') as HTMLTextAreaElement;
-        const domainInput = modal?.querySelector('#editRelTypeDomain') as HTMLInputElement;
-        const rangeInput = modal?.querySelector('#editRelTypeRange') as HTMLInputElement;
-        const definedByInput = modal?.querySelector('#editRelTypeDefinedBy') as HTMLInputElement;
-        
-        return {
-          labelEnabled: !labelInput?.disabled,
-          commentEnabled: !commentInput?.disabled,
-          domainEnabled: !domainInput?.disabled,
-          rangeEnabled: !rangeInput?.disabled,
-          definedByDisabled: definedByInput?.disabled, // Always disabled
-          labelOpacity: labelInput?.style.opacity,
-          commentOpacity: commentInput?.style.opacity,
-        };
-      });
-
-      expect(fieldsEnabled.labelEnabled).toBe(true);
-      expect(fieldsEnabled.commentEnabled).toBe(true);
-      expect(fieldsEnabled.domainEnabled).toBe(true);
-      expect(fieldsEnabled.rangeEnabled).toBe(true);
-      expect(fieldsEnabled.definedByDisabled).toBe(true); // Always non-editable
-      expect(fieldsEnabled.labelOpacity).not.toBe('0.5');
-      expect(fieldsEnabled.commentOpacity).not.toBe('0.5');
+      const message = await page.evaluate(() =>
+        document.querySelector('#editRelationshipTypeModal .warning-icon-popover')?.textContent?.trim() ?? '');
+      expect(message).toContain('external ontology');
+      expect(message).toContain('must be edited by opening that ontology');
     });
 
-    // TODO: This test verifies DOM tooltip behavior (title attribute on hover).
-    // The warning message generation logic is tested indirectly in unit tests.
-    // This E2E test frequently fails due to timing and DOM state.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should show correct warning message tooltip on hover', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+    it('should hide warning popover when clicking outside', async () => {
+      await loadTestFile(page, CHILD_FILE);
+      await openObjectPropertyEditor(page, CONNECTS_TO_URI);
 
-      // Open edge styles menu and edit connectsTo
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
+      await clickWarningIcon(page);
+      await expect.poll(() => popoverVisible(page), { timeout: 5000 }).toBe(true);
 
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Check warning icon title attribute (hover tooltip)
-      const warningMessage = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        return warningIcon?.title || '';
-      });
-
-      expect(warningMessage).toContain('external ontology');
-      expect(warningMessage).toContain('must be edited by opening that ontology');
-      expect(warningMessage.length).toBeGreaterThan(0);
+      // The app registers its click-outside listener in a setTimeout(0) after showing the popover. A
+      // zero-delay timer queued now runs after that one, so the listener is in place before we click.
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      // Click the title: outside the popover and the icon (a label would count as disabled, like its field).
+      await page.locator('#editRelationshipTypeModal h3').click();
+      await expect.poll(() => popoverVisible(page), { timeout: 5000 }).toBe(false);
     });
 
-    // TODO: This test verifies DOM popover behavior (click to show/hide).
-    // The popover display logic works correctly, but timing is flaky in E2E tests.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should show warning message popover when clicking warning icon', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
+    it('should have pulsating animation on warning icon', async () => {
+      await loadTestFile(page, CHILD_FILE);
+      await openObjectPropertyEditor(page, CONNECTS_TO_URI);
 
-      // Open edge styles menu and edit connectsTo
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Click the warning icon
-      await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        if (warningIcon) warningIcon.click();
-      });
-      await page.waitForTimeout(200);
-
-      // Check that popover is visible with correct message
-      const popoverInfo = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const modalContent = modal?.querySelector('.modal-content');
-        const popover = modalContent?.querySelector('.warning-icon-popover') as HTMLElement;
-        return {
-          exists: popover !== null,
-          visible: popover !== null && popover.classList.contains('rename-popover-visible'),
-          message: popover?.textContent?.trim() || '',
-        };
-      });
-
-      expect(popoverInfo.exists).toBe(true);
-      expect(popoverInfo.visible).toBe(true);
-      expect(popoverInfo.message).toContain('external ontology');
-      expect(popoverInfo.message).toContain('must be edited by opening that ontology');
-      expect(popoverInfo.message.length).toBeGreaterThan(0);
-    });
-
-    // TODO: Same as above - DOM interaction timing is flaky.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should hide warning popover when clicking outside', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
-
-      // Open edge styles menu and edit connectsTo
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      await page.evaluate(() => {
-        const content = document.getElementById('edgeStylesContent');
-        const editBtns = content?.querySelectorAll('.edge-edit-btn');
-        if (editBtns && editBtns.length > 0) {
-          const connectsToBtn = Array.from(editBtns).find((btn: any) => {
-            const row = btn.closest('div');
-            return row?.textContent?.includes('connects to') || row?.textContent?.includes('connectsTo');
-          });
-          if (connectsToBtn) (connectsToBtn as HTMLElement).click();
-        }
-      });
-      
-      // Wait for modal to appear
-      await page.waitForSelector('#editRelationshipTypeModal[style*="flex"], #editRelationshipTypeModal:not([style*="none"])', { timeout: 5000 });
-      await page.waitForTimeout(300);
-
-      // Click the warning icon to show popover
-      await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        if (warningIcon) warningIcon.click();
-      });
-      await page.waitForTimeout(200);
-
-      // Verify popover is visible
-      const popoverVisibleBefore = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const modalContent = modal?.querySelector('.modal-content');
-        const popover = modalContent?.querySelector('.warning-icon-popover') as HTMLElement;
-        return popover !== null && popover.classList.contains('rename-popover-visible');
-      });
-      expect(popoverVisibleBefore).toBe(true);
-
-      // Click outside the popover (on the modal background)
-      await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const modalContent = modal?.querySelector('.modal-content');
-        // Click on a label element (outside popover and warning icon)
-        const label = modalContent?.querySelector('label');
-        if (label) (label as HTMLElement).click();
-      });
-      await page.waitForTimeout(200);
-
-      // Verify popover is hidden
-      const popoverVisibleAfter = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const modalContent = modal?.querySelector('.modal-content');
-        const popover = modalContent?.querySelector('.warning-icon-popover') as HTMLElement;
-        return popover !== null && popover.classList.contains('rename-popover-visible');
-      });
-      expect(popoverVisibleAfter).toBe(false);
-    });
-
-    // TODO: Same as above - DOM tooltip timing is flaky.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should show correct warning message when hovering over warning icon', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
-
-      // Open edge styles menu and edit connectsTo
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (testHook?.showEditRelationshipTypeModal) {
-          const objectProps = testHook.getObjectProperties?.() || [];
-          const connectsToProp = objectProps.find((p: any) => 
-            p.name.includes('connectsTo') || p.name.includes('connects to') || 
-            p.label?.includes('connects to') || p.uri?.includes('connectsTo')
-          );
-          if (connectsToProp) {
-            const edgeStylesContent = document.getElementById('edgeStylesContent');
-            testHook.showEditRelationshipTypeModal(connectsToProp.name, edgeStylesContent, () => {});
-          }
-        }
-      });
-      await page.waitForTimeout(500);
-
-      // Check warning icon title/tooltip
-      const warningMessage = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        return warningIcon?.title || '';
-      });
-
-      expect(warningMessage).toContain('external ontology');
-      expect(warningMessage).toContain('must be edited by opening that ontology');
-    });
-
-    // TODO: This test verifies CSS class presence (warning-icon-pulse).
-    // The class is added correctly, but DOM timing makes this test flaky.
-    // Applied defensive pattern: check if modal already open before clicking, but still timing out on button click.
-    it.skip('should have pulsating animation on warning icon', async () => {
-      const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
-      await loadTestFile(page, childFile);
-      await waitForGraphRender(page);
-      await page.waitForTimeout(1000);
-
-      // Open edge styles menu and edit connectsTo
-      const edgeStylesBtn = page.locator('#edgeStylesBtn');
-      await edgeStylesBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await edgeStylesBtn.click();
-      await page.waitForTimeout(500);
-
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (testHook?.showEditRelationshipTypeModal) {
-          const objectProps = testHook.getObjectProperties?.() || [];
-          const connectsToProp = objectProps.find((p: any) => 
-            p.name.includes('connectsTo') || p.name.includes('connects to') || 
-            p.label?.includes('connects to') || p.uri?.includes('connectsTo')
-          );
-          if (connectsToProp) {
-            const edgeStylesContent = document.getElementById('edgeStylesContent');
-            testHook.showEditRelationshipTypeModal(connectsToProp.name, edgeStylesContent, () => {});
-          }
-        }
-      });
-      await page.waitForTimeout(500);
-
-      // Check if warning icon has pulsating animation class
-      const hasPulseAnimation = await page.evaluate(() => {
-        const modal = document.getElementById('editRelationshipTypeModal');
-        const headerIcons = modal?.querySelector('.modal-header-icons');
-        const warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
-        return warningIcon?.classList.contains('warning-icon-pulse') ?? false;
-      });
-
-      expect(hasPulseAnimation).toBe(true);
+      const warning = await warningIconInfo(page);
+      expect(warning.hasPulse).toBe(true);
+      expect(warning.animationName).toBe('warning-icon-pulse');
     });
   });
 });

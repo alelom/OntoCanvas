@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -33,26 +34,9 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(300);
-  await page.evaluate(() => {
-    const fi = document.getElementById('fileInput') as HTMLInputElement | null;
-    if (fi) {
-      fi.style.display = 'block';
-      fi.style.visibility = 'visible';
-      fi.style.position = 'absolute';
-      fi.style.width = '1px';
-      fi.style.height = '1px';
-    }
-  });
-  await page.locator('input#fileInput').setInputFiles(FIXTURE, { timeout: 5000 });
-  await page.waitForFunction(
-    () => {
-      const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
-      return !!net?.body?.data?.nodes?.get?.('Alpha');
-    },
-    { timeout: 5000 }
-  );
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+  await loadTestFile(page, FIXTURE);
   property = await page.evaluate(() => {
     const rows = [...document.querySelectorAll<HTMLInputElement>('#edgeStylesContent .edge-show-cb')];
     return rows.map((cb) => cb.dataset.type ?? '').find((t) => /(^|[#/])relates$/.test(t)) ?? '';
@@ -68,7 +52,7 @@ afterEach(async () => {
 async function setDomain(p: Page, property: string, domain: string): Promise<void> {
   await p.evaluate((name) => (window as any).__EDITOR_TEST__.openEditObjectPropertyModal(name), property);
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display !== 'none',
+    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display !== 'none', undefined,
     { timeout: 5000 }
   );
   await p.evaluate((value) => {
@@ -78,7 +62,7 @@ async function setDomain(p: Page, property: string, domain: string): Promise<voi
   }, domain);
   await p.evaluate(() => (document.getElementById('editRelTypeConfirm') as HTMLButtonElement).click());
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display === 'none',
+    () => getComputedStyle(document.getElementById('editRelationshipTypeModal')!).display === 'none', undefined,
     { timeout: 5000 }
   );
 }

@@ -6,6 +6,26 @@
 import type { Page } from 'playwright';
 
 /**
+ * Wait until the app is ready for a test to act on (#93): an ontology is loaded, no loading or "Open
+ * ontology" dialog covers the page, the toolbar is shown and the graph view has settled after its last
+ * render. Use this after any load or re-render instead of a fixed sleep.
+ */
+export async function waitForAppReady(page: Page, timeout = 5000): Promise<void> {
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.isAppReady?.() === true, undefined, { timeout });
+}
+
+/**
+ * Open the editor in `page` and load `ttl` straight into it, then wait until it is ready. Replaces the
+ * goto + loadTtlDirectly + "close the Open ontology dialog" + Escape steps tests used to repeat.
+ */
+export async function openEditorWithTtl(page: Page, ttl: string, url = 'http://localhost:5173/'): Promise<void> {
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
+  await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), ttl);
+  await waitForAppReady(page);
+}
+
+/**
  * Wait for the graph to be fully rendered and ready.
  * Uses consistent checks across all tests to avoid flakiness.
  */
@@ -15,7 +35,7 @@ export async function waitForGraphRender(page: Page, timeout = 5000): Promise<vo
     () => {
       const vizControls = document.getElementById('vizControls');
       return vizControls && (vizControls as HTMLElement).style.display !== 'none';
-    },
+    }, undefined,
     { timeout }
   );
 
@@ -28,7 +48,7 @@ export async function waitForGraphRender(page: Page, timeout = 5000): Promise<vo
       const ttlStore = testHook.getTtlStore?.();
       const network = testHook.getNetwork?.();
       return (rawData.nodes.length > 0 || rawData.edges.length > 0) && ttlStore !== null && network !== null;
-    },
+    }, undefined,
     { timeout }
   );
 
@@ -47,77 +67,51 @@ export async function waitForGraphRender(page: Page, timeout = 5000): Promise<vo
         edgeCount !== '' &&
         Number.isFinite(Number(edgeCount))
       );
-    },
+    }, undefined,
     { timeout }
   );
 
-  await page.waitForTimeout(200);
+  await waitForAppReady(page, timeout);
 }
 
 /**
- * Load a test file using the file input.
- * This is the standard way to load files in E2E tests.
+ * Fail every request that isn't to the local dev server. Fixtures with owl:imports make the app fetch their
+ * imported ontologies (e.g. http://example.org/...); blocking them keeps tests offline and deterministic.
+ * Call before the page loads anything.
+ */
+export async function blockExternalRequests(page: Page): Promise<void> {
+  await page.route((url) => url.hostname !== 'localhost', (route) => route.abort());
+}
+
+/**
+ * Choose a file in the file input without waiting for it to load: for tests whose load is expected to fail
+ * (a corrupt ontology) and that wait for the error themselves.
+ */
+export async function chooseFile(page: Page, filePath: string): Promise<void> {
+  await page.locator('input#fileInput').setInputFiles(filePath, { timeout: 5000 });
+}
+
+/**
+ * Load a test file through the file input, the way a user opens one, and wait until the app is ready.
+ * Each load creates a new store, so waiting for a store other than the one before guarantees this load
+ * finished, even when the page already had an ontology (#93).
  */
 export async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  // Make file input visible for setInputFiles
   await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
+    (window as any).__e2ePreviousStore = (window as any).__EDITOR_TEST__?.getTtlStore?.() ?? null;
   });
-
-  await page.waitForTimeout(50);
-
-  // Use setInputFiles to load the file (this properly triggers the change event)
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-
-  // Wait for loading modal to appear (indicates file loading started)
-  await page.waitForSelector('#loadingModal', { state: 'visible', timeout: 3000 }).catch(() => {
-    // Loading modal might not appear if loading is very fast
-  });
-
-  // Wait for loading modal to disappear (indicates file loading completed)
-  // Reduced from 10000ms to 5000ms since we've optimized loading
+  // setInputFiles works on the hidden input and fires its change event.
+  await page.locator('input#fileInput').setInputFiles(filePath, { timeout: 5000 });
   await page.waitForFunction(
     () => {
-      const loadingModal = document.getElementById('loadingModal');
-      return !loadingModal || (loadingModal as HTMLElement).style.display === 'none';
+      const hook = (window as any).__EDITOR_TEST__;
+      const store = hook?.getTtlStore?.();
+      return !!store && store !== (window as any).__e2ePreviousStore;
     },
+    undefined,
     { timeout: 5000 }
   );
-
-  // Wait for ttlStore to be populated (set early in loadTtlAndRender, so this should be fast)
-  // Reduced from 10000ms to 5000ms since ttlStore is set immediately after parsing
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getTtlStore) return false;
-      const ttlStore = testHook.getTtlStore();
-      return ttlStore !== null;
-    },
-    { timeout: 5000 }
-  );
-  
-  // Wait for rawData to be populated (after ttlStore is set)
-  await page.waitForFunction(
-    () => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook?.getRawData) return false;
-      const rawData = testHook.getRawData();
-      return (rawData.nodes.length > 0 || rawData.edges.length > 0);
-    },
-    { timeout: 5000 }
-  );
-
-  await page.waitForTimeout(500);
+  await waitForAppReady(page);
 }
 
 /**

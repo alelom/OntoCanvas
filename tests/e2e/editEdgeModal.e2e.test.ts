@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForAppReady, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -13,51 +14,14 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
-// Helper function to load test file into editor
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(150);
-}
-
-async function waitForGraphRender(page: Page, timeout = 4000): Promise<void> {
-  // Wait for the graph to render. The counts can be 0 (e.g., after deleting all nodes/edges),
-  // so we check that the elements exist and have valid numeric values (including 0).
-  // Note: This is NOT a timing issue - the function was incorrectly requiring non-zero counts,
-  // which would cause infinite waits when the last node/edge was deleted.
-  await page.waitForFunction(
-    () => {
-      const nodeCountEl = document.getElementById('nodeCount');
-      const edgeCountEl = document.getElementById('edgeCount');
-      const nodeCount = nodeCountEl?.textContent?.trim();
-      const edgeCount = edgeCountEl?.textContent?.trim();
-      // Require counts to be present, non-empty, and parse as valid finite numbers (including 0)
-      return (
-        nodeCount !== undefined &&
-        nodeCount !== '' &&
-        Number.isFinite(Number(nodeCount)) &&
-        edgeCount !== undefined &&
-        edgeCount !== '' &&
-        Number.isFinite(Number(edgeCount))
-      );
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(100);
-}
+type EdgeData = {
+  from: string;
+  to: string;
+  type: string;
+  isRestriction?: boolean;
+  minCardinality?: number | null;
+  maxCardinality?: number | null;
+} | null;
 
 // Helper function to find edge in graph
 async function findEdgeInGraph(
@@ -77,22 +41,12 @@ async function findEdgeInGraph(
   return edgeId;
 }
 
-// Helper function to open edit edge modal
-async function openEditEdgeModal(page: Page, edgeId: string): Promise<boolean> {
-  const result = await page.evaluate(
-    (edgeId) => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      if (!testHook) return false;
-      return testHook.editEdge(edgeId);
-    },
-    edgeId
-  );
-  
-  await page.waitForTimeout(100);
-  return result;
+/** The edge's data in rawData, or null when the edge does not exist. */
+async function readEdge(page: Page, edgeId: string): Promise<EdgeData> {
+  return page.evaluate((id) => (window as any).__EDITOR_TEST__?.getEdgeData?.(id) ?? null, edgeId);
 }
 
-// Helper function to get edit edge modal values
+// Helper function to get edit edge modal values (null while the modal is hidden)
 async function getEditEdgeModalValues(page: Page): Promise<{
   minCardinality: string;
   maxCardinality: string;
@@ -103,6 +57,25 @@ async function getEditEdgeModalValues(page: Page): Promise<{
     if (!testHook) return null;
     return testHook.getEditEdgeModalValues();
   });
+}
+
+/** Wait until the edit edge modal is shown (`true`) or hidden (`false`). */
+async function waitForEditEdgeModal(page: Page, shown: boolean): Promise<void> {
+  await expect.poll(async () => (await getEditEdgeModalValues(page)) !== null, { timeout: 5000 }).toBe(shown);
+}
+
+// Helper function to open edit edge modal; waits until it is shown
+async function openEditEdgeModal(page: Page, edgeId: string): Promise<boolean> {
+  const result = await page.evaluate(
+    (edgeId) => {
+      const testHook = (window as any).__EDITOR_TEST__;
+      if (!testHook) return false;
+      return testHook.editEdge(edgeId);
+    },
+    edgeId
+  );
+  if (result) await waitForEditEdgeModal(page, true);
+  return result;
 }
 
 // Helper function to set edit edge modal values
@@ -116,52 +89,40 @@ async function setEditEdgeModalValues(
 ): Promise<void> {
   if (values.isRestrictionChecked !== undefined) {
     const checkbox = page.locator('#editEdgeIsRestriction');
-    if (await checkbox.isVisible({ timeout: 2000 }).catch(() => false)) {
-      if (values.isRestrictionChecked) {
-        await checkbox.check({ timeout: 2000 });
-      } else {
-        await checkbox.uncheck({ timeout: 2000 });
-      }
-      await page.waitForTimeout(100);
+    if (values.isRestrictionChecked) {
+      await checkbox.check({ timeout: 2000 });
+    } else {
+      await checkbox.uncheck({ timeout: 2000 });
     }
   }
   if (values.minCardinality !== undefined) {
-    const minInput = page.locator('#editEdgeMinCard');
-    if (await minInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await minInput.fill(values.minCardinality, { timeout: 2000 });
-      await page.waitForTimeout(50);
-    }
+    await page.locator('#editEdgeMinCard').fill(values.minCardinality, { timeout: 2000 });
   }
   if (values.maxCardinality !== undefined) {
-    const maxInput = page.locator('#editEdgeMaxCard');
-    if (await maxInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await maxInput.fill(values.maxCardinality, { timeout: 2000 });
-      await page.waitForTimeout(50);
-    }
+    await page.locator('#editEdgeMaxCard').fill(values.maxCardinality, { timeout: 2000 });
   }
 }
 
-// Helper function to confirm edit edge modal
+// Helper function to confirm edit edge modal; waits for it to close and the graph to re-render
 async function confirmEditEdgeModal(page: Page): Promise<void> {
-  const confirmBtn = page.locator('#editEdgeConfirm');
-  if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await confirmBtn.click({ timeout: 2000 });
-    await page.waitForTimeout(200); // Wait for modal to close and graph to update
-  }
+  await page.locator('#editEdgeConfirm').click({ timeout: 2000 });
+  await waitForEditEdgeModal(page, false);
+  await waitForAppReady(page);
 }
 
-// Helper function to close edit edge modal
+// Helper function to close edit edge modal if it is open
 async function closeEditEdgeModal(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const testHook = (window as any).__EDITOR_TEST__;
-    if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
-  });
-  await page.waitForTimeout(50);
-  const cancelBtn = page.locator('#editEdgeCancel');
-  if (await cancelBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await cancelBtn.click({ timeout: 2000 });
-    await page.waitForTimeout(80);
-  }
+  if ((await getEditEdgeModalValues(page)) === null) return;
+  await page.locator('#editEdgeCancel').click({ timeout: 2000 });
+  await waitForEditEdgeModal(page, false);
+}
+
+/** Select an edge and wait until the network reports it selected. */
+async function selectEdge(page: Page, edgeId: string): Promise<void> {
+  await page.evaluate((id) => (window as any).__EDITOR_TEST__.selectEdgeById(id), edgeId);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__.getSelectedEdges()), { timeout: 5000 })
+    .toContain(edgeId);
 }
 
 describe('Edit Edge Modal E2E Tests', () => {
@@ -173,20 +134,18 @@ describe('Edit Edge Modal E2E Tests', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
-    
+
     // Set up console log capture early
     page.on('console', (msg) => {
       const text = msg.text();
       // Log all console messages for debugging
       if (text.includes('[DELETE]') || text.includes('[GET EDGE DATA]') || text.includes('[DELETE KEY]') || text.includes('[TEST]')) {
-        console.log(`[BROWSER CONSOLE] ${msg.type()}: ${text}`);
       }
     });
-    
+
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
-    
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+
     // Enable debug mode for tests to capture all diagnostic logs
     await page.evaluate(() => {
       try {
@@ -195,18 +154,13 @@ describe('Edit Edge Modal E2E Tests', () => {
         // localStorage may not be available
       }
     });
-    
+
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
     try {
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (testHook?.clearDisplayConfig) testHook.clearDisplayConfig();
-      });
-      await page.waitForTimeout(50);
+      await page.evaluate(() => (window as any).__EDITOR_TEST__?.clearDisplayConfig?.());
     } catch {
       // IndexedDB may not exist yet
     }
@@ -233,8 +187,6 @@ describe('Edit Edge Modal E2E Tests', () => {
           testHook.testLog('Test log message 2');
         }
       });
-
-      await page.waitForTimeout(100);
 
       // Retrieve logs
       const logs = await page.evaluate(() => {
@@ -266,22 +218,12 @@ describe('Edit Edge Modal E2E Tests', () => {
         if (testHook?.clearTestLogs) testHook.clearTestLogs();
       });
 
-      // Select edge
-      const selectionResult = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return { success: false };
-          return { success: testHook.selectEdgeById(edgeId) };
-        },
-        edgeId!
-      );
-      expect(selectionResult.success).toBe(true);
-      await page.waitForTimeout(200);
+      await selectEdge(page, edgeId!);
 
       // Delete the edge
       await page.keyboard.press('Delete');
-      await waitForGraphRender(page);
-      await page.waitForTimeout(500);
+      await expect.poll(() => readEdge(page, edgeId!), { timeout: 5000 }).toBeNull();
+      await waitForAppReady(page);
 
       // Get logs
       const logs = await page.evaluate(() => {
@@ -293,7 +235,6 @@ describe('Edit Edge Modal E2E Tests', () => {
       // Verify we captured DELETE logs
       expect(logs.length).toBeGreaterThan(0);
       expect(logs.some(log => log.includes('performDeleteSelection called'))).toBe(true);
-      console.log('Captured DELETE logs:', logs);
     });
   });
 
@@ -344,14 +285,7 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(edgeId).toBeTruthy();
 
       // Verify edge data in rawData
-      const edgeData = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
+      const edgeData = await readEdge(page, edgeId!);
       expect(edgeData).not.toBeNull();
       expect(edgeData?.isRestriction).toBe(true);
       expect(edgeData?.minCardinality).toBe(2);
@@ -390,14 +324,7 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(edgeId).toBeTruthy();
 
       // Verify edge data in rawData - external property should have full URI
-      const edgeData = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
+      const edgeData = await readEdge(page, edgeId!);
       expect(edgeData).not.toBeNull();
       expect(edgeData?.isRestriction).toBe(true);
       expect(edgeData?.minCardinality).toBe(1);
@@ -441,15 +368,12 @@ describe('Edit Edge Modal E2E Tests', () => {
 
       // Change a value but do not confirm
       await setEditEdgeModalValues(page, { minCardinality: '9' });
-      await page.waitForTimeout(80);
 
       // Press Escape to close without saving
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(150);
 
       // Modal should be closed
-      modalValues = await getEditEdgeModalValues(page);
-      expect(modalValues).toBeNull();
+      await waitForEditEdgeModal(page, false);
 
       // Re-open same edge: original values should be unchanged (no save)
       const reopened = await openEditEdgeModal(page, edgeId!);
@@ -468,15 +392,6 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(existsSync(testFile)).toBe(true);
 
       await loadTestFile(page, testFile);
-      await page.waitForFunction(
-        () => {
-          const nodeCountEl = document.getElementById('nodeCount');
-          const n = nodeCountEl?.textContent?.trim();
-          return n !== undefined && n !== '' && parseInt(n, 10) >= 1;
-        },
-        { timeout: 5000 }
-      );
-      await page.waitForTimeout(100);
 
       const nodeCountBefore = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getNodeCount?.() ?? 0);
       expect(nodeCountBefore).toBe(1);
@@ -485,18 +400,18 @@ describe('Edit Edge Modal E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openAddNodeModal) testHook.openAddNodeModal(100, 100);
       });
-      await page.waitForTimeout(150);
 
-      const modalVisible = await page.locator('#addNodeModal').isVisible();
-      expect(modalVisible).toBe(true);
+      await expect.poll(() => page.locator('#addNodeModal').isVisible(), { timeout: 5000 }).toBe(true);
 
       await page.locator('#addNodeInput').fill('DGU');
-      await page.waitForTimeout(100);
 
-      const state = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        return testHook?.getAddNodeModalState?.() ?? null;
-      });
+      const readState = () =>
+        page.evaluate(() => {
+          const testHook = (window as any).__EDITOR_TEST__;
+          return testHook?.getAddNodeModalState?.() ?? null;
+        });
+      await expect.poll(async () => (await readState())?.duplicateErrorVisible, { timeout: 5000 }).toBe(true);
+      const state = await readState();
       expect(state).not.toBeNull();
       expect(state?.okDisabled).toBe(true);
       expect(state?.duplicateErrorVisible).toBe(true);
@@ -520,23 +435,16 @@ describe('Edit Edge Modal E2E Tests', () => {
 
       const opened = await openEditEdgeModal(page, edgeId!);
       expect(opened).toBe(true);
-      await page.waitForTimeout(150);
 
-      const isRestrictionCb = page.locator('#editEdgeIsRestriction');
-      await isRestrictionCb.check();
-      await page.waitForTimeout(80);
-
+      await page.locator('#editEdgeIsRestriction').check();
       await page.locator('#editEdgeMinCard').fill('0');
       await page.locator('#editEdgeMaxCard').fill('3');
-      await page.waitForTimeout(80);
 
       await page.locator('#editEdgeConfirm').click();
-      await page.waitForTimeout(300);
 
-      const edgeData = await page.evaluate(
-        (id) => (window as any).__EDITOR_TEST__?.getEdgeData?.(id) ?? null,
-        edgeId!
-      );
+      // Wait for the edit to be applied rather than sleeping (#93).
+      await expect.poll(async () => (await readEdge(page, edgeId!))?.isRestriction, { timeout: 5000 }).toBe(true);
+      const edgeData = await readEdge(page, edgeId!);
       expect(edgeData).not.toBeNull();
       expect(edgeData?.isRestriction).toBe(true);
       expect(edgeData?.minCardinality).toBe(0);
@@ -563,14 +471,7 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(edgeId).not.toBeNull();
 
       // Verify it's a restriction initially
-      const initialEdgeData = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
+      const initialEdgeData = await readEdge(page, edgeId!);
       expect(initialEdgeData).not.toBeNull();
       expect(initialEdgeData?.isRestriction).toBe(true);
 
@@ -585,7 +486,6 @@ describe('Edit Edge Modal E2E Tests', () => {
 
       // Uncheck the "is restriction" checkbox
       await setEditEdgeModalValues(page, { isRestrictionChecked: false });
-      await page.waitForTimeout(100);
 
       // Verify checkbox is now unchecked
       const updatedModalValues = await getEditEdgeModalValues(page);
@@ -594,30 +494,12 @@ describe('Edit Edge Modal E2E Tests', () => {
 
       // Confirm the edit
       await confirmEditEdgeModal(page);
-      await waitForGraphRender(page);
 
       // Verify edge still exists but is no longer a restriction
-      const afterUncheckEdgeData = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
+      await expect.poll(async () => (await readEdge(page, edgeId!))?.isRestriction, { timeout: 5000 }).toBe(false);
+      const afterUncheckEdgeData = await readEdge(page, edgeId!);
       expect(afterUncheckEdgeData).not.toBeNull();
       expect(afterUncheckEdgeData?.isRestriction).toBe(false);
-
-      // Verify the edge is still visible in the graph
-      const edgeStillExists = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId) !== null;
-        },
-        edgeId!
-      );
-      expect(edgeStillExists).toBe(true);
 
       // Verify TTL no longer has the restriction
       const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());
@@ -647,37 +529,19 @@ describe('Edit Edge Modal E2E Tests', () => {
       expect(opened).toBe(true);
       await setEditEdgeModalValues(page, { isRestrictionChecked: false });
       await confirmEditEdgeModal(page);
-      await waitForGraphRender(page);
 
       // Verify edge is no longer a restriction
-      const afterUncheck = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      expect(afterUncheck?.isRestriction).toBe(false);
+      await expect.poll(async () => (await readEdge(page, edgeId!))?.isRestriction, { timeout: 5000 }).toBe(false);
 
       // Perform undo
       await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.performUndo) testHook.performUndo();
       });
-      await waitForGraphRender(page);
 
       // Verify edge is back as a restriction
-      const afterUndo = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      expect(afterUndo).not.toBeNull();
-      expect(afterUndo?.isRestriction).toBe(true);
+      await expect.poll(async () => (await readEdge(page, edgeId!))?.isRestriction, { timeout: 5000 }).toBe(true);
+      await waitForAppReady(page);
     });
 
     it('should delete edge completely when using Del key (not just remove restriction)', async () => {
@@ -692,110 +556,20 @@ describe('Edit Edge Modal E2E Tests', () => {
       const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
       expect(edgeId).not.toBeNull();
 
-      // Select the edge using the test hook
-      const selectionResult = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return { success: false, error: 'testHook not found' };
-          if (!testHook.selectEdgeById) return { success: false, error: 'selectEdgeById not found' };
-          const success = testHook.selectEdgeById(edgeId);
-          return { success, edgeId };
-        },
-        edgeId!
-      );
-      console.log('Selection result:', selectionResult);
-      expect(selectionResult.success).toBe(true);
-      // Wait for selection to be applied and verify it persists
-      await page.waitForTimeout(300);
-      
-      // Verify selection is still there before deletion using test hook
-      const selectionBeforeDelete = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (!testHook) return null;
-        return {
-          selectedEdges: testHook.getSelectedEdges ? testHook.getSelectedEdges() : [],
-          selectedNodes: testHook.getSelectedNodes ? testHook.getSelectedNodes() : [],
-        };
-      });
-      console.log('Selection before delete:', selectionBeforeDelete);
-      
-      // If selection is lost, try selecting again
-      if (!selectionBeforeDelete || selectionBeforeDelete.selectedEdges.length === 0) {
-        console.log('Selection lost, reselecting...');
-        const reselectResult = await page.evaluate(
-          (edgeId) => {
-            const testHook = (window as any).__EDITOR_TEST__;
-            if (!testHook) return { success: false };
-            return { success: testHook.selectEdgeById(edgeId) };
-          },
-          edgeId!
-        );
-        console.log('Reselection result:', reselectResult);
-        await page.waitForTimeout(300);
-        
-        // Verify selection again
-        const reselectionCheck = await page.evaluate(() => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return { selectedEdges: [] };
-          return {
-            selectedEdges: testHook.getSelectedEdges ? testHook.getSelectedEdges() : [],
-          };
-        });
-        console.log('After reselection:', reselectionCheck);
-      }
-
-      // Clear test logs before deletion
-      await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (testHook?.clearTestLogs) testHook.clearTestLogs();
-      });
+      await selectEdge(page, edgeId!);
 
       // Delete the edge using Del key
       await page.keyboard.press('Delete');
-      await waitForGraphRender(page);
-      await page.waitForTimeout(500); // Extra wait for deletion to complete
-
-      // Get test logs from the browser
-      const testLogs = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (!testHook) return [];
-        return testHook.getTestLogs ? testHook.getTestLogs() : [];
-      });
-      console.log('Test logs from deletion:', testLogs);
-
-      // Get all edges to see what's in rawData
-      const allEdges = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (!testHook) return [];
-        return testHook.getAllEdges ? testHook.getAllEdges() : [];
-      });
-      console.log('All edges in rawData after deletion:', allEdges);
 
       // Verify edge is completely gone
-      const afterDelete = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      
-      if (afterDelete) {
-        console.log('Edge still exists after deletion:', afterDelete);
-        console.log('All edges:', allEdges);
-        console.log('Test logs:', testLogs);
-      }
-      
-      expect(afterDelete).toBeNull();
+      await expect.poll(() => readEdge(page, edgeId!), { timeout: 5000 }).toBeNull();
+      await waitForAppReady(page);
 
       // Verify TTL no longer has domain/range for this property
       const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());
       expect(ttl).not.toBeNull();
       // The property should still exist, but without domain/range
       expect(ttl).toContain('hasProperty');
-      // Domain/range should be removed
-      const hasDomainRange = ttl.includes('rdfs:domain') && ttl.includes('rdfs:range');
       // Check if domain/range still exists for hasProperty specifically
       const hasPropertyDomainRange = /hasProperty[^;]*rdfs:domain|hasProperty[^;]*rdfs:range/.test(ttl);
       expect(hasPropertyDomainRange).toBe(false);
@@ -813,49 +587,23 @@ describe('Edit Edge Modal E2E Tests', () => {
       const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
       expect(edgeId).not.toBeNull();
 
-      // Select and delete the edge using test hook
-      const selectionResult = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return { success: false };
-          return { success: testHook.selectEdgeById(edgeId) };
-        },
-        edgeId!
-      );
-      expect(selectionResult.success).toBe(true);
-      await page.waitForTimeout(300);
+      // Select and delete the edge
+      await selectEdge(page, edgeId!);
       await page.keyboard.press('Delete');
-      await waitForGraphRender(page);
 
       // Verify edge is gone
-      const afterDelete = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      expect(afterDelete).toBeNull();
+      await expect.poll(() => readEdge(page, edgeId!), { timeout: 5000 }).toBeNull();
+      await waitForAppReady(page);
 
       // Perform undo
       await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.performUndo) testHook.performUndo();
       });
-      await waitForGraphRender(page);
 
       // Verify edge is restored as a restriction
-      const afterUndo = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      expect(afterUndo).not.toBeNull();
-      expect(afterUndo?.isRestriction).toBe(true);
+      await expect.poll(async () => (await readEdge(page, edgeId!))?.isRestriction, { timeout: 5000 }).toBe(true);
+      await waitForAppReady(page);
     });
   });
 
@@ -871,74 +619,28 @@ describe('Edit Edge Modal E2E Tests', () => {
       // Verify edge exists before deletion
       const edgeId = await findEdgeInGraph(page, 'Class A', 'Class B', 'has property');
       expect(edgeId).not.toBeNull();
+      expect(await readEdge(page, edgeId!)).not.toBeNull();
 
-      const edgeDataBefore = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      expect(edgeDataBefore).not.toBeNull();
+      const nodeIds = await page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds());
+      expect(nodeIds).toContain('ClassA');
 
-      // Find and select ClassA node
-      const nodeId = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (!testHook) return null;
-        const nodes = testHook.getNodeIds();
-        // Find ClassA node (should be in the list)
-        const classANode = nodes.find((id: string) => id === 'ClassA');
-        return classANode || null;
-      });
-      expect(nodeId).not.toBeNull();
-
-      // Select the node using test hook
-      const nodeSelectionResult = await page.evaluate(
-        (nodeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return { success: false };
-          return { success: testHook.selectNodeByLabel ? testHook.selectNodeByLabel(nodeId) : false };
-        },
-        'Class A' // Use label instead of ID
-      );
-      // If selectNodeByLabel doesn't work, try direct network access
-      if (!nodeSelectionResult.success) {
-        await page.evaluate(
-          (nodeId) => {
-            const network = (window as any).network;
-            if (network && network.setSelection) {
-              network.setSelection({ nodes: [nodeId] });
-            }
-          },
-          nodeId!
-        );
-      }
-      await page.waitForTimeout(300);
+      // Select the node and wait until the network reports it selected
+      await page.evaluate(() => (window as any).__EDITOR_TEST__.selectNodeById('ClassA'));
+      await expect
+        .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__.getSelectedNodes()), { timeout: 5000 })
+        .toContain('ClassA');
 
       // Delete the node (this should also delete connected edges)
       await page.keyboard.press('Delete');
-      await waitForGraphRender(page);
-      await page.waitForTimeout(200);
 
       // Verify node is gone
-      const nodeIdsAfter = await page.evaluate(() => {
-        const testHook = (window as any).__EDITOR_TEST__;
-        if (!testHook) return [];
-        return testHook.getNodeIds();
-      });
-      expect(nodeIdsAfter).not.toContain('ClassA');
+      await expect
+        .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds()), { timeout: 5000 })
+        .not.toContain('ClassA');
+      await waitForAppReady(page);
 
       // Verify connected edge is also gone (even if removeEdgeFromStore threw an exception)
-      const edgeDataAfter = await page.evaluate(
-        (edgeId) => {
-          const testHook = (window as any).__EDITOR_TEST__;
-          if (!testHook) return null;
-          return testHook.getEdgeData(edgeId);
-        },
-        edgeId!
-      );
-      expect(edgeDataAfter).toBeNull();
+      expect(await readEdge(page, edgeId!)).toBeNull();
 
       // Verify TTL no longer has the edge
       const ttl = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.());

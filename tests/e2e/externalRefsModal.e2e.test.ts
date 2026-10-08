@@ -55,9 +55,9 @@ describe('External refs modal E2E', () => {
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     // App shows Open Ontology modal after 100ms; wait for that then hide it so the modal doesn't intercept clicks
-    await page.waitForTimeout(150);
+    await page.locator('#openOntologyModal').waitFor({ state: 'visible', timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as unknown as { __EDITOR_TEST__?: { hideOpenOntologyModal?: () => void } }).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
@@ -66,7 +66,7 @@ describe('External refs modal E2E', () => {
       () => {
         const m = document.getElementById('openOntologyModal');
         return !m || (m as HTMLElement).style.display === 'none';
-      },
+      }, undefined,
       { timeout: 2000 }
     );
     await page.locator('#openOntologyBtn').waitFor({ state: 'visible', timeout: 5000 });
@@ -83,6 +83,10 @@ describe('External refs modal E2E', () => {
         contentType: 'text/turtle',
         body: TTL_WITH_IMPORTS,
       });
+    });
+    // Serve the imported ontology too, so nothing depends on the public internet.
+    await page.route(/w3id\.org\/dano/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/turtle', body: '@prefix owl: <http://www.w3.org/2002/07/owl#> . <> a owl:Ontology .' });
     });
 
     await page.locator('#openOntologyBtn').click();

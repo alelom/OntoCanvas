@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
 
@@ -28,20 +29,21 @@ describe('Edge label single-click selection E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, { timeout: 5000 });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
+    await waitForAppReady(page);
     await page.waitForFunction(
       () => {
         const n = (window as any).__EDITOR_TEST__?.getNetwork?.();
         return n && Object.keys(n.body?.edges || {}).length > 0;
-      },
+      }, undefined,
       { timeout: 5000 }
     );
     // Ensure no modal overlay is intercepting canvas clicks.
     await page.evaluate(() => (window as any).__EDITOR_TEST__?.hideOpenOntologyModal?.());
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    await waitForAppReady(page);
   });
 
   afterAll(async () => {

@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -29,28 +30,10 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(300);
-  await page.evaluate(() => {
-    const fi = document.getElementById('fileInput') as HTMLInputElement | null;
-    if (fi) {
-      fi.style.display = 'block';
-      fi.style.visibility = 'visible';
-      fi.style.position = 'absolute';
-      fi.style.width = '1px';
-      fi.style.height = '1px';
-    }
-  });
-  await page.locator('input#fileInput').setInputFiles(FIXTURE, { timeout: 5000 });
-  await page.waitForFunction(
-    () => {
-      const net = (window as any).__EDITOR_TEST__?.getNetwork?.();
-      return !!net?.body?.data?.nodes?.get && !!net.body.data.nodes.get('FieldAssertion');
-    },
-    { timeout: 5000 }
-  );
-  // The initial render fits the graph from a deferred callback; let it run before setting a zoom.
-  await page.waitForTimeout(400);
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+  // Waits for the initial render's fit, so the zoom set by each test is not undone by it.
+  await loadTestFile(page, FIXTURE);
 });
 
 afterEach(async () => {
@@ -82,10 +65,10 @@ async function isNodeInViewport(p: Page, nodeId: string): Promise<boolean> {
  * Drive the Add data property modal. The controls live in a side panel that Playwright's
  * actionability checks consider covered, so the clicks are dispatched directly.
  */
-async function addDataProperty(p: Page, label: string): Promise<void> {
+async function addDataProperty(p: Page, label: string, nodeId: string): Promise<void> {
   await p.evaluate(() => (document.getElementById('addDataPropertyBtn') as HTMLButtonElement).click());
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display !== 'none',
+    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display !== 'none', undefined,
     { timeout: 5000 }
   );
   await p.evaluate((text) => {
@@ -95,11 +78,20 @@ async function addDataProperty(p: Page, label: string): Promise<void> {
   }, label);
   await p.evaluate(() => (document.getElementById('addDataPropConfirm') as HTMLButtonElement).click());
   await p.waitForFunction(
-    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display === 'none',
+    () => getComputedStyle(document.getElementById('addDataPropertyModal')!).display === 'none', undefined,
     { timeout: 5000 }
   );
-  // The reveal is animated; wait for the view to settle.
-  await p.waitForTimeout(700);
+  // The reveal is animated and ends with the view centred on the new node; wait for that.
+  await p.waitForFunction(
+    (id) => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      const pos = net.getPositions([id])[id];
+      const view = net.getViewPosition();
+      return !!pos && Math.abs(pos.x - view.x) < 1 && Math.abs(pos.y - view.y) < 1;
+    },
+    nodeId,
+    { timeout: 5000 }
+  );
 }
 
 describe('A newly added data property is brought into view (E2E)', () => {
@@ -107,7 +99,7 @@ describe('A newly added data property is brought into view (E2E)', () => {
     await zoomToClassGraph(page);
     const nodeId = '__dataprop__unattached__brandNewThing';
 
-    await addDataProperty(page, 'brand new thing');
+    await addDataProperty(page, 'brand new thing', nodeId);
 
     const exists = await page.evaluate((id) => {
       const net = (window as any).__EDITOR_TEST__.getNetwork();
@@ -122,7 +114,7 @@ describe('A newly added data property is brought into view (E2E)', () => {
     await zoomToClassGraph(page);
     const before = await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().getScale());
 
-    await addDataProperty(page, 'another new thing');
+    await addDataProperty(page, 'another new thing', '__dataprop__unattached__anotherNewThing');
 
     const after = await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().getScale());
     expect(after).toBeCloseTo(before, 5);

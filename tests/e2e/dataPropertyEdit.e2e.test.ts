@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -13,47 +14,11 @@ const __dirname = dirname(__filename);
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(50);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(200);
-}
-
-async function waitForGraphRender(page: Page, timeout = 5000): Promise<void> {
-  // Wait for the graph to render. The counts can be 0 (e.g., after deleting all nodes/edges),
-  // so we check that the elements exist and have valid numeric values (including 0).
-  await page.waitForFunction(
-    () => {
-      const nodeCountEl = document.getElementById('nodeCount');
-      const edgeCountEl = document.getElementById('edgeCount');
-      const nodeCount = nodeCountEl?.textContent?.trim();
-      const edgeCount = edgeCountEl?.textContent?.trim();
-      // Require counts to be present, non-empty, and parse as valid finite numbers (including 0)
-      return (
-        nodeCount !== undefined &&
-        nodeCount !== '' &&
-        Number.isFinite(Number(nodeCount)) &&
-        edgeCount !== undefined &&
-        edgeCount !== '' &&
-        Number.isFinite(Number(edgeCount))
-      );
-    },
-    { timeout }
-  );
-  await page.waitForTimeout(150);
+/** Wait until the edit-edge modal is shown with a title containing `text`. */
+async function expectEditModalTitleToContain(page: Page, text: string): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? ''), { timeout: 5000 })
+    .toContain(text);
 }
 
 describe('Data Property Edit E2E Tests', () => {
@@ -66,13 +31,11 @@ describe('Data Property Edit E2E Tests', () => {
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, { timeout: 5000 });
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
       const testHook = (window as any).__EDITOR_TEST__;
       if (testHook?.hideOpenOntologyModal) testHook.hideOpenOntologyModal();
     });
-    await page.waitForTimeout(100);
   });
 
   afterAll(async () => {
@@ -92,11 +55,8 @@ describe('Data Property Edit E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openEditModalForNode) testHook.openEditModalForNode('__dataproprestrict__Note__myDataProp');
       });
-      await page.waitForTimeout(200);
 
-      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
-      expect(title).not.toBeNull();
-      expect(title).toContain('data property');
+      await expectEditModalTitleToContain(page, 'data property');
     });
 
     it('opening edit modal for data property edge shows Edit data property restriction', async () => {
@@ -114,11 +74,8 @@ describe('Data Property Edit E2E Tests', () => {
         },
         edgeId
       );
-      await page.waitForTimeout(200);
 
-      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
-      expect(title).not.toBeNull();
-      expect(title).toContain('data property');
+      await expectEditModalTitleToContain(page, 'data property');
     });
 
     it('double-clicking data property restriction node opens edit modal', async () => {
@@ -135,11 +92,7 @@ describe('Data Property Edit E2E Tests', () => {
         if (testHook?.openEditModalForNode) testHook.openEditModalForNode('__dataproprestrict__Note__myDataProp');
       });
 
-      await page.waitForTimeout(300);
-
-      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
-      expect(title).not.toBeNull();
-      expect(title).toContain('data property');
+      await expectEditModalTitleToContain(page, 'data property');
     });
 
     it('context menu "Edit properties" on data property restriction node opens edit modal', async () => {
@@ -154,11 +107,8 @@ describe('Data Property Edit E2E Tests', () => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openEditModalForNode) testHook.openEditModalForNode('__dataproprestrict__Note__myDataProp');
       });
-      await page.waitForTimeout(200);
 
-      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
-      expect(title).not.toBeNull();
-      expect(title).toContain('data property');
+      await expectEditModalTitleToContain(page, 'data property');
     });
 
     it('double-clicking data property restriction edge opens edit modal', async () => {
@@ -177,11 +127,8 @@ describe('Data Property Edit E2E Tests', () => {
         },
         edgeId
       );
-      await page.waitForTimeout(200);
 
-      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
-      expect(title).not.toBeNull();
-      expect(title).toContain('data property');
+      await expectEditModalTitleToContain(page, 'data property');
     });
 
     it('context menu "Edit properties" on data property restriction edge opens edit modal', async () => {
@@ -200,11 +147,8 @@ describe('Data Property Edit E2E Tests', () => {
         },
         edgeId
       );
-      await page.waitForTimeout(200);
 
-      const title = await page.evaluate(() => (window as any).__EDITOR_TEST__?.getEditEdgeModalTitle?.() ?? null);
-      expect(title).not.toBeNull();
-      expect(title).toContain('data property');
+      await expectEditModalTitleToContain(page, 'data property');
     });
   });
 
@@ -216,40 +160,44 @@ describe('Data Property Edit E2E Tests', () => {
       await loadTestFile(page, testFile);
       await waitForGraphRender(page);
 
-      await page.locator('#editEdgeCancel').click({ timeout: 1000 }).catch(() => {});
-      await page.waitForTimeout(100);
+      // Earlier tests leave the edit-edge modal open; close it if so.
+      const editEdgeModal = page.locator('#editEdgeModal');
+      if (await editEdgeModal.isVisible()) {
+        await page.locator('#editEdgeCancel').click();
+        await expect.poll(() => editEdgeModal.isVisible(), { timeout: 5000 }).toBe(false);
+      }
 
       await page.evaluate(() => {
         const testHook = (window as any).__EDITOR_TEST__;
         if (testHook?.openEditDataPropertyModal) testHook.openEditDataPropertyModal('myDataProp');
       });
-      await page.waitForTimeout(200);
 
-      const modalVisible = await page.locator('#editDataPropertyModal').isVisible();
-      expect(modalVisible).toBe(true);
+      const editDataPropModal = page.locator('#editDataPropertyModal');
+      await expect.poll(() => editDataPropModal.isVisible(), { timeout: 5000 }).toBe(true);
 
       await page.locator('#editDataPropAddDomain').click();
-      await page.waitForTimeout(300);
 
       const domainSelect = page.locator('#editDataPropertyModal select').nth(1);
       await domainSelect.waitFor({ state: 'visible', timeout: 3000 });
       await domainSelect.selectOption({ value: 'Note' });
-      await page.waitForTimeout(150);
 
       const addBtn = page.locator('#editDataPropertyModal button').filter({ hasText: /^Add$/ });
       await addBtn.waitFor({ state: 'visible', timeout: 2000 });
       await addBtn.click();
-      await page.waitForTimeout(150);
 
       await page.locator('#editDataPropConfirm').click();
-      await page.waitForTimeout(250);
+      await expect.poll(() => editDataPropModal.isVisible(), { timeout: 5000 }).toBe(false);
 
-      const dp = await page.evaluate(
-        (name) => (window as any).__EDITOR_TEST__?.getDataPropertyByName?.(name) ?? null,
-        'myDataProp'
-      );
-      expect(dp).not.toBeNull();
-      expect(dp?.domains).toContain('Note');
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              (name) => (window as any).__EDITOR_TEST__?.getDataPropertyByName?.(name)?.domains ?? null,
+              'myDataProp'
+            ),
+          { timeout: 5000 }
+        )
+        .toContain('Note');
 
       const ttl = await page.evaluate(async () => (window as any).__EDITOR_TEST__?.getSerializedTurtle?.() ?? null);
       expect(ttl).toBeTruthy();

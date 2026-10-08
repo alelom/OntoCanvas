@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
+import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -17,6 +18,64 @@ const TEST_FIXTURES_DIR = join(__dirname, '../fixtures/imported-ontology');
 let browser: Browser;
 let page: Page;
 
+/** Text of each row in a sidebar list (`edgeStylesContent`, `dataPropsContent`). */
+function listItemTexts(p: Page, containerId: string): Promise<string[]> {
+  return p.evaluate((id) => {
+    const container = document.getElementById(id);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('div[style*="display: flex"]')).map(
+      (item) => item.textContent?.trim() || ''
+    );
+  }, containerId);
+}
+
+/** Rendered label of the first class node (data-property nodes excluded) whose id or label matches. */
+function classNodeLabel(p: Page, idPart: string, labelPart: string): Promise<string | null> {
+  return p.evaluate(
+    ([idSub, labelSub]) => {
+      const network = (window as any).__EDITOR_TEST__.getNetwork?.();
+      if (!network) return null;
+      const node = network.body.data.nodes
+        .get()
+        .filter((n: any) => !String(n.id).startsWith('__dataprop__'))
+        .find((n: any) => String(n.id).includes(idSub) || String(n.label ?? '').includes(labelSub));
+      return node ? String(node.label ?? '') : null;
+    },
+    [idPart, labelPart]
+  );
+}
+
+/** Load `file`, show external references, and wait until the view has settled. */
+async function loadWithExternalRefs(p: Page, file: string): Promise<void> {
+  await loadTestFile(p, file);
+  const changed = await p.evaluate(() => {
+    const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement;
+    if (displayExternalRefEl && !displayExternalRefEl.checked) {
+      displayExternalRefEl.checked = true;
+      displayExternalRefEl.dispatchEvent(new Event('change'));
+      return true;
+    }
+    return false;
+  });
+  if (changed) await waitForAppReady(p);
+}
+
+/** Change the first external reference's prefix through the "Manage external references" modal, then close it. */
+async function changeFirstPrefix(p: Page, newPrefix: string): Promise<void> {
+  await p.click('#manageExternalRefs');
+  const prefixInput = p.locator('.external-ref-prefix').first();
+  await prefixInput.waitFor({ state: 'visible', timeout: 5000 });
+  await prefixInput.evaluate((el, value) => {
+    const input = el as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('change'));
+  }, newPrefix);
+  await p.click('#externalRefsCancel');
+}
+
+const findItem = (items: string[], ...needles: string[]): string | undefined =>
+  items.find((text) => needles.some((n) => text.includes(n)));
+
 beforeAll(async () => {
   browser = await chromium.launch();
 });
@@ -27,9 +86,10 @@ afterAll(async () => {
 
 beforeEach(async () => {
   page = await browser.newPage();
-  await page.goto(EDITOR_URL);
-  await page.waitForTimeout(500);
-  
+  page.setDefaultTimeout(5000);
+  await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
+
   // Enable debug mode for tests
   await page.evaluate(() => {
     localStorage.setItem('ontologyEditorDebug', 'true');
@@ -42,284 +102,56 @@ afterEach(async () => {
   }
 });
 
-async function loadTestFile(page: Page, filePath: string): Promise<void> {
-  await page.evaluate(() => {
-    const fileInput = document.getElementById('fileInput') as HTMLInputElement;
-    if (fileInput) {
-      fileInput.style.display = 'block';
-      fileInput.style.visibility = 'visible';
-      fileInput.style.position = 'absolute';
-      fileInput.style.left = '0';
-      fileInput.style.top = '0';
-      fileInput.style.width = '1px';
-      fileInput.style.height = '1px';
-    }
-  });
-  await page.waitForTimeout(100);
-  const fileInput = page.locator('input#fileInput');
-  await fileInput.setInputFiles(filePath, { timeout: 5000 });
-  await page.waitForTimeout(2000);
-}
-
 describe('External Ref Prefix Update E2E', () => {
   it('should update Object Properties dropdown when prefix is changed', async () => {
     const childFile = join(TEST_FIXTURES_DIR, 'object-props-child.ttl');
     expect(existsSync(childFile)).toBe(true);
-    
-    await loadTestFile(page, childFile);
-    
-    // Enable external references display
-    await page.evaluate(() => {
-      const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement;
-      if (displayExternalRefEl && !displayExternalRefEl.checked) {
-        displayExternalRefEl.checked = true;
-        displayExternalRefEl.dispatchEvent(new Event('change'));
-      }
-    });
-    await page.waitForTimeout(1500);
-    
-    // Get initial Object Properties dropdown content
-    const initialProps = await page.evaluate(() => {
-      const edgeStylesContent = document.getElementById('edgeStylesContent');
-      if (!edgeStylesContent) return { found: false, items: [] };
-      const items = Array.from(edgeStylesContent.querySelectorAll('div[style*="display: flex"]'));
-      return {
-        found: true,
-        items: items.map((item) => ({
-          text: item.textContent?.trim() || '',
-          html: item.innerHTML,
-        })),
-      };
-    });
-    
-    console.log('[TEST] Initial Object Properties:', JSON.stringify(initialProps, null, 2));
-    
-    // Open "Manage external references" modal
-    await page.click('#manageExternalRefs');
-    await page.waitForTimeout(300);
-    
-    // Change the prefix from "base" to "testprefix"
-    const prefixChanged = await page.evaluate(() => {
-      const prefixInput = document.querySelector('.external-ref-prefix') as HTMLInputElement;
-      if (!prefixInput) return { success: false, reason: 'Prefix input not found' };
-      
-      const oldValue = prefixInput.value;
-      prefixInput.value = 'testprefix';
-      prefixInput.dispatchEvent(new Event('change'));
-      
-      return { success: true, oldValue, newValue: 'testprefix' };
-    });
-    
-    console.log('[TEST] Prefix change result:', prefixChanged);
-    expect(prefixChanged.success).toBe(true);
-    
-    // Close the modal
-    await page.click('#externalRefsCancel');
-    await page.waitForTimeout(500);
-    
-    // Get updated Object Properties dropdown content
-    const updatedProps = await page.evaluate(() => {
-      const edgeStylesContent = document.getElementById('edgeStylesContent');
-      if (!edgeStylesContent) return { found: false, items: [] };
-      const items = Array.from(edgeStylesContent.querySelectorAll('div[style*="display: flex"]'));
-      return {
-        found: true,
-        items: items.map((item) => ({
-          text: item.textContent?.trim() || '',
-          html: item.innerHTML,
-        })),
-      };
-    });
-    
-    console.log('[TEST] Updated Object Properties:', JSON.stringify(updatedProps, null, 2));
-    
-    // Verify that the prefix was updated (should show "testprefix:connectsTo" instead of "base:connectsTo")
-    const connectsToItem = updatedProps.items.find((item: any) => 
-      item.text?.includes('connectsTo') || item.html?.includes('connectsTo')
-    );
-    
-    if (connectsToItem) {
-      console.log('[TEST] Found connectsTo item:', connectsToItem);
-      expect(connectsToItem.text || connectsToItem.html).toContain('testprefix:');
-      expect(connectsToItem.text || connectsToItem.html).not.toContain('base:');
-    } else {
-      console.warn('[TEST] connectsTo item not found in updated properties');
-    }
+
+    await loadWithExternalRefs(page, childFile);
+
+    await expect
+      .poll(async () => findItem(await listItemTexts(page, 'edgeStylesContent'), 'connectsTo'), { timeout: 5000 })
+      .toContain('base:connectsTo');
+
+    await changeFirstPrefix(page, 'testprefix');
+
+    // Should show "testprefix:connectsTo" instead of "base:connectsTo"
+    await expect
+      .poll(async () => findItem(await listItemTexts(page, 'edgeStylesContent'), 'connectsTo'), { timeout: 5000 })
+      .toContain('testprefix:connectsTo');
+    expect(findItem(await listItemTexts(page, 'edgeStylesContent'), 'connectsTo')).not.toContain('base:');
   });
-  
+
   it('should update Data Properties dropdown when prefix is changed', async () => {
     const childFile = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
     expect(existsSync(childFile)).toBe(true);
-    
-    await loadTestFile(page, childFile);
-    
-    // Enable external references display
-    await page.evaluate(() => {
-      const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement;
-      if (displayExternalRefEl && !displayExternalRefEl.checked) {
-        displayExternalRefEl.checked = true;
-        displayExternalRefEl.dispatchEvent(new Event('change'));
-      }
-    });
-    await page.waitForTimeout(1500);
-    
-    // Get initial Data Properties dropdown content
-    const initialProps = await page.evaluate(() => {
-      const dataPropsContent = document.getElementById('dataPropsContent');
-      if (!dataPropsContent) return { found: false, items: [] };
-      const items = Array.from(dataPropsContent.querySelectorAll('div[style*="display: flex"]'));
-      return {
-        found: true,
-        items: items.map((item) => ({
-          text: item.textContent?.trim() || '',
-          html: item.innerHTML,
-        })),
-      };
-    });
-    
-    console.log('[TEST] Initial Data Properties:', JSON.stringify(initialProps, null, 2));
-    
-    // Open "Manage external references" modal
-    await page.click('#manageExternalRefs');
-    await page.waitForTimeout(300);
-    
-    // Change the prefix from "dpbase" to "testprefix"
-    const prefixChanged = await page.evaluate(() => {
-      const prefixInput = document.querySelector('.external-ref-prefix') as HTMLInputElement;
-      if (!prefixInput) return { success: false, reason: 'Prefix input not found' };
-      
-      const oldValue = prefixInput.value;
-      prefixInput.value = 'testprefix';
-      prefixInput.dispatchEvent(new Event('change'));
-      
-      return { success: true, oldValue, newValue: 'testprefix' };
-    });
-    
-    console.log('[TEST] Prefix change result:', prefixChanged);
-    expect(prefixChanged.success).toBe(true);
-    
-    // Close the modal
-    await page.click('#externalRefsCancel');
-    await page.waitForTimeout(500);
-    
-    // Get updated Data Properties dropdown content
-    const updatedProps = await page.evaluate(() => {
-      const dataPropsContent = document.getElementById('dataPropsContent');
-      if (!dataPropsContent) return { found: false, items: [] };
-      const items = Array.from(dataPropsContent.querySelectorAll('div[style*="display: flex"]'));
-      return {
-        found: true,
-        items: items.map((item) => ({
-          text: item.textContent?.trim() || '',
-          html: item.innerHTML,
-        })),
-      };
-    });
-    
-    console.log('[TEST] Updated Data Properties:', JSON.stringify(updatedProps, null, 2));
-    
-    // Verify that the prefix was updated (should show "testprefix:createdDate" instead of "dpbase:createdDate")
-    const createdDateItem = updatedProps.items.find((item: any) => 
-      item.text?.includes('createdDate') || item.html?.includes('createdDate') || 
-      item.text?.includes('created date') || item.html?.includes('created date')
-    );
-    
-    if (createdDateItem) {
-      console.log('[TEST] Found createdDate item:', createdDateItem);
-      expect(createdDateItem.text || createdDateItem.html).toContain('testprefix:');
-      expect(createdDateItem.text || createdDateItem.html).not.toContain('dpbase:');
-    } else {
-      console.warn('[TEST] createdDate item not found in updated properties');
-    }
+
+    await loadWithExternalRefs(page, childFile);
+
+    const createdDate = async () =>
+      findItem(await listItemTexts(page, 'dataPropsContent'), 'createdDate', 'created date');
+    await expect.poll(createdDate, { timeout: 5000 }).toContain('dpbase:');
+
+    await changeFirstPrefix(page, 'testprefix');
+
+    // Should show "testprefix:createdDate" instead of "dpbase:createdDate"
+    await expect.poll(createdDate, { timeout: 5000 }).toContain('testprefix:');
+    expect(await createdDate()).not.toContain('dpbase:');
   });
-  
+
   it('should update class node labels when prefix is changed', async () => {
     const childFile = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
     expect(existsSync(childFile)).toBe(true);
-    
-    await loadTestFile(page, childFile);
-    
-    // Enable external references display
-    await page.evaluate(() => {
-      const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement;
-      if (displayExternalRefEl && !displayExternalRefEl.checked) {
-        displayExternalRefEl.checked = true;
-        displayExternalRefEl.dispatchEvent(new Event('change'));
-      }
-    });
-    await page.waitForTimeout(1500);
-    
-    // Get initial class node labels
-    const initialNodes = await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      const network = testHook.getNetwork?.();
-      if (!network) return { found: false, nodes: [] };
-      
-      const allNodes = network.body.data.nodes.get();
-      const nodes = allNodes
-        .filter((n: any) => !n.id?.startsWith('__dataprop__'))
-        .map((n: any) => ({
-          id: n.id,
-          label: n.label,
-        }));
-      
-      return { found: true, nodes };
-    });
-    
-    console.log('[TEST] Initial class nodes:', JSON.stringify(initialNodes, null, 2));
-    
-    // Open "Manage external references" modal
-    await page.click('#manageExternalRefs');
-    await page.waitForTimeout(300);
-    
-    // Change the prefix from "dpbase" to "testprefix"
-    const prefixChanged = await page.evaluate(() => {
-      const prefixInput = document.querySelector('.external-ref-prefix') as HTMLInputElement;
-      if (!prefixInput) return { success: false, reason: 'Prefix input not found' };
-      
-      prefixInput.value = 'testprefix';
-      prefixInput.dispatchEvent(new Event('change'));
-      
-      return { success: true, newValue: 'testprefix' };
-    });
-    
-    console.log('[TEST] Prefix change result:', prefixChanged);
-    expect(prefixChanged.success).toBe(true);
-    
-    // Close the modal
-    await page.click('#externalRefsCancel');
-    await page.waitForTimeout(500);
-    
-    // Get updated class node labels
-    const updatedNodes = await page.evaluate(() => {
-      const testHook = (window as any).__EDITOR_TEST__;
-      const network = testHook.getNetwork?.();
-      if (!network) return { found: false, nodes: [] };
-      
-      const allNodes = network.body.data.nodes.get();
-      const nodes = allNodes
-        .filter((n: any) => !n.id?.startsWith('__dataprop__'))
-        .map((n: any) => ({
-          id: n.id,
-          label: n.label,
-        }));
-      
-      return { found: true, nodes };
-    });
-    
-    console.log('[TEST] Updated class nodes:', JSON.stringify(updatedNodes, null, 2));
-    
-    // Verify that BaseEntity node label was updated
-    const baseEntityNode = updatedNodes.nodes.find((n: any) => 
-      n.id?.includes('BaseEntity') || n.label?.includes('Base Entity')
-    );
-    
-    if (baseEntityNode) {
-      console.log('[TEST] Found BaseEntity node:', baseEntityNode);
-      expect(baseEntityNode.label).toContain('testprefix:');
-      expect(baseEntityNode.label).not.toContain('dpbase:');
-    } else {
-      console.warn('[TEST] BaseEntity node not found in updated nodes');
-    }
+
+    await loadWithExternalRefs(page, childFile);
+
+    const baseEntityLabel = () => classNodeLabel(page, 'BaseEntity', 'Base Entity');
+    await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('dpbase:');
+
+    await changeFirstPrefix(page, 'testprefix');
+
+    // The BaseEntity node label should be updated
+    await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('testprefix:');
+    expect(await baseEntityLabel()).not.toContain('dpbase:');
   });
 });
