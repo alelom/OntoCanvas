@@ -1,5 +1,6 @@
 import { detectOntologyIssues, groupIssuesByType, getIssueTypeLabel, type OntologyIssue } from './ontologyIssues';
 import { Store } from 'n3';
+import { formatOntologyInfo, type OntologyInfo } from './ontologyInfo';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
@@ -195,6 +196,17 @@ function isValidUrl(str: string): boolean {
 }
 
 /**
+ * Show the name and prefix of the open ontology in the status bar (#113), or nothing when there is none.
+ */
+export function updateOntologyInfoDisplay(info: OntologyInfo | null): void {
+  const el = document.getElementById('ontologyInfoDisplay');
+  if (!el) return;
+  el.textContent = info ? formatOntologyInfo(info) : '';
+  el.title = info ? info.iri : '';
+  el.style.display = info ? '' : 'none';
+}
+
+/**
  * Update file path display in the status bar.
  */
 export function updateFilePathDisplay(filePath: string | null): void {
@@ -208,8 +220,8 @@ export function updateFilePathDisplay(filePath: string | null): void {
   if (filePath) {
     const isUrl = isValidUrl(filePath);
     if (isUrl) {
-      // Create text node for "| File: " prefix
-      const prefix = document.createTextNode('| File: ');
+      // Create text node for "File: " prefix (the | before it is drawn by the stylesheet)
+      const prefix = document.createTextNode('File: ');
       el.appendChild(prefix);
       
       // Create anchor element safely using DOM APIs
@@ -233,7 +245,7 @@ export function updateFilePathDisplay(filePath: string | null): void {
       el.title = `Click to open: ${filePath}`;
     } else {
       // Regular text for non-URL paths
-      el.textContent = `| File: ${filePath}`;
+      el.textContent = `File: ${filePath}`;
       el.title = filePath;
     }
     el.style.display = '';

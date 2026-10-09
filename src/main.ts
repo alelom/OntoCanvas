@@ -107,6 +107,7 @@ import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
 import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, type PropertyLists } from './lib/importedDeclarations';
 import { beginImportsSettle, importsSettled } from './ui/importsSettle';
+import { getOntologyInfo } from './ui/ontologyInfo';
 import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
@@ -143,6 +144,7 @@ import {
   updateStatusBar,
   updateNodeEdgeCounts,
   updateFilePathDisplay as updateStatusBarFilePath,
+  updateOntologyInfoDisplay,
   updateSelectionInfo as updateStatusBarSelection,
   updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
@@ -6315,9 +6317,10 @@ function renderApp(): void {
       </div>
     </div>
     <div id="info">
-      <span id="versionDisplay" style="margin-right: 12px; font-size: 11px; color: #666;"></span>
-      Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span>
-      <span id="filePathDisplay" style="margin-left: 24px; font-size: 11px;"></span>
+      <span id="versionDisplay" style="font-size: 11px; color: #666;"></span>
+      <span id="ontologyInfoDisplay" class="info-seg" style="font-size: 11px; display: none;"></span>
+      <span id="filePathDisplay" class="info-seg" style="font-size: 11px;"></span>
+      <span id="graphCounts" class="info-seg">Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>
     </div>
@@ -7138,6 +7141,7 @@ hasUnsavedChanges = false;
 
     setTimeout(() => {
       updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
+      updateOntologyInfoDisplay(ttlStore ? getOntologyInfo(ttlStore, prefixMap) : null);
     }, 0);
 
     if (handle && fileName) {
@@ -8126,7 +8130,7 @@ function setupEventListeners(): void {
   const versionDisplay = document.getElementById('versionDisplay');
   if (versionDisplay) {
     const repoUrl = 'https://github.com/alelom/OntoCanvas';
-    versionDisplay.innerHTML = `<a href="${repoUrl}" target="_blank" rel="noopener noreferrer" class="version-link" title="OntoCanvas on GitHub">OntoCanvas v${getAppVersion()}</a> |`;
+    versionDisplay.innerHTML = `<a href="${repoUrl}" target="_blank" rel="noopener noreferrer" class="version-link" title="OntoCanvas on GitHub">OntoCanvas v${getAppVersion()}</a>`;
   }
   
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
