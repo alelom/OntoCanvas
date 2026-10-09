@@ -1,3 +1,17 @@
+# [1.28.0](https://github.com/alelom/OntoCanvas/compare/v1.27.4...v1.28.0) (2026-10-09)
+
+
+### Bug Fixes
+
+* **#103:** Open external ontology finds the imported file in the open ontology's folder ([3dc3755](https://github.com/alelom/OntoCanvas/commit/3dc3755e8305b9a64f5be27c8857c454a5481e74)), closes [#103](https://github.com/alelom/OntoCanvas/issues/103)
+* **#109:** one tooltip, in one style, for nodes, edges and labels ([889df29](https://github.com/alelom/OntoCanvas/commit/889df290665b34cc390e23a27103f1790d9713d9)), closes [#109](https://github.com/alelom/OntoCanvas/issues/109)
+* **#80, #103:** address review of [#110](https://github.com/alelom/OntoCanvas/issues/110) ([971bb12](https://github.com/alelom/OntoCanvas/commit/971bb12ec2cbf3a21cd31c6e27ca780a7494cec4)), closes [#80](https://github.com/alelom/OntoCanvas/issues/80) [#103](https://github.com/alelom/OntoCanvas/issues/103)
+
+
+### Features
+
+* **#80:** draw owl:Thing-domain data properties once, under owl:Thing ([30ef7a9](https://github.com/alelom/OntoCanvas/commit/30ef7a95c8cbcd488fdfe3811a71298515250746)), closes [#80](https://github.com/alelom/OntoCanvas/issues/80) [#80](https://github.com/alelom/OntoCanvas/issues/80)
+
 ## [1.27.4](https://github.com/alelom/OntoCanvas/compare/v1.27.3...v1.27.4) (2026-10-09)
 
 
