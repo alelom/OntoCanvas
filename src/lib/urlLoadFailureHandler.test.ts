@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CorsOrNetworkError } from '../externalOntologySearch';
-import { isLikelyCorsError, handleUrlLoadFailure } from './urlLoadFailureHandler';
+import { CorsOrNetworkError, FetchTimeoutError } from '../externalOntologySearch';
+import { isLikelyCorsError, isLikelyTimeoutError, handleUrlLoadFailure } from './urlLoadFailureHandler';
 
 vi.mock('../ui/urlLoadFailureModals', () => ({
   showCorsFailureModal: vi.fn(),
   showGenericUrlLoadFailureModal: vi.fn(),
+  showTimeoutFailureModal: vi.fn(),
 }));
 
 describe('urlLoadFailureHandler', () => {
@@ -27,7 +28,25 @@ describe('urlLoadFailureHandler', () => {
     });
   });
 
+  describe('isLikelyTimeoutError', () => {
+    it('is true for a FetchTimeoutError, false for anything else', () => {
+      expect(isLikelyTimeoutError(new FetchTimeoutError('https://example.com/a', 15000))).toBe(true);
+      expect(isLikelyTimeoutError(new CorsOrNetworkError())).toBe(false);
+      expect(isLikelyTimeoutError(new Error('Failed to fetch ontology'))).toBe(false);
+      expect(isLikelyTimeoutError(null)).toBe(false);
+    });
+  });
+
   describe('handleUrlLoadFailure', () => {
+    it('shows the timeout dialog, with how long it waited, when the server was too slow', async () => {
+      const { showTimeoutFailureModal, showCorsFailureModal, showGenericUrlLoadFailureModal } = await import('../ui/urlLoadFailureModals');
+      const onOpenFile = vi.fn();
+      handleUrlLoadFailure('https://example.com/slow.n3', new FetchTimeoutError('https://example.com/slow.n3', 15000), { onOpenFile });
+      expect(showTimeoutFailureModal).toHaveBeenCalledWith('https://example.com/slow.n3', 15, onOpenFile);
+      expect(showCorsFailureModal).not.toHaveBeenCalled();
+      expect(showGenericUrlLoadFailureModal).not.toHaveBeenCalled();
+    });
+
     it('shows CORS modal when error is CorsOrNetworkError', async () => {
       const { showCorsFailureModal, showGenericUrlLoadFailureModal } = await import(
         '../ui/urlLoadFailureModals'

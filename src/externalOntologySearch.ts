@@ -42,8 +42,23 @@ export class CorsOrNetworkError extends Error {
   }
 }
 
+/** The server did not send the ontology within the time allowed. Thrown, instead of null, for the ontology a
+ * user asked to open (throwOnCors), so the app can say the server was slow rather than that loading failed. */
+export class FetchTimeoutError extends Error {
+  constructor(
+    public readonly url: string,
+    public readonly timeoutMs: number
+  ) {
+    const seconds = Math.round(timeoutMs / 1000);
+    super(`Timed out after ${seconds} second${seconds === 1 ? '' : 's'} waiting for ${url}`);
+    this.name = 'FetchTimeoutError';
+    Object.setPrototypeOf(this, FetchTimeoutError.prototype);
+  }
+}
+
 export interface FetchExternalOntologyTtlOptions {
-  /** When true, throw CorsOrNetworkError instead of returning null when the initial fetch throws (e.g. CORS). */
+  /** When true, throw CorsOrNetworkError instead of returning null when the initial fetch throws (e.g. CORS), and
+   * FetchTimeoutError when the server is too slow. For the ontology a user asked to open. */
   throwOnCors?: boolean;
   /** How long the whole request may take, headers and body (default 2000). The ontology a user asked to open
    * may be slow (LOV's FOAF takes 5 to 10 seconds); the many background reads keep the short default. */
@@ -160,6 +175,8 @@ export async function fetchExternalOntologyTtl(
     } catch (fetchErr) {
       clearTimeout(timeoutId);
       if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+        // For the ontology the user opened, say so: the other URLs are not worth another wait.
+        if (throwOnCors) throw new FetchTimeoutError(normalizedUrl, timeoutMs);
         if (isDebugMode()) {
           debugWarn(`Fetch aborted (timeout) for ${normalizedUrl}`);
           debugWarn(`Initial fetch timed out, trying fallback URLs directly...`);
@@ -206,6 +223,9 @@ export async function fetchExternalOntologyTtl(
         text = await response.text();
       } catch (readErr) {
         clearTimeout(timeoutId);
+        if (throwOnCors && readErr instanceof Error && readErr.name === 'AbortError') {
+          throw new FetchTimeoutError(normalizedUrl, timeoutMs);
+        }
         if (isDebugMode()) {
           debugWarn(`Could not read the body of ${normalizedUrl} (timeout or network error):`, readErr);
         }
@@ -522,7 +542,7 @@ export async function fetchExternalOntologyTtl(
     }
     return null;
   } catch (err) {
-    if (err instanceof CorsOrNetworkError) {
+    if (err instanceof CorsOrNetworkError || err instanceof FetchTimeoutError) {
       throw err;
     }
     // Other errors - only log in debug mode

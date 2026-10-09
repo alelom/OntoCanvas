@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Store, DataFactory } from 'n3';
-import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalOntologyReference } from './externalOntologySearch';
+import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, FetchTimeoutError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalOntologyReference } from './externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 // const OWL = 'http://www.w3.org/2002/07/owl#'; // Unused - kept for reference
@@ -531,6 +531,38 @@ describe('externalOntologySearch', () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 6000, init));
       const result = fetchExternalOntologyTtl('https://example.com/default-timeout.ttl');
       await vi.advanceTimersByTimeAsync(2500);
+      expect(await result).toBeNull();
+    });
+
+    it('throws a FetchTimeoutError, not nothing, when the ontology the user opened (throwOnCors) is too slow', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 5000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/slow-user.ttl', { throwOnCors: true, timeoutMs: 1000 });
+      const caught = result.catch((e) => e);
+      await vi.advanceTimersByTimeAsync(1500);
+      const err = await caught;
+      expect(err).toBeInstanceOf(FetchTimeoutError);
+      expect(err.timeoutMs).toBe(1000);
+      expect(err.message).toContain('https://example.com/slow-user.ttl');
+      expect(err.message).toContain('1 second');
+    });
+
+    it('throws it too when the headers never arrive, without trying other URLs after the wait', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+          })
+      );
+      const caught = fetchExternalOntologyTtl('https://example.com/no-headers.ttl', { throwOnCors: true, timeoutMs: 1000 }).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await caught).toBeInstanceOf(FetchTimeoutError);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) => String(c[0]).includes('no-headers'))).toHaveLength(1);
+    });
+
+    it('still returns null for a background read that is too slow', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 5000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/slow-background.ttl', { timeoutMs: 1000 });
+      await vi.advanceTimersByTimeAsync(1500);
       expect(await result).toBeNull();
     });
 

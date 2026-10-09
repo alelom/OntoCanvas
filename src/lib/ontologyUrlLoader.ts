@@ -1,8 +1,8 @@
-const RDF_EXTENSIONS = /\.(ttl|owl|rdf|rdfxml|n3|jsonld)$/i;
+const RDF_EXTENSIONS = /\.(ttl|owl|rdf|rdfxml|n3|jsonld)$/i;
 
 /** How long the ontology the user asked to open may take to arrive: some servers are slow (LOV's FOAF takes 5 to 10
- * seconds), and a timeout would make loading it fail at random. */
-export const ONTOLOGY_LOAD_TIMEOUT_MS = 30000;
+ * seconds), and a shorter timeout would make loading it fail at random. */
+export const ONTOLOGY_LOAD_TIMEOUT_MS = 15000;
 const HTML_EXTENSION = /\.html$/i;
 
 /**
@@ -73,18 +73,22 @@ export function getOntologyUrlCandidates(url: string): string[] {
  * @throws Error if the ontology cannot be fetched from any candidate URL
  */
 export async function fetchOntologyFromUrl(url: string): Promise<string> {
-  const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+  const { fetchExternalOntologyTtl, FetchTimeoutError } = await import('../externalOntologySearch');
   const candidates = getOntologyUrlCandidates(url);
+  let timedOut: { timeoutMs: number } | null = null;
   for (const candidate of candidates) {
     try {
       const ttl = await fetchExternalOntologyTtl(candidate, { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS });
       if (ttl && ttl.trim()) {
         return ttl;
       }
-    } catch {
+    } catch (err) {
       // Try the next candidate; the original URL is reported in the error below.
+      if (err instanceof FetchTimeoutError) timedOut = err;
     }
   }
+  // A slow server is not a missing ontology: say so, so that the user can try again.
+  if (timedOut) throw new FetchTimeoutError(url, timedOut.timeoutMs);
   // Always throw an error with the original URL in the message, not the candidate URL
   // This ensures the error message shows the URL the user provided, not an internal candidate
   throw new Error(`Failed to fetch ontology from ${url}`);
