@@ -14,105 +14,83 @@ export interface LocalFileMatch {
   handle: FileSystemFileHandle;
 }
 
+const RDF_EXTENSIONS = ['.ttl', '.turtle', '.owl', '.rdf', '.rdfxml', '.jsonld', '.json'];
+const RDF_EXTENSION_RE = /\.(ttl|turtle|owl|rdf|rdfxml|jsonld|json)$/i;
+
+/** An IRI without a trailing # or /, for comparing ontology IRIs. */
+const bareIri = (iri: string) => iri.replace(/[#/]$/, '');
+
 /**
- * Find a local file that matches the given external ontology URL.
- * Searches sibling files in the same directory as the current file.
- * 
- * @param fileHandle - The current file handle
- * @param fileName - The current file name
+ * Find the file in `directory` that defines the external ontology at `externalUrl` (its ontology IRI
+ * matches the URL). Likely names are tried first (from the open file's name and the URL); then every RDF
+ * file in the folder is read (#103).
+ *
+ * @param directory - The open ontology's folder (see getOrRequestOntologyDirectory)
+ * @param fileName - The open file's name
  * @param externalUrl - The external ontology URL to match
  * @returns The matching file data, or null if not found
  */
 export async function findMatchingLocalFile(
-  fileHandle: FileSystemFileHandle,
+  directory: FileSystemDirectoryHandle,
   fileName: string,
   externalUrl: string
 ): Promise<LocalFileMatch | null> {
-  // Check if getParent is available
-  if (!('getParent' in fileHandle) || typeof (fileHandle as FileSystemFileHandle & { getParent?: () => Promise<FileSystemDirectoryHandle> }).getParent !== 'function') {
-    return null;
+  const target = bareIri(externalUrl);
+  const tried = new Set<string>();
+
+  const tryFile = async (name: string, handle?: FileSystemFileHandle): Promise<LocalFileMatch | null> => {
+    if (tried.has(name)) return null;
+    tried.add(name);
+    try {
+      const fileHandle = handle ?? (await directory.getFileHandle(name));
+      const content = await (await fileHandle.getFile()).text();
+      const { parseResult } = await loadOntologyFromContent(content, name);
+      const base = getMainOntologyBase(parseResult.store);
+      if (!base || bareIri(base) !== target) return null;
+      return { content, fileName: name, pathHint: name, handle: fileHandle };
+    } catch {
+      return null; // missing, unreadable or not an ontology
+    }
+  };
+
+  // Likely names first: if the open file is "object-props-child-child.ttl" and the URL is
+  // "http://example.org/object-extended", try "object-props-child.ttl", "object-extended.ttl", …
+  const possibleNames = new Set<string>();
+  const currentBaseName = fileName ? fileName.replace(RDF_EXTENSION_RE, '') : '';
+  if (currentBaseName) {
+    for (const pattern of [
+      currentBaseName.replace(/-child-child$/, '-child'),
+      currentBaseName.replace(/-child$/, '-parent'),
+      currentBaseName.replace(/-parent$/, ''),
+    ]) {
+      for (const ext of RDF_EXTENSIONS) possibleNames.add(`${pattern}${ext}`);
+    }
+  }
+  try {
+    const urlObj = new URL(externalUrl);
+    const pathParts = urlObj.pathname.split('/').filter((part) => part);
+    const lastPart = pathParts[pathParts.length - 1] || urlObj.hostname.split('.')[0];
+    if (lastPart) for (const ext of RDF_EXTENSIONS) possibleNames.add(`${lastPart}${ext}`);
+  } catch {
+    // Not a URL: only the folder scan below can find it.
+  }
+  for (const name of possibleNames) {
+    const match = await tryFile(name);
+    if (match) return match;
   }
 
+  // Then every RDF file in the folder.
+  const values = (directory as FileSystemDirectoryHandle & { values?: () => AsyncIterable<FileSystemHandle> }).values;
+  if (typeof values !== 'function') return null;
   try {
-    const parentDir = await (fileHandle as FileSystemFileHandle & { getParent: () => Promise<FileSystemDirectoryHandle> }).getParent();
-    const normalizedExternalUrl = externalUrl.endsWith('#') ? externalUrl.slice(0, -1) : externalUrl;
-    const normalizedExternalUrlNoSlash = normalizedExternalUrl.replace(/\/$/, '');
-    
-    // Try to find all .ttl, .owl, .rdf files in the same directory
-    const rdfExtensions = ['.ttl', '.turtle', '.owl', '.rdf', '.rdfxml', '.jsonld', '.json'];
-    
-    // Get all files in the directory (if supported)
-    // Note: File System Access API doesn't provide a direct way to list files,
-    // so we'll try common patterns based on the current file name
-    const currentBaseName = fileName ? fileName.replace(/\.(ttl|turtle|owl|rdf|rdfxml|jsonld|json)$/i, '') : '';
-    
-    // Try patterns: if current file is "object-props-child-child.ttl" and we're looking for
-    // "http://example.org/object-extended", try "object-props-child.ttl", "object-extended.ttl", etc.
-    const possibleNames = new Set<string>();
-    
-    // Pattern 1: Based on current file name (remove one level of hierarchy)
-    if (currentBaseName) {
-      const patterns = [
-        currentBaseName.replace(/-child-child$/, '-child'),
-        currentBaseName.replace(/-child$/, '-parent'),
-        currentBaseName.replace(/-parent$/, ''),
-      ];
-      for (const pattern of patterns) {
-        for (const ext of rdfExtensions) {
-          possibleNames.add(`${pattern}${ext}`);
-        }
-      }
-    }
-    
-    // Pattern 2: Try to extract from URL
-    try {
-      const urlObj = new URL(externalUrl);
-      const pathParts = urlObj.pathname.split('/').filter(p => p);
-      const lastPart = pathParts[pathParts.length - 1] || urlObj.hostname.split('.')[0];
-      if (lastPart) {
-        for (const ext of rdfExtensions) {
-          possibleNames.add(`${lastPart}${ext}`);
-        }
-      }
-    } catch {
-      // Invalid URL, skip
-    }
-    
-    // Try each possible file name
-    for (const possibleFileName of possibleNames) {
-      try {
-        const siblingHandle = await parentDir.getFileHandle(possibleFileName);
-        const siblingFile = await siblingHandle.getFile();
-        const siblingContent = await siblingFile.text();
-        
-        // Check if this file's ontology base matches the external URL
-        const { parseResult: siblingParseResult } = await loadOntologyFromContent(siblingContent, possibleFileName);
-        const siblingBase = getMainOntologyBase(siblingParseResult.store);
-        const normalizedSiblingBase = siblingBase?.endsWith('#') ? siblingBase.slice(0, -1) : siblingBase;
-        const normalizedSiblingBaseNoSlash = normalizedSiblingBase?.replace(/\/$/, '');
-        
-        if (normalizedSiblingBase === normalizedExternalUrl || 
-            normalizedSiblingBaseNoSlash === normalizedExternalUrlNoSlash ||
-            normalizedSiblingBase === normalizedExternalUrlNoSlash ||
-            normalizedSiblingBaseNoSlash === normalizedExternalUrl) {
-          // Found matching local file!
-          return {
-            content: siblingContent,
-            fileName: possibleFileName,
-            pathHint: possibleFileName,
-            handle: siblingHandle,
-          };
-        }
-      } catch {
-        // File doesn't exist or can't be read, try next
-        continue;
-      }
+    for await (const entry of values.call(directory)) {
+      if (entry.kind !== 'file' || !RDF_EXTENSION_RE.test(entry.name) || entry.name === fileName) continue;
+      const match = await tryFile(entry.name, entry as FileSystemFileHandle);
+      if (match) return match;
     }
   } catch {
-    // getParent not available or other error
-    return null;
+    // The folder can't be listed: nothing more to try.
   }
-  
   return null;
 }
 

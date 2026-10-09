@@ -76,10 +76,14 @@ describe('External Node URL E2E', () => {
   it('should have correct externalOntologyUrl for BaseClass in properties-child.ttl', async () => {
     await loadPropertiesChild(page);
 
-    // Record what "Open external ontology" would open instead of opening a tab.
+    // Record where "Open external ontology" would send its tab instead of opening one. A tab opened as
+    // about:blank (on the click, before any wait for the folder) is sent on by setting its location.
     await page.evaluate(() => {
       (window as any).__openedUrls = [];
       window.open = ((url?: string | URL) => {
+        if (String(url) === 'about:blank') {
+          return { location: { set href(u: string) { (window as any).__openedUrls.push(u); } } };
+        }
         (window as any).__openedUrls.push(String(url));
         return null;
       }) as typeof window.open;
@@ -115,6 +119,8 @@ describe('External Node URL E2E', () => {
 
     const openExternalBtn = page.locator('#contextMenu').getByText('Open external ontology');
     const [newTab] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), openExternalBtn.click()]);
+    // The tab opens blank and is sent to the ontology straight after.
+    await newTab.waitForURL((u) => u.searchParams.has('onto'), { timeout: 5000 });
 
     expect(newTab.url().startsWith(EDITOR_URL)).toBe(true);
     expect(ontoParam(newTab.url())).toBe(EXPECTED_OPENED_ONTO);

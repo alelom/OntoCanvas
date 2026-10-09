@@ -37,6 +37,8 @@ export interface DisplayConfig {
   viewState?: { scale: number; position: { x: number; y: number } };
   /** Whether to show nodes from external ontologies (referenced by object property domain/range). */
   displayExternalReferences?: boolean;
+  /** Draw data properties with domain owl:Thing once, under an owl:Thing node (default), rather than under every class (#80). */
+  clusterThingDataProperties?: boolean;
   /** Layout of external nodes: auto (use main layout) or always place right/top/bottom/left of connected local node. */
   externalNodeLayout?: ExternalNodeLayout;
 }
