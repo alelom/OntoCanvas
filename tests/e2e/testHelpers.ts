@@ -139,11 +139,11 @@ export async function getSaveButtonState(page: Page): Promise<{ visible: boolean
 /**
  * Serve the ontologies in `directory` under their own IRIs, so that the `owl:imports` of a test file can be
  * fetched (#104): a request for `http://example.org/base` gets the file whose ontology IRI that is, with CORS
- * allowed; any other example.org request is aborted. Call it after blockExternalRequests (the later route
+ * allowed (`extra` adds ontologies by IRI); any other example.org request is aborted. Call it after blockExternalRequests (the later route
  * wins) and before loading the file.
  */
-export async function serveOntologies(page: Page, directory: string): Promise<void> {
-  const served = new Map<string, string>();
+export async function serveOntologies(page: Page, directory: string, extra: Record<string, string> = {}): Promise<void> {
+  const served = new Map<string, string>(Object.entries(extra));
   for (const name of readdirSync(directory).filter((n) => n.endsWith('.ttl'))) {
     const content = readFileSync(join(directory, name), 'utf-8');
     const iri = /<([^>]+)>\s+(?:rdf:type|a)\s+owl:Ontology/.exec(content)?.[1];

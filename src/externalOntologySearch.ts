@@ -45,6 +45,11 @@ export class CorsOrNetworkError extends Error {
 export interface FetchExternalOntologyTtlOptions {
   /** When true, throw CorsOrNetworkError instead of returning null when the initial fetch throws (e.g. CORS). */
   throwOnCors?: boolean;
+  /** How long the whole request may take, headers and body (default 2000). The ontology a user asked to open
+   * may be slow (LOV's FOAF takes 5 to 10 seconds); the many background reads keep the short default. */
+  timeoutMs?: number;
+  /** Give up on a response larger than this many characters, and don't keep it (default: no limit). */
+  maxBytes?: number;
 }
 
 /**
@@ -52,6 +57,20 @@ export interface FetchExternalOntologyTtlOptions {
  * This ensures we fetch the TTL once and reuse it for both classes and object properties.
  */
 const externalTtlCache: Map<string, string> = new Map();
+
+/** The most ontologies kept in the cache, and the largest one kept (in characters): the texts stay in memory
+ * for the life of the page, and imports are read in the background (#104). */
+const MAX_CACHED_ONTOLOGIES = 50;
+const MAX_CACHED_CHARACTERS = 5_000_000;
+
+function rememberTtl(url: string, text: string): void {
+  if (text.length > MAX_CACHED_CHARACTERS) return;
+  if (!externalTtlCache.has(url) && externalTtlCache.size >= MAX_CACHED_ONTOLOGIES) {
+    const oldest = externalTtlCache.keys().next().value;
+    if (oldest !== undefined) externalTtlCache.delete(oldest);
+  }
+  externalTtlCache.set(url, text);
+}
 
 /**
  * Fetches and parses an external ontology to extract OWL classes.
@@ -88,6 +107,7 @@ export async function fetchExternalOntologyTtl(
   options?: FetchExternalOntologyTtlOptions
 ): Promise<string | null> {
   const throwOnCors = options?.throwOnCors === true;
+  const timeoutMs = options?.timeoutMs ?? 2000;
   // Normalize URL (remove trailing # if present)
   const normalizedUrl = url.endsWith('#') ? url.slice(0, -1) : url;
   
@@ -120,9 +140,9 @@ export async function fetchExternalOntologyTtl(
     const timeoutId = setTimeout(() => {
       controller.abort();
       if (isDebugMode()) {
-        debugWarn(`Fetch timeout after 2s for ${normalizedUrl}`);
+        debugWarn(`Fetch timeout after ${timeoutMs / 1000}s for ${normalizedUrl}`);
       }
-    }, 2000); // 2 second timeout
+    }, timeoutMs);
     
     let response;
     try {
@@ -135,7 +155,8 @@ export async function fetchExternalOntologyTtl(
         redirect: 'follow', // Explicitly follow redirects (like curl -L)
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
+      // The timer stays on until the body has been read: a server that sends headers and then trickles the
+      // body would otherwise keep this (and anything waiting on it) pending for good.
     } catch (fetchErr) {
       clearTimeout(timeoutId);
       if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
@@ -161,6 +182,7 @@ export async function fetchExternalOntologyTtl(
     // If we got a response, process it normally
     if (response) {
       if (!response.ok) {
+        clearTimeout(timeoutId);
         if (isDebugMode()) {
           debugWarn(`Failed to fetch ${normalizedUrl}: HTTP ${response.status} ${response.statusText}`);
         }
@@ -173,7 +195,29 @@ export async function fetchExternalOntologyTtl(
         console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
       }
       
-      let text = await response.text();
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (options?.maxBytes !== undefined && declaredLength > options.maxBytes) {
+        clearTimeout(timeoutId);
+        controller.abort();
+        return null;
+      }
+      let text: string;
+      try {
+        text = await response.text();
+      } catch (readErr) {
+        clearTimeout(timeoutId);
+        if (isDebugMode()) {
+          debugWarn(`Could not read the body of ${normalizedUrl} (timeout or network error):`, readErr);
+        }
+        return null;
+      }
+      clearTimeout(timeoutId);
+      if (options?.maxBytes !== undefined && text.length > options.maxBytes) {
+        if (isDebugMode()) {
+          debugWarn(`Response from ${normalizedUrl} is larger than ${options.maxBytes} characters; ignored.`);
+        }
+        return null;
+      }
       if (isDebugMode()) {
         console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
       }
@@ -201,7 +245,7 @@ export async function fetchExternalOntologyTtl(
       
       if (isRdfContent) {
         // Content negotiation succeeded - cache and return the TTL text
-        externalTtlCache.set(normalizedUrl, text);
+        rememberTtl(normalizedUrl, text);
         return text;
       }
       
@@ -258,7 +302,7 @@ export async function fetchExternalOntologyTtl(
                 
                 if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
                   // Cache and return the TTL text
-                  externalTtlCache.set(normalizedUrl, text);
+                  rememberTtl(normalizedUrl, text);
                   return text;
                 }
               }
@@ -373,7 +417,7 @@ export async function fetchExternalOntologyTtl(
                       console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
                     }
                     // Cache and return the TTL text
-                    externalTtlCache.set(normalizedUrl, text);
+                    rememberTtl(normalizedUrl, text);
                     return text;
                   }
                 }
@@ -399,7 +443,7 @@ export async function fetchExternalOntologyTtl(
         debugWarn(`Unclear content type from ${normalizedUrl}, assuming it's Turtle`);
       }
       // Cache and return the text anyway
-      externalTtlCache.set(normalizedUrl, text);
+      rememberTtl(normalizedUrl, text);
       return text;
     }
     
@@ -459,7 +503,7 @@ export async function fetchExternalOntologyTtl(
                 console.log(`Successfully fetched Turtle from fallback URL: ${fallback.turtleUrl}, content-type: ${fallbackContentType}`);
               }
               // Cache and return the TTL text
-              externalTtlCache.set(normalizedUrl, fallbackText);
+              rememberTtl(normalizedUrl, fallbackText);
               return fallbackText;
             }
           }

@@ -69,8 +69,14 @@ export async function loadImportedOntologies(
 
   let level = getImportUrls(store);
   for (let depth = 1; depth <= maxDepth && level.length > 0; depth++) {
-    const toRead = level.filter((url) => !seen.has(url)).slice(0, Math.max(0, maxOntologies - result.length));
-    toRead.forEach((url) => seen.add(url));
+    // Chosen one by one, so that an ontology listed twice takes one slot, not two.
+    const toRead: string[] = [];
+    for (const url of level) {
+      if (result.length + toRead.length >= maxOntologies) break;
+      if (seen.has(url)) continue;
+      seen.add(url);
+      toRead.push(url);
+    }
     const read = await Promise.all(toRead.map((url) => readImport(url, fetchTtl)));
     level = [];
     for (const imported of read) {
@@ -82,11 +88,21 @@ export async function loadImportedOntologies(
   return result;
 }
 
+/** The RDF format of a document, from its content. Turtle also reads N-Triples. */
+function sniffContentType(content: string): string {
+  const head = content.trimStart().slice(0, 200);
+  if (/^<\?xml|^<(?:rdf:)?RDF[\s>]/i.test(head)) return 'application/rdf+xml';
+  if (/^[{[]/.test(head)) return 'application/ld+json';
+  return 'text/turtle';
+}
+
 async function readImport(url: string, fetchTtl: (url: string) => Promise<string | null>): Promise<ImportedOntology | null> {
   try {
     const content = await fetchTtl(url);
     if (!content || !content.trim()) return null;
-    const { parseResult } = await loadOntologyFromContent(content, url);
+    // The format is read from the content, not the URL: a server may answer an "Accept: text/turtle" request for
+    // vocab.owl with Turtle, or one for a bare IRI with RDF/XML.
+    const { parseResult } = await loadOntologyFromContent(content, url, { contentType: sniffContentType(content) });
     return { url, store: parseResult.store };
   } catch {
     return null; // CORS, offline, not RDF: the import stays unread
@@ -119,6 +135,15 @@ export function readImportedDeclarations(imported: ImportedOntology[]): Property
     }
   }
   return { objectProperties, dataProperties, annotationProperties };
+}
+
+/** Whether `merged` differs from `before` in anything the canvas draws: the properties the file itself lists
+ * (their labels are on edges, their ranges on boxes). Properties added only as context are never drawn, so
+ * merging them needs no redraw. */
+export function mergeChangesWhatIsDrawn(before: PropertyLists, merged: PropertyLists): boolean {
+  const drawn = (lists: PropertyLists) =>
+    JSON.stringify([lists.objectProperties.filter((p) => !p.contextOnly), lists.dataProperties.filter((p) => !p.contextOnly)]);
+  return drawn(before) !== drawn(merged);
 }
 
 /** A label that is only the property's name says nothing; the import's label is better. */

@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getOntologyUrlCandidates, fetchOntologyFromUrl } from './ontologyUrlLoader';
+import { getOntologyUrlCandidates, fetchOntologyFromUrl, ONTOLOGY_LOAD_TIMEOUT_MS } from './ontologyUrlLoader';
 
 vi.mock('../externalOntologySearch', () => ({
   fetchExternalOntologyTtl: vi.fn(),
@@ -150,10 +150,12 @@ describe('ontologyUrlLoader', () => {
       const result = await fetchOntologyFromUrl('https://example.com/ontology.ttl');
       expect(result).toBe('@prefix : <#> .');
       expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(1);
+      // The ontology the user asked for may be slow (LOV's FOAF takes 5 to 10 seconds), so it gets a long timeout.
       expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
         'https://example.com/ontology.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
+      expect(ONTOLOGY_LOAD_TIMEOUT_MS).toBeGreaterThanOrEqual(20000);
     });
 
     it('tries ontology.ttl fallback when first candidate fails', async () => {
@@ -168,12 +170,12 @@ describe('ontologyUrlLoader', () => {
       expect(fetchExternalOntologyTtl).toHaveBeenNthCalledWith(
         1,
         'https://digitalconstruction.github.io/Processes/latest/',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
       expect(fetchExternalOntologyTtl).toHaveBeenNthCalledWith(
         2,
         'https://digitalconstruction.github.io/Processes/latest/ontology.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
     });
 
@@ -203,7 +205,7 @@ describe('ontologyUrlLoader', () => {
       // Should have tried the .ttl variant
       expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
         'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
     });
 
@@ -223,7 +225,7 @@ describe('ontologyUrlLoader', () => {
       expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(3);
       expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
         'https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
     });
 

@@ -105,8 +105,9 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
-import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, type PropertyLists } from './lib/importedDeclarations';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists } from './lib/importedDeclarations';
 import { beginImportsSettle, importsSettled } from './ui/importsSettle';
+import { escapeHtml } from './utils/escapeHtml';
 import { getOntologyInfo } from './ui/ontologyInfo';
 import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, importedNoteWrapChars, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
@@ -1276,6 +1277,8 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
 }
 
 function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElement, onApply: () => void): void {
+  // Declared only in an import (#104): editing it would write it into this ontology.
+  if (objectProperties.find((p) => p.name === type || p.uri === type)?.contextOnly) return;
   initEditRelationshipTypeHandlers(edgeStylesContent, onApply);
   const modal = document.getElementById('editRelationshipTypeModal')!;
   modal.dataset.type = type;
@@ -1541,7 +1544,7 @@ function initEdgeStylesMenu(
     
     const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, externalOntologyReferences, op, mainBase);
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${displayLabel}</span>
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
         <input type="checkbox" class="edge-show-cb" data-type="${htmlEscapedType}" checked>
         <span>Show</span>
@@ -1557,8 +1560,8 @@ function initEdgeStylesMenu(
       ${editBtn.replace(`data-type="${type}"`, `data-type="${htmlEscapedType}"`)}
       ${deleteBtn.replace(`data-type="${type}"`, `data-type="${htmlEscapedType}"`)}
     `;
-    // A property declared only in an import is not in this file to delete (#104).
-    if (op?.contextOnly) row.querySelector('.edge-delete-btn')?.remove();
+    // A property declared only in an import is not in this file: there is nothing to edit or delete (#104).
+    if (op?.contextOnly) row.querySelectorAll('.edge-edit-btn, .edge-delete-btn').forEach((btn) => btn.remove());
     const before = preserved.get(type);
     if (before) {
       (row.querySelector('.edge-show-cb') as HTMLInputElement).checked = before.show;
@@ -1720,10 +1723,10 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     const rangeDisplay = describeRange(dp);
     const rangeStyle = rangeDisplay.source === 'asserted' ? 'color: #666;' : 'color: #999; font-style: italic;';
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${propDisplayName}</span>
-      <span style="font-size: 11px; ${rangeStyle}" title="${rangeDisplay.tooltipNote}">${rangeDisplay.menuLabel}</span>
-      <button type="button" class="data-prop-edit-btn" data-name="${dp.name}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
-      ${dp.contextOnly ? '' : `<button type="button" class="data-prop-delete-btn" data-name="${dp.name}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`}
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(propDisplayName)}</span>
+      <span style="font-size: 11px; ${rangeStyle}" title="${escapeHtml(rangeDisplay.tooltipNote)}">${escapeHtml(rangeDisplay.menuLabel)}</span>
+      ${dp.contextOnly ? '' : `<button type="button" class="data-prop-edit-btn" data-name="${escapeHtml(dp.name)}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
+      <button type="button" class="data-prop-delete-btn" data-name="${escapeHtml(dp.name)}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`}
     `;
     dataPropsContent.appendChild(row);
   });
@@ -2223,6 +2226,8 @@ function renderDomainsList(domainsListEl: HTMLElement, domains: string[], hasGlo
 }
 
 function showEditDataPropertyModal(name: string): void {
+  // Declared only in an import (#104): editing it would write it into this ontology.
+  if (dataProperties.find((p) => p.name === name)?.contextOnly) return;
   initEditDataPropertyHandlers();
   const modal = document.getElementById('editDataPropertyModal')!;
   (modal as HTMLElement).dataset.dataPropName = name;
@@ -6740,6 +6745,10 @@ function currentDataProperties(store: NonNullable<typeof ttlStore>): DataPropert
     : own;
 }
 
+/** How long, and how large, one imported ontology may be when it is read in the background (#104). */
+const IMPORT_READ_TIMEOUT_MS = 8000;
+const IMPORT_READ_MAX_CHARACTERS = 5_000_000;
+
 /** Re-render the property menus after the declarations of the imports were merged in (#104). The edge
  * styles already set are kept; the annotation menu keeps its own. */
 function refreshPropertyMenus(): void {
@@ -6761,15 +6770,21 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
   beginImportsSettle();
   void (async () => {
     try {
-      const imported = await loadImportedOntologies(store, (url) => fetchExternalOntologyTtl(url));
+      // Background reads are bounded: a slow or huge import is given up on, not waited for (and not kept).
+      const imported = await loadImportedOntologies(store, (url) =>
+        fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_CHARACTERS })
+      );
       if (store !== ttlStore || imported.length === 0) return;
       importedDeclarations = readImportedDeclarations(imported);
-      const merged = mergeImportedDeclarations({ objectProperties, dataProperties, annotationProperties }, importedDeclarations);
+      const before = { objectProperties, dataProperties, annotationProperties };
+      const merged = mergeImportedDeclarations(before, importedDeclarations);
       objectProperties = merged.objectProperties;
       dataProperties = merged.dataProperties;
       annotationProperties = merged.annotationProperties;
       refreshPropertyMenus();
-      applyFilter(true); // the labels of properties used in edges may have come from an import
+      // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
+      // uses came from an import; properties added as context are never drawn.
+      if (mergeChangesWhatIsDrawn(before, merged)) applyFilter(true);
     } catch (err) {
       debugWarn('Could not read the declarations of the imports:', err);
     } finally {

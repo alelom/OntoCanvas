@@ -17,6 +17,7 @@ import {
   loadImportedOntologies,
   readImportedDeclarations,
   mergeImportedDeclarations,
+  mergeChangesWhatIsDrawn,
 } from '../../src/lib/importedDeclarations';
 import type { AnnotationPropertyInfo, DataPropertyInfo, ObjectPropertyInfo } from '../../src/types';
 
@@ -88,6 +89,39 @@ describe('loadImportedOntologies', () => {
 
     expect(imported.map((i) => i.url)).toEqual(['http://x/b']);
     expect(asked).toEqual(['http://x/b']);
+  });
+
+  it('reads an ontology imported twice at the same level once, and still reaches the ones after it', async () => {
+    // main imports A and B; A imports C, B imports C and D: the second level is [C, C, D].
+    const ont = (iri: string, imports: string[]) =>
+      `@prefix owl: <http://www.w3.org/2002/07/owl#> . <${iri}> a owl:Ontology${imports.map((i) => ` ; owl:imports <${i}>`).join('')} .`;
+    const served = {
+      'http://x/a': ont('http://x/a', ['http://x/c']),
+      'http://x/b': ont('http://x/b', ['http://x/c', 'http://x/d']),
+      'http://x/c': ont('http://x/c', []),
+      'http://x/d': ont('http://x/d', []),
+    };
+    const { fetchTtl, asked } = fakeFetch(served);
+    const main = (await loadOntologyFromContent(ont('http://x/main', ['http://x/a', 'http://x/b']), 'main.ttl')).parseResult.store;
+
+    // Room for exactly the four: a duplicate must not take a slot that D needs.
+    const imported = await loadImportedOntologies(main, fetchTtl, { maxOntologies: 4 });
+
+    expect(imported.map((i) => i.url).sort()).toEqual(['http://x/a', 'http://x/b', 'http://x/c', 'http://x/d']);
+    expect(asked.filter((u) => u === 'http://x/c')).toHaveLength(1);
+  });
+
+  it('reads Turtle served for a URL that looks like RDF/XML (content negotiation), and the other way round', async () => {
+    const turtle = '@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . <http://x/vocab> a owl:Ontology . <http://x/vocab#p> a owl:ObjectProperty ; rdfs:label "p" .';
+    const rdfXml = '<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:owl="http://www.w3.org/2002/07/owl#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"><owl:Ontology rdf:about="http://x/other"/><owl:ObjectProperty rdf:about="http://x/other#q"><rdfs:label>q</rdfs:label></owl:ObjectProperty></rdf:RDF>';
+    const main = '@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://x/main> a owl:Ontology ; owl:imports <http://x/vocab.owl> , <http://x/other> .';
+    const { fetchTtl } = fakeFetch({ 'http://x/vocab.owl': turtle, 'http://x/other': rdfXml });
+    const store = (await loadOntologyFromContent(main, 'main.ttl')).parseResult.store;
+
+    const imported = await loadImportedOntologies(store, fetchTtl);
+
+    expect(imported.map((i) => i.url).sort()).toEqual(['http://x/other', 'http://x/vocab.owl']);
+    expect(readImportedDeclarations(imported).objectProperties.map((p) => p.label).sort()).toEqual(['p', 'q']);
   });
 
   it('stops at the depth limit', async () => {
@@ -235,5 +269,33 @@ describe('mergeImportedDeclarations', () => {
     expect(mergeImportedDeclarations(local, empty)).toEqual(local);
     mergeImportedDeclarations(local, { ...empty, objectProperties: [op({ name: 'http://x#b', uri: 'http://x#b' })] });
     expect(JSON.stringify(local)).toBe(before);
+  });
+});
+
+describe('mergeChangesWhatIsDrawn', () => {
+  const empty = { objectProperties: [], dataProperties: [], annotationProperties: [] };
+  const op = (o: Partial<ObjectPropertyInfo> & { name: string }): ObjectPropertyInfo => ({ label: o.name, hasCardinality: true, ...o });
+  const dp = (o: Partial<DataPropertyInfo> & { name: string }): DataPropertyInfo => ({ label: o.name, range: null, domains: [], hasGlobalDomain: false, ...o });
+
+  it('is false when the merge only added properties as context: nothing on the canvas changes', () => {
+    const local = { ...empty, objectProperties: [op({ name: 'a' })] };
+    const merged = mergeImportedDeclarations(local, { ...empty, objectProperties: [op({ name: 'http://x#b', uri: 'http://x#b' })], dataProperties: [dp({ name: 'n', uri: 'http://x#n' })] });
+    expect(mergeChangesWhatIsDrawn(local, merged)).toBe(false);
+  });
+
+  it('is true when the merge filled in a property the file uses: its label or range is drawn', () => {
+    const uri = 'http://x#r';
+    const local = { ...empty, objectProperties: [op({ name: uri, label: 'r' })] };
+    const merged = mergeImportedDeclarations(local, { ...empty, objectProperties: [op({ name: uri, uri, label: 'the r' })] });
+    expect(mergeChangesWhatIsDrawn(local, merged)).toBe(true);
+
+    const dLocal = { ...empty, dataProperties: [dp({ name: 'd', uri: 'http://x#d' })] };
+    const dMerged = mergeImportedDeclarations(dLocal, { ...empty, dataProperties: [dp({ name: 'd', uri: 'http://x#d', range: 'http://www.w3.org/2001/XMLSchema#string' })] });
+    expect(mergeChangesWhatIsDrawn(dLocal, dMerged)).toBe(true);
+  });
+
+  it('is false when there is nothing to merge', () => {
+    const local = { ...empty, objectProperties: [op({ name: 'a' })] };
+    expect(mergeChangesWhatIsDrawn(local, mergeImportedDeclarations(local, empty))).toBe(false);
   });
 });

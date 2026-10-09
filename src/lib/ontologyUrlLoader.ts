@@ -1,4 +1,8 @@
-const RDF_EXTENSIONS = /\.(ttl|owl|rdf|rdfxml|n3|jsonld)$/i;
+const RDF_EXTENSIONS = /\.(ttl|owl|rdf|rdfxml|n3|jsonld)$/i;
+
+/** How long the ontology the user asked to open may take to arrive: some servers are slow (LOV's FOAF takes 5 to 10
+ * seconds), and a timeout would make loading it fail at random. */
+export const ONTOLOGY_LOAD_TIMEOUT_MS = 30000;
 const HTML_EXTENSION = /\.html$/i;
 
 /**
@@ -73,7 +77,7 @@ export async function fetchOntologyFromUrl(url: string): Promise<string> {
   const candidates = getOntologyUrlCandidates(url);
   for (const candidate of candidates) {
     try {
-      const ttl = await fetchExternalOntologyTtl(candidate, { throwOnCors: true });
+      const ttl = await fetchExternalOntologyTtl(candidate, { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS });
       if (ttl && ttl.trim()) {
         return ttl;
       }

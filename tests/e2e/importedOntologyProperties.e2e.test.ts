@@ -323,7 +323,7 @@ describe('Imported Ontology Properties E2E', () => {
       }
     });
 
-    it('cannot be deleted from the loaded ontology', async () => {
+    it('cannot be edited or deleted: they are not in the loaded ontology', async () => {
       await serveOntologies(page, TEST_FIXTURES_DIR);
       await loadTestFile(page, join(TEST_FIXTURES_DIR, 'properties-child.ttl'));
       await waitForImportsSettled(page);
@@ -331,6 +331,35 @@ describe('Imported Ontology Properties E2E', () => {
       await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
       expect(await page.locator('#dataPropsContent .data-prop-delete-btn[data-name="name"]').count()).toBe(0);
       expect(await page.locator('#edgeStylesContent .edge-delete-btn[data-type="http://example.org/base#hasProperty"]').count()).toBe(0);
+      // No Edit button either, and the dialogs refuse them however they are reached: confirming one would write the
+      // import's declaration into this ontology.
+      expect(await page.locator('#dataPropsContent .data-prop-edit-btn[data-name="name"]').count()).toBe(0);
+      expect(await page.locator('#edgeStylesContent .edge-edit-btn[data-type="http://example.org/base#hasProperty"]').count()).toBe(0);
+      await page.evaluate(() => (window as any).__EDITOR_TEST__.openEditDataPropertyModal('name'));
+      expect(await page.evaluate(() => getComputedStyle(document.getElementById('editDataPropertyModal')!).display)).toBe('none');
+    });
+
+    it('show the text of a label read from an import, never run it as markup', async () => {
+      const markup = '<img src=x onerror="window.__xss=1">';
+      const evil = `@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/evil> a owl:Ontology .
+<http://example.org/evil#rel> a owl:ObjectProperty ; rdfs:label "${markup.replace(/"/g, '\\"')}" .
+<http://example.org/evil#dp> a owl:DatatypeProperty ; rdfs:label "${markup.replace(/"/g, '\\"')}" .`;
+      await serveOntologies(page, TEST_FIXTURES_DIR, { 'http://example.org/evil': evil });
+      await openEditorWithTtl(
+        page,
+        `@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/victim> a owl:Ontology ; owl:imports <http://example.org/evil> .
+<http://example.org/victim#A> a owl:Class ; rdfs:label "A" .`
+      );
+      await waitForImportsSettled(page);
+      await openMenuAndReadText(page, 'edgeStylesMenu', 'img');
+      await openMenuAndReadText(page, 'dataPropsMenu', 'img');
+
+      expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+      expect(await page.locator('#edgeStylesContent img, #dataPropsContent img').count()).toBe(0);
+      expect(await page.evaluate(() => document.getElementById('edgeStylesContent')!.textContent)).toContain('<img src=x');
+      expect(await page.evaluate(() => document.getElementById('dataPropsContent')!.textContent)).toContain('<img src=x');
     });
 
     it('leave the imports unread, and the ontology as it was, when they cannot be fetched', async () => {
