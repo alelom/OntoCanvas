@@ -902,7 +902,12 @@ function performDeleteSelection(): boolean {
   const storeChange = diffStore(storeBefore, ttlStore);
   const graphAfter = snapshotGraph(rawData);
   const userAddedAfter = [...userAddedExternalNodes];
-  const graphChanged = graphAfter.nodes.length !== graphBefore.nodes.length || graphAfter.edges.length !== graphBefore.edges.length;
+  // A node added from a referenced ontology with no relationship lives only in userAddedExternalNodes: deleting
+  // it changes neither the store nor the graph data, but is still a change (#107 review).
+  const graphChanged =
+    graphAfter.nodes.length !== graphBefore.nodes.length ||
+    graphAfter.edges.length !== graphBefore.edges.length ||
+    userAddedAfter.length !== userAddedBefore.length;
   if (storeChange.removed.length === 0 && storeChange.added.length === 0 && !graphChanged) return false;
 
   // Clear search so children of deleted nodes remain visible (they were shown as neighbors)
