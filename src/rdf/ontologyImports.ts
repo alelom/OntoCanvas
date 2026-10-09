@@ -1,6 +1,6 @@
 /**
  * The owl:imports a save adds for the external references (#90): on the ontology's real subject, skipping
- * the W3C core namespaces and imports the ontology already has.
+ * the W3C core namespaces and URLs the document already imports.
  */
 import { DataFactory, type Store } from 'n3';
 import { STANDARD_NAMESPACES } from '../turtlePostProcess';
@@ -19,8 +19,10 @@ export function ontologyImportsToAdd(
     .getQuads(null, DataFactory.namedNode(RDF_TYPE), DataFactory.namedNode(OWL + 'Ontology'), null)
     .find((q) => q.subject.termType === 'NamedNode')?.subject.value;
   if (!ontology) return null;
+  // Imports on any subject: the external references are read from every owl:imports, so one that another
+  // ontology in the document already imports belongs to that ontology and must not be copied onto this one.
   const present = new Set(
-    store.getQuads(DataFactory.namedNode(ontology), DataFactory.namedNode(OWL + 'imports'), null, null).map((q) => normalize(q.object.value))
+    store.getQuads(null, DataFactory.namedNode(OWL + 'imports'), null, null).map((q) => normalize(q.object.value))
   );
   const imports: string[] = [];
   for (const { url } of externalRefs) {

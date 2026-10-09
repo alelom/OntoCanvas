@@ -55,6 +55,14 @@ describe('Turtle saved without a source cache (#90)', () => {
     expect(names).toEqual([...new Set(names)]);
   });
 
+  it('does not copy another ontology\'s import onto the first one (#107 review)', async () => {
+    // The external references come from owl:imports on any subject, so an import B already has is not A's.
+    const ttl = `@prefix owl: <${OWL}> .\n<http://example.org/a> a owl:Ontology .\n<http://example.org/b> a owl:Ontology ; owl:imports <http://example.org/other> .\n`;
+    const { quads } = await saveWithoutSource(ttl, 'ab.ttl');
+    const imports = quads.filter((q) => q.object.value === 'http://example.org/other');
+    expect(imports.map((q) => q.subject.value)).toEqual(['http://example.org/b']);
+  });
+
   it('does not add an import the ontology already has', async () => {
     const ttl = `@prefix owl: <${OWL}> .\n<http://example.org/x> a owl:Ontology ; owl:imports <http://example.org/other> .\n`;
     const { quads } = await saveWithoutSource(ttl, 'x.ttl');
