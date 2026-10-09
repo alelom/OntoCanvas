@@ -76,6 +76,7 @@ import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } fr
 import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { edgeLock, type EdgeLock } from './lib/edgeEditability';
+import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -3912,29 +3913,6 @@ function getEdgeIdAtLabelPoint(net: Network, domPos: { x: number; y: number }): 
   return findEdgeIdAtLabelPoint(boxes, canvasPos);
 }
 
-/** Singleton tooltip element used when hovering an edge label (vis-network only shows its own
- * tooltip when hovering the edge line). */
-let edgeLabelTooltipEl: HTMLDivElement | null = null;
-function showEdgeLabelTooltip(text: string, clientX: number, clientY: number): void {
-  if (!edgeLabelTooltipEl) {
-    edgeLabelTooltipEl = document.createElement('div');
-    edgeLabelTooltipEl.className = 'edge-label-tooltip';
-    edgeLabelTooltipEl.style.cssText =
-      'position: fixed; z-index: 10000; pointer-events: none; max-width: 320px; ' +
-      'background: #fff; border: 1px solid #bbb; border-radius: 4px; padding: 6px 8px; ' +
-      'font-size: 12px; color: #2c3e50; box-shadow: 0 2px 6px rgba(0,0,0,0.15); white-space: pre-wrap;';
-    document.body.appendChild(edgeLabelTooltipEl);
-  }
-  edgeLabelTooltipEl.textContent = text;
-  edgeLabelTooltipEl.style.display = 'block';
-  // Offset slightly from the cursor.
-  edgeLabelTooltipEl.style.left = `${clientX + 12}px`;
-  edgeLabelTooltipEl.style.top = `${clientY + 12}px`;
-}
-function hideEdgeLabelTooltip(): void {
-  if (edgeLabelTooltipEl) edgeLabelTooltipEl.style.display = 'none';
-}
-
 function setupNetworkSelectionAndNavigation(
   net: Network,
   container: HTMLElement
@@ -4026,35 +4004,33 @@ function setupNetworkSelectionAndNavigation(
         animation: false,
       });
       rightPanStart = { ...rightPanStart, x: coords.x, y: coords.y, viewPos: newViewPos };
-      hideEdgeLabelTooltip();
+      hideCanvasTooltip();
       return;
     }
 
-    // Show the edge's tooltip when hovering its label box (vis-network only shows it on the line).
+    // One tooltip for whatever is under the cursor: edge label, class-expression mark, node or edge line (#109).
     const target = e.target as Node;
     const overContainer =
       container.contains(target) || (container.querySelector('canvas')?.contains(target) ?? false);
     if (!overContainer) {
-      hideEdgeLabelTooltip();
+      hideCanvasTooltip();
       return;
     }
-    const edgeId = getEdgeIdAtLabelPoint(net, coords);
-    if (edgeId) {
-      const edge = (net as unknown as { body?: { edges?: Record<string, { options?: { title?: string } }> } })
-        .body?.edges?.[edgeId];
-      const title = edge?.options?.title;
-      if (title) {
-        showEdgeLabelTooltip(String(title), e.clientX, e.clientY);
-        return;
-      }
-    }
-    // Hovering a class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
-    const exprTip = classExprMarks.tooltipAt(net.DOMtoCanvas(coords));
-    if (exprTip) {
-      showEdgeLabelTooltip(exprTip, e.clientX, e.clientY);
-      return;
-    }
-    hideEdgeLabelTooltip();
+    const body = (net as unknown as { body?: { nodes?: Record<string, { options?: { title?: unknown } }>; edges?: Record<string, { options?: { title?: unknown } }> } }).body;
+    const titleOf = (item: { options?: { title?: unknown } } | undefined) =>
+      typeof item?.options?.title === 'string' ? item.options.title : null;
+    const labelEdgeId = getEdgeIdAtLabelPoint(net, coords);
+    const nodeId = net.getNodeAt(coords);
+    const lineEdgeId = nodeId === undefined ? net.getEdgeAt(coords) : undefined;
+    const text = pickTooltip({
+      edgeLabel: labelEdgeId ? titleOf(body?.edges?.[labelEdgeId]) : null,
+      // A class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
+      expressionMark: classExprMarks.tooltipAt(net.DOMtoCanvas(coords)),
+      node: nodeId !== undefined ? titleOf(body?.nodes?.[String(nodeId)]) : null,
+      edgeLine: lineEdgeId !== undefined ? titleOf(body?.edges?.[String(lineEdgeId)]) : null,
+    });
+    if (text) showCanvasTooltip(text, e.clientX, e.clientY);
+    else hideCanvasTooltip();
   };
 
   const handleMouseUp = (e: MouseEvent) => {
@@ -4083,7 +4059,7 @@ function setupNetworkSelectionAndNavigation(
 
   const handleMouseLeave = () => {
     rightPanStart = null;
-    hideEdgeLabelTooltip();
+    hideCanvasTooltip();
   };
 
   // Prevent browser context menu on container and all its children (including canvas)

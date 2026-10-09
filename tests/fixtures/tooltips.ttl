@@ -1,0 +1,21 @@
+@prefix : <http://example.org/tooltips#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# A class and a relationship with comments, for the hover tooltips (#109).
+
+<http://example.org/tooltips> rdf:type owl:Ontology .
+
+:writes rdf:type owl:ObjectProperty ;
+    rdfs:label "writes" ;
+    rdfs:comment "The author of a book." ;
+    rdfs:domain :Author ;
+    rdfs:range :Book .
+
+:Author rdf:type owl:Class ;
+    rdfs:label "Author" ;
+    rdfs:comment "A person who writes books." .
+
+:Book rdf:type owl:Class ;
+    rdfs:label "Book" .
