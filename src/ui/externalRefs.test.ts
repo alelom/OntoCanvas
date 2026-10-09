@@ -105,6 +105,31 @@ describe('externalRefs', () => {
       expect(refs.some((r) => r.prefix === 'schema')).toBe(true);
     });
 
+    it('takes an IRI ending in a slash as the namespace itself, so an ontology such as FOAF adds no stray ref (#115)', () => {
+      const store = new Store();
+      const graph = DataFactory.defaultGraph();
+      const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+      const OWL = 'http://www.w3.org/2002/07/owl#';
+      const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+      const FOAF = 'http://xmlns.com/foaf/0.1/';
+      // The ontology IRI, and rdfs:isDefinedBy of every term, are the namespace itself.
+      store.addQuad(DataFactory.namedNode(FOAF), DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Ontology'), graph);
+      store.addQuad(DataFactory.namedNode(FOAF + 'Agent'), DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), graph);
+      store.addQuad(DataFactory.namedNode(FOAF + 'Agent'), DataFactory.namedNode(RDFS + 'isDefinedBy'), DataFactory.namedNode(FOAF), graph);
+
+      // getMainOntologyBase gives <ontology IRI>#, which for FOAF is http://xmlns.com/foaf/0.1/#
+      expect(extractUsedNamespaceRefsFromStore(store, FOAF + '#')).toEqual([]);
+    });
+
+    it('still finds the namespace of another ontology named by an IRI ending in a slash', () => {
+      const store = new Store();
+      const graph = DataFactory.defaultGraph();
+      const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
+      store.addQuad(DataFactory.namedNode('http://example.org/main#A'), DataFactory.namedNode(RDFS + 'isDefinedBy'), DataFactory.namedNode('http://purl.org/dc/terms/'), graph);
+      const refs = extractUsedNamespaceRefsFromStore(store, 'http://example.org/main#');
+      expect(refs.map((r) => r.url.replace(/[#/]$/, ''))).toContain('http://purl.org/dc/terms');
+    });
+
     it('excludes main ontology namespace from refs', () => {
       const store = new Store();
       const graph = DataFactory.defaultGraph();

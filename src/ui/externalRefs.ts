@@ -109,9 +109,13 @@ export function extractUsedNamespaceRefsFromStore(
 
   function addNamespace(iri: string): void {
     if (!iri || (!iri.startsWith('http://') && !iri.startsWith('https://'))) return;
+    // An IRI ending in a slash is a namespace itself, not a term in one (#115): FOAF's own IRI and the
+    // rdfs:isDefinedBy of its terms are http://xmlns.com/foaf/0.1/, not something in http://xmlns.com/foaf/.
     const ns = iri.includes('#')
       ? iri.slice(0, iri.indexOf('#') + 1)
-      : iri.replace(/\/?[^/]*\/?$/, '/') || iri + '/';
+      : iri.endsWith('/')
+        ? iri
+        : iri.replace(/\/?[^/]*\/?$/, '/') || iri + '/';
     let normalized = (ns.endsWith('#') ? ns.slice(0, -1) : ns).replace(/\/$/, '');
     normalized = toCanonicalVocabularyNamespace(normalized);
     if (seen.has(normalized)) return;

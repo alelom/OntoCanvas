@@ -1,5 +1,5 @@
 /**
- * The bottom bar (#113): "OntoCanvas v<version> | <ontology name> (prefix: <prefix>) | Nodes: n / Edges: m".
+ * The bottom bar (#113): "OntoCanvas v<version> | Ontology: <name> (prefix: <prefix>) | Nodes: n / Edges: m".
  * The ontology's name links to the file or URL it was opened from, and its prefix follows in brackets with the
  * prefix itself in italics; the node/edge count comes last, and is left out when embedded. The bars between
  * the parts are drawn by the stylesheet, so none is left dangling when a part is not shown. The name and prefix
@@ -76,7 +76,7 @@ describe('bottom bar (#113)', () => {
       'graphCounts',
     ]);
     expect(bar.order).not.toContain('filePathDisplay');
-    expect(bar.ontologyText).toBe('Status bar ontology (prefix: sb)');
+    expect(bar.ontologyText).toBe('Ontology: Status bar ontology (prefix: sb)');
     expect(bar.counts).toBe('Nodes: 2 / Edges: 1');
   }, 10000);
 
@@ -95,7 +95,8 @@ describe('bottom bar (#113)', () => {
 
     expect(bar.linkText).toBe('Status bar ontology');
     expect(bar.linkHref).toBe(ONTOLOGY_URL);
-    expect(bar.ontologyText).toBe('Status bar ontology (prefix: sb)');
+    // "Ontology:" is outside the link.
+    expect(bar.ontologyText).toBe('Ontology: Status bar ontology (prefix: sb)');
   }, 10000);
 
   it('sets the parts apart with a bar before each one shown, but not before the version', async () => {

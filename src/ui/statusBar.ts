@@ -225,7 +225,7 @@ function createLink(href: string, text: string, title: string): HTMLAnchorElemen
 }
 
 /**
- * The ontology part of the status bar (#113): the ontology's name, linking to the file or URL it was opened
+ * The ontology part of the status bar (#113): "Ontology: " and the ontology's name, linking to the file or URL it was opened
  * from when that is a URL, then "(prefix: <i>foaf</i>)" when the file declares a prefix for it. With no
  * ontology declared, the file's own name stands in; with neither, the part is hidden.
  */
@@ -240,6 +240,7 @@ function renderOntologyPart(): void {
     return;
   }
   el.style.display = '';
+  el.appendChild(document.createTextNode('Ontology: '));
   const where = [
     currentOntologyInfo ? `Ontology: ${currentOntologyInfo.iri}` : null,
     currentFilePath ? `File: ${currentFilePath}` : null,
