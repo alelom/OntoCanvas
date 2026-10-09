@@ -655,10 +655,12 @@ describe('externalOntologySearch', () => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
-    it('never fetches the reserved vocabularies (owl, rdf, rdfs, xsd), whatever is asked', async () => {
-      const result = fetchExternalOntologyTtl('http://www.w3.org/2002/07/owl', { fetchStandardVocabularies: true });
-      await vi.advanceTimersByTimeAsync(5);
-      expect(await result).toBeNull();
+    it('never fetches the reserved vocabularies (owl, rdf, rdfs, xsd, xml), whatever is asked', async () => {
+      for (const url of ['http://www.w3.org/2002/07/owl', 'http://www.w3.org/XML/1998/namespace#']) {
+        const result = fetchExternalOntologyTtl(url, { fetchStandardVocabularies: true });
+        await vi.advanceTimersByTimeAsync(5);
+        expect(await result).toBeNull();
+      }
       expect(global.fetch).not.toHaveBeenCalled();
     });
 

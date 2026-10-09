@@ -1,8 +1,10 @@
 /**
- * The OWL 2 reserved vocabulary: the IRIs in the owl, rdf, rdfs and xsd namespaces. The languages themselves
- * define them (OWL 2 Syntax, section 2.4), so there is no ontology that "defines" them and nothing to import:
- * they are not shown with a "defined by" note, are never fetched as external ontologies, and are not listed
- * as external references. The set is closed by the specification, so it is the one place that names it.
+ * The reserved vocabulary: the IRIs in the owl, rdf, rdfs and xsd namespaces (OWL 2 Syntax, section 2.4) and in
+ * the xml namespace (reserved by XML, for xml:lang and the like). The languages themselves define them, so there
+ * is no ontology that "defines" them and nothing to import, although tools often list them in owl:imports: they
+ * are not shown with a "defined by" note, are never fetched (the xml one answers with an HTML page, which
+ * would set off a string of fallback requests), and are not listed as external references. The set is closed
+ * by the specifications, so it is the one place that names it.
  *
  * It is a different thing from the vocabularies that are merely common (skos, foaf, dcterms, schema.org):
  * those are real third-party ontologies, and saying which one a term comes from is useful.
@@ -14,6 +16,7 @@ export const RESERVED_VOCABULARY_NAMESPACES: readonly string[] = [
   'http://www.w3.org/1999/02/22-rdf-syntax-ns',
   'http://www.w3.org/2000/01/rdf-schema',
   'http://www.w3.org/2001/XMLSchema',
+  'http://www.w3.org/XML/1998/namespace',
 ];
 
 const stripSeparators = (iri: string) => iri.replace(/[#/]+$/, '');

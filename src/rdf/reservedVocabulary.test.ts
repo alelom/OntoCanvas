@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { RESERVED_VOCABULARY_NAMESPACES, isReservedNamespace, isReservedVocabularyUri } from './reservedVocabulary';
 
-describe('the OWL 2 reserved vocabulary (owl, rdf, rdfs, xsd)', () => {
-  it('is the four namespaces the language itself defines, without a trailing # or /', () => {
+describe('the reserved vocabulary (owl, rdf, rdfs, xsd, and the xml namespace)', () => {
+  it('is the namespaces the languages themselves define, without a trailing # or /', () => {
     expect([...RESERVED_VOCABULARY_NAMESPACES].sort()).toEqual([
       'http://www.w3.org/1999/02/22-rdf-syntax-ns',
       'http://www.w3.org/2000/01/rdf-schema',
       'http://www.w3.org/2001/XMLSchema',
       'http://www.w3.org/2002/07/owl',
+      'http://www.w3.org/XML/1998/namespace',
     ]);
+  });
+
+  it('includes the xml namespace, which many ontologies list as an import although XML defines it (xml:lang)', () => {
+    expect(isReservedNamespace('http://www.w3.org/XML/1998/namespace#')).toBe(true);
+    expect(isReservedVocabularyUri('http://www.w3.org/XML/1998/namespace#lang')).toBe(true);
   });
 
   it('knows a namespace with or without its trailing # or /', () => {
