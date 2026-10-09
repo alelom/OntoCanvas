@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser } from 'playwright';
-import { launchBrowser } from './browser';
+import { launchBrowser, isExternalRequest } from './browser';
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 
@@ -28,6 +28,32 @@ const tryFetch = (page: import('playwright').Page, url: string) =>
       return (e as Error).name;
     }
   }, url);
+
+describe('isExternalRequest compares the whole origin', () => {
+  const editor = 'http://localhost:5173';
+  const external = (url: string, origin = editor) => isExternalRequest(new URL(url), origin);
+
+  it('lets the editor origin through', () => {
+    expect(external('http://localhost:5173/src/main.ts')).toBe(false);
+  });
+
+  it('blocks another port on localhost, another scheme, another loopback spelling and other hosts', () => {
+    expect(external('http://localhost:8080/')).toBe(true);
+    expect(external('https://localhost:5173/')).toBe(true);
+    expect(external('http://127.0.0.1:5173/')).toBe(true);
+    expect(external('https://example.com/')).toBe(true);
+  });
+
+  it('follows a custom editor URL (EDITOR_E2E_URL) in any loopback spelling', () => {
+    expect(external('http://127.0.0.1:4173/app.js', 'http://127.0.0.1:4173')).toBe(false);
+    expect(external('http://localhost:5173/', 'http://127.0.0.1:4173')).toBe(true);
+  });
+
+  it('ignores schemes that never reach the network', () => {
+    expect(external('data:text/plain,hi')).toBe(false);
+    expect(external('blob:http://localhost:5173/abc')).toBe(false);
+  });
+});
 
 describe('E2E network isolation', () => {
   it('aborts requests to external hosts in a page from browser.newPage()', async () => {

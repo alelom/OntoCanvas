@@ -49,11 +49,13 @@ for (let i = 1; i <= runs; i++) {
   for (const file of json.testResults ?? []) {
     const shortFile = String(file.name).replace(/^.*[\\/]tests[\\/]e2e[\\/]/, '');
     const tests = file.assertionResults ?? [];
-    if (tests.length === 0 && file.status === 'failed') {
-      failed.push(`${shortFile} (file failed to run)`);
-      const entry = failures.get(`${shortFile} (file failed to run)`) ?? { failed: 0, message: String(file.message ?? '').split('\n')[0] };
+    // A file can fail without a failed test: it did not run, or a hook (afterAll) threw after the tests passed.
+    if (file.status === 'failed' && !tests.some((t) => t.status === 'failed')) {
+      const label = `${shortFile} (${tests.length === 0 ? 'file failed to run' : 'file failed after its tests ran'})`;
+      failed.push(label);
+      const entry = failures.get(label) ?? { failed: 0, message: String(file.message ?? '').split('\n')[0] };
       entry.failed++;
-      failures.set(`${shortFile} (file failed to run)`, entry);
+      failures.set(label, entry);
     }
     for (const t of tests) {
       const name = `${shortFile} > ${t.fullName}`;
