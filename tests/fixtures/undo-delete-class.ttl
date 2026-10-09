@@ -1,0 +1,30 @@
+@prefix : <http://example.org/undo#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Deleting Wall and undoing must restore everything about it (#77): its comment, annotation,
+# subclass axiom, data restriction, the ∀ restriction pointing to it and the ∃ edge to it.
+
+<http://example.org/undo> rdf:type owl:Ontology .
+
+:note rdf:type owl:AnnotationProperty .
+:hasPart rdf:type owl:ObjectProperty .
+:faces rdf:type owl:ObjectProperty .
+:title rdf:type owl:DatatypeProperty .
+
+:Thing rdf:type owl:Class ;
+    rdfs:label "Thing" .
+
+:Wall rdf:type owl:Class ;
+    rdfs:label "Wall"@en ;
+    rdfs:comment "A vertical element." ;
+    :note "checked" ;
+    rdfs:subClassOf :Thing ,
+        [ rdf:type owl:Restriction ; owl:onProperty :title ; owl:onDataRange xsd:string ; owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ] .
+
+:Room rdf:type owl:Class ;
+    rdfs:label "Room" ;
+    rdfs:subClassOf [ rdf:type owl:Restriction ; owl:onProperty :hasPart ; owl:allValuesFrom :Wall ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :faces ; owl:someValuesFrom :Wall ] .

@@ -12,6 +12,7 @@ import { debugLog, debugWarn, debugError } from '../utils/debug';
 import { quadsAreDifferent } from '../parser';
 import { parsePropertyLinesWithStateMachine, type PropertyLineMatch } from './propertyLineParser';
 import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './turtlePrefixes';
+import { findSubClassOfItems, formatLikeOriginal } from './subClassOfListText';
 
 // ============================================================================
 // Phase 1: Core Data Structures
@@ -1069,14 +1070,14 @@ function restoreShortenedLiterals(
 const RDFS_SUBCLASSOF = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
 
 /**
- * If the only change to a class block is one or more ADDED rdfs:subClassOf items (every other
- * property unchanged, and no existing subClassOf item changed or removed), return the original
- * block text with the new item(s) spliced into the rdfs:subClassOf list — preserving the list's
- * existing multi-line / single-line formatting. Otherwise return null (caller falls back to full
- * serialization). This keeps hand-formatted, one-item-per-line subClassOf lists intact when an
- * edge or restriction is added.
+ * If the only changes to a class block are to its rdfs:subClassOf items (every other property
+ * unchanged), return the original block text with just those items edited: an added item is appended
+ * to the list, a changed item (e.g. a restriction whose cardinality was edited, which the store sees as
+ * one removed and one added) is rewritten in place in the original item's layout (#108), and a removed
+ * item is cut out with its separator. The list's other items and formatting stay as they were.
+ * Otherwise return null (caller falls back to full serialization).
  */
-function tryAppendSubClassOfItems(
+function tryEditSubClassOfItems(
   block: StatementBlock,
   cache: OriginalFileCache,
   prefixMap: Record<string, string>
@@ -1124,8 +1125,8 @@ function tryAppendSubClassOfItems(
   const oBlanks = groupBlanks(origQuads);
   const cBlanks = groupBlanks(curQuads);
 
-  // 3) Match each ORIGINAL subClassOf item to a current one; collect current items with no match
-  //    (the additions). Any original item without a current match means a removal/change → bail.
+  // 3) Match each ORIGINAL subClassOf item to a current one. Current items with no match are the
+  //    additions; original items with no match were removed or changed.
   type Item = { named?: string; blankId?: string };
   const subClassItems = (qs: N3Quad[]): Item[] =>
     qs.filter(isSubClassOf).map((q) =>
@@ -1143,16 +1144,17 @@ function tryAppendSubClassOfItems(
     const cg = cBlanks.get(c.blankId!) ?? [];
     return og.length > 0 && cg.length > 0 && blankNodesMatchByStructure(og, cg);
   };
+  const removedItems: Item[] = [];
   for (const o of oItems) {
     let found = false;
     for (let i = 0; i < cItems.length; i++) {
       if (matchedCur.has(i)) continue;
       if (itemsMatch(o, cItems[i])) { matchedCur.add(i); found = true; break; }
     }
-    if (!found) return null; // an existing item changed or was removed — not a pure append
+    if (!found) removedItems.push(o);
   }
   const newItems = cItems.filter((_, i) => !matchedCur.has(i));
-  if (newItems.length === 0) return null; // nothing added (shouldn't happen for isModified)
+  if (newItems.length === 0 && removedItems.length === 0) return null; // nothing changed here
 
   // 4) Render each new item to its inline text.
   const toPrefixed = (uri: string): string => {
@@ -1177,8 +1179,12 @@ function tryAppendSubClassOfItems(
     }
   }
 
-  // 5) Splice the new item(s) into the rdfs:subClassOf list in the original block text.
   const text = originalBlock.originalText;
+  if (removedItems.length > 0) {
+    return rewriteSubClassOfLists(text, prefixMap, oItems, removedItems, newItems, newItemTexts, oBlanks, cBlanks);
+  }
+
+  // 5) Splice the new item(s) into the rdfs:subClassOf list in the original block text.
   const scoMatch = text.match(/rdfs:subClassOf\b/);
   if (!scoMatch || scoMatch.index === undefined) return null;
   const valueStart = scoMatch.index + scoMatch[0].length;
@@ -1213,6 +1219,91 @@ function tryAppendSubClassOfItems(
   const insertAt = valueStart + trimmedLen;
   const addition = newItemTexts.map((t) => `,${sepWs}${t}`).join('');
   return text.slice(0, insertAt) + addition + text.slice(insertAt);
+}
+
+/**
+ * The edit part of tryEditSubClassOfItems when items were removed or changed (#108): find each original
+ * item's text, write a changed item in place (in the layout of the one it replaces), cut removed items
+ * out with their separator and append the remaining additions. Returns null when the text can't be
+ * matched to the items, or when a list would be left empty (the predicate itself would have to go).
+ */
+function rewriteSubClassOfLists(
+  text: string,
+  prefixMap: Record<string, string>,
+  oItems: { named?: string; blankId?: string }[],
+  removedItems: { named?: string; blankId?: string }[],
+  newItems: { named?: string; blankId?: string }[],
+  newItemTexts: string[],
+  oBlanks: Map<string, N3Quad[]>,
+  cBlanks: Map<string, N3Quad[]>
+): string | null {
+  const spans = findSubClassOfItems(text);
+  if (spans.length !== oItems.length) return null;
+
+  // What each span of text denotes: parse it as the object of a throwaway triple.
+  const prefixDecls = Object.entries(prefixMap).map(([p, ns]) => `@prefix ${p}: <${ns}> .`).join('\n');
+  const parsed = spans.map((s): { named?: string; quads?: N3Quad[] } | null => {
+    try {
+      const quads = new Parser().parse(`${prefixDecls}\n<urn:x:s> <urn:x:p> ${text.slice(s.start, s.end)} .`) as unknown as N3Quad[];
+      const obj = quads.find((q) => q.subject.value === 'urn:x:s')?.object;
+      if (obj?.termType === 'NamedNode') return { named: obj.value };
+      if (obj?.termType === 'BlankNode') return { quads: quads.filter((q) => q.subject.termType === 'BlankNode' && q.subject.value === obj.value) };
+      return null;
+    } catch {
+      return null;
+    }
+  });
+  const spanOfItem = new Map<object, number>();
+  const usedSpans = new Set<number>();
+  for (const o of oItems) {
+    const idx = parsed.findIndex((p, i) => {
+      if (usedSpans.has(i) || !p) return false;
+      if (o.named !== undefined) return p.named === o.named;
+      const og = oBlanks.get(o.blankId!) ?? [];
+      return !!p.quads && og.length > 0 && blankNodesMatchByStructure(og, p.quads);
+    });
+    if (idx < 0) return null;
+    usedSpans.add(idx);
+    spanOfItem.set(o, idx);
+  }
+
+  // Pair each removed item with the added item that replaces it: a restriction on the same property first.
+  const onProperty = (group: N3Quad[] | undefined) =>
+    group?.find((q) => (q.predicate as { value: string }).value === 'http://www.w3.org/2002/07/owl#onProperty')?.object.value;
+  const replacementText = new Map<number, string>(); // span index → new text
+  const pairedNew = new Set<number>();
+  const removedSpans = new Set<number>();
+  for (const r of removedItems) {
+    const rProp = r.blankId !== undefined ? onProperty(oBlanks.get(r.blankId)) : undefined;
+    const sameKind = (n: { named?: string; blankId?: string }) => (n.named !== undefined) === (r.named !== undefined);
+    let k = newItems.findIndex((n, i) => !pairedNew.has(i) && sameKind(n) && rProp !== undefined && onProperty(cBlanks.get(n.blankId ?? '')) === rProp);
+    if (k < 0) k = newItems.findIndex((n, i) => !pairedNew.has(i) && sameKind(n));
+    const span = spanOfItem.get(r)!;
+    if (k < 0) {
+      removedSpans.add(span);
+      continue;
+    }
+    pairedNew.add(k);
+    const original = text.slice(spans[span].start, spans[span].end);
+    replacementText.set(span, r.named !== undefined ? newItemTexts[k] : formatLikeOriginal(newItemTexts[k], original));
+  }
+  const appended = newItemTexts.filter((_, i) => !pairedNew.has(i));
+
+  // Rebuild each list from its kept items, each keeping the separator that preceded it.
+  let out = text;
+  const lists = [...new Set(spans.map((s) => s.list))];
+  for (const list of lists.reverse()) {
+    const idxs = spans.map((s, i) => ({ s, i })).filter(({ s }) => s.list === list).map(({ i }) => i);
+    const kept = idxs.filter((i) => !removedSpans.has(i));
+    const extra = list === lists[lists.length - 1] ? appended : []; // additions go to the first list
+    if (kept.length === 0 && extra.length === 0) return null;
+    const sepBefore = (i: number) => (i === idxs[0] ? '' : text.slice(spans[i - 1].end, spans[i].start));
+    const defaultSep = idxs.length > 1 ? sepBefore(idxs[1]) : ', ';
+    const parts = kept.map((i, n) => (n === 0 ? '' : sepBefore(i)) + (replacementText.get(i) ?? text.slice(spans[i].start, spans[i].end)));
+    const region = parts.join('') + extra.map((t, n) => (parts.length === 0 && n === 0 ? '' : defaultSep) + t).join('');
+    out = out.slice(0, spans[idxs[0]].start) + region + out.slice(spans[idxs[idxs.length - 1]].end);
+  }
+  return out;
 }
 
 /**
@@ -1425,15 +1516,15 @@ async function serializeBlockToTurtle(
   }
   const prefixMap: Record<string, string> = Object.fromEntries(prefixes);
   
-  // Targeted append: if the ONLY change to this block is added rdfs:subClassOf items (existing
-  // items and every other property unchanged), keep the original block text verbatim and splice
-  // the new item(s) into the list, preserving its existing per-item line formatting. This avoids
-  // the N3 Writer collapsing a hand-formatted multi-line subClassOf list onto a single line.
+  // Targeted list edit: if the ONLY changes to this block are to rdfs:subClassOf items (every other
+  // property unchanged), keep the original block text and edit just those items in the list, preserving
+  // its per-item line formatting (#108). This avoids the N3 Writer collapsing a hand-formatted
+  // multi-line subClassOf list onto a single line.
   if (block.originalText && block.isModified && cache) {
-    const appended = tryAppendSubClassOfItems(block, cache, prefixMap);
-    if (appended !== null) {
-      debugLog('[serializeBlockToTurtle] Used targeted subClassOf append to preserve list formatting');
-      return appended;
+    const edited = tryEditSubClassOfItems(block, cache, prefixMap);
+    if (edited !== null) {
+      debugLog('[serializeBlockToTurtle] Used targeted subClassOf edit to preserve list formatting');
+      return edited;
     }
   }
 

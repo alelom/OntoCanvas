@@ -200,6 +200,22 @@ describe('External refs visualization E2E', () => {
     expect(options!.title).toMatch(/Imported from/i);
   }, 10000);
 
+  it('deleting an isolated re-added external node removes it, and undo brings it back (#107 review)', async () => {
+    // A node added from a referenced ontology with no relationship lives only in the user-added list: deleting
+    // it changes neither the store nor the graph data, but must still remove it and be undoable.
+    await loadTaskAssignment(page);
+    await deleteNode(page, PROJECT_URI);
+    await searchReferencedOntology(page, 'Project');
+    await addReferencedClass(page, 'Project', PROJECT_URI);
+    const countWithProject = await getNodeCount(page);
+
+    await deleteNode(page, PROJECT_URI);
+    expect(await getNodeCount(page)).toBe(countWithProject - 1);
+
+    await page.evaluate(() => (window as any).__EDITOR_TEST__.performUndo());
+    await expect.poll(() => getNodeCount(page), { timeout: 5000 }).toBe(countWithProject);
+  }, 10000);
+
   it('external nodes show (Imported from ...) tooltip on hover', async () => {
     await loadTaskAssignment(page);
 

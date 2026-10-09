@@ -6,7 +6,6 @@ import { Store, DataFactory } from 'n3';
 import {
   getQuadsRemovedForExternalClass,
   removeExternalClassReferencesFromStore,
-  restoreQuadsToStore,
 } from './removeExternalReferences';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -66,8 +65,8 @@ describe('getQuadsRemovedForExternalClass', () => {
   });
 });
 
-describe('restoreQuadsToStore and undo round-trip', () => {
-  it('undo: getQuadsRemoved -> remove -> restore restores store state', () => {
+describe('getQuadsRemovedForExternalClass and removal', () => {
+  it('adding back the quads it returns restores the store', () => {
     const store = new Store();
     const assignedTo = DataFactory.namedNode(TA + 'assignedTo');
     const task = DataFactory.namedNode(TA + 'Task');
@@ -79,7 +78,7 @@ describe('restoreQuadsToStore and undo round-trip', () => {
     removeExternalClassReferencesFromStore(store, PM + 'Person');
     expect(store.getQuads(null, null, null, null).length).toBe(1);
 
-    restoreQuadsToStore(store, quadsToRestore);
+    store.addQuads(quadsToRestore);
     const rangeQuads = store.getQuads(assignedTo, DataFactory.namedNode(RDFS + 'range'), null, null);
     expect(rangeQuads.length).toBe(1);
     expect((rangeQuads[0].object as { value: string }).value).toBe(PM + 'Person');
@@ -106,12 +105,12 @@ describe('restrictions drawn as edges to an external class (#99 review)', () => 
     expect(subClassOfCount(store)).toBe(0);
   });
 
-  it('captures it for undo, and restoring brings it back', () => {
+  it('lists it among the quads removed, and adding those back restores it', () => {
     const { store } = build();
     const removed = getQuadsRemovedForExternalClass(store, PM + 'Person');
     expect(removed).toHaveLength(1);
     removeExternalClassReferencesFromStore(store, PM + 'Person');
-    restoreQuadsToStore(store, removed);
+    store.addQuads(removed);
     expect(subClassOfCount(store)).toBe(1);
   });
 });

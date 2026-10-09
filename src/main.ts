@@ -76,6 +76,7 @@ import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } fr
 import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { edgeLock, type EdgeLock } from './lib/edgeEditability';
+import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
 import {
@@ -101,11 +102,7 @@ import {
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
-import {
-  getQuadsRemovedForExternalClass,
-  removeExternalClassReferencesFromStore,
-  restoreQuadsToStore,
-} from './graph/removeExternalReferences';
+import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
 import { parseEdgeId } from './utils/edgeId';
 import {
   wrapText,
@@ -717,24 +714,6 @@ function updateUndoRedoButtons(): void {
   if (redoBtn) redoBtn.disabled = redoStack.length === 0;
 }
 
-// Helper to check if an edge already exists in rawData, handling both URI and local name formats
-function edgeExistsInRawData(from: string, to: string, type: string): boolean {
-  // Check exact match first
-  if (rawData.edges.some((e) => e.from === from && e.to === to && e.type === type)) {
-    return true;
-  }
-  // Check for URI/local name variations
-  const op = objectProperties.find((p) => p.name === type || p.uri === type);
-  if (op) {
-    return rawData.edges.some((e) => 
-      e.from === from && 
-      e.to === to && 
-      (e.type === op.name || e.type === op.uri)
-    );
-  }
-  return false;
-}
-
 function performDeleteSelection(): boolean {
   debugLog(`[DELETE] performDeleteSelection called`);
   if (!network || !ttlStore) {
@@ -792,12 +771,11 @@ function performDeleteSelection(): boolean {
     (e) => externalNodeIdsToRemove.includes(e.from) || externalNodeIdsToRemove.includes(e.to)
   );
 
-  const nodeUndoActions: Array<() => void> = [];
-  const nodeRedoActions: Array<() => void> = [];
-  const edgeUndoActions: Array<() => void> = [];
-  const edgeRedoActions: Array<() => void> = [];
-  const dataPropUndoActions: Array<() => void> = [];
-  const dataPropRedoActions: Array<() => void> = [];
+  // Undo puts back exactly what this delete changes in the store and the graph (#77). Rebuilding through the
+  // writers restored only part of a class (its label) and would turn read-only restriction kinds into ∃.
+  const storeBefore = snapshotStore(ttlStore);
+  const graphBefore = snapshotGraph(rawData);
+  const userAddedBefore = [...userAddedExternalNodes];
 
   // Remove edges BEFORE nodes. Restriction-based edges (contains, partOf) require the node's
   // subClassOf quads to still exist for removeEdgeFromStore to find and remove them.
@@ -808,7 +786,7 @@ function performDeleteSelection(): boolean {
     debugLog(`[DELETE] Processing edge deletion: ${from} -> ${to} : ${type}`);
     const edge = findShownEdge(from, to, type);
     // Edges the editor can't write back: restriction kinds other than ∃/onClass (removeEdgeFromStore would
-    // remove the wrong triples, and undo would re-add them as ∃; #63), edges drawn from a class
+    // remove the wrong triples; #63), edges drawn from a class
     // expression (removing one would drop the range or domain every member shares; #58), and restrictions on
     // an imported class (#99).
     const lock = edge ? edgeLock(edge) : null;
@@ -818,7 +796,6 @@ function performDeleteSelection(): boolean {
       continue;
     }
     debugLog(`[DELETE] Found edge in rawData:`, edge ? { from: edge.from, to: edge.to, type: edge.type, isRestriction: edge.isRestriction } : 'NOT FOUND');
-    const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     // Del key deletion should remove both restriction and domain/range
     try {
       debugLog(`[DELETE] Calling removeEdgeFromStore for: ${from} -> ${to} : ${type}`);
@@ -833,19 +810,6 @@ function performDeleteSelection(): boolean {
       } else {
         debugWarn(`[DELETE] WARNING: Edge not found in rawData at index ${idx} for: ${from} -> ${to} : ${type}`);
       }
-      edgeUndoActions.push(() => {
-        addEdgeToStore(ttlStore!, from, to, type, card);
-        // Check if edge already exists before pushing to avoid duplicates
-        if (!edgeExistsInRawData(from, to, type)) {
-          rawData.edges.push(edge ?? { from, to, type });
-        }
-      });
-      edgeRedoActions.push(() => {
-        // Del key deletion should remove both restriction and domain/range
-        removeEdgeFromStore(ttlStore!, from, to, type);
-        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-        if (i >= 0) rawData.edges.splice(i, 1);
-      });
     } catch (err) {
       // Edge not found in store (may only exist in rawData from domain/range)
       // Still remove from rawData
@@ -857,26 +821,8 @@ function performDeleteSelection(): boolean {
       if (idx >= 0) {
         const edge = rawData.edges[idx];
         debugLog(`[DELETE] Removing edge from rawData despite exception:`, { from: edge.from, to: edge.to, type: edge.type });
-        const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
         rawData.edges.splice(idx, 1);
         debugLog(`[DELETE] Removed edge from rawData after exception. Remaining edges: ${rawData.edges.length}`);
-        edgeUndoActions.push(() => {
-          addEdgeToStore(ttlStore!, from, to, type, card);
-          // Check if edge already exists before pushing to avoid duplicates
-          if (!edgeExistsInRawData(from, to, type)) {
-            rawData.edges.push(edge);
-          }
-        });
-        edgeRedoActions.push(() => {
-          // Del key deletion should remove both restriction and domain/range
-          try {
-            removeEdgeFromStore(ttlStore!, from, to, type);
-          } catch {
-            // Ignore errors in redo
-          }
-          const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-          if (i >= 0) rawData.edges.splice(i, 1);
-        });
       } else {
         debugWarn(`[DELETE] WARNING: Edge not found in rawData at index ${idx} after exception for: ${from} -> ${to} : ${type}`);
       }
@@ -896,76 +842,30 @@ function performDeleteSelection(): boolean {
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx < 0) continue;
       const [removedEdge] = rawData.edges.splice(idx, 1);
-      if (removedEdge.isRestriction) {
-        // A restriction drawn for the expression's pair names the deleted class inside its blank node, which
-        // removeNodeFromStore doesn't reach: remove just the restriction. No undo, as for #63's kinds.
-        removeRestrictionEdgeFromStore(ttlStore, from, to, type);
-        continue;
-      }
-      edgeUndoActions.push(() => {
-        if (!edgeExistsInRawData(from, to, type)) rawData.edges.push(removedEdge);
-      });
-      edgeRedoActions.push(() => {
-        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-        if (i >= 0) rawData.edges.splice(i, 1);
-      });
+      // A restriction drawn for the expression's pair names the deleted class inside its blank node, which
+      // removeNodeFromStore doesn't reach: remove just the restriction.
+      if (removedEdge.isRestriction) removeRestrictionEdgeFromStore(ttlStore, from, to, type);
       continue;
     }
     if (lock === 'restriction') {
-      // Deleting its class takes a read-only restriction with it: remove exactly its restriction(s). No undo
-      // is offered — addEdgeToStore would re-add it as ∃ (#63).
+      // Deleting its class takes a read-only restriction with it: remove exactly its restriction(s) (#63).
       removeRestrictionEdgeFromStore(ttlStore, from, to, type);
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
       continue;
     }
     if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
-    const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
     try {
       removeEdgeFromStore(ttlStore, from, to, type);
       // Successfully removed from store - remove from rawData
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
-      edgeUndoActions.push(() => {
-        addEdgeToStore(ttlStore!, from, to, type, card);
-        // Check if edge already exists before pushing to avoid duplicates
-        if (!edgeExistsInRawData(from, to, type)) {
-          rawData.edges.push(edge ?? { from, to, type });
-        }
-      });
-      edgeRedoActions.push(() => {
-        // Del key deletion should remove both restriction and domain/range
-        removeEdgeFromStore(ttlStore!, from, to, type);
-        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-        if (i >= 0) rawData.edges.splice(i, 1);
-      });
     } catch (err) {
       // Edge not found in store (may only exist in rawData from domain/range)
       // Still remove from rawData
       debugWarn(`Failed to remove connected edge from store: ${err instanceof Error ? err.message : String(err)}`);
       const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-      if (idx >= 0) {
-        const edge = rawData.edges[idx];
-        const card = edge && type !== 'subClassOf' ? { minCardinality: edge.minCardinality ?? null, maxCardinality: edge.maxCardinality ?? null } : undefined;
-        rawData.edges.splice(idx, 1);
-        edgeUndoActions.push(() => {
-          addEdgeToStore(ttlStore!, from, to, type, card);
-          // Check if edge already exists before pushing to avoid duplicates
-          if (!edgeExistsInRawData(from, to, type)) {
-            rawData.edges.push(edge);
-          }
-        });
-        edgeRedoActions.push(() => {
-          // Del key deletion should remove both restriction and domain/range
-          try {
-            removeEdgeFromStore(ttlStore!, from, to, type);
-          } catch {
-            // Ignore errors in redo
-          }
-          const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-          if (i >= 0) rawData.edges.splice(i, 1);
-        });
-      }
+      if (idx >= 0) rawData.edges.splice(idx, 1);
     }
   }
 
@@ -974,30 +874,11 @@ function performDeleteSelection(): boolean {
     const classNode = rawData.nodes.find((n) => n.id === classId);
     const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     if (!classNode || !restriction) continue;
-    
-    const oldMin = restriction.minCardinality ?? null;
-    const oldMax = restriction.maxCardinality ?? null;
-    
     removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
     const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
     if (nodeIndex >= 0) {
       rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, classId);
     }
-    
-    dataPropUndoActions.push(() => {
-      addDataPropertyRestrictionToClass(ttlStore!, classId, propertyName, { minCardinality: oldMin ?? undefined, maxCardinality: oldMax ?? undefined }, restriction.onDataRange);
-      const idx = rawData.nodes.findIndex((n) => n.id === classId);
-      if (idx >= 0) {
-        rawData.nodes[idx].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore!, classId);
-      }
-    });
-    dataPropRedoActions.push(() => {
-      removeDataPropertyRestrictionFromClass(ttlStore!, classId, propertyName);
-      const idx = rawData.nodes.findIndex((n) => n.id === classId);
-      if (idx >= 0) {
-        rawData.nodes[idx].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore!, classId);
-      }
-    });
   }
 
   for (const nodeId of nodesToRemove) {
@@ -1006,65 +887,28 @@ function performDeleteSelection(): boolean {
     removeNodeFromStore(ttlStore, nodeId);
     const idx = rawData.nodes.findIndex((n) => n.id === nodeId);
     if (idx >= 0) rawData.nodes.splice(idx, 1);
-    nodeUndoActions.push(() => {
-      addNodeToStore(ttlStore!, node.label, nodeId);
-      rawData.nodes.push(node);
-    });
-    nodeRedoActions.push(() => {
-      removeNodeFromStore(ttlStore!, nodeId);
-      const i = rawData.nodes.findIndex((n) => n.id === nodeId);
-      if (i >= 0) rawData.nodes.splice(i, 1);
-    });
   }
 
-  const externalUndoActions: (() => void)[] = [];
-  const externalRedoActions: (() => void)[] = [];
-
-  const userAddedBeingRemoved = userAddedExternalNodes.filter((n) => externalNodeIdsToRemove.includes(n.id));
   userAddedExternalNodes = userAddedExternalNodes.filter((n) => !externalNodeIdsToRemove.includes(n.id));
 
   for (const externalId of externalNodeIdsToRemove) {
-    const quadsToRestoreOnUndo = getQuadsRemovedForExternalClass(ttlStore, externalId);
-    const edgesForThisExternal = edgesConnectedToExternal.filter(
-      (e) => e.from === externalId || e.to === externalId
-    );
-    const edgesSnapshot = edgesForThisExternal.map((e) => ({ from: e.from, to: e.to, type: e.type }));
-    const userAddedNode = userAddedBeingRemoved.find((n) => n.id === externalId);
-
     removeExternalClassReferencesFromStore(ttlStore, externalId);
-    for (const e of edgesForThisExternal) {
+    for (const e of edgesConnectedToExternal.filter((e) => e.from === externalId || e.to === externalId)) {
       const idx = rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
       if (idx >= 0) rawData.edges.splice(idx, 1);
     }
-
-    externalUndoActions.push(() => {
-      restoreQuadsToStore(ttlStore!, quadsToRestoreOnUndo);
-      edgesSnapshot.forEach((e) => {
-        // Check if edge already exists before pushing to avoid duplicates
-        const existingEdge = rawData.edges.find((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
-        if (!existingEdge) {
-          rawData.edges.push(e);
-        }
-      });
-      if (userAddedNode) userAddedExternalNodes.push(userAddedNode);
-    });
-    externalRedoActions.push(() => {
-      removeExternalClassReferencesFromStore(ttlStore!, externalId);
-      edgesSnapshot.forEach((e) => {
-        const idx = rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
-        if (idx >= 0) rawData.edges.splice(idx, 1);
-      });
-      if (userAddedNode) userAddedExternalNodes = userAddedExternalNodes.filter((nn) => nn.id !== externalId);
-    });
   }
 
-  const hasActions =
-    nodeUndoActions.length +
-    edgeUndoActions.length +
-    dataPropUndoActions.length +
-    externalUndoActions.length >
-    0;
-  if (!hasActions) return false;
+  const storeChange = diffStore(storeBefore, ttlStore);
+  const graphAfter = snapshotGraph(rawData);
+  const userAddedAfter = [...userAddedExternalNodes];
+  // A node added from a referenced ontology with no relationship lives only in userAddedExternalNodes: deleting
+  // it changes neither the store nor the graph data, but is still a change (#107 review).
+  const graphChanged =
+    graphAfter.nodes.length !== graphBefore.nodes.length ||
+    graphAfter.edges.length !== graphBefore.edges.length ||
+    userAddedAfter.length !== userAddedBefore.length;
+  if (storeChange.removed.length === 0 && storeChange.added.length === 0 && !graphChanged) return false;
 
   // Clear search so children of deleted nodes remain visible (they were shown as neighbors)
   const searchEl = document.getElementById('searchQuery') as HTMLInputElement | null;
@@ -1075,16 +919,14 @@ function performDeleteSelection(): boolean {
 
   pushUndoable(
     () => {
-      nodeUndoActions.forEach((a) => a());
-      edgeUndoActions.forEach((a) => a());
-      dataPropUndoActions.forEach((a) => a());
-      externalUndoActions.forEach((a) => a());
+      revertStoreChange(ttlStore!, storeChange);
+      restoreGraph(rawData, graphBefore);
+      userAddedExternalNodes = [...userAddedBefore];
     },
     () => {
-      edgeRedoActions.forEach((a) => a());
-      nodeRedoActions.forEach((a) => a());
-      dataPropRedoActions.forEach((a) => a());
-      externalRedoActions.forEach((a) => a());
+      reapplyStoreChange(ttlStore!, storeChange);
+      restoreGraph(rawData, graphAfter);
+      userAddedExternalNodes = [...userAddedAfter];
     }
   );
   hasUnsavedChanges = true;

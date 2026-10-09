@@ -24,8 +24,7 @@ function restrictionLinksTo(store: Store, externalClassUri: string): Quad[] {
 }
 
 /**
- * Returns the quads that would be removed by removeExternalClassReferencesFromStore, without removing them.
- * Used to capture state for undo.
+ * Returns the quads that removeExternalClassReferencesFromStore removes, without removing them.
  */
 export function getQuadsRemovedForExternalClass(store: Store, externalClassUri: string): Quad[] {
   const externalNode = DataFactory.namedNode(externalClassUri);
@@ -34,15 +33,6 @@ export function getQuadsRemovedForExternalClass(store: Store, externalClassUri: 
     ...store.getQuads(null, DataFactory.namedNode(RDFS + 'range'), externalNode, null),
     ...restrictionLinksTo(store, externalClassUri),
   ];
-}
-
-/**
- * Restore quads that were previously removed (e.g. on undo).
- */
-export function restoreQuadsToStore(store: Store, quads: Quad[]): void {
-  for (const q of quads) {
-    store.addQuad(q.subject, q.predicate, q.object, q.graph);
-  }
 }
 
 /**
