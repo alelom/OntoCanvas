@@ -45,4 +45,5 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
-| [data-restriction-cardinality.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fdata-restriction-cardinality.ttl) | Data-property restrictions are saved in the OWL 2 qualified form; the older unqualified form is still read | #75 | [TTL](saving/data-restriction-cardinality.ttl) |
+| [data-restriction-cardinality.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fdata-restriction-cardinality.ttl) | Data-property restrictions are saved in the OWL 2 qualified form; the older unqualified form is still read; an edit changes only its own lines | #75, #108 | [TTL](saving/data-restriction-cardinality.ttl) |
+| [undo-delete-class.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fundo-delete-class.ttl) | Undo after deleting a class restores all of it: comment, annotation, axioms, restrictions, and read-only restrictions pointing to it | #77 | [TTL](saving/undo-delete-class.ttl) |

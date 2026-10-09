@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Parser } from 'n3';
+import { lineDiff } from './customSerializerTests/minimalDiff';
 import {
   parseRdfToGraph,
   storeToTurtle,
@@ -38,5 +39,23 @@ describe('examples/saving', () => {
     const predicates = quads.filter((q) => q.subject.equals(titleBlank)).map((q) => q.predicate.value.replace(OWL, 'owl:'));
     expect(predicates).toEqual(expect.arrayContaining(['owl:onDataRange', 'owl:minQualifiedCardinality', 'owl:maxQualifiedCardinality']));
     expect(predicates).not.toContain('owl:minCardinality');
+
+    // Only the title restriction's cardinality lines change; the list keeps its layout (#108).
+    const d = lineDiff(original, saved);
+    expect(d.removed).toEqual([expect.stringMatching(/^\s+owl:minCardinality "1"\^\^xsd:nonNegativeInteger \] ,$/)]);
+    expect(d.added).toEqual([
+      expect.stringMatching(/^\s+owl:minQualifiedCardinality "1"\^\^xsd:nonNegativeInteger ;$/),
+      expect.stringMatching(/^\s+owl:maxQualifiedCardinality "3"\^\^xsd:nonNegativeInteger \] ,$/),
+    ]);
+  });
+
+  it('undo-delete-class.ttl: the classes and relationships the "Try it" deletes and restores (#77)', async () => {
+    const path = 'saving/undo-delete-class.ttl';
+    const { graphData } = await parseRdfToGraph(readFileSync(join(EXAMPLES, path), 'utf-8'), { path });
+    const edges = graphData.edges.map((e) => `${e.from}->${e.to}:${e.type}`).sort();
+    expect(edges).toEqual(['Room->Wall:faces', 'Room->Wall:hasPart', 'Wall->Thing:subClassOf']);
+    const wall = graphData.nodes.find((n) => n.id === 'Wall');
+    expect(wall?.comment).toBe('A vertical element.');
+    expect(wall?.dataPropertyRestrictions?.map((r) => r.propertyName)).toEqual(['title']);
   });
 });

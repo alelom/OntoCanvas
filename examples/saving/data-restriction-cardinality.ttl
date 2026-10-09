@@ -8,9 +8,10 @@
 # restriction below uses the older unqualified form (owl:minCardinality next to owl:onDataRange),
 # which strict OWL tools reject. Both forms are read; the box shows "title [1..*]" and "isbn [1..1]".
 #
-# Try it: double-click the "title" box, set Max to 3, press OK, then Save. The saved restriction is
-#   [ rdf:type owl:Restriction ; owl:onProperty :title ; owl:onDataRange xsd:string ;
-#     owl:minQualifiedCardinality 1 ; owl:maxQualifiedCardinality 3 ]
+# Try it: double-click the "title" box, set Max to 3, press OK, then Save. In the saved file only the
+# title restriction's cardinality lines change (issue #108): owl:minCardinality becomes
+# owl:minQualifiedCardinality 1 and owl:maxQualifiedCardinality 3 is added below it; the list keeps its
+# layout and the isbn restriction is untouched.
 
 <http://example.org/examples/datacardinality> rdf:type owl:Ontology ;
     rdfs:label "Data restriction cardinality" .
