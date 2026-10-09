@@ -24,14 +24,14 @@ describe('examples/display', () => {
     expect(dataProperties.find((dp) => dp.name === 'nick')).toMatchObject({ domains: [], hasGlobalDomain: false });
   });
 
-  it('imported-note.ttl: an import with a prefix is "(defined by: base)", one without is "(imported)" (#111)', async () => {
+  it('imported-note.ttl: an import with a prefix is "(defined by: base)", one without names the ontology (#111)', async () => {
     const content = readFileSync(join(EXAMPLES, 'display/imported-note.ttl'), 'utf-8');
     const { parseResult, extractedRefs } = await loadOntologyFromContent(content, 'imported-note.ttl');
     const mainBase = getMainOntologyBase(parseResult.store);
     const noteFor = (externalOntologyUrl: string) =>
       importedNoteForNode({ id: 'X', label: 'X', labellableRoot: null, isExternal: true, externalOntologyUrl }, extractedRefs, mainBase);
     expect(noteFor('http://example.org/examples/imported-note-base')).toBe('(defined by: base)');
-    expect(noteFor('http://example.org/examples/imported-note-other')).toBe('(imported)');
+    expect(noteFor('http://example.org/examples/imported-note-other')).toBe('(defined by: imported-note-other)');
     expect(importedNoteForNode({ id: 'Report', label: 'Report', labellableRoot: null, uri: 'http://example.org/examples/imported-note#Report' }, extractedRefs, mainBase)).toBeNull();
   });
 

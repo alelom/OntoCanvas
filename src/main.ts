@@ -104,7 +104,7 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
-import { importedNoteForNode, importedNoteForRelationship, importedNoteFont, importedNoteFontSize, labelWithImportedNote } from './ui/importedNote';
+import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
 import { parseEdgeId } from './utils/edgeId';
@@ -3470,13 +3470,14 @@ function buildNetworkData(
       // Debug: Log the actual label being set for the node
       debugLog(`[DEBUG] Setting data property node label: propertyName="${dataProp.propertyName}", classId="${classId}", nodeLabel="${nodeLabel}", prefix="${dataPropPrefix}", isImported="${isDataPropImported}", tooltip="${tooltip}"`);
         
+      const dataPropNote = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
-        label: wrapText(nodeLabel, wrapChars),
+        label: dataPropNote ? labelWithImportedNote(wrapText(nodeLabel, wrapChars), dataPropNote) : wrapText(nodeLabel, wrapChars),
         shape: 'box',
         size: 15,
         color: { background: dataPropBackgroundColor, border: dataPropBorderColor },
-        font: { size: dataPropertyFontSize, color: dataPropFontColor },
+        font: { size: dataPropertyFontSize, color: dataPropFontColor, ...(dataPropNote && importedNoteFont(dataPropertyFontSize, dataPropFontColor)) },
         margin: 4,
         physics: false,
         x: finalDataPropPos.x,
@@ -3561,7 +3562,7 @@ function buildNetworkData(
         : 1.0;
       const opacity =
         getDataPropertySearchOpacity(dp.name, null, searchSets, searchQuery) * importedOpacity;
-      return { dp, label, tooltip, opacity };
+      return { dp, label, tooltip, opacity, note: importedNoteForDataProperty(dp, externalOntologyReferences, mainBase) };
     });
 
     const classPositions = filteredNodes
@@ -3571,7 +3572,7 @@ function buildNetworkData(
     // to three lines was being laid out as one long, one-line-tall box, which both inflated the
     // widths (forcing rows earlier than needed) and let the rows it created overlap vertically.
     const dimensions = entries.map((e) =>
-      estimateNodeDimensions(e.label, wrapChars, dataPropertyFontSize)
+      estimateNodeDimensions(e.label, wrapChars, dataPropertyFontSize, e.note ? { text: e.note, fontSize: importedNoteFontSize(dataPropertyFontSize) } : undefined)
     );
     const positions = layoutUnattachedNodes(
       dimensions.map((d) => d.width),
@@ -3584,19 +3585,22 @@ function buildNetworkData(
       const faded = entry.opacity < 1.0;
       dataPropertyNodes.push({
         id: unattachedDataPropertyNodeId(entry.dp.name),
-        label: wrapText(entry.label, wrapChars),
+        label: entry.note ? labelWithImportedNote(wrapText(entry.label, wrapChars), entry.note) : wrapText(entry.label, wrapChars),
         shape: 'box',
         size: 15,
         color: {
           background: faded ? applyOpacityToColor(DATA_PROPERTY_FILL, entry.opacity) : DATA_PROPERTY_FILL,
           border: faded ? applyOpacityToColor('#4a90a4', entry.opacity) : '#4a90a4',
         },
-        font: {
+        font: ((color: string) => ({
           size: dataPropertyFontSize,
-          color: faded
+          color,
+          ...(entry.note && importedNoteFont(dataPropertyFontSize, color)),
+        }))(
+          faded
             ? applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: entry.opacity }), entry.opacity)
-            : readableTextColor(DATA_PROPERTY_FILL),
-        },
+            : readableTextColor(DATA_PROPERTY_FILL)
+        ),
         margin: 4,
         physics: false,
         // Dashed border marks these as unattached, matching the absence of a connecting edge.

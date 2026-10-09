@@ -14,6 +14,9 @@ import {
   isImportedRelationshipType,
   importedNoteForNode,
   importedNoteForRelationship,
+  importedNoteForDataProperty,
+  ontologyDisplayName,
+  namespaceOf,
 } from '../../src/ui/importedNote';
 import { estimateNodeDimensions } from '../../src/graph';
 import { OWL_THING_URI } from '../../src/graph/thingNode';
@@ -21,11 +24,29 @@ import { OWL_THING_URI } from '../../src/graph/thingNode';
 describe('importedNoteText', () => {
   it('names the prefix of the defining ontology when it has one', () => {
     expect(importedNoteText('base')).toBe('(defined by: base)');
+    expect(importedNoteText('base', 'http://example.org/base')).toBe('(defined by: base)');
   });
-  it('says "imported" without a prefix', () => {
+  it("names the ontology itself, from its IRI, when it has no prefix: always 'defined by'", () => {
+    expect(importedNoteText(null, 'http://example.org/examples/other-ontology')).toBe('(defined by: other-ontology)');
+    expect(importedNoteText('', 'https://w3id.org/dano#')).toBe('(defined by: dano)');
+  });
+  it('says "imported" only when nothing is known about the ontology', () => {
     expect(importedNoteText(null)).toBe('(imported)');
-    expect(importedNoteText(undefined)).toBe('(imported)');
-    expect(importedNoteText('')).toBe('(imported)');
+    expect(importedNoteText(undefined, null)).toBe('(imported)');
+  });
+});
+
+describe('ontologyDisplayName and namespaceOf', () => {
+  it('uses the last path segment without a file extension, else the host', () => {
+    expect(ontologyDisplayName('http://example.org/base')).toBe('base');
+    expect(ontologyDisplayName('https://w3id.org/adiro/aec_geometry.html')).toBe('aec_geometry');
+    expect(ontologyDisplayName('http://www.w3.org/2002/07/owl#')).toBe('owl');
+    expect(ontologyDisplayName('https://example.org/')).toBe('example.org');
+    expect(ontologyDisplayName('not a url')).toBe('not a url');
+  });
+  it('takes the namespace of a term up to its # or last /', () => {
+    expect(namespaceOf('http://example.org/base#hasProperty')).toBe('http://example.org/base');
+    expect(namespaceOf('http://example.org/vocab/term')).toBe('http://example.org/vocab');
   });
 });
 
@@ -46,14 +67,25 @@ describe('escapeLabelMarkup', () => {
 
 describe('labelWithImportedNote', () => {
   it('puts the note on its own line above the escaped label, keeping the label\'s own line breaks', () => {
-    expect(labelWithImportedNote('Base\nClass', '(defined by: base)')).toBe('<i>(defined by: base)</i>\nBase\nClass');
-    expect(labelWithImportedNote('R&D <x>', '(imported)')).toBe('<i>(imported)</i>\nR&amp;D &lt;x&gt;');
+    expect(labelWithImportedNote('Base\nClass', '(defined by: base)')).toContain('\nBase\nClass');
+    expect(labelWithImportedNote('R&D <x>', '(imported)')).toBe('<code>(imported)</code>\nR&amp;D &lt;x&gt;');
+  });
+
+  it('sets the prefix or ontology name in italics, apart from the plain "(defined by: " and ")"', () => {
+    expect(labelWithImportedNote('Base', '(defined by: base)')).toBe('<code>(defined by: </code><i>base</i><code>)</code>\nBase');
+    expect(labelWithImportedNote('X', '(defined by: a<b>)')).toBe('<code>(defined by: </code><i>a&lt;b&gt;</i><code>)</code>\nX');
   });
 });
 
 describe('importedNoteFont', () => {
-  it('turns on the HTML multi-font and gives the note a smaller font in the label colour', () => {
-    expect(importedNoteFont(40, '#445')).toEqual({ multi: 'html', ital: { size: importedNoteFontSize(40), color: '#445', mod: '' } });
+  it('turns on the HTML multi-font and gives the note a smaller monospace font in the label colour, italic for the name', () => {
+    const font = importedNoteFont(40, '#445');
+    const size = importedNoteFontSize(40);
+    expect(font).toMatchObject({ multi: 'html', mono: { size, color: '#445', mod: '' }, ital: { size, color: '#445', mod: 'italic' } });
+    for (const f of [font.mono, font.ital]) {
+      expect(f.face).toMatch(/Consolas/);
+      expect(f.face).toMatch(/monospace/);
+    }
   });
 });
 
@@ -89,9 +121,9 @@ describe('importedNoteForNode and importedNoteForRelationship', () => {
     expect(importedNoteForNode(node, refs, main)).toBe('(defined by: base)');
   });
 
-  it('says "imported" when that ontology has no prefix', () => {
+  it('names the ontology when it has no prefix', () => {
     const node = { id: 'http://example.org/other#C', label: 'C', labellableRoot: null, isExternal: true, externalOntologyUrl: 'http://example.org/other' };
-    expect(importedNoteForNode(node, refs, main)).toBe('(imported)');
+    expect(importedNoteForNode(node, refs, main)).toBe('(defined by: other)');
   });
 
   it('marks a class declared locally but defined elsewhere (rdfs:isDefinedBy)', () => {
@@ -107,8 +139,26 @@ describe('importedNoteForNode and importedNoteForRelationship', () => {
   it('notes a relationship defined in another ontology, by its property, and not a local one or subClassOf', () => {
     const ops = [{ name: 'http://example.org/base#hasProperty', uri: 'http://example.org/base#hasProperty', label: 'has property', hasCardinality: true, isDefinedBy: 'http://example.org/base' }];
     expect(importedNoteForRelationship('http://example.org/base#hasProperty', ops, refs, main)).toBe('(defined by: base)');
-    expect(importedNoteForRelationship('http://example.org/other#r', [], refs, main)).toBe('(imported)');
+    expect(importedNoteForRelationship('http://example.org/other#r', [], refs, main)).toBe('(defined by: other)');
+    // A property named locally but declared rdfs:isDefinedBy another ontology is that ontology's too.
+    const stub = [{ name: 'geoProp', uri: 'http://example.org/main#geoProp', label: 'geo', hasCardinality: true, isDefinedBy: 'http://example.org/base' }];
+    expect(importedNoteForRelationship('geoProp', stub, refs, main)).toBe('(defined by: base)');
     expect(importedNoteForRelationship('hasPart', ops, refs, main)).toBeNull();
     expect(importedNoteForRelationship('subClassOf', ops, refs, main)).toBeNull();
+  });
+});
+
+describe('importedNoteForDataProperty', () => {
+  const refs = [{ url: 'http://example.org/data-base', usePrefix: true, prefix: 'dpbase' }];
+  const main = 'http://example.org/main#';
+
+  it('notes a data property of another ontology: by prefix, else by the ontology name', () => {
+    expect(importedNoteForDataProperty({ uri: 'http://example.org/data-base#createdDate', isDefinedBy: 'http://example.org/data-base' }, refs, main)).toBe('(defined by: dpbase)');
+    expect(importedNoteForDataProperty({ uri: 'http://example.org/unlisted#x' }, refs, main)).toBe('(defined by: unlisted)');
+  });
+
+  it("leaves the loaded ontology's own data property, and an unknown one, without a note", () => {
+    expect(importedNoteForDataProperty({ uri: 'http://example.org/main#age' }, refs, main)).toBeNull();
+    expect(importedNoteForDataProperty(undefined, refs, main)).toBeNull();
   });
 });
