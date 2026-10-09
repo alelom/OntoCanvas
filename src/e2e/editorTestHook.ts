@@ -10,6 +10,7 @@ import type { ExternalOntologyReference } from '../storage';
 import { parseEdgeId } from '../utils/edgeId';
 import { isViewSettled } from '../ui/viewSettle';
 import { areImportsSettled } from '../ui/importsSettle';
+import { storeLocalFileContent, retrieveLocalFileContent } from '../lib/localFileTokenStorage';
 
 /** Use getters for state that is set after app init (e.g. when a file is loaded) so the hook always sees current values. */
 export interface EditorTestDeps {
@@ -213,6 +214,13 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     saveTtl: (): Promise<void> => saveTtl(),
     setHasUnsavedChanges: (value: boolean): void => setHasUnsavedChanges(value),
     updateSaveButtonVisibility: (): void => updateSaveButtonVisibility(),
+    /** Store a file in the one-time token store ("Open external ontology" does this before opening a tab), and return
+     * its token. Here, not imported from the page by its source path: that path exists only on Vite's dev server, and the
+     * tests run against the built app (#116). */
+    storeLocalFile: (content: string, fileName: string, pathHint: string): Promise<string> =>
+      storeLocalFileContent(content, fileName, pathHint),
+    /** What the token store holds for `token`, or null (it is deleted once a tab has loaded it). */
+    retrieveLocalFile: (token: string): Promise<unknown> => retrieveLocalFileContent(token),
     /** Load a Turtle string and resolve once the graph view has settled, so a test can act straight away (#93). */
     loadTtlDirectly: async (ttlString: string, fileName?: string, pathHint?: string): Promise<void> => {
       await loadTtlDirectly(ttlString, fileName, pathHint);

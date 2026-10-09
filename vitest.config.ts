@@ -20,7 +20,6 @@ export default defineConfig({
         '**/*.config.ts',
         '**/fixtures/**',
         '**/globalSetup.ts',
-        '**/globalTeardown.ts',
       ],
     },
   },

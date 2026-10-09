@@ -50,7 +50,7 @@ The old N3-Writer "serialize-then-fix" approach was abandoned as architecturally
 ## Testing conventions
 
 - **Unit:** load fixtures with `readFileSync`, call parser/logic functions directly, assert on the returned data or store quads. Setup in [tests/unitSetup.ts](tests/unitSetup.ts). Good example: [tests/unit/labellableRootColor.test.ts](tests/unit/labellableRootColor.test.ts).
-- **E2E:** [tests/e2e/testHelpers.ts](tests/e2e/testHelpers.ts) provides `loadTestFile`, `waitForGraphRender`, etc.; dev server is managed by `tests/e2e/globalSetup.ts`. Access app state through `window.__EDITOR_TEST__`. Be defensive about modal state (check visibility before clicking), launch browsers headless.
+- **E2E:** [tests/e2e/testHelpers.ts](tests/e2e/testHelpers.ts) provides `loadTestFile`, `waitForAppReady`, etc.; the server is managed by `tests/e2e/globalSetup.ts` (a built bundle, unless one already answers on 5173). Launch browsers with `launchBrowser()` from [tests/e2e/browser.ts](tests/e2e/browser.ts): it blocks the real network by default, and a test answers a URL with its own route. Access app state through `window.__EDITOR_TEST__`. Be defensive about modal state (check visibility before clicking). Flaky or slow E2E tests: see the `e2e-testing` skill (`.claude/skills/e2e-testing`), and measure with `npm run test:e2e:flake`.
 - **Fixtures** live in [tests/fixtures/](tests/fixtures/).
 
 ## Conventions

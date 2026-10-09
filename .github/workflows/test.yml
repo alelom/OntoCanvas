@@ -60,7 +60,6 @@ jobs:
               - 'tests/fixtures/**'
               - 'vitest.e2e.config.ts'
               - 'tests/e2e/globalSetup.ts'
-              - 'tests/e2e/globalTeardown.ts'
               - 'package.json'
               - 'package-lock.json'
 
