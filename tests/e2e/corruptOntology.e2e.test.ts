@@ -3,7 +3,8 @@
  * Verifies that meaningful error messages are shown instead of silent failures or stack overflows.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { chooseFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -58,7 +59,7 @@ describe('Corrupt ontology handling E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);

@@ -11,7 +11,8 @@
  * list-button path is timing-flaky; the OK button itself is clicked so the real handler runs.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { loadTestFile, waitForAppReady, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -30,7 +31,7 @@ describe('Edit property modal — OK with no changes does not rename (issue #33)
 
   beforeAll(async () => {
     expect(existsSync(FIXTURE)).toBe(true);
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);

@@ -3,7 +3,8 @@
  * whole graph (nothing fades, the outline marks the match), matches and their neighbours, matches only.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
@@ -41,7 +42,7 @@ describe('Search scope E2E (#85)', () => {
   let plain: Record<string, string>;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });

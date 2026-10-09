@@ -2,7 +2,8 @@
  * E2E test: load ontology from URL when URL returns RDF/XML (OWL).
  */
 import { describe, it, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 
@@ -22,7 +23,7 @@ describe('OWL URL load E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   afterAll(async () => {

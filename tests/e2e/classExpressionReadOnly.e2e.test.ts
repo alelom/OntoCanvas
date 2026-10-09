@@ -9,7 +9,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
@@ -42,7 +43,7 @@ describe('Read-only class-expression edges E2E (#58)', () => {
     });
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
@@ -117,7 +118,7 @@ describe('Read-only class-expression edges: edge cases (#58)', () => {
   const O2 = 'http://example.org/o2#';
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });

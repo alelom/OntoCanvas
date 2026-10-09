@@ -6,11 +6,12 @@
  * tests/unit/localFileOpeningFromE2e.test.ts.
  */
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { blockExternalRequests, loadTestFile } from './testHelpers';
+import { loadTestFile } from './testHelpers';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '../fixtures/imported-ontology');
@@ -21,7 +22,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {
@@ -36,7 +37,6 @@ afterEach(async () => {
 async function openEditor(files: Record<string, string> | 'cancel'): Promise<void> {
   page = await browser.newPage();
   page.setDefaultTimeout(5000);
-  await blockExternalRequests(page);
   await page.addInitScript((files) => {
     (window as any).__pickerCalls = 0;
     (window as any).showDirectoryPicker = async () => {

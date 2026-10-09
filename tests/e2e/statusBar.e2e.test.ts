@@ -6,8 +6,9 @@
  * logic is unit-tested in tests/unit/ontologyInfo.test.ts.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
-import { blockExternalRequests, openEditorWithTtl, waitForAppReady } from './testHelpers';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
+import { openEditorWithTtl, waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
 const HEADER = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -29,7 +30,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {
@@ -39,7 +40,6 @@ afterAll(async () => {
 beforeEach(async () => {
   page = await browser.newPage();
   page.setDefaultTimeout(5000);
-  await blockExternalRequests(page);
 });
 
 afterEach(async () => {

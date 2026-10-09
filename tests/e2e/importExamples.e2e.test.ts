@@ -4,11 +4,12 @@
  * The two files are served from a made-up address, so the test needs no network.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { blockExternalRequests, waitForAppReady, waitForImportsSettled } from './testHelpers';
+import { waitForAppReady, waitForImportsSettled } from './testHelpers';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples/imports');
 const WHERE = 'https://examples.test/imports/';
@@ -17,7 +18,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 afterAll(async () => {
   await browser.close();
@@ -25,7 +26,6 @@ afterAll(async () => {
 beforeEach(async () => {
   page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.setDefaultTimeout(5000);
-  await blockExternalRequests(page);
   const served: Record<string, string> = {
     [`${WHERE}fetchable-child.ttl`]: readFileSync(join(EXAMPLES, 'fetchable-child.ttl'), 'utf-8'),
     [`${WHERE}fetchable-parent.ttl`]: readFileSync(join(EXAMPLES, 'fetchable-parent.ttl'), 'utf-8'),
@@ -39,6 +39,29 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   if (page && !page.isClosed()) await page.close();
+});
+
+describe('waitForAppReady and imports (#116)', () => {
+  it('does not report the app ready while an import is still being read', async () => {
+    // Re-answer the parent slowly, so the load itself finishes long before the import does.
+    await page.unroute(`${WHERE}*`);
+    const served: Record<string, string> = {
+      [`${WHERE}fetchable-child.ttl`]: readFileSync(join(EXAMPLES, 'fetchable-child.ttl'), 'utf-8'),
+      [`${WHERE}fetchable-parent.ttl`]: readFileSync(join(EXAMPLES, 'fetchable-parent.ttl'), 'utf-8'),
+    };
+    await page.route(`${WHERE}*`, async (route) => {
+      const url = route.request().url();
+      if (url.endsWith('fetchable-parent.ttl')) await new Promise((resolve) => setTimeout(resolve, 1500));
+      return route.fulfill({ status: 200, contentType: 'text/turtle', headers: { 'access-control-allow-origin': '*' }, body: served[url] });
+    });
+    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+
+    await waitForAppReady(page);
+
+    // Ready means the imports are in: nothing is about to change under the test.
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.areImportsSettled())).toBe(true);
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getObjectPropertyByName('http://example.org/examples/fetchable-parent#author'))).not.toBeNull();
+  });
 });
 
 describe('fetchable-child.ttl (#104)', () => {

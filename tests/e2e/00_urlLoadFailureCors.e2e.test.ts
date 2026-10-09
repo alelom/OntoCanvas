@@ -4,7 +4,8 @@
  * Requests are served by page.route, so nothing here touches the network.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 const TEST_URL = 'https://example.test/ontology.ttl';
@@ -27,7 +28,7 @@ describe('URL load failure E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   beforeEach(async () => {

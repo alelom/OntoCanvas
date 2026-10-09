@@ -5,7 +5,8 @@
  * - Non-embedded mode keeps the legend, no extra button, editing works.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
 
 const TTL = `@prefix : <http://example.org/o#> .
@@ -61,7 +62,7 @@ describe('Embedded mode E2E', () => {
   let browser: Browser;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
   afterAll(async () => {
     if (browser) await browser.close();

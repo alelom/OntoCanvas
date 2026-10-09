@@ -326,7 +326,8 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     areImportsSettled: (): boolean => areImportsSettled(),
     /**
      * Whether the app is ready for a test to act on: an ontology is loaded, no loading or "Open ontology"
-     * dialog covers the page, the toolbar is shown and the view has settled. Tests wait for this instead
+     * dialog covers the page, the toolbar is shown, the view has settled and the declarations of the imports have
+     * been read or given up on (they are read in the background and may redraw; #116). Tests wait for this instead
      * of sleeping (#93); see waitForAppReady in tests/e2e/testHelpers.ts.
      */
     isAppReady: (): boolean => {
@@ -335,7 +336,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         return !el || getComputedStyle(el).display === 'none';
       };
       return getTtlStore() !== null && getNetwork() !== null && hidden('loadingModal') && hidden('openOntologyModal') &&
-        !hidden('vizControls') && isViewSettled();
+        !hidden('vizControls') && isViewSettled() && areImportsSettled();
     },
     /** Quads in the live store matching subject / predicate (full IRIs; null = any), as plain objects. */
     getQuads: (subject: string | null, predicate: string | null): Array<{ subject: string; predicate: string; objectType: string; object: string }> => {

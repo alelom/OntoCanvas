@@ -7,7 +7,8 @@
  * These tests render real ontologies and assert against the colours vis-network actually holds.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -35,7 +36,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {

@@ -4,7 +4,8 @@
  * Each test runs in a fresh page to avoid state/route leakage and timeouts.
  */
 import { describe, it, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 
@@ -43,7 +44,7 @@ describe('External refs modal E2E', () => {
   const routePattern = /e2e-external-refs\.test/;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   afterAll(async () => {

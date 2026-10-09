@@ -9,7 +9,8 @@
  * so nothing here touches the network.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { type Browser, type BrowserContext, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -59,7 +60,7 @@ async function routeExampleOrg(ctx: BrowserContext, served: Record<string, strin
 }
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {

@@ -3,7 +3,8 @@
  * update the UI (Object Properties, Data Properties, Annotation Properties, Classes).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { loadTestFile, waitForAppReady, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -77,7 +78,7 @@ const findItem = (items: string[], ...needles: string[]): string | undefined =>
   items.find((text) => needles.some((n) => text.includes(n)));
 
 beforeAll(async () => {
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {

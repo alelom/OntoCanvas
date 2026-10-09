@@ -6,7 +6,8 @@
  * never exposed the bug.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { openEditorWithTtl } from './testHelpers';
 
 const TTL = `@prefix : <http://example.org/click#> .
@@ -23,7 +24,7 @@ describe('Add Edge: OK right after typing the relationship (#98)', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await openEditorWithTtl(page, TTL);
