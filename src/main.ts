@@ -104,6 +104,7 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
+import { importedNoteForNode, importedNoteForRelationship, importedNoteFont, importedNoteFontSize, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
 import { parseEdgeId } from './utils/edgeId';
@@ -3045,6 +3046,13 @@ function buildNetworkData(
     ),
   };
 
+  // The small "(defined by: …)" line above the label of imported classes and relationships (#111).
+  const mainBaseForNotes = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const importedNoteBox = (n: GraphNode, fontSize: number) => {
+    const text = importedNoteForNode(n, externalOntologyReferences, mainBaseForNotes);
+    return text ? { text, fontSize: importedNoteFontSize(fontSize) } : undefined;
+  };
+
   let nodePositions: Record<string, { x: number; y: number }> = {};
   
   // First, preserve any existing positions from rawData (loaded from config or set by drag)
@@ -3074,7 +3082,7 @@ function buildNetworkData(
           : maxFontSize;
       nodeDimensions.set(
         n.id,
-        estimateNodeDimensions(n.label, wrapChars, fontSize)
+        estimateNodeDimensions(n.label, wrapChars, fontSize, importedNoteBox(n, fontSize))
       );
     });
     
@@ -3166,12 +3174,13 @@ function buildNetworkData(
       fontColor = applyOpacityToColor(readableTextColor(style.background, { opacity: baseOpacity }), baseOpacity);
     }
     
+    const importedNote = importedNoteForNode(n, externalOntologyReferences, mainBaseForNodes);
     const node: Record<string, unknown> = {
       id: n.id,
-      label: wrapText(displayLabel, wrapChars),
+      label: importedNote ? labelWithImportedNote(wrapText(displayLabel, wrapChars), importedNote) : wrapText(displayLabel, wrapChars),
       labellableRoot: n.labellableRoot,
       color: { background: backgroundColor, border: borderColor },
-      font: { size: fontSize, color: fontColor },
+      font: { size: fontSize, color: fontColor, ...(importedNote && importedNoteFont(fontSize, fontColor)) },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
       ...((): { title?: string } => {
         // Lead with a source note (like external "(Imported from …)"), then the rdfs:comment.
@@ -3222,7 +3231,7 @@ function buildNetworkData(
           )
         : maxFontSize;
     // Estimate from the label as drawn (prefix included), or imported classes come out a line short (#72).
-    nodeDimensionsMap.set(n.id, estimateNodeDimensions(formatNodeLabelWithPrefix(n, externalOntologyReferences), wrapChars, fontSize));
+    nodeDimensionsMap.set(n.id, estimateNodeDimensions(formatNodeLabelWithPrefix(n, externalOntologyReferences), wrapChars, fontSize, importedNoteBox(n, fontSize)));
   });
   
   // Group data properties by their parent class node for better layout
@@ -3615,6 +3624,9 @@ function buildNetworkData(
       lineType: 'solid' as BorderLineType,
     };
     const edgeComment = getRelationshipComment(e.type, objectProperties);
+    // Relationships defined in another ontology carry the same small note as imported classes (#111).
+    const importedEdgeNote = style.showLabel ? importedNoteForRelationship(e.type, objectProperties, externalOntologyReferences, mainBaseForNotes) : null;
+    const edgeLabelText = style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '';
     
     // Styling based on whether edge is from restriction or domain/range
     // Thick continuous line for restrictions, thin dashed line for normal object properties
@@ -3663,10 +3675,11 @@ function buildNetworkData(
       from: e.from,
       to: e.to,
       arrows: 'to',
-      label: style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '',
+      label: importedEdgeNote ? labelWithImportedNote(edgeLabelText, importedEdgeNote) : edgeLabelText,
       font: {
         size: relationshipFontSize,
         color: edgeFontColor,
+        ...(importedEdgeNote && importedNoteFont(relationshipFontSize, edgeFontColor)),
         ...(style.showLabel && { background: `rgba(${RELATIONSHIP_LABEL_BG_RGB}, ${labelBgAlpha})` }),
       },
       color: { color: edgeColor, highlight: edgeColor },

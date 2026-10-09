@@ -26,6 +26,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
 | [thing-data-properties.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdisplay%2Fthing-data-properties.ttl) | Data properties with domain owl:Thing drawn once under owl:Thing; a toggle draws them under every class | #80 | [TTL](display/thing-data-properties.ttl) |
+| [imported-note.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdisplay%2Fimported-note.ttl) | A small "(defined by: base)" / "(imported)" line above the label of imported classes and relationships | #111 | [TTL](display/imported-note.ttl) |
 | [tooltips.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdisplay%2Ftooltips.ttl) | One hover tooltip, in one style, for classes, relationship labels and lines | #109 | [TTL](display/tooltips.ttl) |
 
 ## Imported terms

@@ -1,0 +1,25 @@
+@prefix : <http://example.org/examples/imported-note#> .
+@prefix base: <http://example.org/examples/imported-note-base#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Terms defined in another ontology carry a small line above their label (issue #111). The two imports
+# below are not reachable; what is drawn comes from this file.
+#   - base:Document, base:Person and the "author" relationship come from an import that has a prefix (base):
+#     the line says "(defined by: base)".
+#   - The Template class comes from an import with no prefix: the line says "(imported)".
+# Report is local, so it has no line.
+
+<http://example.org/examples/imported-note> rdf:type owl:Ontology ;
+    rdfs:label "Imported note" ;
+    owl:imports <http://example.org/examples/imported-note-base> ,
+                <http://example.org/examples/imported-note-other> .
+
+:Report rdf:type owl:Class ;
+    rdfs:label "Report" ;
+    rdfs:subClassOf base:Document ,
+        <http://example.org/examples/imported-note-other#Template> ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty base:author ;
+          owl:someValuesFrom base:Person ] .
