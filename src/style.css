@@ -153,6 +153,18 @@ body.ontocanvas-embedded #edgeColorsLegend {
   color: #666;
   background: #fafafa;
 }
+/* The parts of the bottom bar after the version (ontology, file, counts) are set apart by a | before each
+ * one that is shown, so no bar is left dangling when a part is empty or hidden (#113). */
+#info .info-seg {
+  margin-left: 12px;
+}
+#info .info-seg:not(:empty)::before {
+  content: '| ';
+}
+/* The node and edge count is left out when embedded, to keep the bar short. */
+body.ontocanvas-embedded #graphCounts {
+  display: none;
+}
 #info a.version-link {
   color: #3498db;
   text-decoration: none;

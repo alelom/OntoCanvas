@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Store, DataFactory } from 'n3';
-import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalOntologyReference } from './externalOntologySearch';
+import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, FetchTimeoutError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalOntologyReference } from './externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 // const OWL = 'http://www.w3.org/2002/07/owl#'; // Unused - kept for reference
@@ -482,6 +482,230 @@ describe('externalOntologySearch', () => {
       const danoClasses2 = await fetchExternalOntologyClasses('https://w3id.org/dano', refs);
       expect(danoClasses2.length).toBe(danoClasses.length);
       expect(global.fetch).toHaveBeenCalledTimes(2); // Still 2, not 4
+    });
+  });
+
+  describe('fetchExternalOntologyTtl timeout, size and cache bounds', () => {
+    /** A response whose body takes `ms` to arrive, and gives up (rejects) when the request is aborted. */
+    const slowBody = (body: string, ms: number, init?: RequestInit) => {
+      const response = {
+        ok: true,
+        status: 200,
+        url: 'https://example.com/slow.ttl',
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/turtle' : null) },
+        text: () =>
+          new Promise<string>((resolve, reject) => {
+            const timer = setTimeout(() => resolve(body), ms);
+            init?.signal?.addEventListener('abort', () => {
+              clearTimeout(timer);
+              reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+            });
+          }),
+      };
+      return Promise.resolve(response);
+    };
+
+    beforeEach(() => {
+      clearExternalClassesCache();
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('gives up on a body that is still arriving when the timeout is over, not only on slow headers', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 5000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/slow-body.ttl', { timeoutMs: 1000 });
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await result).toBeNull();
+    });
+
+    it('waits as long as the timeout it is given (the ontology the user opened may be slow)', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 6000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/slow-but-fine.ttl', { timeoutMs: 30000 });
+      await vi.advanceTimersByTimeAsync(7000);
+      expect(await result).toBe('@prefix : <#> .');
+    });
+
+    it('keeps the 2 second timeout by default', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 6000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/default-timeout.ttl');
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(await result).toBeNull();
+    });
+
+    it('throws a FetchTimeoutError, not nothing, when the ontology the user opened (throwOnCors) is too slow', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 5000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/slow-user.ttl', { throwOnCors: true, timeoutMs: 1000 });
+      const caught = result.catch((e) => e);
+      await vi.advanceTimersByTimeAsync(1500);
+      const err = await caught;
+      expect(err).toBeInstanceOf(FetchTimeoutError);
+      expect(err.timeoutMs).toBe(1000);
+      expect(err.message).toContain('https://example.com/slow-user.ttl');
+      expect(err.message).toContain('1 second');
+    });
+
+    it('throws it too when the headers never arrive, without trying other URLs after the wait', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+          })
+      );
+      const caught = fetchExternalOntologyTtl('https://example.com/no-headers.ttl', { throwOnCors: true, timeoutMs: 1000 }).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await caught).toBeInstanceOf(FetchTimeoutError);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) => String(c[0]).includes('no-headers'))).toHaveLength(1);
+    });
+
+    it('still returns null for a background read that is too slow', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 5000, init));
+      const result = fetchExternalOntologyTtl('https://example.com/slow-background.ttl', { timeoutMs: 1000 });
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await result).toBeNull();
+    });
+
+    it('returns nothing for a body larger than maxBytes, and does not keep it', async () => {
+      const big = '@prefix : <#> . ' + 'x'.repeat(2000);
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody(big, 0, init));
+      const first = fetchExternalOntologyTtl('https://example.com/big.ttl', { maxBytes: 1000 });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await first).toBeNull();
+      // Not cached: with a larger limit the next call fetches again and gets it.
+      const second = fetchExternalOntologyTtl('https://example.com/big.ttl', { maxBytes: 100000 });
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await second).toBe(big);
+    });
+
+    /** A response whose body is a stream of `chunkBytes`-byte chunks with no end and no Content-Length: the
+     * only way to know it is too large is to count what has arrived. `pulled()` is how many were read. */
+    const endlessStream = (chunkBytes: number) => {
+      let pulled = 0;
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulled++;
+          controller.enqueue(new Uint8Array(chunkBytes).fill(97));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const response = {
+        ok: true,
+        status: 200,
+        url: 'https://example.com/endless.ttl',
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/turtle' : null) },
+        body,
+        text: () => {
+          throw new Error('the whole body must not be buffered with text()');
+        },
+      };
+      return { response, pulled: () => pulled, cancelled: () => cancelled };
+    };
+
+    it('stops reading as soon as the byte budget is passed, without buffering the rest of an endless body', async () => {
+      const stream = endlessStream(100);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(stream.response);
+
+      const result = fetchExternalOntologyTtl('https://example.com/endless.ttl', { maxBytes: 1000 });
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(await result).toBeNull();
+      expect(stream.pulled()).toBeLessThan(20); // about ten chunks, not an unbounded number
+      expect(stream.cancelled()).toBe(true);
+    });
+
+    it('reads a body within the budget from the stream, whole and decoded', async () => {
+      const text = '@prefix : <#> . # héllo';
+      const bytes = new TextEncoder().encode(text);
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes.slice(0, 10));
+          controller.enqueue(bytes.slice(10));
+          controller.close();
+        },
+      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        url: 'https://example.com/streamed.ttl',
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/turtle' : null) },
+        body,
+      });
+
+      const result = fetchExternalOntologyTtl('https://example.com/streamed.ttl', { maxBytes: 100000 });
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(await result).toBe(text);
+    });
+
+    it('skips the common vocabularies (FOAF, SKOS, …) by default, but reads them when asked, as an import of one is', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 0, init));
+
+      const skipped = fetchExternalOntologyTtl('http://xmlns.com/foaf/0.1/');
+      await vi.advanceTimersByTimeAsync(5);
+      expect(await skipped).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+
+      const read = fetchExternalOntologyTtl('http://xmlns.com/foaf/0.1/', { fetchStandardVocabularies: true });
+      await vi.advanceTimersByTimeAsync(5);
+      expect(await read).toBe('@prefix : <#> .');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('never fetches the reserved vocabularies (owl, rdf, rdfs, xsd, xml), whatever is asked', async () => {
+      for (const url of ['http://www.w3.org/2002/07/owl', 'http://www.w3.org/XML/1998/namespace#']) {
+        const result = fetchExternalOntologyTtl(url, { fetchStandardVocabularies: true });
+        await vi.advanceTimersByTimeAsync(5);
+        expect(await result).toBeNull();
+      }
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('also gives up on the follow-up requests (the alternate link, the guessed Turtle URLs) when their bodies stall', async () => {
+      // The first answer is an HTML page pointing at a Turtle file; every request after that sends headers and
+      // then never the body. The timer must stay on through each body, or the whole read hangs for good.
+      const html = '<!DOCTYPE html><html><head><link rel="alternate" type="text/turtle" href="/real.ttl"></head></html>';
+      let calls = 0;
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => {
+        calls++;
+        if (calls === 1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            url: 'https://example.com/page.html',
+            headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/html' : null) },
+            text: () => Promise.resolve(html),
+          });
+        }
+        return slowBody('@prefix : <#> .', 10 * 60 * 1000, init); // headers now, body "never"
+      });
+
+      const result = fetchExternalOntologyTtl('https://example.com/page.html', { timeoutMs: 1000 });
+      let settled = false;
+      void result.then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(60_000); // a minute: each stalled request may take its 1 s, none may take forever
+
+      expect(calls).toBeGreaterThan(2); // the follow-ups really were tried
+      expect(settled).toBe(true);
+      expect(await result).toBeNull();
+    });
+
+    it('keeps only a bounded number of ontologies in its cache', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 0, init));
+      const get = async (n: number) => {
+        const r = fetchExternalOntologyTtl(`https://example.com/cache-${n}.ttl`);
+        await vi.advanceTimersByTimeAsync(5);
+        return r;
+      };
+      for (let i = 0; i < 80; i++) await get(i);
+      const callsBefore = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+      await get(79); // the latest is still cached
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
+      await get(0); // the oldest was evicted
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(callsBefore);
     });
   });
 

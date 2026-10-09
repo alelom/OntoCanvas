@@ -26,6 +26,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
 | [thing-data-properties.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdisplay%2Fthing-data-properties.ttl) | Data properties with domain owl:Thing drawn once under owl:Thing; a toggle draws them under every class | #80 | [TTL](display/thing-data-properties.ttl) |
+| [imported-note.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdisplay%2Fimported-note.ttl) | A small "(defined by: <prefix or ontology name>)" line above the label of imported classes and relationships | #111 | [TTL](display/imported-note.ttl) |
 | [tooltips.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdisplay%2Ftooltips.ttl) | One hover tooltip, in one style, for classes, relationship labels and lines | #109 | [TTL](display/tooltips.ttl) |
 
 ## Imported terms
@@ -33,6 +34,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
 | [imported-terms.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Fimported-terms.ttl) | Terms used from an imported ontology: a restriction edge to an imported class (read-only), a data property listed once, prefixed identifiers | #99–#101 | [TTL](imports/imported-terms.ttl) |
+| [fetchable-child.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Ffetchable-child.ttl) | An import that can be fetched: it is read from next to the file, and what its parent declares (an object property, two data properties) is listed in the menus as read-only context, never drawn. Needs `fetchable-parent.ttl` beside it | #104 | [TTL](imports/fetchable-child.ttl), [parent](imports/fetchable-parent.ttl) |
 
 ## Relationships
 

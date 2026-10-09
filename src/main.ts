@@ -59,6 +59,7 @@ import {
   searchExternalClasses,
   searchExternalObjectProperties,
   preloadExternalOntologyClasses,
+  fetchExternalOntologyTtl,
   getReferencedExternalClassesFromStore,
   getStubExternalClassForUri,
   type ExternalClassInfo,
@@ -104,6 +105,11 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists } from './lib/importedDeclarations';
+import { beginImportsSettle, importsSettled } from './ui/importsSettle';
+import { escapeHtml } from './utils/escapeHtml';
+import { getOntologyInfo } from './ui/ontologyInfo';
+import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, importedNoteWrapChars, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
 import { parseEdgeId } from './utils/edgeId';
@@ -139,6 +145,7 @@ import {
   updateStatusBar,
   updateNodeEdgeCounts,
   updateFilePathDisplay as updateStatusBarFilePath,
+  updateOntologyInfoDisplay,
   updateSelectionInfo as updateStatusBarSelection,
   updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
@@ -192,6 +199,7 @@ import { defaultMaxFontSize, fontSettingRatios, nodeFontRatio } from './ui/fontS
 import type { BadgeFontRatios } from './graph/classExpressionOverlay';
 import {
   getAllRelationshipTypes,
+  colourableRelationshipTypes,
   cleanupUnusedExternalProperties,
   getRelationshipLabel,
   getEdgeDisplayLabel,
@@ -450,7 +458,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   if (document.getElementById('edgeStylesContent')) {
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const types = getAllRelationshipTypes(rawData, objectProperties);
-    const defaultColors = getDefaultEdgeColors(types);
+    const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
     let appliedToCheckboxes = 0;
     Object.keys(upgradedEdgeStyleConfig).forEach((type) => {
       const c = upgradedEdgeStyleConfig[type];
@@ -1211,7 +1219,7 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
         for (const e of rawData.edges) {
           if (e.type === type) e.type = derivedId!;
         }
-        objectProperties = getObjectProperties(ttlStore);
+        objectProperties = currentObjectProperties(ttlStore);
         objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
         effectiveType = derivedId!;
       }
@@ -1269,6 +1277,8 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
 }
 
 function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElement, onApply: () => void): void {
+  // Declared only in an import (#104): editing it would write it into this ontology.
+  if (objectProperties.find((p) => p.name === type || p.uri === type)?.contextOnly) return;
   initEditRelationshipTypeHandlers(edgeStylesContent, onApply);
   const modal = document.getElementById('editRelationshipTypeModal')!;
   modal.dataset.type = type;
@@ -1444,12 +1454,26 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
 
 function initEdgeStylesMenu(
   edgeStylesContent: HTMLElement,
-  onApply: () => void
+  onApply: () => void,
+  options: { preserveStyles?: boolean } = {}
 ): void {
+  // When the menu is only being extended (imports read, #104), what the user or a saved config set stays.
+  const preserved = new Map<string, { show: boolean; showLabel: boolean; color: string }>();
+  if (options.preserveStyles) {
+    edgeStylesContent.querySelectorAll<HTMLInputElement>('.edge-show-cb').forEach((showCb) => {
+      const type = showCb.dataset.type!;
+      const escaped = CSS.escape(type);
+      preserved.set(type, {
+        show: showCb.checked,
+        showLabel: !!edgeStylesContent.querySelector<HTMLInputElement>(`.edge-label-cb[data-type="${escaped}"]`)?.checked,
+        color: edgeStylesContent.querySelector<HTMLInputElement>(`.edge-color-picker[data-type="${escaped}"]`)?.value ?? '',
+      });
+    });
+  }
   edgeStylesContent.innerHTML = '';
   const types = getAllRelationshipTypes(rawData, objectProperties);
   // Get default colors for all types (distributed across spectrum)
-  const defaultColors = getDefaultEdgeColors(types);
+  const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
   types.forEach((type) => {
     // Get default color - use the generated color directly
     const color = defaultColors[type] || getDefaultColor();
@@ -1520,7 +1544,7 @@ function initEdgeStylesMenu(
     
     const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, externalOntologyReferences, op, mainBase);
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${displayLabel}</span>
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
         <input type="checkbox" class="edge-show-cb" data-type="${htmlEscapedType}" checked>
         <span>Show</span>
@@ -1536,6 +1560,14 @@ function initEdgeStylesMenu(
       ${editBtn.replace(`data-type="${type}"`, `data-type="${htmlEscapedType}"`)}
       ${deleteBtn.replace(`data-type="${type}"`, `data-type="${htmlEscapedType}"`)}
     `;
+    // A property declared only in an import is not in this file: there is nothing to edit or delete (#104).
+    if (op?.contextOnly) row.querySelectorAll('.edge-edit-btn, .edge-delete-btn').forEach((btn) => btn.remove());
+    const before = preserved.get(type);
+    if (before) {
+      (row.querySelector('.edge-show-cb') as HTMLInputElement).checked = before.show;
+      (row.querySelector('.edge-label-cb') as HTMLInputElement).checked = before.showLabel;
+      if (before.color) (row.querySelector('.edge-color-picker') as HTMLInputElement).value = before.color;
+    }
     edgeStylesContent.appendChild(row);
   });
   edgeStylesContent
@@ -1660,7 +1692,7 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
       range: range || undefined,
     });
     if (name) {
-      objectProperties = getObjectProperties(ttlStore);
+      objectProperties = currentObjectProperties(ttlStore);
       objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
@@ -1691,10 +1723,10 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     const rangeDisplay = describeRange(dp);
     const rangeStyle = rangeDisplay.source === 'asserted' ? 'color: #666;' : 'color: #999; font-style: italic;';
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${propDisplayName}</span>
-      <span style="font-size: 11px; ${rangeStyle}" title="${rangeDisplay.tooltipNote}">${rangeDisplay.menuLabel}</span>
-      <button type="button" class="data-prop-edit-btn" data-name="${dp.name}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
-      <button type="button" class="data-prop-delete-btn" data-name="${dp.name}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>
+      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(propDisplayName)}</span>
+      <span style="font-size: 11px; ${rangeStyle}" title="${escapeHtml(rangeDisplay.tooltipNote)}">${escapeHtml(rangeDisplay.menuLabel)}</span>
+      ${dp.contextOnly ? '' : `<button type="button" class="data-prop-edit-btn" data-name="${escapeHtml(dp.name)}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
+      <button type="button" class="data-prop-delete-btn" data-name="${escapeHtml(dp.name)}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`}
     `;
     dataPropsContent.appendChild(row);
   });
@@ -2019,7 +2051,7 @@ function initEditDataPropertyHandlers(): void {
     if (identifierChanged && dp.uri && !dp.isDefinedBy) {
       const renamed = renameDataPropertyInStore(ttlStore, dp.uri, derivedId!);
       if (renamed) {
-        dataProperties = getDataProperties(ttlStore);
+        dataProperties = currentDataProperties(ttlStore);
         name = derivedId!;
         (modal as HTMLElement).dataset.dataPropName = name;
         dp = dataProperties.find((p) => p.name === name)!;
@@ -2046,7 +2078,7 @@ function initEditDataPropertyHandlers(): void {
     }
     hasUnsavedChanges = true;
     updateSaveButtonVisibility();
-    dataProperties = getDataProperties(ttlStore);
+    dataProperties = currentDataProperties(ttlStore);
     applyFilter(true);
     // Deleting the last domain moves the property off its class and into the free-standing band,
     // which is usually off-screen. Follow it there rather than leaving the user on an empty edit.
@@ -2194,6 +2226,8 @@ function renderDomainsList(domainsListEl: HTMLElement, domains: string[], hasGlo
 }
 
 function showEditDataPropertyModal(name: string): void {
+  // Declared only in an import (#104): editing it would write it into this ontology.
+  if (dataProperties.find((p) => p.name === name)?.contextOnly) return;
   initEditDataPropertyHandlers();
   const modal = document.getElementById('editDataPropertyModal')!;
   (modal as HTMLElement).dataset.dataPropName = name;
@@ -2695,7 +2729,7 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     }
     const name = addDataPropertyToStore(ttlStore, label, rangeUri, validation.identifier);
     if (name) {
-      dataProperties = getDataProperties(ttlStore);
+      dataProperties = currentDataProperties(ttlStore);
       hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       const content = document.getElementById('dataPropsContent');
@@ -3045,6 +3079,13 @@ function buildNetworkData(
     ),
   };
 
+  // The small "(defined by: …)" line above the label of imported classes and relationships (#111).
+  const mainBaseForNotes = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const importedNoteBox = (n: GraphNode, fontSize: number) => {
+    const text = importedNoteForNode(n, externalOntologyReferences, mainBaseForNotes);
+    return text ? { text, fontSize: importedNoteFontSize(fontSize) } : undefined;
+  };
+
   let nodePositions: Record<string, { x: number; y: number }> = {};
   
   // First, preserve any existing positions from rawData (loaded from config or set by drag)
@@ -3074,7 +3115,7 @@ function buildNetworkData(
           : maxFontSize;
       nodeDimensions.set(
         n.id,
-        estimateNodeDimensions(n.label, wrapChars, fontSize)
+        estimateNodeDimensions(n.label, wrapChars, fontSize, importedNoteBox(n, fontSize))
       );
     });
     
@@ -3135,7 +3176,10 @@ function buildNetworkData(
         externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
       });
     }
-    const displayLabel = formatNodeLabelWithPrefix(n, externalOntologyReferences);
+    // The label is just the name: an imported term's defining ontology is in the note above it, and a built-in
+    // term such as owl:Thing needs no prefix (#111).
+    const importedNote = importedNoteForNode(n, externalOntologyReferences, mainBaseForNodes);
+    const displayLabel = n.label;
     
     // Apply search transparency if search query is active; external nodes use configured opacity.
     // A class declared locally but defined elsewhere (rdfs:isDefinedBy → another ontology) is
@@ -3168,10 +3212,10 @@ function buildNetworkData(
     
     const node: Record<string, unknown> = {
       id: n.id,
-      label: wrapText(displayLabel, wrapChars),
+      label: importedNote ? labelWithImportedNote(wrapText(displayLabel, wrapChars), importedNote, importedNoteWrapChars(wrapChars, fontSize)) : wrapText(displayLabel, wrapChars),
       labellableRoot: n.labellableRoot,
       color: { background: backgroundColor, border: borderColor },
-      font: { size: fontSize, color: fontColor },
+      font: { size: fontSize, color: fontColor, ...(importedNote && importedNoteFont(fontSize, fontColor)) },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
       ...((): { title?: string } => {
         // Lead with a source note (like external "(Imported from …)"), then the rdfs:comment.
@@ -3222,7 +3266,8 @@ function buildNetworkData(
           )
         : maxFontSize;
     // Estimate from the label as drawn (prefix included), or imported classes come out a line short (#72).
-    nodeDimensionsMap.set(n.id, estimateNodeDimensions(formatNodeLabelWithPrefix(n, externalOntologyReferences), wrapChars, fontSize));
+    const note = importedNoteBox(n, fontSize);
+    nodeDimensionsMap.set(n.id, estimateNodeDimensions(n.label, wrapChars, fontSize, note));
   });
   
   // Group data properties by their parent class node for better layout
@@ -3260,9 +3305,10 @@ function buildNetworkData(
   // to any class here; they are drawn free-standing further below, unless a restriction already
   // puts them on a class — that restriction is an assertion, so the node is not floating.
   const unattachedDataProps = dataProperties.filter(
-    (dp) => domainAttachment(dp) === 'unattached' && !restrictedPropertyNames.has(dp.name)
+    (dp) => !dp.contextOnly && domainAttachment(dp) === 'unattached' && !restrictedPropertyNames.has(dp.name)
   );
   dataProperties.forEach((dp) => {
+    if (dp.contextOnly) return; // declared only in an import (#104): listed in the menu, never drawn
     filteredNodes.forEach((n) => {
       if (displayedAsRestriction.has(`${n.id}__${dp.name}`)) return;
       if (!appliesToClass(dp, n.id, clusterThingDataProperties)) return;
@@ -3437,7 +3483,9 @@ function buildNetworkData(
       
       // Get prefix for data property if it's imported
       const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : null;
-      const dataPropDisplayLabel = dataPropPrefix ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
+      // The label is just the name: an imported property's defining ontology is in the note above it (#111).
+      const dataPropNote = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
+      const dataPropDisplayLabel = dataProp.label;
       
       // A data property whose domain/range is an anonymous class expression is marked with a small
       // badge (∪ ∩ ¬ {}) overlapping its stub node (classExpressionOverlayRenderer, which owns the
@@ -3463,11 +3511,11 @@ function buildNetworkData(
         
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
-        label: wrapText(nodeLabel, wrapChars),
+        label: dataPropNote ? labelWithImportedNote(wrapText(nodeLabel, wrapChars), dataPropNote, importedNoteWrapChars(wrapChars, dataPropertyFontSize)) : wrapText(nodeLabel, wrapChars),
         shape: 'box',
         size: 15,
         color: { background: dataPropBackgroundColor, border: dataPropBorderColor },
-        font: { size: dataPropertyFontSize, color: dataPropFontColor },
+        font: { size: dataPropertyFontSize, color: dataPropFontColor, ...(dataPropNote && importedNoteFont(dataPropertyFontSize, dataPropFontColor)) },
         margin: 4,
         physics: false,
         x: finalDataPropPos.x,
@@ -3534,9 +3582,9 @@ function buildNetworkData(
   if (unattachedDataProps.length > 0) {
     const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
     const entries = unattachedDataProps.map((dp) => {
-      const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
       const rangeDisplay = describeRange(dp);
-      const label = `${prefix ? `${prefix}:${dp.label}` : dp.label}${rangeDisplay.labelSuffix}`;
+      const note = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
+      const label = `${dp.label}${rangeDisplay.labelSuffix}`;
       const definingOntologyUrl = dp.isDefinedBy || (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
       const isImported = isUriFromExternalOntology(dp.uri, dp.isDefinedBy ?? null, externalOntologyReferences, mainBase);
       const notes = [
@@ -3552,7 +3600,7 @@ function buildNetworkData(
         : 1.0;
       const opacity =
         getDataPropertySearchOpacity(dp.name, null, searchSets, searchQuery) * importedOpacity;
-      return { dp, label, tooltip, opacity };
+      return { dp, label, tooltip, opacity, note };
     });
 
     const classPositions = filteredNodes
@@ -3562,7 +3610,7 @@ function buildNetworkData(
     // to three lines was being laid out as one long, one-line-tall box, which both inflated the
     // widths (forcing rows earlier than needed) and let the rows it created overlap vertically.
     const dimensions = entries.map((e) =>
-      estimateNodeDimensions(e.label, wrapChars, dataPropertyFontSize)
+      estimateNodeDimensions(e.label, wrapChars, dataPropertyFontSize, e.note ? { text: e.note, fontSize: importedNoteFontSize(dataPropertyFontSize) } : undefined)
     );
     const positions = layoutUnattachedNodes(
       dimensions.map((d) => d.width),
@@ -3575,19 +3623,22 @@ function buildNetworkData(
       const faded = entry.opacity < 1.0;
       dataPropertyNodes.push({
         id: unattachedDataPropertyNodeId(entry.dp.name),
-        label: wrapText(entry.label, wrapChars),
+        label: entry.note ? labelWithImportedNote(wrapText(entry.label, wrapChars), entry.note, importedNoteWrapChars(wrapChars, dataPropertyFontSize)) : wrapText(entry.label, wrapChars),
         shape: 'box',
         size: 15,
         color: {
           background: faded ? applyOpacityToColor(DATA_PROPERTY_FILL, entry.opacity) : DATA_PROPERTY_FILL,
           border: faded ? applyOpacityToColor('#4a90a4', entry.opacity) : '#4a90a4',
         },
-        font: {
+        font: ((color: string) => ({
           size: dataPropertyFontSize,
-          color: faded
+          color,
+          ...(entry.note && importedNoteFont(dataPropertyFontSize, color)),
+        }))(
+          faded
             ? applyOpacityToColor(readableTextColor(DATA_PROPERTY_FILL, { opacity: entry.opacity }), entry.opacity)
-            : readableTextColor(DATA_PROPERTY_FILL),
-        },
+            : readableTextColor(DATA_PROPERTY_FILL)
+        ),
         margin: 4,
         physics: false,
         // Dashed border marks these as unattached, matching the absence of a connecting edge.
@@ -3615,6 +3666,9 @@ function buildNetworkData(
       lineType: 'solid' as BorderLineType,
     };
     const edgeComment = getRelationshipComment(e.type, objectProperties);
+    // Relationships defined in another ontology carry the same small note as imported classes (#111).
+    const importedEdgeNote = style.showLabel ? importedNoteForRelationship(e.type, objectProperties, externalOntologyReferences, mainBaseForNotes) : null;
+    const edgeLabelText = style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '';
     
     // Styling based on whether edge is from restriction or domain/range
     // Thick continuous line for restrictions, thin dashed line for normal object properties
@@ -3663,10 +3717,11 @@ function buildNetworkData(
       from: e.from,
       to: e.to,
       arrows: 'to',
-      label: style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '',
+      label: importedEdgeNote ? labelWithImportedNote(edgeLabelText, importedEdgeNote) : edgeLabelText,
       font: {
         size: relationshipFontSize,
         color: edgeFontColor,
+        ...(importedEdgeNote && importedNoteFont(relationshipFontSize, edgeFontColor)),
         ...(style.showLabel && { background: `rgba(${RELATIONSHIP_LABEL_BG_RGB}, ${labelBgAlpha})` }),
       },
       color: { color: edgeColor, highlight: edgeColor },
@@ -6267,9 +6322,9 @@ function renderApp(): void {
       </div>
     </div>
     <div id="info">
-      <span id="versionDisplay" style="margin-right: 12px; font-size: 11px; color: #666;"></span>
-      Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span>
-      <span id="filePathDisplay" style="margin-left: 24px; font-size: 11px;"></span>
+      <span id="versionDisplay" style="font-size: 11px; color: #666;"></span>
+      <span id="ontologyInfoDisplay" class="info-seg" style="font-size: 11px; display: none;"></span>
+      <span id="graphCounts" class="info-seg">Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>
     </div>
@@ -6670,6 +6725,74 @@ function openExternalOntology(url: string): Promise<void> {
   });
 }
 
+/** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
+ * after some edits; this is merged back in each time. */
+let importedDeclarations: PropertyLists | null = null;
+
+/** The object properties of `store`, with what the imports declare merged in. */
+function currentObjectProperties(store: NonNullable<typeof ttlStore>): ObjectPropertyInfo[] {
+  const own = getObjectProperties(store);
+  return importedDeclarations
+    ? mergeImportedDeclarations({ objectProperties: own, dataProperties: [], annotationProperties: [] }, importedDeclarations).objectProperties
+    : own;
+}
+
+/** The data properties of `store`, with what the imports declare merged in. */
+function currentDataProperties(store: NonNullable<typeof ttlStore>): DataPropertyInfo[] {
+  const own = getDataProperties(store);
+  return importedDeclarations
+    ? mergeImportedDeclarations({ objectProperties: [], dataProperties: own, annotationProperties: [] }, importedDeclarations).dataProperties
+    : own;
+}
+
+/** How long, and how large (in bytes), one imported ontology may be when it is read in the background (#104). */
+const IMPORT_READ_TIMEOUT_MS = 8000;
+const IMPORT_READ_MAX_BYTES = 5_000_000;
+
+/** Re-render the property menus after the declarations of the imports were merged in (#104). The edge
+ * styles already set are kept; the annotation menu keeps its own. */
+function refreshPropertyMenus(): void {
+  const edgeStylesContent = document.getElementById('edgeStylesContent');
+  if (edgeStylesContent) initEdgeStylesMenu(edgeStylesContent, applyFilter, { preserveStyles: true });
+  const dataPropsContent = document.getElementById('dataPropsContent');
+  if (dataPropsContent) initDataPropsMenu(dataPropsContent);
+  const annotationPropsContent = document.getElementById('annotationPropsContent');
+  if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
+}
+
+/**
+ * Read what the loaded ontology's imports declare, in the background, and merge it into the property lists
+ * and menus as read-only context (#104). Best effort: an import that can't be fetched (CORS, offline) is
+ * skipped and nothing changes. The loaded store is never touched, so saving is unaffected. Nothing happens
+ * if another ontology was opened in the meantime.
+ */
+function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
+  beginImportsSettle();
+  void (async () => {
+    try {
+      // Background reads are bounded: a slow or huge import is given up on, not waited for (and not kept).
+      const imported = await loadImportedOntologies(store, (url) =>
+        fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
+      );
+      if (store !== ttlStore || imported.length === 0) return;
+      importedDeclarations = readImportedDeclarations(imported);
+      const before = { objectProperties, dataProperties, annotationProperties };
+      const merged = mergeImportedDeclarations(before, importedDeclarations);
+      objectProperties = merged.objectProperties;
+      dataProperties = merged.dataProperties;
+      annotationProperties = merged.annotationProperties;
+      refreshPropertyMenus();
+      // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
+      // uses came from an import; properties added as context are never drawn.
+      if (mergeChangesWhatIsDrawn(before, merged)) applyFilter(true);
+    } catch (err) {
+      debugWarn('Could not read the declarations of the imports:', err);
+    } finally {
+      if (store === ttlStore) importsSettled();
+    }
+  })();
+}
+
 async function loadTtlAndRender(
   ttlString: string,
   fileName?: string,
@@ -6971,6 +7094,7 @@ async function loadTtlAndRender(
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
+    importedDeclarations = null; // those of the previous ontology's imports
     // ttlStore already set earlier after parsing (for faster test detection)
     knownExternalClassUris = new Set();
     userAddedExternalNodes = [];
@@ -7031,6 +7155,7 @@ hasUnsavedChanges = false;
 
     setTimeout(() => {
       updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
+      updateOntologyInfoDisplay(ttlStore ? getOntologyInfo(ttlStore, prefixMap) : null);
     }, 0);
 
     if (handle && fileName) {
@@ -7216,6 +7341,7 @@ hasUnsavedChanges = false;
         });
       });
     }
+    startLoadingImportedDeclarations(store);
   } catch (err) {
     errorMsg.textContent = `Parse error: ${err instanceof Error ? err.message : String(err)}`;
     errorMsg.style.display = 'block';
@@ -8018,7 +8144,7 @@ function setupEventListeners(): void {
   const versionDisplay = document.getElementById('versionDisplay');
   if (versionDisplay) {
     const repoUrl = 'https://github.com/alelom/OntoCanvas';
-    versionDisplay.innerHTML = `<a href="${repoUrl}" target="_blank" rel="noopener noreferrer" class="version-link" title="OntoCanvas on GitHub">OntoCanvas v${getAppVersion()}</a> |`;
+    versionDisplay.innerHTML = `<a href="${repoUrl}" target="_blank" rel="noopener noreferrer" class="version-link" title="OntoCanvas on GitHub">OntoCanvas v${getAppVersion()}</a>`;
   }
   
   const fileInput = document.getElementById('fileInput') as HTMLInputElement;
@@ -8406,7 +8532,7 @@ function setupEventListeners(): void {
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     const types = getAllRelationshipTypes(rawData, objectProperties);
-    const defaultColors = getDefaultEdgeColors(types);
+    const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
     types.forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
       if (colorEl) colorEl.value = defaultColors[type] ?? getDefaultColor();

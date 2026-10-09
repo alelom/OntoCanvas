@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getAllRelationshipTypes,
   cleanupUnusedExternalProperties,
+  colourableRelationshipTypes,
   getRelationshipLabel,
   getEdgeDisplayLabel,
   getRelationshipComment,
@@ -63,6 +64,16 @@ describe('relationshipUtils', () => {
     });
   });
   
+  describe('colourableRelationshipTypes', () => {
+    it('leaves out properties declared only in an import, so the colours of the other edges do not move (#104)', () => {
+      const ops = [
+        { name: 'contains', label: 'Contains', hasCardinality: true },
+        { name: 'https://w3id.org/dano#declaredInImport', label: 'Declared', hasCardinality: true, contextOnly: true },
+      ];
+      expect(colourableRelationshipTypes(['contains', 'https://w3id.org/dano#declaredInImport', 'subClassOf'], ops)).toEqual(['contains', 'subClassOf']);
+    });
+  });
+
   describe('cleanupUnusedExternalProperties', () => {
     it('should remove unused external properties', () => {
       objectProperties.push({
@@ -75,6 +86,12 @@ describe('relationshipUtils', () => {
       expect(cleaned.find(p => p.name === 'contains')).toBeDefined();
     });
     
+    it('keeps a property declared only in an import and listed as context (#104)', () => {
+      objectProperties.push({ name: 'https://w3id.org/dano#declaredInImport', label: 'Declared', hasCardinality: true, contextOnly: true } as never);
+      const cleaned = cleanupUnusedExternalProperties(rawData, objectProperties);
+      expect(cleaned.find((p) => p.name === 'https://w3id.org/dano#declaredInImport')).toBeDefined();
+    });
+
     it('should keep local properties', () => {
       const cleaned = cleanupUnusedExternalProperties(rawData, objectProperties);
       expect(cleaned.find(p => p.name === 'contains')).toBeDefined();

@@ -1,11 +1,14 @@
 import { detectOntologyIssues, groupIssuesByType, getIssueTypeLabel, type OntologyIssue } from './ontologyIssues';
 import { Store } from 'n3';
+import { fileDisplayName, type OntologyInfo } from './ontologyInfo';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
 let issuesPopup: HTMLElement | null = null;
 let currentStore: Store | null = null;
 let currentOntologyLocation: string | null = null;
+let currentOntologyInfo: OntologyInfo | null = null;
+let currentFilePath: string | null = null;
 
 /**
  * Initialize the status bar component.
@@ -195,51 +198,75 @@ function isValidUrl(str: string): boolean {
 }
 
 /**
- * Update file path display in the status bar.
+ * Show the name and prefix of the open ontology in the status bar (#113), or nothing when there is none.
  */
-export function updateFilePathDisplay(filePath: string | null): void {
-  const el = document.getElementById('filePathDisplay');
+export function updateOntologyInfoDisplay(info: OntologyInfo | null): void {
+  currentOntologyInfo = info;
+  renderOntologyPart();
+}
+
+/** A link opening `href` in a new tab. */
+function createLink(href: string, text: string, title: string): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.href = href; // The browser encodes it safely
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = text; // textContent escapes HTML
+  link.title = title;
+  link.style.color = '#3498db';
+  link.style.textDecoration = 'none';
+  link.addEventListener('mouseenter', () => {
+    link.style.textDecoration = 'underline';
+  });
+  link.addEventListener('mouseleave', () => {
+    link.style.textDecoration = 'none';
+  });
+  return link;
+}
+
+/**
+ * The ontology part of the status bar (#113): "Ontology: " and the ontology's name, linking to the file or URL it was opened
+ * from when that is a URL, then "(prefix: <i>foaf</i>)" when the file declares a prefix for it. With no
+ * ontology declared, the file's own name stands in; with neither, the part is hidden.
+ */
+function renderOntologyPart(): void {
+  const el = document.getElementById('ontologyInfoDisplay');
   if (!el) return;
-  
-  // Clear existing content
   el.textContent = '';
   el.title = '';
-  
-  if (filePath) {
-    const isUrl = isValidUrl(filePath);
-    if (isUrl) {
-      // Create text node for "| File: " prefix
-      const prefix = document.createTextNode('| File: ');
-      el.appendChild(prefix);
-      
-      // Create anchor element safely using DOM APIs
-      const link = document.createElement('a');
-      link.href = filePath; // Browser will safely encode the URL
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = filePath; // textContent is safe - escapes HTML
-      link.style.color = '#3498db';
-      link.style.textDecoration = 'none';
-      
-      // Use CSS hover via event listeners instead of inline handlers
-      link.addEventListener('mouseenter', () => {
-        link.style.textDecoration = 'underline';
-      });
-      link.addEventListener('mouseleave', () => {
-        link.style.textDecoration = 'none';
-      });
-      
-      el.appendChild(link);
-      el.title = `Click to open: ${filePath}`;
-    } else {
-      // Regular text for non-URL paths
-      el.textContent = `| File: ${filePath}`;
-      el.title = filePath;
-    }
-    el.style.display = '';
-  } else {
+  const name = currentOntologyInfo?.name ?? (currentFilePath ? fileDisplayName(currentFilePath) : '');
+  if (!name) {
     el.style.display = 'none';
+    return;
   }
+  el.style.display = '';
+  el.appendChild(document.createTextNode('Ontology: '));
+  const where = [
+    currentOntologyInfo ? `Ontology: ${currentOntologyInfo.iri}` : null,
+    currentFilePath ? `File: ${currentFilePath}` : null,
+  ].filter(Boolean).join('\n');
+  if (currentFilePath && isValidUrl(currentFilePath)) {
+    el.appendChild(createLink(currentFilePath, name, `Click to open: ${currentFilePath}`));
+  } else {
+    el.appendChild(document.createTextNode(name));
+  }
+  el.title = where;
+  if (currentOntologyInfo?.prefix) {
+    el.appendChild(document.createTextNode(' (prefix: '));
+    const prefix = document.createElement('i');
+    prefix.textContent = currentOntologyInfo.prefix;
+    el.appendChild(prefix);
+    el.appendChild(document.createTextNode(')'));
+  }
+}
+
+/**
+ * Set the file or URL the ontology was opened from: the ontology's name in the status bar links to it
+ * (#113).
+ */
+export function updateFilePathDisplay(filePath: string | null): void {
+  currentFilePath = filePath;
+  renderOntologyPart();
 }
 
 /**

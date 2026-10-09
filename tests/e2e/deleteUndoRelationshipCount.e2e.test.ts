@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, waitForAppReady } from './testHelpers';
+import { loadTestFile, waitForAppReady, blockExternalRequests } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -32,6 +32,9 @@ beforeEach(async () => {
   page = await browser.newPage();
   page.setDefaultTimeout(5000);
   page.setDefaultNavigationTimeout(5000);
+  // This is about deleting and undoing, not the network: the file's imports are real URLs, which CI can reach, and
+  // reading them would redraw the graph (and clear the selection) between selecting and deleting.
+  await blockExternalRequests(page);
   await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await page.waitForFunction(
     () => (window as unknown as { __EDITOR_TEST__?: unknown }).__EDITOR_TEST__ !== undefined,

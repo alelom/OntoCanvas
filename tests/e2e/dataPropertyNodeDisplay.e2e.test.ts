@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, waitForAppReady } from './testHelpers';
+import { loadTestFile, waitForAppReady, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -118,7 +118,8 @@ describe('Data Property Node Display E2E', () => {
     
     // ExtendedEntity restricts dpbase:createdDate, so it is drawn as a __dataproprestrict__ node.
     expect(createdDateNode, 'createdDate data property node').toBeDefined();
-    expect(createdDateNode.label).toMatch(/dpbase:\s*(createdDate|created date)/i);
+    // The note above the label names the defining ontology; the label itself is just the name (#111).
+    expect(plainLabel(createdDateNode.label)).toMatch(/\(defined by: dpbase\)\s*(createdDate|created date)/i);
     expect(createdDateNode.label).toMatch(/\(xsd:(dateTime|string)\)/);
     expect(createdDateNode.title).toContain('Imported from');
     expect(createdDateNode.title).toContain('http://example.org/data-base');
@@ -182,7 +183,7 @@ describe('Data Property Node Display E2E', () => {
     const baseEntityNode = result.nodes.find((n: any) => n.id === 'http://example.org/data-base#BaseEntity');
     expect(baseEntityNode, 'external BaseEntity node').toBeDefined();
     // The imported ontology is not loaded, so there is no rdfs:label and the local name is shown.
-    expect(baseEntityNode.label).toMatch(/dpbase:\s*Base\s?Entity/i);
+    expect(plainLabel(baseEntityNode.label)).toMatch(/\(defined by: dpbase\)\s*Base\s?Entity/i);
     expect(baseEntityNode.title).toContain('Imported from');
     expect(baseEntityNode.title).toContain('http://example.org/data-base');
   });

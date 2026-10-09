@@ -1,6 +1,6 @@
 import type { GraphData, GraphEdge, BorderLineType, ObjectPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
-import { getAllRelationshipTypes, getRelationshipLabel } from './relationshipUtils';
+import { getAllRelationshipTypes, getRelationshipLabel, colourableRelationshipTypes } from './relationshipUtils';
 import { getDefaultEdgeColors, getDefaultColor, getEdgeTypes } from '../graph';
 
 /**
@@ -104,7 +104,7 @@ export function getEdgeStyleConfig(
   const allTypes = new Set([...menuTypes, ...edgeTypes]);
   
   // Get default colors for all types (distributed across spectrum)
-  const defaultColors = getDefaultEdgeColors([...allTypes]);
+  const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes([...allTypes], objectProperties));
   
   allTypes.forEach((type) => {
     // Escape special CSS characters in the type for use in attribute selectors

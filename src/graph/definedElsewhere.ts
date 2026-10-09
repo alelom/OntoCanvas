@@ -11,10 +11,10 @@
  * because editing them here does not change the real definition.
  */
 
-/** Strip a single trailing '#' or '/' so namespace variants compare equal. */
+/** Strip trailing '#' and '/' so namespace variants compare equal. More than one can be there: the main base
+ * of an ontology whose IRI ends in a slash, such as FOAF, is `http://xmlns.com/foaf/0.1/#` (#114). */
 function normalizeNamespace(uri: string): string {
-  if (uri.endsWith('#') || uri.endsWith('/')) return uri.slice(0, -1);
-  return uri;
+  return uri.replace(/[#/]+$/, '');
 }
 
 /** Namespace of a URI: everything up to and including the '#', or the final '/'. */

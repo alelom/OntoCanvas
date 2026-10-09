@@ -1,4 +1,5 @@
 // import type { DataSet } from 'vis-network'; // Unused - kept for reference
+import { wrapNoteText } from './utils/noteWrap';
 import type { GraphEdge, GraphNode, NodeDimensions } from './types';
 import type { SearchScope } from './lib/searchHighlight';
 
@@ -230,15 +231,24 @@ const NODE_MARGIN = 10;
 const CHAR_WIDTH_RATIO = 0.62;
 const LINE_HEIGHT_RATIO = 1.35;
 
+/** `note`: a smaller text drawn above the label (#111), wrapped like it; it adds its lines to the height. */
 export function estimateNodeDimensions(
   label: string,
   wrapChars: number,
-  fontSize: number
+  fontSize: number,
+  note?: { text: string; fontSize: number }
 ): NodeDimensions {
   const lines = wrapText(label, wrapChars).split('\n');
   const maxLineLen = Math.max(1, ...lines.map((l) => l.length));
-  const width = maxLineLen * fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN;
-  const height = lines.length * fontSize * LINE_HEIGHT_RATIO + 2 * NODE_MARGIN;
+  let width = maxLineLen * fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN;
+  let height = lines.length * fontSize * LINE_HEIGHT_RATIO + 2 * NODE_MARGIN;
+  if (note) {
+    // The note wraps like the label: the label's wrap width holds more of its smaller font.
+    const noteLines = wrapNoteText(note.text, Math.round((wrapChars * fontSize) / note.fontSize));
+    const longest = Math.max(1, ...noteLines.map((l) => l.length));
+    width = Math.max(width, longest * note.fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN);
+    height += noteLines.length * note.fontSize * LINE_HEIGHT_RATIO;
+  }
   return { width: Math.max(70, width), height: Math.max(40, height) };
 }
 

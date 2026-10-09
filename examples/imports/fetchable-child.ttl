@@ -1,0 +1,22 @@
+@prefix : <http://example.org/examples/fetchable-child#> .
+@prefix parent: <http://example.org/examples/fetchable-parent#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# What an import declares is read from it (issue #104). This ontology imports fetchable-parent.ttl, written as a
+# relative IRI, so it is read from next to this file wherever this one was opened from (a branch, a release, your
+# own server); opened from a file on disk there is nowhere to read it from, and nothing changes. Open it by URL.
+# What you should see, a moment after it opens:
+#   - Report, and Document faded with "(defined by: parent)" above it: the only class this file uses.
+#   - Object Properties menu: parent:author, which this file never uses. Data Properties menu: parent:title
+#     (xsd:string) and parent:published on (xsd:date), likewise. They are context: listed, but not drawn on the
+#     canvas, not editable, not deletable, and not written into this ontology when you save.
+
+<http://example.org/examples/fetchable-child> rdf:type owl:Ontology ;
+    rdfs:label "Fetchable child" ;
+    owl:imports <fetchable-parent.ttl> .
+
+:Report rdf:type owl:Class ;
+    rdfs:label "Report" ;
+    rdfs:subClassOf parent:Document .

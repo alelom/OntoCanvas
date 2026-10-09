@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, waitForAppReady } from './testHelpers';
+import { loadTestFile, waitForAppReady, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -145,13 +145,15 @@ describe('External Ref Prefix Update E2E', () => {
 
     await loadWithExternalRefs(page, childFile);
 
-    const baseEntityLabel = () => classNodeLabel(page, 'BaseEntity', 'Base Entity');
-    await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('dpbase:');
+    // The prefix is in the note above the label (#111), not in the label itself.
+    // The note wraps like the label, so compare with the line breaks as spaces.
+    const baseEntityLabel = async () => plainLabel(await classNodeLabel(page, 'BaseEntity', 'Base Entity')).replace(/\s+/g, ' ');
+    await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('(defined by: dpbase)');
 
     await changeFirstPrefix(page, 'testprefix');
 
     // The BaseEntity node label should be updated
-    await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('testprefix:');
-    expect(await baseEntityLabel()).not.toContain('dpbase:');
+    await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('(defined by: testprefix)');
+    expect(await baseEntityLabel()).not.toContain('dpbase');
   });
 });

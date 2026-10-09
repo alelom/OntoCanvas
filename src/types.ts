@@ -84,6 +84,9 @@ export interface ObjectPropertyInfo {
   isDefinedBy?: string | null;
   /** rdfs:subPropertyOf (single parent object property URI or local name). */
   subPropertyOf?: string | null;
+  /** Declared only in an imported ontology and not used in this file (#104): listed in the menu as
+   * read-only context. */
+  contextOnly?: boolean;
 }
 
 export interface DataPropertyInfo {
@@ -120,6 +123,9 @@ export interface DataPropertyInfo {
   uri?: string;
   /** rdfs:isDefinedBy (URI of defining ontology). If set, label is read-only (imported). */
   isDefinedBy?: string | null;
+  /** Declared only in an imported ontology and not used in this file (#104): listed in the menu as
+   * read-only context, never drawn on the canvas. */
+  contextOnly?: boolean;
 }
 
 export interface GraphEdge {

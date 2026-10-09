@@ -1,4 +1,5 @@
 import { Store, DataFactory } from 'n3';
+import { RESERVED_VOCABULARY_NAMESPACES } from './rdf/reservedVocabulary';
 import type { Quad } from 'n3';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { extractLocalName, extractLocalNameFromUri } from './parser';
@@ -41,9 +42,34 @@ export class CorsOrNetworkError extends Error {
   }
 }
 
+/** The server did not send the ontology within the time allowed. Thrown, instead of null, for the ontology a
+ * user asked to open (throwOnCors), so the app can say the server was slow rather than that loading failed. */
+export class FetchTimeoutError extends Error {
+  constructor(
+    public readonly url: string,
+    public readonly timeoutMs: number
+  ) {
+    const seconds = Math.round(timeoutMs / 1000);
+    super(`Timed out after ${seconds} second${seconds === 1 ? '' : 's'} waiting for ${url}`);
+    this.name = 'FetchTimeoutError';
+    Object.setPrototypeOf(this, FetchTimeoutError.prototype);
+  }
+}
+
 export interface FetchExternalOntologyTtlOptions {
-  /** When true, throw CorsOrNetworkError instead of returning null when the initial fetch throws (e.g. CORS). */
+  /** When true, throw CorsOrNetworkError instead of returning null when the initial fetch throws (e.g. CORS), and
+   * FetchTimeoutError when the server is too slow. For the ontology a user asked to open. */
   throwOnCors?: boolean;
+  /** How long the whole request may take, headers and body (default 2000). The ontology a user asked to open
+   * may be slow (LOV's FOAF takes 5 to 10 seconds); the many background reads keep the short default. */
+  timeoutMs?: number;
+  /** Give up on a response larger than this many bytes, and don't keep it (default: no limit). The body is read as
+   * a stream and the request stopped as soon as the budget is passed, so a server that sends more than it says (or
+   * says nothing) can't fill the browser's memory. */
+  maxBytes?: number;
+  /** Read the common vocabularies (FOAF, SKOS, Dublin Core, …) too, which are otherwise skipped. For an ontology
+   * that imports one: its declarations are wanted. The reserved ones (owl, rdf, rdfs, xsd) are never fetched. */
+  fetchStandardVocabularies?: boolean;
 }
 
 /**
@@ -51,6 +77,20 @@ export interface FetchExternalOntologyTtlOptions {
  * This ensures we fetch the TTL once and reuse it for both classes and object properties.
  */
 const externalTtlCache: Map<string, string> = new Map();
+
+/** The most ontologies kept in the cache, and the largest one kept (in characters): the texts stay in memory
+ * for the life of the page, and imports are read in the background (#104). */
+const MAX_CACHED_ONTOLOGIES = 50;
+const MAX_CACHED_CHARACTERS = 5_000_000;
+
+function rememberTtl(url: string, text: string): void {
+  if (text.length > MAX_CACHED_CHARACTERS) return;
+  if (!externalTtlCache.has(url) && externalTtlCache.size >= MAX_CACHED_ONTOLOGIES) {
+    const oldest = externalTtlCache.keys().next().value;
+    if (oldest !== undefined) externalTtlCache.delete(oldest);
+  }
+  externalTtlCache.set(url, text);
+}
 
 /**
  * Fetches and parses an external ontology to extract OWL classes.
@@ -66,11 +106,36 @@ const externalObjectPropertiesCache: Map<string, ExternalObjectPropertyInfo[]> =
 
 // Standard vocabularies that don't need to be fetched (they're built into the system)
 // These are commonly referenced but don't need to be fetched as external ontologies
+/**
+ * The text of a response, as a string. With a `maxBytes` budget the body is read chunk by chunk and the request
+ * is stopped (the rest cancelled, nothing kept) the moment more than that has arrived; null then. Without one,
+ * or where the response has no readable stream, it is simply read.
+ */
+async function readBodyText(response: Response, maxBytes?: number, controller?: AbortController): Promise<string | null> {
+  if (maxBytes === undefined || !response.body || typeof response.body.getReader !== 'function') {
+    const text = await response.text();
+    return maxBytes !== undefined && text.length > maxBytes ? null : text;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      controller?.abort();
+      return null;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 const STANDARD_VOCABULARIES = new Set([
-  'http://www.w3.org/2002/07/owl',
-  'http://www.w3.org/1999/02/22-rdf-syntax-ns',
-  'http://www.w3.org/2000/01/rdf-schema',
-  'http://www.w3.org/2001/XMLSchema',
+  ...RESERVED_VOCABULARY_NAMESPACES,
   'http://www.w3.org/2004/02/skos/core',
   'http://www.opengis.net/ont/geosparql',
   'http://xmlns.com/foaf/0.1/',
@@ -90,12 +155,15 @@ export async function fetchExternalOntologyTtl(
   options?: FetchExternalOntologyTtlOptions
 ): Promise<string | null> {
   const throwOnCors = options?.throwOnCors === true;
+  const timeoutMs = options?.timeoutMs ?? 2000;
   // Normalize URL (remove trailing # if present)
   const normalizedUrl = url.endsWith('#') ? url.slice(0, -1) : url;
   
   // Skip standard vocabularies - they don't need to be fetched
   // These are expected to fail (CORS, 404, etc.) and failures should be silent
-  if (STANDARD_VOCABULARIES.has(normalizedUrl) || STANDARD_VOCABULARIES.has(normalizedUrl.replace(/\/$/, ''))) {
+  const skipped = options?.fetchStandardVocabularies ? RESERVED_VOCABULARY_NAMESPACES : STANDARD_VOCABULARIES;
+  const isSkipped = (u: string) => (Array.isArray(skipped) ? skipped.includes(u) : (skipped as Set<string>).has(u));
+  if (isSkipped(normalizedUrl) || isSkipped(normalizedUrl.replace(/\/$/, ''))) {
     if (isDebugMode()) {
       debugWarn(`Skipping fetch for standard vocabulary: ${normalizedUrl}`);
     }
@@ -122,9 +190,9 @@ export async function fetchExternalOntologyTtl(
     const timeoutId = setTimeout(() => {
       controller.abort();
       if (isDebugMode()) {
-        debugWarn(`Fetch timeout after 2s for ${normalizedUrl}`);
+        debugWarn(`Fetch timeout after ${timeoutMs / 1000}s for ${normalizedUrl}`);
       }
-    }, 2000); // 2 second timeout
+    }, timeoutMs);
     
     let response;
     try {
@@ -137,10 +205,13 @@ export async function fetchExternalOntologyTtl(
         redirect: 'follow', // Explicitly follow redirects (like curl -L)
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
+      // The timer stays on until the body has been read: a server that sends headers and then trickles the
+      // body would otherwise keep this (and anything waiting on it) pending for good.
     } catch (fetchErr) {
       clearTimeout(timeoutId);
       if (fetchErr instanceof Error && fetchErr.name === 'AbortError') {
+        // For the ontology the user opened, say so: the other URLs are not worth another wait.
+        if (throwOnCors) throw new FetchTimeoutError(normalizedUrl, timeoutMs);
         if (isDebugMode()) {
           debugWarn(`Fetch aborted (timeout) for ${normalizedUrl}`);
           debugWarn(`Initial fetch timed out, trying fallback URLs directly...`);
@@ -163,6 +234,7 @@ export async function fetchExternalOntologyTtl(
     // If we got a response, process it normally
     if (response) {
       if (!response.ok) {
+        clearTimeout(timeoutId);
         if (isDebugMode()) {
           debugWarn(`Failed to fetch ${normalizedUrl}: HTTP ${response.status} ${response.statusText}`);
         }
@@ -175,7 +247,35 @@ export async function fetchExternalOntologyTtl(
         console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
       }
       
-      let text = await response.text();
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (options?.maxBytes !== undefined && declaredLength > options.maxBytes) {
+        clearTimeout(timeoutId);
+        controller.abort();
+        return null;
+      }
+      let text: string;
+      try {
+        // Read as a stream, stopping at the byte budget, so an over-large body is never held in full.
+        const body = await readBodyText(response, options?.maxBytes, controller);
+        if (body === null) {
+          clearTimeout(timeoutId);
+          if (isDebugMode()) {
+            debugWarn(`Response from ${normalizedUrl} is larger than ${options?.maxBytes} bytes; ignored.`);
+          }
+          return null;
+        }
+        text = body;
+      } catch (readErr) {
+        clearTimeout(timeoutId);
+        if (throwOnCors && readErr instanceof Error && readErr.name === 'AbortError') {
+          throw new FetchTimeoutError(normalizedUrl, timeoutMs);
+        }
+        if (isDebugMode()) {
+          debugWarn(`Could not read the body of ${normalizedUrl} (timeout or network error):`, readErr);
+        }
+        return null;
+      }
+      clearTimeout(timeoutId);
       if (isDebugMode()) {
         console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
       }
@@ -203,7 +303,7 @@ export async function fetchExternalOntologyTtl(
       
       if (isRdfContent) {
         // Content negotiation succeeded - cache and return the TTL text
-        externalTtlCache.set(normalizedUrl, text);
+        rememberTtl(normalizedUrl, text);
         return text;
       }
       
@@ -230,9 +330,10 @@ export async function fetchExternalOntologyTtl(
             }
             
             // Fetch the actual Turtle content from the alternate link
+            // The timer covers the request and its body, and is cleared when this attempt is over.
+            const altController = new AbortController();
+            const altTimeoutId = setTimeout(() => altController.abort(), timeoutMs);
             try {
-              const altController = new AbortController();
-              const altTimeoutId = setTimeout(() => altController.abort(), 2000);
               let turtleResponse;
               try {
                 turtleResponse = await fetch(turtleUrl, {
@@ -244,28 +345,29 @@ export async function fetchExternalOntologyTtl(
                   redirect: 'follow',
                   signal: altController.signal,
                 });
-                clearTimeout(altTimeoutId);
               } catch (altFetchErr) {
                 clearTimeout(altTimeoutId);
                 if (altFetchErr instanceof Error && altFetchErr.name === 'AbortError') {
-                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within 2 seconds`);
+                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within ${timeoutMs / 1000} seconds`);
                 }
                 throw altFetchErr;
               }
               
               if (turtleResponse.ok) {
-                text = await turtleResponse.text();
+                text = (await readBodyText(turtleResponse, options?.maxBytes, altController)) ?? '';
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 console.log(`Successfully fetched Turtle from alternate link: ${turtleUrl}, content-type: ${turtleContentType}`);
                 
                 if (text.trim() && !text.trim().toLowerCase().startsWith('<!doctype')) {
                   // Cache and return the TTL text
-                  externalTtlCache.set(normalizedUrl, text);
+                  rememberTtl(normalizedUrl, text);
                   return text;
                 }
               }
             } catch (altErr) {
               console.warn(`Failed to fetch from alternate link ${turtleUrl}:`, altErr);
+            } finally {
+              clearTimeout(altTimeoutId);
             }
           }
         }
@@ -329,10 +431,10 @@ export async function fetchExternalOntologyTtl(
         
         // Try all constructed Turtle URL patterns
         for (const turtleUrl of turtleUrlPatterns) {
+            const directController = new AbortController();
+            const directTimeoutId = setTimeout(() => directController.abort(), timeoutMs);
             try {
               console.log(`Trying direct Turtle URL: ${turtleUrl}`);
-              const directController = new AbortController();
-              const directTimeoutId = setTimeout(() => directController.abort(), 2000);
               let turtleResponse;
               try {
                 turtleResponse = await fetch(turtleUrl, {
@@ -344,17 +446,16 @@ export async function fetchExternalOntologyTtl(
                   redirect: 'follow',
                   signal: directController.signal,
                 });
-                clearTimeout(directTimeoutId);
               } catch (directFetchErr) {
                 clearTimeout(directTimeoutId);
                 if (directFetchErr instanceof Error && directFetchErr.name === 'AbortError') {
-                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within 2 seconds`);
+                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within ${timeoutMs / 1000} seconds`);
                 }
                 throw directFetchErr;
               }
               
               if (turtleResponse.ok || turtleResponse.status === 200) {
-                text = await turtleResponse.text();
+                text = (await readBodyText(turtleResponse, options?.maxBytes, directController)) ?? '';
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 
                 // More robust HTML detection
@@ -375,7 +476,7 @@ export async function fetchExternalOntologyTtl(
                       console.log(`Successfully fetched Turtle from direct URL: ${turtleUrl}, content-type: ${turtleContentType}`);
                     }
                     // Cache and return the TTL text
-                    externalTtlCache.set(normalizedUrl, text);
+                    rememberTtl(normalizedUrl, text);
                     return text;
                   }
                 }
@@ -383,6 +484,8 @@ export async function fetchExternalOntologyTtl(
             } catch (directErr) {
               // Continue to next pattern
               console.warn(`Failed to fetch from direct URL ${turtleUrl}:`, directErr);
+            } finally {
+              clearTimeout(directTimeoutId);
             }
           }
         
@@ -401,7 +504,7 @@ export async function fetchExternalOntologyTtl(
         debugWarn(`Unclear content type from ${normalizedUrl}, assuming it's Turtle`);
       }
       // Cache and return the text anyway
-      externalTtlCache.set(normalizedUrl, text);
+      rememberTtl(normalizedUrl, text);
       return text;
     }
     
@@ -426,9 +529,9 @@ export async function fetchExternalOntologyTtl(
         if (isDebugMode()) {
           console.log(`Trying known fallback URL: ${fallback.turtleUrl}`);
         }
+        const fallbackController = new AbortController();
+        const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), timeoutMs);
         try {
-          const fallbackController = new AbortController();
-          const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 2000);
           let fallbackResponse;
           try {
             fallbackResponse = await fetch(fallback.turtleUrl, {
@@ -440,7 +543,6 @@ export async function fetchExternalOntologyTtl(
               redirect: 'follow',
               signal: fallbackController.signal,
             });
-            clearTimeout(fallbackTimeoutId);
           } catch (fallbackFetchErr) {
             clearTimeout(fallbackTimeoutId);
             if (fallbackFetchErr instanceof Error && fallbackFetchErr.name === 'AbortError') {
@@ -453,7 +555,7 @@ export async function fetchExternalOntologyTtl(
           }
           
           if (fallbackResponse.ok) {
-            const fallbackText = await fallbackResponse.text();
+            const fallbackText = (await readBodyText(fallbackResponse, options?.maxBytes, fallbackController)) ?? '';
             const fallbackContentType = fallbackResponse.headers.get('content-type') || '';
             
             if (fallbackText.trim() && !fallbackText.trim().toLowerCase().startsWith('<!doctype')) {
@@ -461,7 +563,7 @@ export async function fetchExternalOntologyTtl(
                 console.log(`Successfully fetched Turtle from fallback URL: ${fallback.turtleUrl}, content-type: ${fallbackContentType}`);
               }
               // Cache and return the TTL text
-              externalTtlCache.set(normalizedUrl, fallbackText);
+              rememberTtl(normalizedUrl, fallbackText);
               return fallbackText;
             }
           }
@@ -469,6 +571,8 @@ export async function fetchExternalOntologyTtl(
           if (isDebugMode()) {
             debugWarn(`Failed to fetch from fallback URL ${fallback.turtleUrl}:`, fallbackErr);
           }
+        } finally {
+          clearTimeout(fallbackTimeoutId);
         }
       }
     }
@@ -480,7 +584,7 @@ export async function fetchExternalOntologyTtl(
     }
     return null;
   } catch (err) {
-    if (err instanceof CorsOrNetworkError) {
+    if (err instanceof CorsOrNetworkError || err instanceof FetchTimeoutError) {
       throw err;
     }
     // Other errors - only log in debug mode

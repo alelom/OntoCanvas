@@ -2,9 +2,12 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getOntologyUrlCandidates, fetchOntologyFromUrl } from './ontologyUrlLoader';
+import { FetchTimeoutError } from '../externalOntologySearch';
+import { getOntologyUrlCandidates, fetchOntologyFromUrl, ONTOLOGY_LOAD_TIMEOUT_MS } from './ontologyUrlLoader';
 
-vi.mock('../externalOntologySearch', () => ({
+// Only the fetch is faked: the error classes stay real, as the loader tells them apart.
+vi.mock('../externalOntologySearch', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../externalOntologySearch')>()),
   fetchExternalOntologyTtl: vi.fn(),
 }));
 
@@ -150,10 +153,39 @@ describe('ontologyUrlLoader', () => {
       const result = await fetchOntologyFromUrl('https://example.com/ontology.ttl');
       expect(result).toBe('@prefix : <#> .');
       expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(1);
+      // The ontology the user asked for may be slow (LOV's FOAF takes 5 to 10 seconds), so it gets a long timeout.
       expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
         'https://example.com/ontology.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
+      expect(ONTOLOGY_LOAD_TIMEOUT_MS).toBe(15000);
+    });
+
+    it('throws the timeout error, naming the URL the user gave, when the server was too slow', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      vi.mocked(fetchExternalOntologyTtl).mockRejectedValue(new FetchTimeoutError('https://example.com/slow.n3', 15000));
+
+      const err = await fetchOntologyFromUrl('https://example.com/slow.n3').catch((e) => e);
+
+      expect(err).toBeInstanceOf(FetchTimeoutError);
+      expect(err.timeoutMs).toBe(15000);
+      expect(err.message).toContain('https://example.com/slow.n3');
+    });
+
+    it('still succeeds when one candidate times out and another answers', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      vi.mocked(fetchExternalOntologyTtl)
+        .mockRejectedValueOnce(new FetchTimeoutError('https://example.com/onto', 15000))
+        .mockResolvedValueOnce('@prefix : <#> .');
+
+      expect(await fetchOntologyFromUrl('https://example.com/onto')).toBe('@prefix : <#> .');
+    });
+
+    it('keeps the generic error for a failure that is not a timeout', async () => {
+      const { fetchExternalOntologyTtl } = await import('../externalOntologySearch');
+      vi.mocked(fetchExternalOntologyTtl).mockResolvedValue(null);
+
+      await expect(fetchOntologyFromUrl('https://example.com/missing.ttl')).rejects.toThrow('Failed to fetch ontology from https://example.com/missing.ttl');
     });
 
     it('tries ontology.ttl fallback when first candidate fails', async () => {
@@ -168,12 +200,12 @@ describe('ontologyUrlLoader', () => {
       expect(fetchExternalOntologyTtl).toHaveBeenNthCalledWith(
         1,
         'https://digitalconstruction.github.io/Processes/latest/',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
       expect(fetchExternalOntologyTtl).toHaveBeenNthCalledWith(
         2,
         'https://digitalconstruction.github.io/Processes/latest/ontology.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
     });
 
@@ -203,7 +235,7 @@ describe('ontologyUrlLoader', () => {
       // Should have tried the .ttl variant
       expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
         'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
     });
 
@@ -223,7 +255,7 @@ describe('ontologyUrlLoader', () => {
       expect(fetchExternalOntologyTtl).toHaveBeenCalledTimes(3);
       expect(fetchExternalOntologyTtl).toHaveBeenCalledWith(
         'https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata.ttl',
-        { throwOnCors: true }
+        { throwOnCors: true, timeoutMs: ONTOLOGY_LOAD_TIMEOUT_MS }
       );
     });
 

@@ -4,6 +4,8 @@
  * and interact with the application without complex DOM manipulations.
  */
 import type { Page } from 'playwright';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Wait until the app is ready for a test to act on (#93): an ontology is loaded, no loading or "Open
@@ -132,4 +134,46 @@ export async function getSaveButtonState(page: Page): Promise<{ visible: boolean
       ttlStoreExists: false,
     };
   });
+}
+
+/**
+ * Serve the ontologies in `directory` under their own IRIs, so that the `owl:imports` of a test file can be
+ * fetched (#104): a request for `http://example.org/base` gets the file whose ontology IRI that is, with CORS
+ * allowed (`extra` adds ontologies by IRI); any other example.org request is aborted. Call it after blockExternalRequests (the later route
+ * wins) and before loading the file.
+ */
+export async function serveOntologies(page: Page, directory: string, extra: Record<string, string> = {}): Promise<void> {
+  const served = new Map<string, string>(Object.entries(extra));
+  for (const name of readdirSync(directory).filter((n) => n.endsWith('.ttl'))) {
+    const content = readFileSync(join(directory, name), 'utf-8');
+    const iri = /<([^>]+)>\s+(?:rdf:type|a)\s+owl:Ontology/.exec(content)?.[1];
+    if (iri) served.set(iri, content);
+  }
+  await page.route(
+    (url) => url.hostname === 'example.org',
+    (route) => {
+      const body = served.get(route.request().url().replace(/#$/, ''));
+      return body === undefined
+        ? route.abort()
+        : route.fulfill({ status: 200, contentType: 'text/turtle', headers: { 'access-control-allow-origin': '*' }, body });
+    }
+  );
+}
+
+/** Wait until the declarations of the loaded ontology's imports have been read, or given up on (#104). */
+export async function waitForImportsSettled(page: Page, timeout = 5000): Promise<void> {
+  await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.areImportsSettled?.() === true, undefined, { timeout });
+}
+
+/**
+ * A vis-network label as the user reads it. An imported term's label has a small note above its name, drawn
+ * with HTML multi-font markup (#111): "<code>(defined by: </code><i>base</i><code>)</code>\nName". This strips
+ * the markup, leaving "(defined by: base)\nName".
+ */
+export function plainLabel(label: string): string {
+  return label
+    .replace(/<\/?(?:code|i)>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }

@@ -157,6 +157,59 @@ export function showCorsFailureModal(
 }
 
 /**
+ * Show the slow-server modal: the ontology's server did not answer in time. That is often temporary, so the
+ * main suggestion is to reload; opening a downloaded copy is the other way out.
+ *
+ * @param seconds - How long the app waited
+ * @param reload - What "Reload" does (the page itself by default; injectable for tests)
+ */
+export function showTimeoutFailureModal(
+  _url: string,
+  seconds: number,
+  onOpenFile: () => void | Promise<void>,
+  reload: () => void = () => window.location.reload()
+): void {
+  const unit = seconds === 1 ? 'second' : 'seconds';
+  const bodyHtml = `The server took too long to send the ontology: nothing arrived within ${seconds} ${unit}.<br><br>It may just be slow or busy, so <strong>reloading the page</strong> often works. If it keeps happening, download the file from the URL and open it here using <strong>Open file</strong>.`;
+  const { overlay, content } = createModalBase('The server took too long to answer', bodyHtml);
+
+  const close = (): void => {
+    overlay.remove();
+    document.body.style.overflow = '';
+  };
+
+  const buttons = document.createElement('div');
+  buttons.style.cssText = BUTTON_ROW_STYLE;
+
+  const reloadBtn = document.createElement('button');
+  reloadBtn.textContent = 'Reload';
+  reloadBtn.className = 'primary';
+  reloadBtn.style.cssText = PRIMARY_BTN_STYLE;
+  reloadBtn.addEventListener('click', () => {
+    close();
+    reload();
+  });
+
+  const openFileBtn = document.createElement('button');
+  openFileBtn.textContent = 'Open file…';
+  openFileBtn.style.cssText = PRIMARY_BTN_STYLE + ' background: #f0f0f0; border: 1px solid #ccc;';
+  openFileBtn.addEventListener('click', () => {
+    close();
+    void Promise.resolve(onOpenFile());
+  });
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = PRIMARY_BTN_STYLE + ' background: #f0f0f0; border: 1px solid #ccc;';
+  closeBtn.addEventListener('click', close);
+
+  buttons.appendChild(reloadBtn);
+  buttons.appendChild(openFileBtn);
+  buttons.appendChild(closeBtn);
+  content.appendChild(buttons);
+}
+
+/**
  * Show the generic URL load failure modal (non-CORS): show error and suggest download-then-open as an option.
  */
 export function showGenericUrlLoadFailureModal(_url: string, errorMessage: string): void {

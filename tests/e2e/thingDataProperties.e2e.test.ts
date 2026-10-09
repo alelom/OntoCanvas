@@ -80,6 +80,19 @@ describe('owl:Thing data properties (#80)', () => {
     ]);
   }, 10000);
 
+  it('draws the owl:Thing node dimmed, labelled just "Thing", with no "defined by" note: it is a built-in', async () => {
+    // The fixture declares the owl prefix, which used to make the label "owl: Thing".
+    const node = await page.evaluate(
+      (id) => {
+        const n = (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(id);
+        return { label: n.label as string, opacity: n.opacity as number };
+      },
+      THING
+    );
+    expect(node.label).toBe('Thing');
+    expect(node.opacity).toBeLessThan(1);
+  }, 10000);
+
   it('the toggle is saved in the display config', async () => {
     await page.locator('#clusterThingDataProps').uncheck();
     await waitForAppReady(page);

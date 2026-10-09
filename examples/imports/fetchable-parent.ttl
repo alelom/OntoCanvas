@@ -1,0 +1,32 @@
+@prefix : <http://example.org/examples/fetchable-parent#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The parent of fetchable-child.ttl (issue #104): it declares the terms the child uses, and some it doesn't.
+# Open fetchable-child.ttl, not this file; it reads this one, which sits next to it.
+
+<http://example.org/examples/fetchable-parent> rdf:type owl:Ontology ;
+    rdfs:label "Fetchable parent" .
+
+:Document rdf:type owl:Class ;
+    rdfs:label "Document" .
+
+:Person rdf:type owl:Class ;
+    rdfs:label "Person" .
+
+:author rdf:type owl:ObjectProperty ;
+    rdfs:label "author" ;
+    rdfs:domain :Document ;
+    rdfs:range :Person .
+
+:title rdf:type owl:DatatypeProperty ;
+    rdfs:label "title" ;
+    rdfs:domain :Document ;
+    rdfs:range xsd:string .
+
+:publishedOn rdf:type owl:DatatypeProperty ;
+    rdfs:label "published on" ;
+    rdfs:domain :Document ;
+    rdfs:range xsd:date .
