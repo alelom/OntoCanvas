@@ -330,9 +330,10 @@ export async function fetchExternalOntologyTtl(
             }
             
             // Fetch the actual Turtle content from the alternate link
+            // The timer covers the request and its body, and is cleared when this attempt is over.
+            const altController = new AbortController();
+            const altTimeoutId = setTimeout(() => altController.abort(), timeoutMs);
             try {
-              const altController = new AbortController();
-              const altTimeoutId = setTimeout(() => altController.abort(), 2000);
               let turtleResponse;
               try {
                 turtleResponse = await fetch(turtleUrl, {
@@ -344,17 +345,16 @@ export async function fetchExternalOntologyTtl(
                   redirect: 'follow',
                   signal: altController.signal,
                 });
-                clearTimeout(altTimeoutId);
               } catch (altFetchErr) {
                 clearTimeout(altTimeoutId);
                 if (altFetchErr instanceof Error && altFetchErr.name === 'AbortError') {
-                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within 2 seconds`);
+                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within ${timeoutMs / 1000} seconds`);
                 }
                 throw altFetchErr;
               }
               
               if (turtleResponse.ok) {
-                text = (await readBodyText(turtleResponse, options?.maxBytes)) ?? '';
+                text = (await readBodyText(turtleResponse, options?.maxBytes, altController)) ?? '';
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 console.log(`Successfully fetched Turtle from alternate link: ${turtleUrl}, content-type: ${turtleContentType}`);
                 
@@ -366,6 +366,8 @@ export async function fetchExternalOntologyTtl(
               }
             } catch (altErr) {
               console.warn(`Failed to fetch from alternate link ${turtleUrl}:`, altErr);
+            } finally {
+              clearTimeout(altTimeoutId);
             }
           }
         }
@@ -429,10 +431,10 @@ export async function fetchExternalOntologyTtl(
         
         // Try all constructed Turtle URL patterns
         for (const turtleUrl of turtleUrlPatterns) {
+            const directController = new AbortController();
+            const directTimeoutId = setTimeout(() => directController.abort(), timeoutMs);
             try {
               console.log(`Trying direct Turtle URL: ${turtleUrl}`);
-              const directController = new AbortController();
-              const directTimeoutId = setTimeout(() => directController.abort(), 2000);
               let turtleResponse;
               try {
                 turtleResponse = await fetch(turtleUrl, {
@@ -444,17 +446,16 @@ export async function fetchExternalOntologyTtl(
                   redirect: 'follow',
                   signal: directController.signal,
                 });
-                clearTimeout(directTimeoutId);
               } catch (directFetchErr) {
                 clearTimeout(directTimeoutId);
                 if (directFetchErr instanceof Error && directFetchErr.name === 'AbortError') {
-                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within 2 seconds`);
+                  throw new Error(`Request timeout: Failed to fetch ${turtleUrl} within ${timeoutMs / 1000} seconds`);
                 }
                 throw directFetchErr;
               }
               
               if (turtleResponse.ok || turtleResponse.status === 200) {
-                text = (await readBodyText(turtleResponse, options?.maxBytes)) ?? '';
+                text = (await readBodyText(turtleResponse, options?.maxBytes, directController)) ?? '';
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 
                 // More robust HTML detection
@@ -483,6 +484,8 @@ export async function fetchExternalOntologyTtl(
             } catch (directErr) {
               // Continue to next pattern
               console.warn(`Failed to fetch from direct URL ${turtleUrl}:`, directErr);
+            } finally {
+              clearTimeout(directTimeoutId);
             }
           }
         
@@ -526,9 +529,9 @@ export async function fetchExternalOntologyTtl(
         if (isDebugMode()) {
           console.log(`Trying known fallback URL: ${fallback.turtleUrl}`);
         }
+        const fallbackController = new AbortController();
+        const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), timeoutMs);
         try {
-          const fallbackController = new AbortController();
-          const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 2000);
           let fallbackResponse;
           try {
             fallbackResponse = await fetch(fallback.turtleUrl, {
@@ -540,7 +543,6 @@ export async function fetchExternalOntologyTtl(
               redirect: 'follow',
               signal: fallbackController.signal,
             });
-            clearTimeout(fallbackTimeoutId);
           } catch (fallbackFetchErr) {
             clearTimeout(fallbackTimeoutId);
             if (fallbackFetchErr instanceof Error && fallbackFetchErr.name === 'AbortError') {
@@ -553,7 +555,7 @@ export async function fetchExternalOntologyTtl(
           }
           
           if (fallbackResponse.ok) {
-            const fallbackText = (await readBodyText(fallbackResponse, options?.maxBytes)) ?? '';
+            const fallbackText = (await readBodyText(fallbackResponse, options?.maxBytes, fallbackController)) ?? '';
             const fallbackContentType = fallbackResponse.headers.get('content-type') || '';
             
             if (fallbackText.trim() && !fallbackText.trim().toLowerCase().startsWith('<!doctype')) {
@@ -569,6 +571,8 @@ export async function fetchExternalOntologyTtl(
           if (isDebugMode()) {
             debugWarn(`Failed to fetch from fallback URL ${fallback.turtleUrl}:`, fallbackErr);
           }
+        } finally {
+          clearTimeout(fallbackTimeoutId);
         }
       }
     }

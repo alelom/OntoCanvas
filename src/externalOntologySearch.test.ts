@@ -664,6 +664,35 @@ describe('externalOntologySearch', () => {
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
+    it('also gives up on the follow-up requests (the alternate link, the guessed Turtle URLs) when their bodies stall', async () => {
+      // The first answer is an HTML page pointing at a Turtle file; every request after that sends headers and
+      // then never the body. The timer must stay on through each body, or the whole read hangs for good.
+      const html = '<!DOCTYPE html><html><head><link rel="alternate" type="text/turtle" href="/real.ttl"></head></html>';
+      let calls = 0;
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => {
+        calls++;
+        if (calls === 1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            url: 'https://example.com/page.html',
+            headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/html' : null) },
+            text: () => Promise.resolve(html),
+          });
+        }
+        return slowBody('@prefix : <#> .', 10 * 60 * 1000, init); // headers now, body "never"
+      });
+
+      const result = fetchExternalOntologyTtl('https://example.com/page.html', { timeoutMs: 1000 });
+      let settled = false;
+      void result.then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(60_000); // a minute: each stalled request may take its 1 s, none may take forever
+
+      expect(calls).toBeGreaterThan(2); // the follow-ups really were tried
+      expect(settled).toBe(true);
+      expect(await result).toBeNull();
+    });
+
     it('keeps only a bounded number of ontologies in its cache', async () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 0, init));
       const get = async (n: number) => {

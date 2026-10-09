@@ -61,5 +61,5 @@ describe('fetchable-child.ttl (#104)', () => {
     // None of it is drawn: Report and the faded Document, no property boxes.
     const nodeIds = await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.nodeIndices.map(String) as string[]);
     expect(nodeIds.sort()).toEqual(['Report', 'http://example.org/examples/fetchable-parent#Document']);
-  }, 15000);
+  });
 });
