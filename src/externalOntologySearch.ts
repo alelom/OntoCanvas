@@ -63,8 +63,13 @@ export interface FetchExternalOntologyTtlOptions {
   /** How long the whole request may take, headers and body (default 2000). The ontology a user asked to open
    * may be slow (LOV's FOAF takes 5 to 10 seconds); the many background reads keep the short default. */
   timeoutMs?: number;
-  /** Give up on a response larger than this many characters, and don't keep it (default: no limit). */
+  /** Give up on a response larger than this many bytes, and don't keep it (default: no limit). The body is read as
+   * a stream and the request stopped as soon as the budget is passed, so a server that sends more than it says (or
+   * says nothing) can't fill the browser's memory. */
   maxBytes?: number;
+  /** Read the common vocabularies (FOAF, SKOS, Dublin Core, …) too, which are otherwise skipped. For an ontology
+   * that imports one: its declarations are wanted. The reserved ones (owl, rdf, rdfs, xsd) are never fetched. */
+  fetchStandardVocabularies?: boolean;
 }
 
 /**
@@ -101,6 +106,34 @@ const externalObjectPropertiesCache: Map<string, ExternalObjectPropertyInfo[]> =
 
 // Standard vocabularies that don't need to be fetched (they're built into the system)
 // These are commonly referenced but don't need to be fetched as external ontologies
+/**
+ * The text of a response, as a string. With a `maxBytes` budget the body is read chunk by chunk and the request
+ * is stopped (the rest cancelled, nothing kept) the moment more than that has arrived; null then. Without one,
+ * or where the response has no readable stream, it is simply read.
+ */
+async function readBodyText(response: Response, maxBytes?: number, controller?: AbortController): Promise<string | null> {
+  if (maxBytes === undefined || !response.body || typeof response.body.getReader !== 'function') {
+    const text = await response.text();
+    return maxBytes !== undefined && text.length > maxBytes ? null : text;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      controller?.abort();
+      return null;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 const STANDARD_VOCABULARIES = new Set([
   ...RESERVED_VOCABULARY_NAMESPACES,
   'http://www.w3.org/2004/02/skos/core',
@@ -128,7 +161,9 @@ export async function fetchExternalOntologyTtl(
   
   // Skip standard vocabularies - they don't need to be fetched
   // These are expected to fail (CORS, 404, etc.) and failures should be silent
-  if (STANDARD_VOCABULARIES.has(normalizedUrl) || STANDARD_VOCABULARIES.has(normalizedUrl.replace(/\/$/, ''))) {
+  const skipped = options?.fetchStandardVocabularies ? RESERVED_VOCABULARY_NAMESPACES : STANDARD_VOCABULARIES;
+  const isSkipped = (u: string) => (Array.isArray(skipped) ? skipped.includes(u) : (skipped as Set<string>).has(u));
+  if (isSkipped(normalizedUrl) || isSkipped(normalizedUrl.replace(/\/$/, ''))) {
     if (isDebugMode()) {
       debugWarn(`Skipping fetch for standard vocabulary: ${normalizedUrl}`);
     }
@@ -220,7 +255,16 @@ export async function fetchExternalOntologyTtl(
       }
       let text: string;
       try {
-        text = await response.text();
+        // Read as a stream, stopping at the byte budget, so an over-large body is never held in full.
+        const body = await readBodyText(response, options?.maxBytes, controller);
+        if (body === null) {
+          clearTimeout(timeoutId);
+          if (isDebugMode()) {
+            debugWarn(`Response from ${normalizedUrl} is larger than ${options?.maxBytes} bytes; ignored.`);
+          }
+          return null;
+        }
+        text = body;
       } catch (readErr) {
         clearTimeout(timeoutId);
         if (throwOnCors && readErr instanceof Error && readErr.name === 'AbortError') {
@@ -232,12 +276,6 @@ export async function fetchExternalOntologyTtl(
         return null;
       }
       clearTimeout(timeoutId);
-      if (options?.maxBytes !== undefined && text.length > options.maxBytes) {
-        if (isDebugMode()) {
-          debugWarn(`Response from ${normalizedUrl} is larger than ${options.maxBytes} characters; ignored.`);
-        }
-        return null;
-      }
       if (isDebugMode()) {
         console.log(`Fetched ${text.length} characters, content-type: ${contentType}`);
       }
@@ -316,7 +354,7 @@ export async function fetchExternalOntologyTtl(
               }
               
               if (turtleResponse.ok) {
-                text = await turtleResponse.text();
+                text = (await readBodyText(turtleResponse, options?.maxBytes)) ?? '';
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 console.log(`Successfully fetched Turtle from alternate link: ${turtleUrl}, content-type: ${turtleContentType}`);
                 
@@ -416,7 +454,7 @@ export async function fetchExternalOntologyTtl(
               }
               
               if (turtleResponse.ok || turtleResponse.status === 200) {
-                text = await turtleResponse.text();
+                text = (await readBodyText(turtleResponse, options?.maxBytes)) ?? '';
                 const turtleContentType = turtleResponse.headers.get('content-type') || '';
                 
                 // More robust HTML detection
@@ -515,7 +553,7 @@ export async function fetchExternalOntologyTtl(
           }
           
           if (fallbackResponse.ok) {
-            const fallbackText = await fallbackResponse.text();
+            const fallbackText = (await readBodyText(fallbackResponse, options?.maxBytes)) ?? '';
             const fallbackContentType = fallbackResponse.headers.get('content-type') || '';
             
             if (fallbackText.trim() && !fallbackText.trim().toLowerCase().startsWith('<!doctype')) {

@@ -6745,9 +6745,9 @@ function currentDataProperties(store: NonNullable<typeof ttlStore>): DataPropert
     : own;
 }
 
-/** How long, and how large, one imported ontology may be when it is read in the background (#104). */
+/** How long, and how large (in bytes), one imported ontology may be when it is read in the background (#104). */
 const IMPORT_READ_TIMEOUT_MS = 8000;
-const IMPORT_READ_MAX_CHARACTERS = 5_000_000;
+const IMPORT_READ_MAX_BYTES = 5_000_000;
 
 /** Re-render the property menus after the declarations of the imports were merged in (#104). The edge
  * styles already set are kept; the annotation menu keeps its own. */
@@ -6772,7 +6772,7 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
     try {
       // Background reads are bounded: a slow or huge import is given up on, not waited for (and not kept).
       const imported = await loadImportedOntologies(store, (url) =>
-        fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_CHARACTERS })
+        fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
       );
       if (store !== ttlStore || imported.length === 0) return;
       importedDeclarations = readImportedDeclarations(imported);

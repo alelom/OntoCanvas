@@ -34,6 +34,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
 | [imported-terms.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Fimported-terms.ttl) | Terms used from an imported ontology: a restriction edge to an imported class (read-only), a data property listed once, prefixed identifiers | #99–#101 | [TTL](imports/imported-terms.ttl) |
+| [fetchable-child.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Ffetchable-child.ttl) | An import that can be fetched: it is read from next to the file, and what its parent declares (an object property, two data properties) is listed in the menus as read-only context, never drawn. Needs `fetchable-parent.ttl` beside it | #104 | [TTL](imports/fetchable-child.ttl), [parent](imports/fetchable-parent.ttl) |
 
 ## Relationships
 

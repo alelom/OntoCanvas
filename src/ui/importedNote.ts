@@ -16,6 +16,7 @@ import type { ExternalOntologyReference } from '../storage';
 import { getNodeOntologyUrl, getNodePrefix, getPrefixForUri, isUriFromExternalOntology } from './externalRefs';
 import { isDefinedElsewhere } from '../graph/definedElsewhere';
 import { isReservedNamespace, isReservedVocabularyUri } from '../rdf/reservedVocabulary';
+import { wrapStyledChars, type StyledChar } from '../utils/noteWrap';
 
 const NOTE_FONT_RATIO = 0.5;
 const MIN_NOTE_FONT_SIZE = 7;
@@ -57,11 +58,6 @@ export function escapeLabelMarkup(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-interface StyledChar {
-  char: string;
-  italic: boolean;
-}
-
 /** The note's characters, with the prefix or name in italics and the rest plain. */
 function styledNote(note: string): StyledChar[] {
   const named = /^\(defined by: (.*)\)$/.exec(note);
@@ -73,37 +69,6 @@ function styledNote(note: string): StyledChar[] {
       ]
     : [{ text: note, italic: false }];
   return parts.flatMap(({ text, italic }) => [...text].map((char) => ({ char, italic })));
-}
-
-/** The note's lines, broken at spaces to at most `maxChars` characters as wrapText breaks a label (a word longer
- * than that stays whole). No `maxChars` keeps it on one line. A space is italic only between italic characters. */
-function wrapStyledNote(chars: StyledChar[], maxChars?: number): StyledChar[][] {
-  const words: StyledChar[][] = [];
-  let word: StyledChar[] = [];
-  for (const c of chars) {
-    if (c.char === ' ') {
-      if (word.length) words.push(word);
-      word = [];
-    } else {
-      word.push(c);
-    }
-  }
-  if (word.length) words.push(word);
-
-  const lines: StyledChar[][] = [];
-  let line: StyledChar[] = [];
-  for (const w of words) {
-    if (line.length === 0) {
-      line = [...w];
-    } else if (!maxChars || maxChars <= 0 || line.length + 1 + w.length <= maxChars) {
-      line = [...line, { char: ' ', italic: line[line.length - 1].italic && w[0].italic }, ...w];
-    } else {
-      lines.push(line);
-      line = [...w];
-    }
-  }
-  if (line.length) lines.push(line);
-  return lines;
 }
 
 /** One line of the note as multi-font markup: italic runs in `<i>`, the rest in the plain note font. */
@@ -127,7 +92,7 @@ export function importedNoteWrapChars(wrapChars: number, labelFontSize: number):
 /** `label` (already wrapped) with the note above it, wrapped to `noteMaxChars` when given so that it never
  * makes the node wider than its label does. */
 export function labelWithImportedNote(label: string, note: string, noteMaxChars?: number): string {
-  const lines = wrapStyledNote(styledNote(note), noteMaxChars).map(noteLineMarkup);
+  const lines = wrapStyledChars(styledNote(note), noteMaxChars).map(noteLineMarkup);
   return `${lines.join('\n')}\n${escapeLabelMarkup(label)}`;
 }
 

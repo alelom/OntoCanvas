@@ -11,14 +11,18 @@
 import type { Store } from 'n3';
 import { getAnnotationProperties, getDataProperties, getMainOntologyBase, getObjectProperties } from '../parser';
 import { loadOntologyFromContent } from './loadOntology';
+import { getOntologyInfo } from '../ui/ontologyInfo';
 import { extractLocalName } from '../utils/localName';
 import type { AnnotationPropertyInfo, DataPropertyInfo, ObjectPropertyInfo } from '../types';
 
 const OWL_IMPORTS = 'http://www.w3.org/2002/07/owl#imports';
 
 export interface ImportedOntology {
-  /** The import's IRI, as written in owl:imports (without a trailing #). */
+  /** The import's IRI, as written in owl:imports (without a trailing #): the address it is fetched from. */
   url: string;
+  /** The ontology's own IRI (its owl:Ontology subject), when it declares one: what its terms are "defined by".
+   * It is often not the address it was fetched from. */
+  iri: string | null;
   /** Its declarations, in a store of their own. */
   store: Store;
 }
@@ -34,10 +38,37 @@ export interface LoadImportsOptions {
   maxDepth?: number;
   /** The most ontologies to read in all. */
   maxOntologies?: number;
+  /** How many to fetch and parse at the same time (default 4). */
+  concurrency?: number;
+  /** The most characters of ontology text to take in, over the whole traversal (default 20 million): each
+   * import may be large, and an ontology can name many. */
+  maxTotalCharacters?: number;
 }
 
 const DEFAULT_MAX_DEPTH = 3;
 const DEFAULT_MAX_ONTOLOGIES = 20;
+const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_MAX_TOTAL_CHARACTERS = 20_000_000;
+
+/** What the traversal has taken in so far, and may take in all. */
+interface SizeBudget {
+  used: number;
+  max: number;
+}
+
+/** `fn` over `items`, at most `limit` at a time; results in order. */
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return results;
+}
 
 const bareIri = (iri: string) => iri.replace(/#$/, '');
 
@@ -63,6 +94,8 @@ export async function loadImportedOntologies(
 ): Promise<ImportedOntology[]> {
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
   const maxOntologies = options.maxOntologies ?? DEFAULT_MAX_ONTOLOGIES;
+  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  const budget: SizeBudget = { used: 0, max: options.maxTotalCharacters ?? DEFAULT_MAX_TOTAL_CHARACTERS };
   const mainBase = getMainOntologyBase(store);
   const seen = new Set<string>(mainBase ? [bareIri(mainBase)] : []);
   const result: ImportedOntology[] = [];
@@ -77,7 +110,7 @@ export async function loadImportedOntologies(
       seen.add(url);
       toRead.push(url);
     }
-    const read = await Promise.all(toRead.map((url) => readImport(url, fetchTtl)));
+    const read = await mapWithLimit(toRead, concurrency, (url) => readImport(url, fetchTtl, budget));
     level = [];
     for (const imported of read) {
       if (!imported) continue;
@@ -96,14 +129,25 @@ function sniffContentType(content: string): string {
   return 'text/turtle';
 }
 
-async function readImport(url: string, fetchTtl: (url: string) => Promise<string | null>): Promise<ImportedOntology | null> {
+async function readImport(
+  url: string,
+  fetchTtl: (url: string) => Promise<string | null>,
+  budget: SizeBudget
+): Promise<ImportedOntology | null> {
   try {
+    // Nothing more is even asked for once the budget is spent.
+    if (budget.used >= budget.max) return null;
     const content = await fetchTtl(url);
     if (!content || !content.trim()) return null;
+    if (budget.used + content.length > budget.max) {
+      budget.used = budget.max; // spent: the others are not even asked for
+      return null;
+    }
+    budget.used += content.length;
     // The format is read from the content, not the URL: a server may answer an "Accept: text/turtle" request for
     // vocab.owl with Turtle, or one for a bare IRI with RDF/XML.
     const { parseResult } = await loadOntologyFromContent(content, url, { contentType: sniffContentType(content) });
-    return { url, store: parseResult.store };
+    return { url, iri: getOntologyInfo(parseResult.store, {})?.iri ?? null, store: parseResult.store };
   } catch {
     return null; // CORS, offline, not RDF: the import stays unread
   }
@@ -122,16 +166,19 @@ export function readImportedDeclarations(imported: ImportedOntology[]): Property
     seen.add(key);
     return true;
   };
-  for (const { url, store } of imported) {
+  for (const { url, iri, store } of imported) {
+    // Defined by the ontology's IRI: that is what a prefix declared for its namespace is matched on, and the
+    // address it was fetched from (a CDN, a versioned file, a redirect) usually is not it.
+    const definedBy = iri ?? url;
     for (const p of getObjectProperties(store)) {
       // Named by full IRI, as the object properties of other ontologies are everywhere else.
-      if (firstTime(p.uri, 'object')) objectProperties.push({ ...p, name: p.uri!, isDefinedBy: p.isDefinedBy ?? url });
+      if (firstTime(p.uri, 'object')) objectProperties.push({ ...p, name: p.uri!, isDefinedBy: p.isDefinedBy ?? definedBy });
     }
     for (const p of getDataProperties(store)) {
-      if (firstTime(p.uri, 'data')) dataProperties.push({ ...p, isDefinedBy: p.isDefinedBy ?? url });
+      if (firstTime(p.uri, 'data')) dataProperties.push({ ...p, isDefinedBy: p.isDefinedBy ?? definedBy });
     }
     for (const p of getAnnotationProperties(store)) {
-      if (firstTime(p.uri, 'annotation')) annotationProperties.push({ ...p, isDefinedBy: p.isDefinedBy ?? url });
+      if (firstTime(p.uri, 'annotation')) annotationProperties.push({ ...p, isDefinedBy: p.isDefinedBy ?? definedBy });
     }
   }
   return { objectProperties, dataProperties, annotationProperties };
@@ -180,23 +227,34 @@ export function mergeImportedDeclarations(local: PropertyLists, imported: Proper
 
   const dataProperties = local.dataProperties.map((p) => ({ ...p }));
   for (const imp of imported.dataProperties) {
+    // A property is identified by its IRI. Data properties are addressed by local name throughout the app, so
+    // when that name is taken by a different property (the file's own, or another import's) the imported one is
+    // listed under its full IRI, as object properties are; both stay.
+    const sameIri = imp.uri ? dataProperties.find((p) => p.uri === imp.uri) : undefined;
     const sameName = dataProperties.find((p) => p.name === imp.name);
-    if (!sameName) {
-      dataProperties.push({ ...imp, contextOnly: true });
-      continue;
+    let target = sameIri;
+    if (!target) {
+      if (!sameName) {
+        dataProperties.push({ ...imp, contextOnly: true });
+        continue;
+      }
+      if (!sameName.uri || !imp.uri) target = sameName; // a stub made from usage: fill it in
+      else {
+        dataProperties.push({ ...imp, name: imp.uri, contextOnly: true });
+        continue;
+      }
     }
-    if (sameName.uri && imp.uri && sameName.uri !== imp.uri) continue; // a different property
-    if (isPlaceholderLabel(sameName.label, sameName.name)) sameName.label = imp.label;
-    sameName.uri ??= imp.uri;
-    sameName.isDefinedBy ??= imp.isDefinedBy;
-    sameName.comment ??= imp.comment;
-    if (sameName.range == null) {
-      sameName.range = imp.range;
-      if (imp.rangeExpression) sameName.rangeExpression = imp.rangeExpression;
+    if (isPlaceholderLabel(target.label, target.name)) target.label = imp.label;
+    target.uri ??= imp.uri;
+    target.isDefinedBy ??= imp.isDefinedBy;
+    target.comment ??= imp.comment;
+    if (target.range == null) {
+      target.range = imp.range;
+      if (imp.rangeExpression) target.rangeExpression = imp.rangeExpression;
     }
-    if (sameName.domains.length === 0 && !sameName.hasGlobalDomain) {
-      sameName.domains = [...imp.domains];
-      sameName.hasGlobalDomain = imp.hasGlobalDomain;
+    if (target.domains.length === 0 && !target.hasGlobalDomain) {
+      target.domains = [...imp.domains];
+      target.hasGlobalDomain = imp.hasGlobalDomain;
     }
   }
 

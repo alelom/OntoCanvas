@@ -578,6 +578,90 @@ describe('externalOntologySearch', () => {
       expect(await second).toBe(big);
     });
 
+    /** A response whose body is a stream of `chunkBytes`-byte chunks with no end and no Content-Length: the
+     * only way to know it is too large is to count what has arrived. `pulled()` is how many were read. */
+    const endlessStream = (chunkBytes: number) => {
+      let pulled = 0;
+      let cancelled = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulled++;
+          controller.enqueue(new Uint8Array(chunkBytes).fill(97));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const response = {
+        ok: true,
+        status: 200,
+        url: 'https://example.com/endless.ttl',
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/turtle' : null) },
+        body,
+        text: () => {
+          throw new Error('the whole body must not be buffered with text()');
+        },
+      };
+      return { response, pulled: () => pulled, cancelled: () => cancelled };
+    };
+
+    it('stops reading as soon as the byte budget is passed, without buffering the rest of an endless body', async () => {
+      const stream = endlessStream(100);
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(stream.response);
+
+      const result = fetchExternalOntologyTtl('https://example.com/endless.ttl', { maxBytes: 1000 });
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(await result).toBeNull();
+      expect(stream.pulled()).toBeLessThan(20); // about ten chunks, not an unbounded number
+      expect(stream.cancelled()).toBe(true);
+    });
+
+    it('reads a body within the budget from the stream, whole and decoded', async () => {
+      const text = '@prefix : <#> . # héllo';
+      const bytes = new TextEncoder().encode(text);
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes.slice(0, 10));
+          controller.enqueue(bytes.slice(10));
+          controller.close();
+        },
+      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ok: true,
+        status: 200,
+        url: 'https://example.com/streamed.ttl',
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/turtle' : null) },
+        body,
+      });
+
+      const result = fetchExternalOntologyTtl('https://example.com/streamed.ttl', { maxBytes: 100000 });
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(await result).toBe(text);
+    });
+
+    it('skips the common vocabularies (FOAF, SKOS, …) by default, but reads them when asked, as an import of one is', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 0, init));
+
+      const skipped = fetchExternalOntologyTtl('http://xmlns.com/foaf/0.1/');
+      await vi.advanceTimersByTimeAsync(5);
+      expect(await skipped).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+
+      const read = fetchExternalOntologyTtl('http://xmlns.com/foaf/0.1/', { fetchStandardVocabularies: true });
+      await vi.advanceTimersByTimeAsync(5);
+      expect(await read).toBe('@prefix : <#> .');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('never fetches the reserved vocabularies (owl, rdf, rdfs, xsd), whatever is asked', async () => {
+      const result = fetchExternalOntologyTtl('http://www.w3.org/2002/07/owl', { fetchStandardVocabularies: true });
+      await vi.advanceTimersByTimeAsync(5);
+      expect(await result).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
     it('keeps only a bounded number of ontologies in its cache', async () => {
       (global.fetch as ReturnType<typeof vi.fn>).mockImplementation((_url: string, init: RequestInit) => slowBody('@prefix : <#> .', 0, init));
       const get = async (n: number) => {

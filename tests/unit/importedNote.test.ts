@@ -99,6 +99,12 @@ describe('wrapping the note like the label, so it does not make the node wider',
     );
   });
 
+  it('cuts a single name longer than the line, keeping it italic on every line', () => {
+    expect(labelWithImportedNote('X', '(defined by: abcdefghijklmnop)', 8)).toBe(
+      '<code>(defined</code>\n<code>by:</code>\n<i>abcdefgh</i>\n<i>ijklmnop</i>\n<code>)</code>\nX'
+    );
+  });
+
   it('keeps a note that fits on one line, and does not wrap without a budget', () => {
     const one = '<code>(defined by: </code><i>base</i><code>)</code>\nBase';
     expect(labelWithImportedNote('Base', '(defined by: base)', 24)).toBe(one);
@@ -154,6 +160,13 @@ describe('estimateNodeDimensions with a note', () => {
     // 33 characters on one line would be about 327px wide; wrapped at 24 characters, "imported-note-other)" sets it.
     expect(wrapped.width).toBeLessThan(250);
     expect(wrapped.height).toBeGreaterThan(oneLine.height);
+  });
+
+  it('does not let one very long prefix or name widen the node either: it is cut to the line', () => {
+    const long = estimateNodeDimensions('Template', 12, 30, { text: `(defined by: ${'x'.repeat(60)})`, fontSize: 15 });
+    // Wrapped at 24 characters of the 15px note font, whatever the name: no wider than that line sets it.
+    expect(long.width).toBeLessThan(250);
+    expect(long.height).toBeGreaterThan(estimateNodeDimensions('Template', 12, 30, { text: '(defined by: x)', fontSize: 15 }).height);
   });
 
   it('makes room for the extra lines, and leaves the width to the label (the note wraps instead)', () => {

@@ -1,4 +1,5 @@
 // import type { DataSet } from 'vis-network'; // Unused - kept for reference
+import { wrapNoteText } from './utils/noteWrap';
 import type { GraphEdge, GraphNode, NodeDimensions } from './types';
 import type { SearchScope } from './lib/searchHighlight';
 
@@ -243,7 +244,7 @@ export function estimateNodeDimensions(
   let height = lines.length * fontSize * LINE_HEIGHT_RATIO + 2 * NODE_MARGIN;
   if (note) {
     // The note wraps like the label: the label's wrap width holds more of its smaller font.
-    const noteLines = wrapText(note.text, Math.round((wrapChars * fontSize) / note.fontSize)).split('\n');
+    const noteLines = wrapNoteText(note.text, Math.round((wrapChars * fontSize) / note.fontSize));
     const longest = Math.max(1, ...noteLines.map((l) => l.length));
     width = Math.max(width, longest * note.fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN);
     height += noteLines.length * note.fontSize * LINE_HEIGHT_RATIO;

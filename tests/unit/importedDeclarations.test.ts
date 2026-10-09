@@ -124,6 +124,48 @@ describe('loadImportedOntologies', () => {
     expect(readImportedDeclarations(imported).objectProperties.map((p) => p.label).sort()).toEqual(['p', 'q']);
   });
 
+  it('reads at most a few imports at a time, not all of a long list at once', async () => {
+    const iris = Array.from({ length: 12 }, (_, i) => `http://x/i${i}`);
+    const own = (iri: string) => `@prefix owl: <http://www.w3.org/2002/07/owl#> . <${iri}> a owl:Ontology .`;
+    const main = `@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://x/main> a owl:Ontology${iris.map((i) => ` ; owl:imports <${i}>`).join('')} .`;
+    let running = 0;
+    let mostAtOnce = 0;
+    const fetchTtl = async (url: string) => {
+      running++;
+      mostAtOnce = Math.max(mostAtOnce, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running--;
+      return own(url);
+    };
+    const store = (await loadOntologyFromContent(main, 'main.ttl')).parseResult.store;
+
+    const imported = await loadImportedOntologies(store, fetchTtl);
+
+    expect(imported).toHaveLength(12);
+    expect(mostAtOnce).toBeLessThanOrEqual(4);
+    expect(mostAtOnce).toBeGreaterThan(1); // still in parallel
+  });
+
+  it('stops reading once the imports have used up the overall size budget, however many there are', async () => {
+    const own = (iri: string) => `@prefix owl: <http://www.w3.org/2002/07/owl#> . <${iri}> a owl:Ontology . # ${'x'.repeat(100)}`;
+    const iris = ['http://x/a', 'http://x/b', 'http://x/c', 'http://x/d'];
+    const main = `@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://x/main> a owl:Ontology${iris.map((i) => ` ; owl:imports <${i}>`).join('')} .`;
+    const asked: string[] = [];
+    const fetchTtl = async (url: string) => {
+      asked.push(url);
+      return own(url);
+    };
+    const store = (await loadOntologyFromContent(main, 'main.ttl')).parseResult.store;
+    const oneSize = own('http://x/a').length;
+
+    // Room for two of the four.
+    const imported = await loadImportedOntologies(store, fetchTtl, { concurrency: 1, maxTotalCharacters: oneSize * 2 + 10 });
+
+    expect(imported).toHaveLength(2);
+    // Once the budget is spent nothing more is even asked for.
+    expect(asked.length).toBeLessThanOrEqual(3);
+  });
+
   it('stops at the depth limit', async () => {
     const { fetchTtl } = fakeFetch(await servedByIri());
     const imported = await loadImportedOntologies((await load('properties-child-child.ttl')).store, fetchTtl, { maxDepth: 1 });
@@ -153,6 +195,27 @@ describe('readImportedDeclarations', () => {
       label: 'has property',
       isDefinedBy: 'http://example.org/base',
     });
+  });
+
+  it('defines what an import declares by the ontology IRI, not by the address it was fetched from', async () => {
+    // The address a document is fetched from is often not the ontology's IRI (LOV, w3id, a raw GitHub URL): only
+    // the IRI matches the prefix a file declares for the namespace.
+    const doc = '@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . <http://example.org/real-iri> a owl:Ontology . <http://example.org/real-iri#p> a owl:ObjectProperty ; rdfs:label "p" .';
+    const main = '@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://x/main> a owl:Ontology ; owl:imports <https://cdn.example.net/files/v3/real.ttl> .';
+    const store = (await loadOntologyFromContent(main, 'main.ttl')).parseResult.store;
+    const imported = await loadImportedOntologies(store, async () => doc);
+
+    expect(imported[0].url).toBe('https://cdn.example.net/files/v3/real.ttl');
+    expect(readImportedDeclarations(imported).objectProperties[0].isDefinedBy).toBe('http://example.org/real-iri');
+  });
+
+  it('falls back to the address when the import declares no ontology IRI of its own', async () => {
+    const doc = '@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://example.org/real#p> a owl:ObjectProperty .';
+    const main = '@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://x/main> a owl:Ontology ; owl:imports <https://cdn.example.net/anon.ttl> .';
+    const store = (await loadOntologyFromContent(main, 'main.ttl')).parseResult.store;
+    const imported = await loadImportedOntologies(store, async () => doc);
+
+    expect(readImportedDeclarations(imported).objectProperties[0].isDefinedBy).toBe('https://cdn.example.net/anon.ttl');
   });
 
   it('reads data properties with their label, range and domain, defined by the import (even when it does not say so)', async () => {
@@ -225,13 +288,46 @@ describe('mergeImportedDeclarations', () => {
     expect(merged).toMatchObject({ label: 'has property', uri, isDefinedBy: 'http://example.org/base' });
   });
 
-  it("does not touch a local property that shares a name with a different imported one", () => {
+  it('leaves a local property that shares a name with a different imported one alone, and lists the imported one too, under its full IRI', () => {
     const local = { ...empty, dataProperties: [dp({ name: 'name', uri: 'http://example.org/mine#name', label: 'my name' })] };
     const imported = { ...empty, dataProperties: [dp({ name: 'name', uri: 'http://example.org/base#name', label: 'their name' })] };
 
     const merged = mergeImportedDeclarations(local, imported).dataProperties;
 
-    expect(merged).toEqual(local.dataProperties);
+    expect(merged.find((p) => p.name === 'name')).toEqual(local.dataProperties[0]);
+    expect(merged.find((p) => p.uri === 'http://example.org/base#name')).toMatchObject({
+      name: 'http://example.org/base#name',
+      label: 'their name',
+      contextOnly: true,
+    });
+  });
+
+  it('keeps both when two imports declare different properties with the same local name (a:name, b:name)', () => {
+    const imported = {
+      ...empty,
+      dataProperties: [
+        dp({ name: 'name', uri: 'http://example.org/a#name', label: 'name (a)' }),
+        dp({ name: 'name', uri: 'http://example.org/b#name', label: 'name (b)' }),
+      ],
+    };
+
+    const merged = mergeImportedDeclarations(empty, imported).dataProperties;
+
+    expect(merged.map((p) => p.uri).sort()).toEqual(['http://example.org/a#name', 'http://example.org/b#name']);
+    expect(new Set(merged.map((p) => p.name)).size).toBe(2); // distinct names, so each can be addressed on its own
+    expect(merged.every((p) => p.contextOnly)).toBe(true);
+  });
+
+  it('gives the same result when merged again into a list that already has the imported entries', () => {
+    const imported = {
+      ...empty,
+      dataProperties: [
+        dp({ name: 'name', uri: 'http://example.org/a#name', label: 'name (a)' }),
+        dp({ name: 'name', uri: 'http://example.org/b#name', label: 'name (b)' }),
+      ],
+    };
+    const once = mergeImportedDeclarations(empty, imported);
+    expect(mergeImportedDeclarations(once, imported)).toEqual(once);
   });
 
   it('enriches an annotation property the file uses, but does not add the ones it does not', () => {
