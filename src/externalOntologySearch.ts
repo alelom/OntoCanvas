@@ -1,4 +1,5 @@
 import { Store, DataFactory } from 'n3';
+import { RESERVED_VOCABULARY_NAMESPACES } from './rdf/reservedVocabulary';
 import type { Quad } from 'n3';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { extractLocalName, extractLocalNameFromUri } from './parser';
@@ -67,10 +68,7 @@ const externalObjectPropertiesCache: Map<string, ExternalObjectPropertyInfo[]> =
 // Standard vocabularies that don't need to be fetched (they're built into the system)
 // These are commonly referenced but don't need to be fetched as external ontologies
 const STANDARD_VOCABULARIES = new Set([
-  'http://www.w3.org/2002/07/owl',
-  'http://www.w3.org/1999/02/22-rdf-syntax-ns',
-  'http://www.w3.org/2000/01/rdf-schema',
-  'http://www.w3.org/2001/XMLSchema',
+  ...RESERVED_VOCABULARY_NAMESPACES,
   'http://www.w3.org/2004/02/skos/core',
   'http://www.opengis.net/ont/geosparql',
   'http://xmlns.com/foaf/0.1/',

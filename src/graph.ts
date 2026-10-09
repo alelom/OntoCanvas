@@ -230,7 +230,7 @@ const NODE_MARGIN = 10;
 const CHAR_WIDTH_RATIO = 0.62;
 const LINE_HEIGHT_RATIO = 1.35;
 
-/** `note`: a smaller line drawn above the label (#111), which adds a line and may be the widest. */
+/** `note`: a smaller text drawn above the label (#111), wrapped like it; it adds its lines to the height. */
 export function estimateNodeDimensions(
   label: string,
   wrapChars: number,
@@ -242,8 +242,11 @@ export function estimateNodeDimensions(
   let width = maxLineLen * fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN;
   let height = lines.length * fontSize * LINE_HEIGHT_RATIO + 2 * NODE_MARGIN;
   if (note) {
-    width = Math.max(width, note.text.length * note.fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN);
-    height += note.fontSize * LINE_HEIGHT_RATIO;
+    // The note wraps like the label: the label's wrap width holds more of its smaller font.
+    const noteLines = wrapText(note.text, Math.round((wrapChars * fontSize) / note.fontSize)).split('\n');
+    const longest = Math.max(1, ...noteLines.map((l) => l.length));
+    width = Math.max(width, longest * note.fontSize * CHAR_WIDTH_RATIO + 2 * NODE_MARGIN);
+    height += noteLines.length * note.fontSize * LINE_HEIGHT_RATIO;
   }
   return { width: Math.max(70, width), height: Math.max(40, height) };
 }

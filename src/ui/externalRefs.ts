@@ -1,4 +1,5 @@
 import { Store, DataFactory } from 'n3';
+import { RESERVED_VOCABULARY_NAMESPACES } from '../rdf/reservedVocabulary';
 import type { GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { saveExternalRefsToIndexedDB } from '../storage';
@@ -57,12 +58,7 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
 }
 
 /** Core W3C namespaces we do not show as external refs (always present). */
-const CORE_NAMESPACES = new Set([
-  'http://www.w3.org/1999/02/22-rdf-syntax-ns',
-  'http://www.w3.org/2000/01/rdf-schema',
-  'http://www.w3.org/2002/07/owl',
-  'http://www.w3.org/2001/XMLSchema',
-]);
+const CORE_NAMESPACES = new Set(RESERVED_VOCABULARY_NAMESPACES);
 
 /** Non-vocabulary: identifiers, licenses, docs, people pages, source repos. Never show as external ontology refs. */
 function isNonVocabularyNamespace(normalized: string): boolean {

@@ -108,7 +108,7 @@ import { isDefinedElsewhere } from './graph/definedElsewhere';
 import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, type PropertyLists } from './lib/importedDeclarations';
 import { beginImportsSettle, importsSettled } from './ui/importsSettle';
 import { getOntologyInfo } from './ui/ontologyInfo';
-import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, labelWithImportedNote } from './ui/importedNote';
+import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, importedNoteWrapChars, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
 import { parseEdgeId } from './utils/edgeId';
@@ -3171,9 +3171,10 @@ function buildNetworkData(
         externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
       });
     }
-    // The note above an imported term's label names its defining ontology, so the label is just the name (#111).
+    // The label is just the name: an imported term's defining ontology is in the note above it, and a built-in
+    // term such as owl:Thing needs no prefix (#111).
     const importedNote = importedNoteForNode(n, externalOntologyReferences, mainBaseForNodes);
-    const displayLabel = importedNote ? n.label : formatNodeLabelWithPrefix(n, externalOntologyReferences);
+    const displayLabel = n.label;
     
     // Apply search transparency if search query is active; external nodes use configured opacity.
     // A class declared locally but defined elsewhere (rdfs:isDefinedBy → another ontology) is
@@ -3206,7 +3207,7 @@ function buildNetworkData(
     
     const node: Record<string, unknown> = {
       id: n.id,
-      label: importedNote ? labelWithImportedNote(wrapText(displayLabel, wrapChars), importedNote) : wrapText(displayLabel, wrapChars),
+      label: importedNote ? labelWithImportedNote(wrapText(displayLabel, wrapChars), importedNote, importedNoteWrapChars(wrapChars, fontSize)) : wrapText(displayLabel, wrapChars),
       labellableRoot: n.labellableRoot,
       color: { background: backgroundColor, border: borderColor },
       font: { size: fontSize, color: fontColor, ...(importedNote && importedNoteFont(fontSize, fontColor)) },
@@ -3261,7 +3262,7 @@ function buildNetworkData(
         : maxFontSize;
     // Estimate from the label as drawn (prefix included), or imported classes come out a line short (#72).
     const note = importedNoteBox(n, fontSize);
-    nodeDimensionsMap.set(n.id, estimateNodeDimensions(note ? n.label : formatNodeLabelWithPrefix(n, externalOntologyReferences), wrapChars, fontSize, note));
+    nodeDimensionsMap.set(n.id, estimateNodeDimensions(n.label, wrapChars, fontSize, note));
   });
   
   // Group data properties by their parent class node for better layout
@@ -3477,9 +3478,9 @@ function buildNetworkData(
       
       // Get prefix for data property if it's imported
       const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : null;
-      // The note above an imported property's label names its defining ontology: the label is just the name (#111).
+      // The label is just the name: an imported property's defining ontology is in the note above it (#111).
       const dataPropNote = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
-      const dataPropDisplayLabel = dataPropPrefix && !dataPropNote ? `${dataPropPrefix}:${dataProp.label}` : dataProp.label;
+      const dataPropDisplayLabel = dataProp.label;
       
       // A data property whose domain/range is an anonymous class expression is marked with a small
       // badge (∪ ∩ ¬ {}) overlapping its stub node (classExpressionOverlayRenderer, which owns the
@@ -3505,7 +3506,7 @@ function buildNetworkData(
         
       const dataPropNode: Record<string, unknown> = {
         id: dataProp.id,
-        label: dataPropNote ? labelWithImportedNote(wrapText(nodeLabel, wrapChars), dataPropNote) : wrapText(nodeLabel, wrapChars),
+        label: dataPropNote ? labelWithImportedNote(wrapText(nodeLabel, wrapChars), dataPropNote, importedNoteWrapChars(wrapChars, dataPropertyFontSize)) : wrapText(nodeLabel, wrapChars),
         shape: 'box',
         size: 15,
         color: { background: dataPropBackgroundColor, border: dataPropBorderColor },
@@ -3576,10 +3577,9 @@ function buildNetworkData(
   if (unattachedDataProps.length > 0) {
     const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
     const entries = unattachedDataProps.map((dp) => {
-      const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
       const rangeDisplay = describeRange(dp);
       const note = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
-      const label = `${prefix && !note ? `${prefix}:${dp.label}` : dp.label}${rangeDisplay.labelSuffix}`;
+      const label = `${dp.label}${rangeDisplay.labelSuffix}`;
       const definingOntologyUrl = dp.isDefinedBy || (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
       const isImported = isUriFromExternalOntology(dp.uri, dp.isDefinedBy ?? null, externalOntologyReferences, mainBase);
       const notes = [
@@ -3618,7 +3618,7 @@ function buildNetworkData(
       const faded = entry.opacity < 1.0;
       dataPropertyNodes.push({
         id: unattachedDataPropertyNodeId(entry.dp.name),
-        label: entry.note ? labelWithImportedNote(wrapText(entry.label, wrapChars), entry.note) : wrapText(entry.label, wrapChars),
+        label: entry.note ? labelWithImportedNote(wrapText(entry.label, wrapChars), entry.note, importedNoteWrapChars(wrapChars, dataPropertyFontSize)) : wrapText(entry.label, wrapChars),
         shape: 'box',
         size: 15,
         color: {

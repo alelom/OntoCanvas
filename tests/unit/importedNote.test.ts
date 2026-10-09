@@ -17,6 +17,7 @@ import {
   importedNoteForDataProperty,
   ontologyDisplayName,
   namespaceOf,
+  importedNoteWrapChars,
 } from '../../src/ui/importedNote';
 import { estimateNodeDimensions } from '../../src/graph';
 import { OWL_THING_URI } from '../../src/graph/thingNode';
@@ -50,6 +51,20 @@ describe('ontologyDisplayName and namespaceOf', () => {
   });
 });
 
+describe('reserved-vocabulary terms (owl, rdf, rdfs, xsd) get no note: the languages define them', () => {
+  const refs = [{ url: 'http://www.w3.org/2000/01/rdf-schema', usePrefix: true, prefix: 'rdfs' }];
+  const main = 'http://example.org/main#';
+  it('for classes, relationships and data properties', () => {
+    const external = (id: string, url: string) => ({ id, label: 'X', labellableRoot: null, isExternal: true, externalOntologyUrl: url });
+    expect(importedNoteForNode(external('http://www.w3.org/2000/01/rdf-schema#Resource', 'http://www.w3.org/2000/01/rdf-schema'), refs, main)).toBeNull();
+    expect(importedNoteForNode(external('http://www.w3.org/2001/XMLSchema#string', 'http://www.w3.org/2001/XMLSchema'), refs, main)).toBeNull();
+    // Another W3C vocabulary is not reserved, and says where it comes from.
+    expect(importedNoteForNode(external('http://www.w3.org/2004/02/skos/core#Concept', 'http://www.w3.org/2004/02/skos/core'), refs, main)).toBe('(defined by: core)');
+    expect(importedNoteForRelationship('http://www.w3.org/2000/01/rdf-schema#seeAlso', [], refs, main)).toBeNull();
+    expect(importedNoteForDataProperty({ uri: 'http://www.w3.org/2000/01/rdf-schema#label', isDefinedBy: 'http://www.w3.org/2000/01/rdf-schema' }, refs, main)).toBeNull();
+  });
+});
+
 describe('importedNoteFontSize', () => {
   it('is smaller than the label font, and never unreadably small', () => {
     expect(importedNoteFontSize(40)).toBeLessThan(40);
@@ -74,6 +89,34 @@ describe('labelWithImportedNote', () => {
   it('sets the prefix or ontology name in italics, apart from the plain "(defined by: " and ")"', () => {
     expect(labelWithImportedNote('Base', '(defined by: base)')).toBe('<code>(defined by: </code><i>base</i><code>)</code>\nBase');
     expect(labelWithImportedNote('X', '(defined by: a<b>)')).toBe('<code>(defined by: </code><i>a&lt;b&gt;</i><code>)</code>\nX');
+  });
+});
+
+describe('wrapping the note like the label, so it does not make the node wider', () => {
+  it('breaks a note longer than the budget at its spaces, keeping the name in italics', () => {
+    expect(labelWithImportedNote('Base', '(defined by: imported-note-other)', 24)).toBe(
+      '<code>(defined by:</code>\n<i>imported-note-other</i><code>)</code>\nBase'
+    );
+  });
+
+  it('keeps a note that fits on one line, and does not wrap without a budget', () => {
+    const one = '<code>(defined by: </code><i>base</i><code>)</code>\nBase';
+    expect(labelWithImportedNote('Base', '(defined by: base)', 24)).toBe(one);
+    expect(labelWithImportedNote('Base', '(defined by: base)')).toBe(one);
+    expect(labelWithImportedNote('Base', '(defined by: imported-note-other)')).toContain('<code>(defined by: </code>');
+  });
+
+  it('breaks inside a name of several words, each line keeping its italics', () => {
+    expect(labelWithImportedNote('X', '(defined by: Friend of a Friend)', 16)).toBe(
+      '<code>(defined by:</code>\n<i>Friend of a</i>\n<i>Friend</i><code>)</code>\nX'
+    );
+  });
+
+  it("gives the note as many characters as the label's width holds at the note's smaller font", () => {
+    // 12 characters of a 20px label are as wide as 24 of a 10px note.
+    expect(importedNoteWrapChars(12, 20)).toBe(24);
+    expect(importedNoteWrapChars(12, 40)).toBe(24);
+    expect(importedNoteWrapChars(0, 20)).toBe(0);
   });
 });
 
@@ -104,11 +147,20 @@ describe('isImportedRelationshipType', () => {
 });
 
 describe('estimateNodeDimensions with a note', () => {
-  it('makes room for the extra line and for a note wider than the label', () => {
+  it('wraps the note by the same rule, so a long one makes the node taller, not wider', () => {
+    const note = { text: '(defined by: imported-note-other)', fontSize: 15 };
+    const wrapped = estimateNodeDimensions('Template', 12, 30, note);
+    const oneLine = estimateNodeDimensions('Template', 12, 30, { text: '(defined by: x)', fontSize: 15 });
+    // 33 characters on one line would be about 327px wide; wrapped at 24 characters, "imported-note-other)" sets it.
+    expect(wrapped.width).toBeLessThan(250);
+    expect(wrapped.height).toBeGreaterThan(oneLine.height);
+  });
+
+  it('makes room for the extra lines, and leaves the width to the label (the note wraps instead)', () => {
     const plain = estimateNodeDimensions('Base Class', 12, 30);
     const withNote = estimateNodeDimensions('Base Class', 12, 30, { text: '(defined by: a-long-prefix)', fontSize: 16 });
     expect(withNote.height).toBeGreaterThan(plain.height);
-    expect(withNote.width).toBeGreaterThan(plain.width);
+    expect(withNote.width).toBe(plain.width);
   });
   it('is unchanged without a note', () => {
     expect(estimateNodeDimensions('Base Class', 12, 30, undefined)).toEqual(estimateNodeDimensions('Base Class', 12, 30));

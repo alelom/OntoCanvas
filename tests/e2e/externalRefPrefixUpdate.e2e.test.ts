@@ -146,7 +146,8 @@ describe('External Ref Prefix Update E2E', () => {
     await loadWithExternalRefs(page, childFile);
 
     // The prefix is in the note above the label (#111), not in the label itself.
-    const baseEntityLabel = async () => plainLabel(await classNodeLabel(page, 'BaseEntity', 'Base Entity'));
+    // The note wraps like the label, so compare with the line breaks as spaces.
+    const baseEntityLabel = async () => plainLabel(await classNodeLabel(page, 'BaseEntity', 'Base Entity')).replace(/\s+/g, ' ');
     await expect.poll(baseEntityLabel, { timeout: 5000 }).toContain('(defined by: dpbase)');
 
     await changeFirstPrefix(page, 'testprefix');
