@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
-import { getOntologyInfo, formatOntologyInfo } from '../../src/ui/ontologyInfo';
+import { getOntologyInfo, fileDisplayName } from '../../src/ui/ontologyInfo';
 
 const PREFIXES = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -56,11 +56,14 @@ describe('getOntologyInfo', () => {
   });
 });
 
-describe('formatOntologyInfo', () => {
-  it('shows the name with the prefix, as written in the file, in brackets', () => {
-    expect(formatOntologyInfo({ iri: 'http://xmlns.com/foaf/0.1/', name: 'FOAF', prefix: 'foaf' })).toBe('FOAF (foaf:)');
+describe('fileDisplayName', () => {
+  it('is the last part of a path or URL, without its query or fragment', () => {
+    expect(fileDisplayName('https://lov.linkeddata.es/dataset/vocabs/foaf/versions/2014-01-14.n3')).toBe('2014-01-14.n3');
+    expect(fileDisplayName('https://example.org/onto.ttl?raw=1#top')).toBe('onto.ttl');
+    expect(fileDisplayName('C:\\Users\\me\\onto.ttl')).toBe('onto.ttl');
+    expect(fileDisplayName('onto.ttl')).toBe('onto.ttl');
   });
-  it('shows only the name without a prefix', () => {
-    expect(formatOntologyInfo({ iri: 'http://example.org/a', name: 'A', prefix: null })).toBe('A');
+  it('is the whole text when there is no last part', () => {
+    expect(fileDisplayName('https://example.org/')).toBe('example.org');
   });
 });

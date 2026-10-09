@@ -6319,7 +6319,6 @@ function renderApp(): void {
     <div id="info">
       <span id="versionDisplay" style="font-size: 11px; color: #666;"></span>
       <span id="ontologyInfoDisplay" class="info-seg" style="font-size: 11px; display: none;"></span>
-      <span id="filePathDisplay" class="info-seg" style="font-size: 11px;"></span>
       <span id="graphCounts" class="info-seg">Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>

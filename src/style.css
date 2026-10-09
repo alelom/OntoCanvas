@@ -161,6 +161,10 @@ body.ontocanvas-embedded #edgeColorsLegend {
 #info .info-seg:not(:empty)::before {
   content: '| ';
 }
+/* The node and edge count is left out when embedded, to keep the bar short. */
+body.ontocanvas-embedded #graphCounts {
+  display: none;
+}
 #info a.version-link {
   color: #3498db;
   text-decoration: none;

@@ -45,7 +45,11 @@ export function getOntologyInfo(store: Store, prefixMap: Record<string, string>)
   return { iri, name: name ?? ontologyDisplayName(iri), prefix };
 }
 
-/** "Name (prefix:)", or just the name when there is no prefix. */
-export function formatOntologyInfo(info: OntologyInfo): string {
-  return info.prefix ? `${info.name} (${info.prefix}:)` : info.name;
+/** A short label for the file or URL an ontology was opened from: its last part, without any query or
+ * fragment. */
+export function fileDisplayName(filePath: string): string {
+  const withoutQuery = filePath.split(/[?#]/)[0];
+  const last = withoutQuery.split(/[\\/]/).filter(Boolean).pop();
+  if (/^https?:\/\/[^/]+\/?$/i.test(withoutQuery)) return new URL(withoutQuery).hostname;
+  return last ?? filePath;
 }
