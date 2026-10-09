@@ -9,6 +9,7 @@ import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo, Annota
 import type { ExternalOntologyReference } from '../storage';
 import { parseEdgeId } from '../utils/edgeId';
 import { isViewSettled } from '../ui/viewSettle';
+import { areImportsSettled } from '../ui/importsSettle';
 
 /** Use getters for state that is set after app init (e.g. when a file is loaded) so the hook always sees current values. */
 export interface EditorTestDeps {
@@ -321,6 +322,8 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     getRawData: (): GraphData => getRawData(),
     /** Whether the graph view has stopped moving after the latest render (its fit or restored view). */
     isViewSettled: (): boolean => isViewSettled(),
+    /** Whether the declarations of the imports have been read, or given up on (#104). */
+    areImportsSettled: (): boolean => areImportsSettled(),
     /**
      * Whether the app is ready for a test to act on: an ontology is loaded, no loading or "Open ontology"
      * dialog covers the page, the toolbar is shown and the view has settled. Tests wait for this instead

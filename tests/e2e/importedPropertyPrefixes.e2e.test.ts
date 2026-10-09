@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, openEditorWithTtl, blockExternalRequests } from './testHelpers';
+import { loadTestFile, openEditorWithTtl, blockExternalRequests, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -200,7 +200,8 @@ describe('Imported Property Prefixes E2E', () => {
         return node ? { label: node.label as string, opacity: node.opacity as number, title: node.title as string } : null;
       });
       expect(nodeInfo).not.toBeNull();
-      expect(nodeInfo?.label.replace(/\s+/g, '')).toBe('extended:ChildClass');
+      // The prefix is in the note above the label, not in the label itself (#111).
+      expect(plainLabel(nodeInfo!.label).replace(/\s+/g, '')).toBe('(definedby:extended)ChildClass');
       expect(nodeInfo?.title).toContain('Imported from http://example.org/object-extended');
       // Opacity should be 0.5 (50%) for external nodes
       expect(nodeInfo?.opacity).toBeCloseTo(0.5, 1);

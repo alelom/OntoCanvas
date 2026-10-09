@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile } from './testHelpers';
+import { loadTestFile, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -61,7 +61,8 @@ describe('Unasserted rdfs:range and rdfs:domain (E2E)', () => {
     const generatedAtTime = nodes.filter((n) => n.id.includes('generatedAtTime'));
     expect(generatedAtTime).toHaveLength(1);
     expect(generatedAtTime[0].label).not.toContain('xsd:');
-    expect(generatedAtTime[0].label.replace(/\n/g, ' ')).toBe('prov:generatedAtTime');
+    // The note above the label names the defining ontology; the label itself is just the name (#111).
+    expect(plainLabel(generatedAtTime[0].label).replace(/\n/g, ' ')).toBe('(defined by: prov) generatedAtTime');
     expect(generatedAtTime[0].title).toContain('No rdfs:range asserted');
   });
 

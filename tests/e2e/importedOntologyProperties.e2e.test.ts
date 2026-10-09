@@ -4,15 +4,16 @@
  * imported from parent ontologies, including edge cases like grandchild ontologies.
  *
  * The fixtures import `http://example.org/...` ontologies. Requests to anything but the dev server are
- * aborted so every run sees the same thing: the app does not read declarations from the imported files,
- * it only knows what the loaded file itself says about the imported terms.
+ * aborted so every run sees the same thing: the app only knows what the loaded file itself says about the
+ * imported terms. The tests of section G, and the ones that need a declaration only an import makes, serve the
+ * imports from the fixtures (serveOntologies), as a fetchable import would be (#104).
  *
  * Each test opens a fresh page and waits for outcomes (the app's ready signal, a visible modal, menu
  * text), never for a fixed duration (#93, #97).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, openEditorWithTtl, blockExternalRequests } from './testHelpers';
+import { loadTestFile, openEditorWithTtl, blockExternalRequests, serveOntologies, waitForImportsSettled } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -126,32 +127,39 @@ describe('Imported Ontology Properties E2E', () => {
   });
 
   describe('B) Data and Object Properties from Imported Ontologies', () => {
-    // Skipped: base:hasProperty is declared only in properties-parent.ttl and never used in the child; the app
-    // does not read declarations from imported ontologies (not even when the import URL can be fetched). See #104.
-    it.skip('should display object properties from parent ontology in menu with prefix', async () => {
+    // base:hasProperty is declared only in properties-parent.ttl and never used in the child: it is known only
+    // by reading the import, which is served here (#104).
+    it('should display object properties from parent ontology in menu with prefix', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'properties-child.ttl');
       expect(existsSync(childFile)).toBe(true);
+      await serveOntologies(page, TEST_FIXTURES_DIR);
       await loadTestFile(page, childFile);
+      await waitForImportsSettled(page);
 
       const edgeStylesContent = await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
       expect(edgeStylesContent).toMatch(/base:hasProperty|base:has property/);
     });
 
-    // Skipped: base:name is declared an owl:DatatypeProperty only in properties-parent.ttl, which the app does not
-    // read; from the child's usage alone (a literal on an individual) it lists base:name as an annotation property. See #104.
-    it.skip('should display data properties from parent ontology in menu with prefix', async () => {
+    // base:name is declared an owl:DatatypeProperty only in properties-parent.ttl; from the child's usage alone
+    // (a literal on an individual) it would be an annotation property. Reading the import (served here) fixes its kind (#104).
+    it('should display data properties from parent ontology in menu with prefix', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'properties-child.ttl');
+      await serveOntologies(page, TEST_FIXTURES_DIR);
       await loadTestFile(page, childFile);
+      await waitForImportsSettled(page);
 
       const dataPropsContent = await openMenuAndReadText(page, 'dataPropsMenu', 'name');
       expect(dataPropsContent).toContain('base:name');
     });
 
-    // Skipped: same as the two tests above; the grandchild neither uses base:hasProperty nor declares base:name. See #104.
-    it.skip('should display object and data properties from grandparent ontology in grandchild with prefix', async () => {
+    // Same as the two tests above; the grandchild neither uses base:hasProperty nor declares base:name, so they
+    // come from the import of its import (#104).
+    it('should display object and data properties from grandparent ontology in grandchild with prefix', async () => {
       const grandchildFile = join(TEST_FIXTURES_DIR, 'properties-child-child.ttl');
       expect(existsSync(grandchildFile)).toBe(true);
+      await serveOntologies(page, TEST_FIXTURES_DIR);
       await loadTestFile(page, grandchildFile);
+      await waitForImportsSettled(page);
 
       const edgeStylesContent = await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
       expect(edgeStylesContent).toMatch(/base:hasProperty|base:has property/);
@@ -271,26 +279,65 @@ describe('Imported Ontology Properties E2E', () => {
       expect(node?.title).toContain('Imported from http://example.org/data-base');
     });
 
-    // Skipped: dpbase:identifier is used only in an owl:minCardinality restriction and "created date" is its label in
-    // data-props-parent.ttl; without reading the import (the app never does) the menu shows only dpbase:createdDate. See #104.
-    it.skip('should show imported data properties in data properties menu with prefix', async () => {
+    // dpbase:identifier is used only in an owl:minCardinality restriction and "created date" is the label of
+    // dpbase:createdDate in data-props-parent.ttl: both come from reading the import, served here (#104).
+    it('should show imported data properties in data properties menu with prefix', async () => {
       const childFile = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
+      await serveOntologies(page, TEST_FIXTURES_DIR);
       await loadTestFile(page, childFile);
+      await waitForImportsSettled(page);
 
       const dataPropsContent = await openMenuAndReadText(page, 'dataPropsMenu', 'identifier');
       expect(dataPropsContent).toContain('dpbase:identifier');
       expect(dataPropsContent).toContain('created date');
     });
 
-    // Skipped: same reason as above; the grandchild only restricts dpbase:identifier by cardinality. See #104.
-    it.skip('should display data properties from grandparent ontology in grandchild with prefix', async () => {
+    // Same reason as above; the grandchild only restricts dpbase:identifier by cardinality (#104).
+    it('should display data properties from grandparent ontology in grandchild with prefix', async () => {
       const grandchildFile = join(TEST_FIXTURES_DIR, 'data-props-child-child.ttl');
       expect(existsSync(grandchildFile)).toBe(true);
+      await serveOntologies(page, TEST_FIXTURES_DIR);
       await loadTestFile(page, grandchildFile);
+      await waitForImportsSettled(page);
 
       const dataPropsContent = await openMenuAndReadText(page, 'dataPropsMenu', 'identifier');
       expect(dataPropsContent).toContain('dpbase:identifier');
       expect(dataPropsContent).toContain('created date');
+    });
+  });
+
+  describe('G) Declarations read from imports are context only (#104)', () => {
+    it('are listed but never drawn on the canvas, and never written into the loaded ontology', async () => {
+      await serveOntologies(page, TEST_FIXTURES_DIR);
+      await loadTestFile(page, join(TEST_FIXTURES_DIR, 'properties-child.ttl'));
+      await waitForImportsSettled(page);
+      await openMenuAndReadText(page, 'dataPropsMenu', 'base:name');
+
+      // base:name and base:hasProperty are known now, but no box or edge was added for them.
+      const nodeIds = await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.nodeIndices.map(String) as string[]);
+      expect(nodeIds.filter((id) => id.startsWith('__dataprop'))).toEqual([]);
+      expect(await getRenderedEdgeIds(page)).toEqual(['ExtendedClass->http://example.org/base#BaseClass:subClassOf']);
+      // The declarations stay in the imported ontology: nothing about them is in the store that would be saved.
+      for (const term of ['hasProperty', 'name']) {
+        expect(await page.evaluate((s) => (window as any).__EDITOR_TEST__.getQuads(s, null), 'http://example.org/base#' + term)).toEqual([]);
+      }
+    });
+
+    it('cannot be deleted from the loaded ontology', async () => {
+      await serveOntologies(page, TEST_FIXTURES_DIR);
+      await loadTestFile(page, join(TEST_FIXTURES_DIR, 'properties-child.ttl'));
+      await waitForImportsSettled(page);
+      await openMenuAndReadText(page, 'dataPropsMenu', 'base:name');
+      await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
+      expect(await page.locator('#dataPropsContent .data-prop-delete-btn[data-name="name"]').count()).toBe(0);
+      expect(await page.locator('#edgeStylesContent .edge-delete-btn[data-type="http://example.org/base#hasProperty"]').count()).toBe(0);
+    });
+
+    it('leave the imports unread, and the ontology as it was, when they cannot be fetched', async () => {
+      await loadTestFile(page, join(TEST_FIXTURES_DIR, 'properties-child.ttl')); // example.org is blocked here
+      await waitForImportsSettled(page);
+      const dataPropsContent = await openMenuAndReadText(page, 'dataPropsMenu', 'zzz-nothing');
+      expect(dataPropsContent).not.toContain('base:name');
     });
   });
 

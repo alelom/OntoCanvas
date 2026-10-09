@@ -36,6 +36,15 @@ export function getAllRelationshipTypes(
 }
 
 /**
+ * The relationship types the default edge colours are spread over: all but the properties declared only in
+ * an import (#104), so that listing them in the menu doesn't change the colour of any edge already drawn.
+ */
+export function colourableRelationshipTypes(types: string[], objectProperties: ObjectPropertyInfo[]): string[] {
+  const contextOnly = new Set(objectProperties.filter((op) => op.contextOnly).map((op) => op.name));
+  return types.filter((type) => !contextOnly.has(type));
+}
+
+/**
  * Remove unused external object properties from the objectProperties array.
  * External properties (URIs) should only be kept if they're used in edges.
  */
@@ -47,6 +56,8 @@ export function cleanupUnusedExternalProperties(
   const beforeCount = objectProperties.length;
   
   const filtered = objectProperties.filter((op) => {
+    // Declared only in an import and listed as read-only context (#104): not used by an edge, by design.
+    if (op.contextOnly) return true;
     // Keep local properties (not URIs)
     if (!op.name.startsWith('http://') && !op.name.startsWith('https://')) {
       return true;

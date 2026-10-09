@@ -154,7 +154,7 @@ describe('importedNoteForDataProperty', () => {
 
   it('notes a data property of another ontology: by prefix, else by the ontology name', () => {
     expect(importedNoteForDataProperty({ uri: 'http://example.org/data-base#createdDate', isDefinedBy: 'http://example.org/data-base' }, refs, main)).toBe('(defined by: dpbase)');
-    expect(importedNoteForDataProperty({ uri: 'http://example.org/unlisted#x' }, refs, main)).toBe('(defined by: unlisted)');
+    expect(importedNoteForDataProperty({ uri: 'http://example.org/unlisted#x', isDefinedBy: 'http://example.org/unlisted' }, refs, main)).toBe('(defined by: unlisted)');
   });
 
   it("leaves the loaded ontology's own data property, and an unknown one, without a note", () => {
