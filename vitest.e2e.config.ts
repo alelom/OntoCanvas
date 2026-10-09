@@ -15,6 +15,5 @@ export default defineConfig({
     // 4 → 71-85 s); never more than cores - 1, so small CI runners aren't oversubscribed (#93).
     maxWorkers: Math.max(1, Math.min(8, availableParallelism() - 1)),
     globalSetup: ['tests/e2e/globalSetup.ts'],
-    globalTeardown: ['tests/e2e/globalTeardown.ts'],
   },
 });

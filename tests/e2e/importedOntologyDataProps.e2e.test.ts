@@ -3,8 +3,9 @@
  * Tests warning icons, editable state, transparency, and proper display.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, openEditorWithTtl, blockExternalRequests } from './testHelpers';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
+import { loadTestFile, openEditorWithTtl } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -53,7 +54,7 @@ describe('Imported Data Properties E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   afterAll(async () => {
@@ -64,7 +65,6 @@ describe('Imported Data Properties E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
-    await blockExternalRequests(page);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
   });

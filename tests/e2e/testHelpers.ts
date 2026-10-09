@@ -77,15 +77,6 @@ export async function waitForGraphRender(page: Page, timeout = 5000): Promise<vo
 }
 
 /**
- * Fail every request that isn't to the local dev server. Fixtures with owl:imports make the app fetch their
- * imported ontologies (e.g. http://example.org/...); blocking them keeps tests offline and deterministic.
- * Call before the page loads anything.
- */
-export async function blockExternalRequests(page: Page): Promise<void> {
-  await page.route((url) => url.hostname !== 'localhost', (route) => route.abort());
-}
-
-/**
  * Choose a file in the file input without waiting for it to load: for tests whose load is expected to fail
  * (a corrupt ontology) and that wait for the error themselves.
  */
@@ -139,8 +130,8 @@ export async function getSaveButtonState(page: Page): Promise<{ visible: boolean
 /**
  * Serve the ontologies in `directory` under their own IRIs, so that the `owl:imports` of a test file can be
  * fetched (#104): a request for `http://example.org/base` gets the file whose ontology IRI that is, with CORS
- * allowed (`extra` adds ontologies by IRI); any other example.org request is aborted. Call it after blockExternalRequests (the later route
- * wins) and before loading the file.
+ * allowed (`extra` adds ontologies by IRI); any other example.org request is aborted. Its route takes precedence over the default network
+ * block (tests/e2e/browser.ts); call it before loading the file.
  */
 export async function serveOntologies(page: Page, directory: string, extra: Record<string, string> = {}): Promise<void> {
   const served = new Map<string, string>(Object.entries(extra));

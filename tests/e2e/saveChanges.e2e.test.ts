@@ -7,7 +7,8 @@
  * download that saving produces.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { readFileSync } from 'node:fs';
 import { waitForAppReady } from './testHelpers';
 
@@ -60,7 +61,7 @@ async function markUnsaved(p: Page): Promise<void> {
 }
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {

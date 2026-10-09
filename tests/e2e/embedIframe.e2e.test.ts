@@ -9,7 +9,8 @@
  * storage is not partitioned (CI-reliable).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page, type Frame } from 'playwright';
+import { type Browser, type Page, type Frame } from 'playwright';
+import { launchBrowser } from './browser';
 import { defaultMaxFontSize } from '../../src/ui/fontSizeDefaults';
 
 const ORIGIN = 'http://localhost:5173';
@@ -36,7 +37,7 @@ describe('Embedded in a real iframe E2E', () => {
   let frame: Frame;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     const context = await browser.newContext({
       viewport: { width: 1400, height: 900 },
       permissions: ['clipboard-read', 'clipboard-write'],

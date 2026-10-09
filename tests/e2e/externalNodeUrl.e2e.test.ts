@@ -7,7 +7,8 @@
  * Requests to example.org are answered by a route, so nothing here touches the network.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { type Browser, type BrowserContext, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -29,7 +30,7 @@ let context: BrowserContext;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {

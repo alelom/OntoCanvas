@@ -5,11 +5,12 @@
  * unit-tested in tests/unit/thingDataProperties.test.ts.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { blockExternalRequests, loadTestFile, waitForAppReady } from './testHelpers';
+import { loadTestFile, waitForAppReady } from './testHelpers';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../fixtures/thing-data-properties.ttl');
@@ -21,7 +22,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {
@@ -31,7 +32,6 @@ afterAll(async () => {
 beforeEach(async () => {
   page = await browser.newPage({ acceptDownloads: true });
   page.setDefaultTimeout(5000);
-  await blockExternalRequests(page);
   // Headless Chromium can't answer the save picker; without it the app downloads the file instead.
   await page.addInitScript(() => { delete (window as any).showSaveFilePicker; });
   await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });

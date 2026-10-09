@@ -8,8 +8,9 @@
  * modal, menu text), never for a fixed duration (#93, #97).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, openEditorWithTtl, blockExternalRequests, plainLabel } from './testHelpers';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
+import { loadTestFile, openEditorWithTtl, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -41,17 +42,21 @@ const MENU_CONTENT: Record<MenuId, string> = {
   annotationPropsMenu: 'annotationPropsContent',
 };
 
-/** Open a sidebar menu (a `<details>`; its content is rendered when it opens) and wait until its text contains `expected`. */
+/** Open a sidebar menu (a `<details>`) and wait until its text contains `expected`. Fails at once, showing the text,
+ * when it never does: an expectation that is never met is a test bug (#116). */
 async function openMenu(page: Page, menuId: MenuId, expected: string): Promise<void> {
   const isOpen = await page.locator(`details#${menuId}`).evaluate((el) => (el as HTMLDetailsElement).open);
   if (!isOpen) await page.locator(`details#${menuId} > summary`).click();
-  await page
-    .waitForFunction(
+  try {
+    await page.waitForFunction(
       ([id, text]) => (document.getElementById(id)?.textContent ?? '').includes(text),
       [MENU_CONTENT[menuId], expected] as const,
       { timeout: 5000 }
-    )
-    .catch(() => undefined); // Fall through to the assertions, which report the actual content.
+    );
+  } catch {
+    const actual = await page.evaluate((id) => document.getElementById(id)?.textContent ?? '', MENU_CONTENT[menuId]);
+    throw new Error(`The ${menuId} never showed "${expected}". It shows: ${actual.replace(/\s+/g, ' ').trim()}`);
+  }
 }
 
 /** Text of the bold name span of each row in a menu (the property's display name). */
@@ -88,7 +93,7 @@ describe('Imported Property Prefixes E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   afterAll(async () => {
@@ -99,7 +104,6 @@ describe('Imported Property Prefixes E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
-    await blockExternalRequests(page);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {

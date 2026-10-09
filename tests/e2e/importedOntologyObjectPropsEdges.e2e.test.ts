@@ -3,8 +3,9 @@
  * Tests that edges are visible and imported properties are available in Add Edge modal.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, blockExternalRequests } from './testHelpers';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
+import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -32,7 +33,7 @@ describe('Imported Object Properties and Edges E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   afterAll(async () => {
@@ -43,7 +44,6 @@ describe('Imported Object Properties and Edges E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
-    await blockExternalRequests(page);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     expect(existsSync(CHILD_FILE)).toBe(true);

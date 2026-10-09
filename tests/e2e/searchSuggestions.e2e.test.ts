@@ -4,7 +4,8 @@
  * that name in the search box; ontology labels are shown as text, never interpreted as HTML.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = 'http://localhost:5173/';
@@ -30,7 +31,7 @@ describe('Search suggestions E2E (#81)', () => {
     page.$$eval('#searchAutocomplete .suggestion', (els) => els.map((e) => ({ text: e.textContent, title: e.getAttribute('title') })));
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
@@ -84,7 +85,7 @@ describe('Search suggestions for referenced external classes E2E (#81)', () => {
 `;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });

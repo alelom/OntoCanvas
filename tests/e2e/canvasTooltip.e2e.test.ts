@@ -4,10 +4,11 @@
  * well, in another style, repeating the same text.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { blockExternalRequests, loadTestFile } from './testHelpers';
+import { loadTestFile } from './testHelpers';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../fixtures/tooltips.ttl');
@@ -17,7 +18,7 @@ let browser: Browser;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {
@@ -27,7 +28,6 @@ afterAll(async () => {
 beforeEach(async () => {
   page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   page.setDefaultTimeout(5000);
-  await blockExternalRequests(page);
   await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
   await loadTestFile(page, FIXTURE);

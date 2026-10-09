@@ -10,7 +10,8 @@
  * error) and consumes the token.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { type Browser, type BrowserContext, type Page } from 'playwright';
+import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -21,23 +22,13 @@ const __dirname = dirname(__filename);
 
 const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures/imported-ontology');
-/** The app's token store module, as the dev server serves it. */
-const TOKEN_STORAGE_MODULE = '/src/lib/localFileTokenStorage.ts';
-
-/**
- * Page script calling `fn(...args)` from the token store module. A string, because Vitest would rewrite a
- * dynamic import() written in a function passed to page.evaluate.
- */
-function callTokenStorage(fn: string, args: unknown[]): string {
-  return `import(${JSON.stringify(TOKEN_STORAGE_MODULE)}).then((m) => m[${JSON.stringify(fn)}](...${JSON.stringify(args)}))`;
-}
 
 let browser: Browser;
 let context: BrowserContext;
 let page: Page;
 
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true });
+  browser = await launchBrowser();
 });
 
 afterAll(async () => {
@@ -69,7 +60,8 @@ describe('Local File Opening E2E', () => {
 
     // Store the file the way "Open external ontology" does before opening the tab.
     const token: string = await page.evaluate(
-      callTokenStorage('storeLocalFileContent', [content, 'object-props-child.ttl', 'object-props-child.ttl'])
+      (args) => (window as any).__EDITOR_TEST__.storeLocalFile(args.content, args.fileName, args.fileName),
+      { content, fileName: 'object-props-child.ttl' }
     );
     expect(token).toBeTruthy();
 
@@ -105,7 +97,7 @@ describe('Local File Opening E2E', () => {
     // The token is one-time use: it is deleted once the tab has loaded it.
     await expect
       .poll(
-        () => newPage.evaluate(callTokenStorage('retrieveLocalFileContent', [token])),
+        () => newPage.evaluate((t) => (window as any).__EDITOR_TEST__.retrieveLocalFile(t), token),
         { timeout: 5000 }
       )
       .toBeNull();

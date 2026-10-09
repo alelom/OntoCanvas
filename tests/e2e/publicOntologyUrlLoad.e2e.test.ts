@@ -6,7 +6,8 @@
  * tests never depend on the public internet or on those sites staying up.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page, type Route } from 'playwright';
+import { type Browser, type Page, type Route } from 'playwright';
+import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
 
 const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
@@ -108,7 +109,7 @@ describe('Public ontology URL load E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   beforeEach(async () => {

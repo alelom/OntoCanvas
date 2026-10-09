@@ -12,8 +12,9 @@
  * text), never for a fixed duration (#93, #97).
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { chromium, type Browser, type Page } from 'playwright';
-import { loadTestFile, openEditorWithTtl, blockExternalRequests, serveOntologies, waitForImportsSettled } from './testHelpers';
+import { type Browser, type Page } from 'playwright';
+import { launchBrowser } from './browser';
+import { loadTestFile, openEditorWithTtl, serveOntologies, waitForImportsSettled } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -31,18 +32,31 @@ const MENU_CONTENT: Record<MenuId, string> = {
   annotationPropsMenu: 'annotationPropsContent',
 };
 
-/** Open a sidebar menu (a `<details>`; its content is rendered when it opens) and return its text once it contains `expected`. */
+/** Open a sidebar menu (a `<details>`) and return its text now. For a test that has already waited for what it needs
+ * (the load, the imports) and wants to look, not wait. */
+async function readMenuText(page: Page, menuId: MenuId): Promise<string> {
+  const isOpen = await page.locator(`details#${menuId}`).evaluate((el) => (el as HTMLDetailsElement).open);
+  if (!isOpen) await page.locator(`details#${menuId} > summary`).click();
+  return page.evaluate((id) => document.getElementById(id)?.textContent ?? '', MENU_CONTENT[menuId]);
+}
+
+/** Open a sidebar menu and return its text once it contains `expected`. Fails at once, showing the text, when it
+ * never does: an expectation that is never met is a test bug, and waiting out the timeout to say so only
+ * made every run 5 s slower (#116). */
 async function openMenuAndReadText(page: Page, menuId: MenuId, expected: string): Promise<string> {
   const isOpen = await page.locator(`details#${menuId}`).evaluate((el) => (el as HTMLDetailsElement).open);
   if (!isOpen) await page.locator(`details#${menuId} > summary`).click();
   const contentId = MENU_CONTENT[menuId];
-  await page
-    .waitForFunction(
+  try {
+    await page.waitForFunction(
       ([id, text]) => (document.getElementById(id)?.textContent ?? '').includes(text),
       [contentId, expected] as const,
       { timeout: 5000 }
-    )
-    .catch(() => undefined); // Fall through to the assertion, which reports the actual text.
+    );
+  } catch {
+    const actual = await page.evaluate((id) => document.getElementById(id)?.textContent ?? '', contentId);
+    throw new Error(`The ${menuId} never showed "${expected}". It shows: ${actual.replace(/\s+/g, ' ').trim()}`);
+  }
   return page.evaluate((id) => document.getElementById(id)?.textContent ?? '', contentId);
 }
 
@@ -69,7 +83,7 @@ describe('Imported Ontology Properties E2E', () => {
   let page: Page;
 
   beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
   });
 
   afterAll(async () => {
@@ -80,7 +94,6 @@ describe('Imported Ontology Properties E2E', () => {
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
     page.setDefaultNavigationTimeout(5000);
-    await blockExternalRequests(page);
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
     await page.evaluate(() => {
@@ -136,7 +149,7 @@ describe('Imported Ontology Properties E2E', () => {
       await loadTestFile(page, childFile);
       await waitForImportsSettled(page);
 
-      const edgeStylesContent = await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
+      const edgeStylesContent = await openMenuAndReadText(page, 'edgeStylesMenu', 'has property');
       expect(edgeStylesContent).toMatch(/base:hasProperty|base:has property/);
     });
 
@@ -161,7 +174,7 @@ describe('Imported Ontology Properties E2E', () => {
       await loadTestFile(page, grandchildFile);
       await waitForImportsSettled(page);
 
-      const edgeStylesContent = await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
+      const edgeStylesContent = await openMenuAndReadText(page, 'edgeStylesMenu', 'has property');
       expect(edgeStylesContent).toMatch(/base:hasProperty|base:has property/);
       const dataPropsContent = await openMenuAndReadText(page, 'dataPropsMenu', 'name');
       expect(dataPropsContent).toContain('base:name');
@@ -328,7 +341,7 @@ describe('Imported Ontology Properties E2E', () => {
       await loadTestFile(page, join(TEST_FIXTURES_DIR, 'properties-child.ttl'));
       await waitForImportsSettled(page);
       await openMenuAndReadText(page, 'dataPropsMenu', 'base:name');
-      await openMenuAndReadText(page, 'edgeStylesMenu', 'hasProperty');
+      await openMenuAndReadText(page, 'edgeStylesMenu', 'has property');
       expect(await page.locator('#dataPropsContent .data-prop-delete-btn[data-name="name"]').count()).toBe(0);
       expect(await page.locator('#edgeStylesContent .edge-delete-btn[data-type="http://example.org/base#hasProperty"]').count()).toBe(0);
       // No Edit button either, and the dialogs refuse them however they are reached: confirming one would write the
@@ -365,7 +378,7 @@ describe('Imported Ontology Properties E2E', () => {
     it('leave the imports unread, and the ontology as it was, when they cannot be fetched', async () => {
       await loadTestFile(page, join(TEST_FIXTURES_DIR, 'properties-child.ttl')); // example.org is blocked here
       await waitForImportsSettled(page);
-      const dataPropsContent = await openMenuAndReadText(page, 'dataPropsMenu', 'zzz-nothing');
+      const dataPropsContent = await readMenuText(page, 'dataPropsMenu');
       expect(dataPropsContent).not.toContain('base:name');
     });
   });

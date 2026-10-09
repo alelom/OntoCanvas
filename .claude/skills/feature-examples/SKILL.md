@@ -38,6 +38,15 @@ When in doubt, add one example. It costs a few minutes and the PR is easier to r
   #   Building → Floor    "∀ hasFloor"
   ```
 
+### An example that needs a second file (an import)
+
+When the feature reads another ontology (`owl:imports`), ship the pair side by side in the same folder and write the
+child's import as a **relative IRI** (`owl:imports <parent.ttl>`). It resolves against wherever the child was opened
+from, so the same example works from a branch, `main`, localhost or any server, with no URL to fix after merge. Declare
+the namespace prefix with the parent's real absolute namespace, so the prefix matches. It needs the child opened **by
+URL** (a file from disk has no base to resolve against); say so in the header. Pin it with a unit test that resolves the
+import against a made-up base URL, and an E2E test that serves both files from routes (no network).
+
 ## 2. Pin it with a unit test
 
 Add assertions to a `tests/unit/*Examples.test.ts` file. Use an existing one (`classExpressionExamples`,
@@ -79,6 +88,8 @@ URL-encoded inside `?onto=`. Generate the links rather than writing them by hand
 const raw = (path) => `https://raw.githubusercontent.com/alelom/OntoCanvas/${branch}/${path}`;
 const open = (path) => `http://localhost:5173/?onto=${encodeURIComponent(raw(path))}`;
 ```
+
+Don't write a closing word before an issue number in the PR body prose ("closed #102", "resolved #102", "fixes #102"): GitHub reads it as a closing keyword and will close that issue on merge. Check what it registered: `gh pr view <n> --json closingIssuesReferences`.
 
 Push the branch **before** sharing the links. Raw links point at the branch, so they work during review and
 stop working once the branch is deleted after merge. The README index is the lasting reference.
