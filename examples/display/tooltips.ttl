@@ -1,0 +1,24 @@
+@prefix : <http://example.org/examples/tooltips#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Hover tooltips (issue #109): hovering Author, the "writes" label or the "writes" line shows its
+# rdfs:comment straight away, in one tooltip. Before, a second tooltip in another style appeared a
+# moment later, repeating the text.
+
+<http://example.org/examples/tooltips> rdf:type owl:Ontology ;
+    rdfs:label "Tooltips" .
+
+:writes rdf:type owl:ObjectProperty ;
+    rdfs:label "writes" ;
+    rdfs:comment "The author of a book." ;
+    rdfs:domain :Author ;
+    rdfs:range :Book .
+
+:Author rdf:type owl:Class ;
+    rdfs:label "Author" ;
+    rdfs:comment "A person who writes books." .
+
+:Book rdf:type owl:Class ;
+    rdfs:label "Book" .

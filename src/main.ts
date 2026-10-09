@@ -77,6 +77,7 @@ import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { edgeLock, type EdgeLock } from './lib/edgeEditability';
 import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
+import { withThingNode, OWL_THING_URI } from './graph/thingNode';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -299,12 +300,16 @@ function collectDisplayConfig(): DisplayConfig | null {
       ? { scale: network.getScale(), position: network.getViewPosition() }
       : undefined,
     displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
+    clusterThingDataProperties,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
   };
 }
 
 function applyDisplayConfig(config: DisplayConfig): void {
   displayExternalReferences = config.displayExternalReferences ?? true;
+  clusterThingDataProperties = config.clusterThingDataProperties ?? true;
+  const clusterThingEl = document.getElementById('clusterThingDataProps') as HTMLInputElement | null;
+  if (clusterThingEl) clusterThingEl.checked = clusterThingDataProperties;
   externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
   loadedNodePositions = config.nodePositions ?? null;
   const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
@@ -497,6 +502,8 @@ let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
 let lastLayoutMode: string | null = null;
 /** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
 let displayExternalReferences = true;
+/** Draw data properties with domain owl:Thing once, under an owl:Thing node, rather than under every class (#80). */
+let clusterThingDataProperties = true;
 /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
 let externalNodeLayout: ExternalNodeLayout = 'auto';
 
@@ -736,6 +743,14 @@ function performDeleteSelection(): boolean {
     debugLog(`[DELETE] Early return: no selection`);
     return false;
   }
+  // A data property drawn once under owl:Thing (#80) stands for the property itself: deleting its box deletes
+  // the property, after a confirmation.
+  const thingBoxPrefix = `__dataprop__${OWL_THING_URI}__`;
+  const thingBox = selectedNodeIds.find((id) => id.startsWith(thingBoxPrefix));
+  if (thingBox) {
+    deleteDataPropertyWithConfirm(thingBox.slice(thingBoxPrefix.length));
+    return true;
+  }
 
   const edgesToRemove: { from: string; to: string; type: string }[] = [];
   const dataPropertyRestrictionsToRemove: { classId: string; propertyName: string }[] = [];
@@ -762,8 +777,9 @@ function performDeleteSelection(): boolean {
   }
 
   const nodesToRemove = selectedNodeIds.filter((id) => rawData.nodes.some((n) => n.id === id));
+  // owl:Thing, drawn for the data properties of every class (#80), is not an imported class to remove.
   const externalNodeIdsToRemove = selectedNodeIds.filter(
-    (id) => (id.startsWith('http://') || id.startsWith('https://')) && !rawData.nodes.some((n) => n.id === id)
+    (id) => id !== OWL_THING_URI && (id.startsWith('http://') || id.startsWith('https://')) && !rawData.nodes.some((n) => n.id === id)
   );
   const connectedEdges = rawData.edges.filter(
     (e) => nodesToRemove.includes(e.from) || nodesToRemove.includes(e.to)
@@ -1677,51 +1693,55 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     });
   });
   dataPropsContent.querySelectorAll('.data-prop-delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = (btn as HTMLElement).dataset.name!;
-      if (!confirm(`Delete data property "${name}"?`)) return;
-      if (!ttlStore) return;
-      
-      // Check if this property is used in any restrictions
-      const restrictionsUsingProperty = rawData.nodes.filter((n) =>
-        n.dataPropertyRestrictions?.some((r) => r.propertyName === name)
-      );
-      
-      if (restrictionsUsingProperty.length > 0) {
-        const classNames = restrictionsUsingProperty.map((n) => n.label || n.id).join(', ');
-        if (!confirm(`This property is used in restrictions on: ${classNames}\n\nDelete anyway? This will also remove all restrictions using this property.`)) {
-          return;
-        }
-        
-        // Remove all restrictions using this property
-        for (const node of restrictionsUsingProperty) {
-          removeDataPropertyRestrictionFromClass(ttlStore, node.id, name);
-          const nodeIndex = rawData.nodes.findIndex((n) => n.id === node.id);
-          if (nodeIndex >= 0) {
-            rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, node.id);
-          }
-        }
-      }
-      
-      // Try to remove from store
-      const removed = removeDataPropertyFromStore(ttlStore, name);
-      
-      // Always remove from the array and refresh UI, even if store removal failed
-      // (the property might have been from an external ontology or already deleted)
-      const wasInArray = dataProperties.some((dp) => dp.name === name);
-      if (wasInArray) {
-        dataProperties = dataProperties.filter((dp) => dp.name !== name);
-        hasUnsavedChanges = true;
-        updateSaveButtonVisibility();
-        initDataPropsMenu(dataPropsContent);
-        applyFilter(true); // Refresh the graph to reflect the deletion
-      }
-      
-      if (!removed && wasInArray) {
-        console.warn(`Data property "${name}" was in the list but not found in store. It may have been from an external ontology or already deleted.`);
-      }
-    });
+    btn.addEventListener('click', () => deleteDataPropertyWithConfirm((btn as HTMLElement).dataset.name!));
   });
+}
+
+/** Delete a data property after a confirmation (and a second one when restrictions use it): from the Data
+ * Properties menu, or from its box under owl:Thing (#80). */
+function deleteDataPropertyWithConfirm(name: string): void {
+  const dataPropsContent = document.getElementById('dataPropsContent') as HTMLElement;
+  if (!confirm(`Delete data property "${name}"?`)) return;
+  if (!ttlStore) return;
+  
+  // Check if this property is used in any restrictions
+  const restrictionsUsingProperty = rawData.nodes.filter((n) =>
+    n.dataPropertyRestrictions?.some((r) => r.propertyName === name)
+  );
+  
+  if (restrictionsUsingProperty.length > 0) {
+    const classNames = restrictionsUsingProperty.map((n) => n.label || n.id).join(', ');
+    if (!confirm(`This property is used in restrictions on: ${classNames}\n\nDelete anyway? This will also remove all restrictions using this property.`)) {
+      return;
+    }
+    
+    // Remove all restrictions using this property
+    for (const node of restrictionsUsingProperty) {
+      removeDataPropertyRestrictionFromClass(ttlStore, node.id, name);
+      const nodeIndex = rawData.nodes.findIndex((n) => n.id === node.id);
+      if (nodeIndex >= 0) {
+        rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, node.id);
+      }
+    }
+  }
+  
+  // Try to remove from store
+  const removed = removeDataPropertyFromStore(ttlStore, name);
+  
+  // Always remove from the array and refresh UI, even if store removal failed
+  // (the property might have been from an external ontology or already deleted)
+  const wasInArray = dataProperties.some((dp) => dp.name === name);
+  if (wasInArray) {
+    dataProperties = dataProperties.filter((dp) => dp.name !== name);
+    hasUnsavedChanges = true;
+    updateSaveButtonVisibility();
+    initDataPropsMenu(dataPropsContent);
+    applyFilter(true); // Refresh the graph to reflect the deletion
+  }
+  
+  if (!removed && wasInArray) {
+    console.warn(`Data property "${name}" was in the list but not found in store. It may have been from an external ontology or already deleted.`);
+  }
 }
 
 // Helper to get defining ontology from URI
@@ -3233,7 +3253,7 @@ function buildNetworkData(
   dataProperties.forEach((dp) => {
     filteredNodes.forEach((n) => {
       if (displayedAsRestriction.has(`${n.id}__${dp.name}`)) return;
-      if (!appliesToClass(dp, n.id)) return;
+      if (!appliesToClass(dp, n.id, clusterThingDataProperties)) return;
       
       if (!dataPropsByClass.has(n.id)) {
         dataPropsByClass.set(n.id, []);
@@ -6145,6 +6165,10 @@ function renderApp(): void {
           <button type="button" id="layoutModeHintToggle" title="About the layout modes" aria-label="About the layout modes" style="cursor: pointer; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid #b0b8c0; background: #f4f6f8; color: #2c7be5; font-size: 12px; font-weight: bold; line-height: 1; flex: none;">i</button>
           <div id="layoutModeHintPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 10px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; width: 340px; max-height: 60vh; overflow-y: auto;"></div>
         </div>
+        <label id="clusterThingDataPropsWrap" title="Data properties whose rdfs:domain is owl:Thing apply to every class. Checked: draw each once, under an owl:Thing node. Unchecked: draw it under every class." style="font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="clusterThingDataProps" checked />
+          owl:Thing data properties once
+        </label>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
         <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
@@ -7332,6 +7356,7 @@ function applyFilter(preserveView = false): void {
       graphDataForBuild.nodes.push({ ...n });
     }
   }
+  graphDataForBuild = withThingNode(graphDataForBuild, dataProperties, clusterThingDataProperties);
   currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
   if (network && ttlStore) {
@@ -8070,6 +8095,11 @@ function setupEventListeners(): void {
     const layoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
     if (displayEl) displayEl.checked = displayExternalReferences;
     if (layoutEl) layoutEl.value = externalNodeLayout;
+  });
+  document.getElementById('clusterThingDataProps')?.addEventListener('change', (e) => {
+    clusterThingDataProperties = (e.target as HTMLInputElement).checked;
+    applyFilter(true);
+    scheduleDisplayConfigSave();
   });
   document.getElementById('displayExternalRefs')?.addEventListener('change', (e) => {
     displayExternalReferences = (e.target as HTMLInputElement).checked;

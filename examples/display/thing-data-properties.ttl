@@ -1,0 +1,24 @@
+@prefix : <http://example.org/examples/thingdp#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Data properties with domain owl:Thing apply to every class (issue #80): "name" and "homepage" are drawn
+# once under an owl:Thing node by default, or under every class with the toggle off. "age" stays on
+# Person; "nick" has no domain and stays free-standing.
+#
+# Try it: untick "owl:Thing data properties once" (under Display options): name and homepage now appear
+# under Agent, Person and Document. The setting is kept in the display config.
+
+<http://example.org/examples/thingdp> rdf:type owl:Ontology ;
+    rdfs:label "owl:Thing data properties" .
+
+:Agent rdf:type owl:Class ; rdfs:label "Agent" .
+:Person rdf:type owl:Class ; rdfs:label "Person" ; rdfs:subClassOf :Agent .
+:Document rdf:type owl:Class ; rdfs:label "Document" .
+
+:name rdf:type owl:DatatypeProperty ; rdfs:label "name" ; rdfs:domain owl:Thing ; rdfs:range xsd:string .
+:homepage rdf:type owl:DatatypeProperty ; rdfs:label "homepage" ; rdfs:domain owl:Thing ; rdfs:range xsd:anyURI .
+:age rdf:type owl:DatatypeProperty ; rdfs:label "age" ; rdfs:domain :Person ; rdfs:range xsd:integer .
+:nick rdf:type owl:DatatypeProperty ; rdfs:label "nick" ; rdfs:range xsd:string .

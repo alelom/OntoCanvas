@@ -8,6 +8,7 @@
  * that distinction being visible.
  */
 import type { DataPropertyInfo } from '../types';
+import { OWL_THING_URI } from '../graph/thingNode';
 
 export const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 export const RDFS_NS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -143,14 +144,16 @@ export function domainAttachment(dp: Pick<DataPropertyInfo, 'domains' | 'hasGlob
   return dp.hasGlobalDomain ? 'global' : 'unattached';
 }
 
-/** Whether a data property should be drawn attached to the given class node. */
+/** Whether a data property should be drawn attached to the given class node. With clusterGlobal, a
+ * property with domain owl:Thing is drawn once, under the owl:Thing node, instead of under every class (#80). */
 export function appliesToClass(
   dp: Pick<DataPropertyInfo, 'domains' | 'hasGlobalDomain'>,
-  classId: string
+  classId: string,
+  clusterGlobal = false
 ): boolean {
   const attachment = domainAttachment(dp);
   if (attachment === 'unattached') return false;
-  if (attachment === 'global') return true;
+  if (attachment === 'global') return clusterGlobal ? classId === OWL_THING_URI : true;
   return dp.domains.includes(classId);
 }
 
