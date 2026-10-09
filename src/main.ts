@@ -78,6 +78,7 @@ import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { edgeLock, type EdgeLock } from './lib/edgeEditability';
 import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
 import { withThingNode, OWL_THING_URI } from './graph/thingNode';
+import { getOrRequestOntologyDirectory, forgetOntologyDirectory } from './lib/ontologyDirectory';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -6635,6 +6636,32 @@ function renderApp(): void {
 }
 
 
+/**
+ * "Open external ontology": open the imported ontology in a new tab. When the open ontology came from a
+ * local file, its file is looked for in the same folder first (the folder is asked for once, #103), which
+ * avoids CORS; otherwise, or when it isn't there, the ontology is opened by URL.
+ */
+async function openExternalOntology(url: string): Promise<void> {
+  const openedFromDisk = !!loadedFileName && !/^https?:\/\//i.test(loadedFilePath ?? '');
+  if (openedFromDisk) {
+    // Ask for the folder before any other await, while the click still counts as a user gesture.
+    const directory = await getOrRequestOntologyDirectory(fileHandle);
+    if (directory) {
+      const { findMatchingLocalFile, openLocalFileInNewTab } = await import('./lib/localFileOpener');
+      const localFile = await findMatchingLocalFile(directory, loadedFileName!, url);
+      if (localFile) {
+        window.open(await openLocalFileInNewTab(localFile), '_blank');
+        return;
+      }
+    }
+  }
+  // Open the HTML documentation URL when the ontology URL converts to one (hyphens to underscores, .html).
+  const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
+  const urlToOpen = convertOntologyUrlToHtmlUrl(url) || url;
+  const base = window.location.origin + window.location.pathname;
+  window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
+}
+
 async function loadTtlAndRender(
   ttlString: string,
   fileName?: string,
@@ -6943,7 +6970,8 @@ async function loadTtlAndRender(
     loadedFileName = fileName ?? null;
     loadedFilePath = pathHint ?? fileName ?? null;
     fileHandle = handle ?? null;
-    hasUnsavedChanges = false;
+    forgetOntologyDirectory(); // another ontology, maybe in another folder (#103)
+hasUnsavedChanges = false;
     clearUndoRedo();
     updateFilePathDisplay();
 
@@ -7360,18 +7388,7 @@ function applyFilter(preserveView = false): void {
   currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
   if (network && ttlStore) {
-    updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, async (url) => {
-      // Convert ontology URL to HTML documentation URL (replaces hyphens with underscores, adds .html)
-      const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
-      const htmlUrl = convertOntologyUrlToHtmlUrl(url);
-      
-      // Always use the converted HTML URL if conversion succeeded, otherwise use original
-      // This ensures we open the HTML documentation URL, not the raw ontology URL
-      const urlToOpen = htmlUrl || url;
-      
-      const base = window.location.origin + window.location.pathname;
-      window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
-    });
+    updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, openExternalOntology);
   }
   const options = getNetworkOptions(layoutMode, { embedded: isEmbedded() });
 
@@ -7605,34 +7622,7 @@ function applyFilter(preserveView = false): void {
       );
       
       // Update context menu data after initialization (use graphDataForBuild so external nodes are included)
-      updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, async (url) => {
-        // Import the local file opener module
-        const { findMatchingLocalFile, openLocalFileInNewTab } = await import('./lib/localFileOpener');
-        
-        // For local development: try to find and open the local file directly if it exists
-        // This avoids CORS issues when the external ontology URL matches a local file
-        if (fileHandle && loadedFileName) {
-          const localFile = await findMatchingLocalFile(fileHandle, loadedFileName, url);
-          if (localFile) {
-            // Found matching local file! Store it in IndexedDB and open in new tab
-            const newTabUrl = await openLocalFileInNewTab(localFile);
-            window.open(newTabUrl, '_blank');
-            return;
-          }
-        }
-        
-        // Convert ontology URL to HTML documentation URL (replaces hyphens with underscores, adds .html)
-        const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
-        const htmlUrl = convertOntologyUrlToHtmlUrl(url);
-        
-        // Always use the converted HTML URL if conversion succeeded, otherwise use original
-        // This ensures we open the HTML documentation URL, not the raw ontology URL
-        const urlToOpen = htmlUrl || url;
-        
-        // Fallback: open via URL (works for production/published ontologies)
-        const base = window.location.origin + window.location.pathname;
-        window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
-      });
+      updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, openExternalOntology);
     }
     
     network.on('click', () => {

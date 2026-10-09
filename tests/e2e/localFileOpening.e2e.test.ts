@@ -4,10 +4,10 @@
  *
  * "Open external ontology" on a node from an imported ontology looks for the imported file next to the
  * open one; if found, it stores that file's content in IndexedDB under a one-time token and opens
- * `?localFile=<token>` in a new tab. Finding the sibling needs a FileSystemFileHandle with `getParent()`,
- * which a test cannot hand the browser, so that part is unit-tested in
- * tests/unit/localFileOpeningFromE2e.test.ts. This file covers the browser side: a `?localFile=` tab loads
- * the stored ontology without any network request (no CORS error) and consumes the token.
+ * `?localFile=<token>` in a new tab. Finding the file (in a folder the user picks once, #103) is covered by
+ * openExternalFromFolder.e2e.test.ts and unit-tested in tests/unit/localFileOpeningFromE2e.test.ts. This file
+ * covers the browser side: a `?localFile=` tab loads the stored ontology without any network request (no CORS
+ * error) and consumes the token.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
