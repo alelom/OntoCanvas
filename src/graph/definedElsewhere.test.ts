@@ -27,6 +27,22 @@ describe('isDefinedElsewhere', () => {
     expect(isDefinedElsewhere({ isDefinedBy: 'http://www.opengis.net/ont/geosparql#' }, null)).toBe(true);
   });
 
+  describe('an ontology whose IRI ends in a slash, such as FOAF (#114)', () => {
+    // getMainOntologyBase turns <http://xmlns.com/foaf/0.1/> into <http://xmlns.com/foaf/0.1/#>.
+    const foaf = 'http://xmlns.com/foaf/0.1/#';
+
+    it('treats its own terms as its own, by rdfs:isDefinedBy and by URI', () => {
+      expect(isDefinedElsewhere({ isDefinedBy: 'http://xmlns.com/foaf/0.1/' }, foaf)).toBe(false);
+      expect(isDefinedElsewhere({ uri: 'http://xmlns.com/foaf/0.1/Person' }, foaf)).toBe(false);
+      expect(isDefinedElsewhere({ uri: 'http://xmlns.com/foaf/0.1/Person', isDefinedBy: 'http://xmlns.com/foaf/0.1/' }, foaf)).toBe(false);
+    });
+
+    it('still sees a term of another ontology as defined elsewhere', () => {
+      expect(isDefinedElsewhere({ isDefinedBy: 'http://purl.org/dc/terms/' }, foaf)).toBe(true);
+      expect(isDefinedElsewhere({ uri: 'http://xmlns.com/wot/0.1/assurance' }, foaf)).toBe(true);
+    });
+  });
+
   describe('by URI namespace (no rdfs:isDefinedBy)', () => {
     it('is true when the class URI lives outside the main ontology', () => {
       expect(isDefinedElsewhere({ uri: 'http://www.opengis.net/ont/geosparql#Geometry' }, mainBase)).toBe(true);

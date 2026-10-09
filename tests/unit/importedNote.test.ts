@@ -86,6 +86,9 @@ describe('importedNoteFont', () => {
       expect(f.face).toMatch(/Consolas/);
       expect(f.face).toMatch(/monospace/);
     }
+    // vis-network lowers its mono font by 2px by default, which leaves the italic name looking raised.
+    expect(font.mono.vadjust).toBe(0);
+    expect(font.ital.vadjust).toBe(0);
   });
 });
 
@@ -145,6 +148,25 @@ describe('importedNoteForNode and importedNoteForRelationship', () => {
     expect(importedNoteForRelationship('geoProp', stub, refs, main)).toBe('(defined by: base)');
     expect(importedNoteForRelationship('hasPart', ops, refs, main)).toBeNull();
     expect(importedNoteForRelationship('subClassOf', ops, refs, main)).toBeNull();
+  });
+});
+
+describe('terms of an ontology whose IRI ends in a slash, such as FOAF, are its own (#114)', () => {
+  const foaf = 'http://xmlns.com/foaf/0.1/#'; // as getMainOntologyBase returns it
+  const none: never[] = [];
+
+  it('gives its own classes, relationships and data properties no note', () => {
+    expect(importedNoteForNode({ id: 'Person', label: 'Person', labellableRoot: null, uri: 'http://xmlns.com/foaf/0.1/Person', isDefinedBy: 'http://xmlns.com/foaf/0.1/' }, none, foaf)).toBeNull();
+    // Properties of a slash ontology are typed by full IRI (on purpose), which must not read as imported.
+    const knows = { name: 'http://xmlns.com/foaf/0.1/knows', uri: 'http://xmlns.com/foaf/0.1/knows', label: 'knows', hasCardinality: true, isDefinedBy: 'http://xmlns.com/foaf/0.1/' };
+    expect(importedNoteForRelationship('http://xmlns.com/foaf/0.1/knows', [knows], none, foaf)).toBeNull();
+    expect(importedNoteForRelationship('http://xmlns.com/foaf/0.1/knows', [], none, foaf)).toBeNull();
+    expect(importedNoteForDataProperty({ uri: 'http://xmlns.com/foaf/0.1/age', isDefinedBy: 'http://xmlns.com/foaf/0.1/' }, none, foaf)).toBeNull();
+  });
+
+  it('still notes the terms it takes from another ontology', () => {
+    expect(importedNoteForRelationship('http://purl.org/dc/terms/creator', [], none, foaf)).toBe('(defined by: terms)');
+    expect(importedNoteForNode({ id: 'http://purl.org/dc/terms/Agent', label: 'Agent', labellableRoot: null, isExternal: true, externalOntologyUrl: 'http://purl.org/dc/terms/' }, none, foaf)).toBe('(defined by: terms)');
   });
 });
 

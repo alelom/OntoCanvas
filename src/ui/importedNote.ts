@@ -70,14 +70,16 @@ export function labelWithImportedNote(label: string, note: string): string {
  * the note (`mono`, upright) and for the prefix or name in it (`ital`, italic). */
 export function importedNoteFont(labelFontSize: number, color: string): {
   multi: 'html';
-  ital: { size: number; color: string; face: string; mod: string };
-  mono: { size: number; color: string; face: string; mod: string };
+  ital: { size: number; color: string; face: string; mod: string; vadjust: number };
+  mono: { size: number; color: string; face: string; mod: string; vadjust: number };
 } {
   const size = importedNoteFontSize(labelFontSize);
   return {
     multi: 'html',
-    ital: { size, color, face: NOTE_FONT_FACE, mod: 'italic' },
-    mono: { size, color, face: NOTE_FONT_FACE, mod: '' },
+    // vadjust 0 for both: vis-network lowers its mono font by 2px by default, which would leave the italic name
+    // looking raised on a small line.
+    ital: { size, color, face: NOTE_FONT_FACE, mod: 'italic', vadjust: 0 },
+    mono: { size, color, face: NOTE_FONT_FACE, mod: '', vadjust: 0 },
   };
 }
 
@@ -85,6 +87,13 @@ export function importedNoteFont(labelFontSize: number, color: string): {
  * ones by their local name (see getObjectProperties). */
 export function isImportedRelationshipType(type: string): boolean {
   return /^https?:\/\//i.test(type);
+}
+
+const stripSeparators = (iri: string) => iri.replace(/[#/]+$/, '');
+
+/** Whether a term IRI is in the ontology's own namespace; `mainBase` as getMainOntologyBase returns it. */
+function inMainNamespace(uri: string, mainBase: string | null): boolean {
+  return !!mainBase && stripSeparators(namespaceOf(uri)) === stripSeparators(mainBase);
 }
 
 /** The note for a class node, or null when it is local. owl:Thing, added for display, is not an import. */
@@ -108,9 +117,11 @@ export function importedNoteForRelationship(
 ): string | null {
   const op = objectProperties.find((p) => p.name === type || p.uri === type);
   const uri = op?.uri ?? type;
-  const imported =
-    isImportedRelationshipType(type) ||
-    (!!op?.isDefinedBy && isUriFromExternalOntology(uri, op.isDefinedBy, externalOntologyReferences, mainBase));
+  // A full-IRI type isn't enough: properties of a slash ontology such as FOAF are typed by full IRI on purpose
+  // (#87), so the namespace is compared with the ontology's own (#114).
+  const imported = op?.isDefinedBy
+    ? isUriFromExternalOntology(uri, op.isDefinedBy, externalOntologyReferences, mainBase)
+    : isImportedRelationshipType(uri) && !inMainNamespace(uri, mainBase);
   if (!imported) return null;
   const ontologyUrl = op?.isDefinedBy ?? (isImportedRelationshipType(uri) ? namespaceOf(uri) : null);
   return importedNoteText(getPrefixForUri(uri, op?.isDefinedBy, externalOntologyReferences, mainBase), ontologyUrl);
