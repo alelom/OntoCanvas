@@ -1,3 +1,15 @@
+## [1.27.4](https://github.com/alelom/OntoCanvas/compare/v1.27.3...v1.27.4) (2026-10-09)
+
+
+### Bug Fixes
+
+* **#107 review:** deleting an isolated user-added external node is recorded ([d5ad48a](https://github.com/alelom/OntoCanvas/commit/d5ad48a38e2e3e8887905880402b20f74c5622e1)), closes [#107](https://github.com/alelom/OntoCanvas/issues/107)
+* **#107 review:** don't copy another ontology's import onto the first one ([15f5062](https://github.com/alelom/OntoCanvas/commit/15f5062ba60110d2a06d4897b7ab2b0de047b208)), closes [#107](https://github.com/alelom/OntoCanvas/issues/107)
+* **#108:** editing one subClassOf item keeps the rest of the list as written ([63f53e3](https://github.com/alelom/OntoCanvas/commit/63f53e3dfc0fa5f0a652b18d7b0a71c6926ba898)), closes [#108](https://github.com/alelom/OntoCanvas/issues/108)
+* **#75:** write data-property restrictions in the qualified form ([2d3324a](https://github.com/alelom/OntoCanvas/commit/2d3324a83b1df59a72978b683ba27200aa26bf15)), closes [#75](https://github.com/alelom/OntoCanvas/issues/75)
+* **#77:** undo after deleting a class restores exactly what the delete removed ([2b56d68](https://github.com/alelom/OntoCanvas/commit/2b56d68ba90d853ee99d7c4bc01bd91605455309)), closes [#77](https://github.com/alelom/OntoCanvas/issues/77)
+* **#90:** valid Turtle when saving without a source cache ([59d5172](https://github.com/alelom/OntoCanvas/commit/59d5172896da798c4b406aa8091a509dc37c6a4d)), closes [#90](https://github.com/alelom/OntoCanvas/issues/90)
+
 ## [1.27.3](https://github.com/alelom/OntoCanvas/compare/v1.27.2...v1.27.3) (2026-10-08)
 
 
