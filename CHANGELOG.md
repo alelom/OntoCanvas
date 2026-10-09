@@ -1,3 +1,10 @@
+## [1.29.1](https://github.com/alelom/OntoCanvas/compare/v1.29.0...v1.29.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **#116:** review of [#117](https://github.com/alelom/OntoCanvas/issues/117); isolation compares the whole origin, flake report counts failed files ([5dcbd70](https://github.com/alelom/OntoCanvas/commit/5dcbd70e0c28502ee7c12bed903177f56f5cc49b)), closes [#116](https://github.com/alelom/OntoCanvas/issues/116)
+
 # [1.29.0](https://github.com/alelom/OntoCanvas/compare/v1.28.0...v1.29.0) (2026-10-09)
 
 
