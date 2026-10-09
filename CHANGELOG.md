@@ -1,3 +1,27 @@
+# [1.29.0](https://github.com/alelom/OntoCanvas/compare/v1.28.0...v1.29.0) (2026-10-09)
+
+
+### Bug Fixes
+
+* **#104, #111:** review of [#112](https://github.com/alelom/OntoCanvas/issues/112); stream imports with a byte budget, bound the traversal, keep same-named properties, wrap long names ([8d0c190](https://github.com/alelom/OntoCanvas/commit/8d0c1902956685f9d38e8b28b044ab94324b8cd9)), closes [#104](https://github.com/alelom/OntoCanvas/issues/104) [#111](https://github.com/alelom/OntoCanvas/issues/111)
+* **#104:** review of [#112](https://github.com/alelom/OntoCanvas/issues/112); load slow ontologies reliably; no redraw that clears the selection ([0748b25](https://github.com/alelom/OntoCanvas/commit/0748b2541920d25fe6ec9d0da060166cdfb562d6)), closes [#104](https://github.com/alelom/OntoCanvas/issues/104)
+* **#104:** review of [#112](https://github.com/alelom/OntoCanvas/issues/112); the follow-up requests keep their timer through the body ([bd93713](https://github.com/alelom/OntoCanvas/commit/bd93713b5b5d16eedcc94a68733e1c1be46af903)), closes [#104](https://github.com/alelom/OntoCanvas/issues/104)
+* **#114, #111:** own terms of a slash ontology (FOAF) are not "imported"; align the italic part of the note ([ce26797](https://github.com/alelom/OntoCanvas/commit/ce26797e0097249e4a0656daefeaa890e6aebf03)), closes [#114](https://github.com/alelom/OntoCanvas/issues/114) [#111](https://github.com/alelom/OntoCanvas/issues/111)
+* **#115, #113:** an IRI ending in a slash is a namespace itself; the bar says "Ontology:" before the name ([b516f95](https://github.com/alelom/OntoCanvas/commit/b516f9501a183d12535f27758c4b4a06f6249bcb)), closes [#115](https://github.com/alelom/OntoCanvas/issues/115) [#113](https://github.com/alelom/OntoCanvas/issues/113)
+
+
+### Features
+
+* **#104, #111:** read the declarations of fetchable imports; drop the prefix from the label of imported terms ([ca7f6a5](https://github.com/alelom/OntoCanvas/commit/ca7f6a58130694e6c365e6305a60c3ba5bc6df67))
+* **#104:** read the declarations of fetchable imports (module and tests, not wired in yet) ([aa27b45](https://github.com/alelom/OntoCanvas/commit/aa27b4527ea11c9ccbd9299fe9c054422926e90e)), closes [#104](https://github.com/alelom/OntoCanvas/issues/104)
+* **#104:** the xml namespace is reserved too: never fetched as an import ([7f07e1c](https://github.com/alelom/OntoCanvas/commit/7f07e1c1844beac68be83c29f214733a35c0890e)), closes [#104](https://github.com/alelom/OntoCanvas/issues/104)
+* **#111:** Consolas note, every externally defined term, the prefix or ontology name in italics ([ab8398c](https://github.com/alelom/OntoCanvas/commit/ab8398c86c3ca2f733747116ef5eea49580c8a8f))
+* **#111:** small "(defined by: …)" / "(imported)" line above the label of imported classes and relationships ([4cb4a6f](https://github.com/alelom/OntoCanvas/commit/4cb4a6f8fc0b82364d1e648b4b4eedfdeedebf40)), closes [#111](https://github.com/alelom/OntoCanvas/issues/111)
+* **#111:** the note wraps like the label; built-in terms (owl, rdf, rdfs, xsd) get no note and no prefix ([746c198](https://github.com/alelom/OntoCanvas/commit/746c1984bc216da44309ced5816de042a65135e8)), closes [#111](https://github.com/alelom/OntoCanvas/issues/111)
+* **#113:** name and prefix of the open ontology in the bottom bar, count after the file ([ab5220a](https://github.com/alelom/OntoCanvas/commit/ab5220a0049b6b60df8f4350d6d7e0edcaaa5528))
+* **#113:** the ontology name links to the file or URL, prefix shown as (prefix: foaf); no count when embedded ([ad1426a](https://github.com/alelom/OntoCanvas/commit/ad1426a667b2728aa905a77a91474b71578235c9))
+* 15 s for the ontology the user opens, and say so when the server is too slow ([af2824c](https://github.com/alelom/OntoCanvas/commit/af2824cd4b426e38bdb15bc2dc6646cdc8fb6fd6))
+
 # [1.28.0](https://github.com/alelom/OntoCanvas/compare/v1.27.4...v1.28.0) (2026-10-09)
 
 
