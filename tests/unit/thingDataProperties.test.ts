@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { appliesToClass } from '../../src/lib/dataPropertyDisplay';
-import { withThingNode, OWL_THING_URI } from '../../src/graph/thingNode';
+import { withThingNode, OWL_THING_URI, splitThingBoxSelection } from '../../src/graph/thingNode';
 import type { GraphData } from '../../src/types';
 
 const GLOBAL = { domains: [], hasGlobalDomain: true };
@@ -52,5 +52,25 @@ describe('withThingNode (#80)', () => {
     g.nodes.push({ id: OWL_THING_URI, label: 'Thing (own)', labellableRoot: null, isExternal: true });
     const out = withThingNode(g, [GLOBAL], true);
     expect(out.nodes.filter((n) => n.id === OWL_THING_URI).map((n) => n.label)).toEqual(['Thing (own)']);
+  });
+});
+
+describe('splitThingBoxSelection (#80)', () => {
+  const box = (name: string) => `__dataprop__${OWL_THING_URI}__${name}`;
+
+  it('returns the property of every box under owl:Thing, not only the first', () => {
+    expect(splitThingBoxSelection([box('name'), box('homepage')])).toEqual({ names: ['name', 'homepage'], others: [] });
+  });
+
+  it('keeps everything else selected apart, so the caller can refuse a mixed selection', () => {
+    expect(splitThingBoxSelection([box('name'), 'http://example.org/x#Person', '__dataprop__http://example.org/x#Person__age'])).toEqual({
+      names: ['name'],
+      others: ['http://example.org/x#Person', '__dataprop__http://example.org/x#Person__age'],
+    });
+  });
+
+  it('finds no Thing box in a selection without one', () => {
+    expect(splitThingBoxSelection(['http://example.org/x#Person'])).toEqual({ names: [], others: ['http://example.org/x#Person'] });
+    expect(splitThingBoxSelection([OWL_THING_URI])).toEqual({ names: [], others: [OWL_THING_URI] });
   });
 });

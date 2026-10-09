@@ -58,10 +58,17 @@ async function openEditor(files: Record<string, string> | 'cancel'): Promise<voi
   await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await page.waitForFunction(() => (window as any).__EDITOR_TEST__ !== undefined, undefined, { timeout: 5000 });
   await loadTestFile(page, join(FIXTURES, 'properties-child.ttl'));
-  // Record what "Open external ontology" opens instead of opening a tab.
+  // Record where "Open external ontology" sends its tab instead of opening one. Like a real browser, a tab
+  // opened as about:blank is sent on later by setting its location; __blankOpens records how many folder
+  // pickers had run when each blank tab was opened (the tab must open on the click, before the picker).
   await page.evaluate(() => {
     (window as any).__openedUrls = [];
+    (window as any).__blankOpens = [];
     window.open = ((url?: string | URL) => {
+      if (String(url) === 'about:blank') {
+        (window as any).__blankOpens.push((window as any).__pickerCalls);
+        return { location: { set href(u: string) { (window as any).__openedUrls.push(u); } } };
+      }
       (window as any).__openedUrls.push(String(url));
       return null;
     }) as typeof window.open;
@@ -90,6 +97,12 @@ describe('Open external ontology from the local folder (#103)', () => {
 
     await openExternal();
     expect(await page.evaluate(() => (window as any).__pickerCalls)).toBe(1);
+  }, 10000);
+
+  it('opens the tab on the click, before the folder picker runs (a tab opened after it can be blocked)', async () => {
+    await openEditor({ 'properties-child.ttl': readFileSync(join(FIXTURES, 'properties-child.ttl'), 'utf-8') });
+    await openExternal(); // the folder holds no file for the imported ontology: opened by URL
+    expect(await page.evaluate(() => (window as any).__blankOpens)).toEqual([0]);
   }, 10000);
 
   it('opens the ontology by URL when the user cancels the folder picker', async () => {

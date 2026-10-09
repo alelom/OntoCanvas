@@ -71,17 +71,6 @@ beforeEach(async () => {
   page = await context.newPage();
   page.setDefaultTimeout(5000);
 
-  // Record window.open URLs BEFORE navigation
-  await page.addInitScript(() => {
-    const originalOpen = window.open;
-    (window as any).__testOpenUrl = null;
-    window.open = function (url?: string | URL | null, target?: string | undefined, features?: string | undefined) {
-      if (url && typeof url === 'string') {
-        (window as any).__testOpenUrl = url;
-      }
-      return originalOpen.call(this, url, target, features);
-    };
-  });
 });
 
 afterEach(async () => {
@@ -109,8 +98,9 @@ describe('External Ontology URL Conversion E2E', () => {
 
     const [newTab] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), openExternalBtn.click()]);
 
-    const openedUrl: string = await page.evaluate(() => (window as any).__testOpenUrl);
-    expect(openedUrl).toBe(newTab.url());
+    // The tab opens blank and is sent to the ontology straight after.
+    await newTab.waitForURL((u) => u.searchParams.has('onto'), { timeout: 5000 });
+    const openedUrl = newTab.url();
 
     // The opened URL should be in the format: base?onto=encodedUrl
     expect(openedUrl).toContain('?onto=');

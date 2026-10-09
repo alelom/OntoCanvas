@@ -68,6 +68,35 @@ describe('findMatchingLocalFile', () => {
     }
   });
 
+  it('does not read files that merely end in an RDF extension without its dot', async () => {
+    // "extended-termsttl" and "notesjson" end in "ttl"/"json" but have no extension; they are not RDF files.
+    const dir = fakeDirectory({
+      'extended-termsttl': fixture('object-props-child.ttl'),
+      'notesjson': fixture('object-props-child.ttl'),
+    });
+
+    const match = await findMatchingLocalFile(dir, 'object-props-child-child.ttl', 'http://example.org/object-extended');
+
+    expect(match).toBeNull();
+  });
+
+  it('does not strip a character before the extension when deriving likely names', async () => {
+    // The open file "object-propsXttl" has no extension, so its whole name is the base. With the unescaped dot
+    // the base became "object-props" and "object-props.ttl" was guessed; the folder scan must be what finds it.
+    const dir = fakeDirectory({ 'object-props.ttl': fixture('object-props-child.ttl') });
+    const asked: string[] = [];
+    const original = dir.getFileHandle.bind(dir);
+    dir.getFileHandle = (async (name: string, o?: FileSystemGetFileOptions) => {
+      asked.push(name);
+      return original(name, o);
+    }) as typeof dir.getFileHandle;
+
+    const match = await findMatchingLocalFile(dir, 'object-propsXttl', 'http://example.org/object-extended');
+
+    expect(match?.fileName).toBe('object-props.ttl');
+    expect(asked).not.toContain('object-props.ttl');
+  });
+
   it('does not return a file whose ontology IRI is a different ontology', async () => {
     // object-props-parent.ttl defines <http://example.org/object-base>, not object-extended.
     const dir = fakeDirectory({ 'object-props-child.ttl': fixture('object-props-parent.ttl') });

@@ -15,7 +15,7 @@ export interface LocalFileMatch {
 }
 
 const RDF_EXTENSIONS = ['.ttl', '.turtle', '.owl', '.rdf', '.rdfxml', '.jsonld', '.json'];
-const RDF_EXTENSION_RE = /.(ttl|turtle|owl|rdf|rdfxml|jsonld|json)$/i;
+const RDF_EXTENSION_RE = /\.(ttl|turtle|owl|rdf|rdfxml|jsonld|json)$/i;
 
 /** An IRI without a trailing # or /, for comparing ontology IRIs. */
 const bareIri = (iri: string) => iri.replace(/[#/]$/, '');

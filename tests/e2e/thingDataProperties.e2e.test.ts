@@ -54,6 +54,17 @@ const boxes = (): Promise<string[]> =>
   );
 const shownNodeIds = (): Promise<string[]> => page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.nodeIndices);
 
+/** Double-click the box of a node on the canvas, with the mouse, as a user would. */
+async function dblclickNode(id: string): Promise<void> {
+  const at = await page.evaluate((id) => {
+    const net = (window as any).__EDITOR_TEST__.getNetwork();
+    const dom = net.canvasToDOM(net.getPositions([id])[id]);
+    const r = document.getElementById('network')!.getBoundingClientRect();
+    return { x: r.left + dom.x, y: r.top + dom.y };
+  }, id);
+  await page.mouse.dblclick(at.x, at.y);
+}
+
 describe('owl:Thing data properties (#80)', () => {
   it('are drawn once under owl:Thing by default, and under every class with the toggle off', async () => {
     expect(await page.locator('#clusterThingDataProps').isChecked()).toBe(true);
@@ -87,6 +98,45 @@ describe('owl:Thing data properties (#80)', () => {
     expect(dialogs).toEqual(['Delete data property "name"?']);
     expect(await page.evaluate((s) => (window as any).__EDITOR_TEST__.getQuads(s, null), NAME)).toEqual([]);
     expect(await boxes()).toEqual(['Person/age', 'owl:Thing/homepage', 'unattached/nick']);
+  }, 10000);
+
+  it('deleting several boxes under owl:Thing deletes every one of those properties', async () => {
+    page.on('dialog', (d) => { void d.accept(); });
+    await page.evaluate((ids) => (window as any).__EDITOR_TEST__.getNetwork().selectNodes(ids), [
+      `__dataprop__${THING}__name`, `__dataprop__${THING}__homepage`,
+    ]);
+    await page.evaluate(() => (window as any).__EDITOR_TEST__.performDelete());
+    await waitForAppReady(page);
+    expect(await page.evaluate((s) => (window as any).__EDITOR_TEST__.getQuads(s, null), NAME)).toEqual([]);
+    expect(await boxes()).toEqual(['Person/age', 'unattached/nick']);
+  }, 10000);
+
+  it('refuses to delete a box under owl:Thing together with other selected items, and deletes nothing', async () => {
+    const dialogs: string[] = [];
+    page.on('dialog', (d) => { dialogs.push(d.message()); void d.accept(); });
+    const before = await page.evaluate(() => (window as any).__EDITOR_TEST__.getQuads(null, null).length);
+    await page.evaluate((ids) => (window as any).__EDITOR_TEST__.getNetwork().selectNodes(ids), [
+      `__dataprop__${THING}__name`, 'Document',
+    ]);
+    await page.evaluate(() => (window as any).__EDITOR_TEST__.performDelete());
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]).toMatch(/on their own/);
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getQuads(null, null).length)).toBe(before);
+    expect(await boxes()).toEqual(['Person/age', 'owl:Thing/homepage', 'owl:Thing/name', 'unattached/nick']);
+  }, 10000);
+
+  it('double-clicking a box under owl:Thing edits the property and keeps its domain owl:Thing', async () => {
+    await dblclickNode(`__dataprop__${THING}__name`);
+    await page.locator('#editDataPropertyModal').waitFor({ state: 'visible' });
+    await page.locator('#editDataPropComment').fill('What something is called.');
+    await page.locator('#editDataPropConfirm').click();
+    await waitForAppReady(page);
+
+    const quads = await page.evaluate((s) => (window as any).__EDITOR_TEST__.getQuads(s, null), NAME);
+    expect(quads.filter((q: any) => q.predicate.endsWith('#domain')).map((q: any) => q.object)).toEqual([THING]);
+    expect(quads.find((q: any) => q.predicate.endsWith('#comment'))?.object).toBe('What something is called.');
+    // Still one box, still under owl:Thing, not copied to the classes.
+    expect(await boxes()).toEqual(['Person/age', 'owl:Thing/homepage', 'owl:Thing/name', 'unattached/nick']);
   }, 10000);
 
   it("owl:Thing itself can't be deleted", async () => {

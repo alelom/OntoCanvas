@@ -77,7 +77,7 @@ import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { edgeLock, type EdgeLock } from './lib/edgeEditability';
 import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
-import { withThingNode, OWL_THING_URI } from './graph/thingNode';
+import { withThingNode, OWL_THING_URI, splitThingBoxSelection, thingBoxId } from './graph/thingNode';
 import { getOrRequestOntologyDirectory, forgetOntologyDirectory } from './lib/ontologyDirectory';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
 
@@ -165,7 +165,8 @@ import { openOnStartup } from './ui/startupOpen';
 import { debounced } from './utils/debounced';
 import { beginViewSettle, viewSettled } from './ui/viewSettle';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust, convertOntologyUrlToHtmlUrl } from './utils/urlParams';
+import { openExternalOntologyTab } from './lib/openExternalOntology';
 import {
   extractUsedNamespaceRefsFromStore,
   formatNodeLabelWithPrefix,
@@ -745,11 +746,21 @@ function performDeleteSelection(): boolean {
     return false;
   }
   // A data property drawn once under owl:Thing (#80) stands for the property itself: deleting its box deletes
-  // the property, after a confirmation.
-  const thingBoxPrefix = `__dataprop__${OWL_THING_URI}__`;
-  const thingBox = selectedNodeIds.find((id) => id.startsWith(thingBoxPrefix));
-  if (thingBox) {
-    deleteDataPropertyWithConfirm(thingBox.slice(thingBoxPrefix.length));
+  // the property, after a confirmation. Every selected box is deleted that way; mixed with anything else the
+  // selection is refused rather than partly ignored.
+  const { names: thingProperties, others: otherSelectedNodeIds } = splitThingBoxSelection(selectedNodeIds);
+  if (thingProperties.length > 0) {
+    // Selecting a box also selects its own edge to owl:Thing; that one is part of the box.
+    const thingBoxIds = new Set(thingProperties.map(thingBoxId));
+    const otherSelectedEdgeIds = selectedEdgeIds.filter((id) => {
+      const edge = parseEdgeId(id);
+      return !edge || !(thingBoxIds.has(edge.from) || thingBoxIds.has(edge.to));
+    });
+    if (otherSelectedNodeIds.length > 0 || otherSelectedEdgeIds.length > 0) {
+      alert('Select the data property boxes under owl:Thing on their own to delete them: they delete the property itself, not just a box.');
+      return true;
+    }
+    for (const name of thingProperties) deleteDataPropertyWithConfirm(name);
     return true;
   }
 
@@ -6639,27 +6650,24 @@ function renderApp(): void {
 /**
  * "Open external ontology": open the imported ontology in a new tab. When the open ontology came from a
  * local file, its file is looked for in the same folder first (the folder is asked for once, #103), which
- * avoids CORS; otherwise, or when it isn't there, the ontology is opened by URL.
+ * avoids CORS; otherwise, or when it isn't there, the ontology is opened by URL. The tab opens on the click
+ * itself (see openExternalOntologyTab), so the wait for the folder can't get it blocked as a popup.
  */
-async function openExternalOntology(url: string): Promise<void> {
-  const openedFromDisk = !!loadedFileName && !/^https?:\/\//i.test(loadedFilePath ?? '');
-  if (openedFromDisk) {
-    // Ask for the folder before any other await, while the click still counts as a user gesture.
-    const directory = await getOrRequestOntologyDirectory(fileHandle);
-    if (directory) {
+function openExternalOntology(url: string): Promise<void> {
+  const fileName = loadedFileName;
+  return openExternalOntologyTab({
+    fromDisk: !!fileName && !/^https?:\/\//i.test(loadedFilePath ?? ''),
+    open: (target) => window.open(target, '_blank'),
+    findLocalUrl: async () => {
+      const directory = await getOrRequestOntologyDirectory(fileHandle);
+      if (!directory) return null;
       const { findMatchingLocalFile, openLocalFileInNewTab } = await import('./lib/localFileOpener');
-      const localFile = await findMatchingLocalFile(directory, loadedFileName!, url);
-      if (localFile) {
-        window.open(await openLocalFileInNewTab(localFile), '_blank');
-        return;
-      }
-    }
-  }
-  // Open the HTML documentation URL when the ontology URL converts to one (hyphens to underscores, .html).
-  const { convertOntologyUrlToHtmlUrl } = await import('./utils/urlParams');
-  const urlToOpen = convertOntologyUrlToHtmlUrl(url) || url;
-  const base = window.location.origin + window.location.pathname;
-  window.open(`${base}?onto=${encodeURIComponent(urlToOpen)}`, '_blank');
+      const localFile = await findMatchingLocalFile(directory, fileName!, url);
+      return localFile ? openLocalFileInNewTab(localFile) : null;
+    },
+    // Open the HTML documentation URL when the ontology URL converts to one (hyphens to underscores, .html).
+    byUrl: () => `${window.location.origin + window.location.pathname}?onto=${encodeURIComponent(convertOntologyUrlToHtmlUrl(url) || url)}`,
+  });
 }
 
 async function loadTtlAndRender(
