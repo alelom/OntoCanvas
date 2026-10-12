@@ -1,3 +1,12 @@
+## [1.29.2](https://github.com/alelom/OntoCanvas/compare/v1.29.1...v1.29.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **#126:** type-check src/ in CI, and fix the two errors it reports ([1406dcb](https://github.com/alelom/OntoCanvas/commit/1406dcba871fae0453124d430a685db47594e780))
+* **#65:** address review of [#127](https://github.com/alelom/OntoCanvas/issues/127) ([95518b7](https://github.com/alelom/OntoCanvas/commit/95518b7a6f58119f4c9f20e93be0a9a3b829d94f)), closes [#65](https://github.com/alelom/OntoCanvas/issues/65)
+* **#65:** keep class expressions and unusual Turtle layouts minimal-diff on save ([ede3781](https://github.com/alelom/OntoCanvas/commit/ede37815e2f499e6ba9ccd8e3daf87a1889cb1c2)), closes [#65](https://github.com/alelom/OntoCanvas/issues/65) [#64](https://github.com/alelom/OntoCanvas/issues/64) [#65](https://github.com/alelom/OntoCanvas/issues/65) [#118](https://github.com/alelom/OntoCanvas/issues/118) [#119](https://github.com/alelom/OntoCanvas/issues/119) [#120](https://github.com/alelom/OntoCanvas/issues/120) [#121](https://github.com/alelom/OntoCanvas/issues/121) [#122](https://github.com/alelom/OntoCanvas/issues/122) [#123](https://github.com/alelom/OntoCanvas/issues/123) [#124](https://github.com/alelom/OntoCanvas/issues/124)
+
 ## [1.29.1](https://github.com/alelom/OntoCanvas/compare/v1.29.0...v1.29.1) (2026-10-09)
 
 
