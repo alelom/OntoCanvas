@@ -1,0 +1,25 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://example.org/examples/baserelative#> .
+
+# Terms written as IRIs relative to @base, `<#Wall>` (issue #122). Saving used to miss that `<#Wall>`
+# is the Wall class, so every term was appended again at the end of the file, sometimes in the middle
+# of another line. The graph shows Wall and Door, with a "hasDoor" relationship from Wall to Door.
+#
+# Try it: Save without editing: the file is unchanged. Then rename "Door" to "Opening" and Save: only
+# the line `rdfs:label "Door" .` changes.
+
+<http://example.org/examples/baserelative> rdf:type owl:Ontology ;
+    rdfs:label "Relative IRIs under @base" .
+
+<#Wall> rdf:type owl:Class ;
+    rdfs:label "Wall" .
+
+<#Door> rdf:type owl:Class ;
+    rdfs:label "Door" .
+
+<#hasDoor> rdf:type owl:ObjectProperty ;
+    rdfs:label "hasDoor" ;
+    rdfs:domain <#Wall> ;
+    rdfs:range <#Door> .

@@ -14,6 +14,14 @@ describe('hasUndefinedBlankNodeRefs', () => {
     const ttl = `:hasOrientation rdfs:domain [ a owl:Class ; owl:unionOf ( :A :B ) ] .`;
     expect(hasUndefinedBlankNodeRefs(ttl)).toBe(false);
   });
+  it('is false when the blank node is defined by a statement that starts mid-line', () => {
+    expect(hasUndefinedBlankNodeRefs(`:A a owl:Class . _:b2 a owl:Class .\n:C :p _:b2 .`)).toBe(false);
+  });
+  it('is false for a label the source already left undefined, true for a new one (#124)', () => {
+    const source = `:A rdfs:subClassOf _:df_0_0 .`;
+    expect(hasUndefinedBlankNodeRefs(`:A rdfs:subClassOf _:df_0_0 .`, source)).toBe(false);
+    expect(hasUndefinedBlankNodeRefs(`:A rdfs:subClassOf _:df_0_0, _:df_0_1 .`, source)).toBe(true);
+  });
 });
 
 describe('postProcessTurtle blank node inlining', () => {
@@ -35,5 +43,18 @@ _:n3-0 rdf:type owl:Restriction;
     expect(output).not.toMatch(/_\s*:\s*n3-\d/);
     expect(output).toMatch(/\[\s*rdf:type\s+owl:Restriction/);
     expect(output).toMatch(/rdfs:subClassOf\s+\[/);
+  });
+});
+
+describe('buildInlineForms RDF lists', () => {
+  it('writes a class expression list as a collection, as Turtle sources do (#65)', async () => {
+    const { Parser } = await import('n3');
+    const { buildInlineForms } = await import('./turtlePostProcess');
+    const quads = new Parser().parse(
+      '@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n' +
+      '<http://example.org/aec-drawing-ontology#p> rdfs:domain [ owl:unionOf ( <http://example.org/aec-drawing-ontology#A> [ owl:complementOf <http://example.org/aec-drawing-ontology#B> ] ) ] .'
+    );
+    const domain = quads.find((q) => q.predicate.value.endsWith('domain'))!.object as { id: string };
+    expect(buildInlineForms(quads).get(domain.id)).toBe('[ owl:unionOf ( :A [ owl:complementOf :B ] ) ]');
   });
 });

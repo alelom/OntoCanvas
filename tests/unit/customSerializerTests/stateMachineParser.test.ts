@@ -204,6 +204,52 @@ describe('State Machine Parser - Bracket Handling', () => {
     expect(subClassOfLine?.lineNumbers.length).toBeGreaterThan(1);
     expect(subClassOfLine?.originalLineText).toContain('[ rdf:type owl:Restriction');
   });
+
+  // #65: a collection written straight as a value, with no [ ] around it. It may span lines and
+  // hold a literal with a '.' or ';' in it, neither of which ends the property.
+  it('should read a collection value ( ... ) as one value, with its list quads', async () => {
+    const content = `@prefix : <http://example.org/test#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+:Size owl:oneOf ( :A0
+        "A1; folded." ) ;
+    rdfs:label "Size" .`;
+
+    const { cache } = await parseTurtleWithPositions(content);
+    const block = cache.statementBlocks.find(b => b.subject === ':Size');
+    expect(block).toBeDefined();
+    if (!block) return;
+
+    const propertyLines = extractPropertyLines(block, cache);
+    const oneOfLine = propertyLines.find(pl => pl.predicate === 'owl:oneOf');
+
+    expect(propertyLines.map(pl => pl.predicate)).toEqual(['owl:oneOf', 'rdfs:label']);
+    expect(oneOfLine?.originalLineText).toContain('( :A0\n        "A1; folded." )');
+    // owl:oneOf plus rdf:first / rdf:rest for each of the two list nodes
+    expect(oneOfLine?.quads).toHaveLength(5);
+  });
+
+  // #120, #121: an object list whose items are full IRIs, literals or brackets, across lines.
+  it('should read an object list continued on the next line as one value, whatever its items', async () => {
+    const content = `@prefix : <http://example.org/test#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+:Report rdfs:subClassOf :Document ,
+        <http://example.org/other#Template> ,
+        [ owl:onProperty :author ; owl:someValuesFrom :Person ] ;
+    owl:imports <http://example.org/a.ttl>, <http://example.org/b.ttl> ;
+    rdfs:comment "One; two.", "Three"@en ;
+    rdfs:label "Report" .`;
+
+    const { cache } = await parseTurtleWithPositions(content);
+    const block = cache.statementBlocks.find(b => b.subject === ':Report')!;
+    const propertyLines = extractPropertyLines(block, cache);
+
+    expect(propertyLines.map(pl => pl.predicate)).toEqual(['rdfs:subClassOf', 'owl:imports', 'rdfs:comment', 'rdfs:label']);
+    expect(propertyLines.map(pl => pl.quads.filter(q => q.subject.termType === 'NamedNode').length)).toEqual([3, 2, 2, 1]);
+    // Only the list that spans lines is multi-line: the newline after a `;` is between properties.
+    expect(propertyLines.map(pl => pl.isMultiLine)).toEqual([true, false, false, false]);
+  });
 });
 
 describe('State Machine Parser - URI Handling', () => {

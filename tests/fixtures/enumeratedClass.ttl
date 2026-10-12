@@ -1,0 +1,28 @@
+@prefix : <http://example.org/enum#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# A class enumerated with a bare collection (no [ ] around it), as in the ADIRO drawing-metadata
+# module (#65).
+
+<http://example.org/enum> rdf:type owl:Ontology .
+
+:Sheet rdf:type owl:Class ;
+    rdfs:label "Sheet" .
+
+###  Orientation enumeration
+
+:OrientationValue rdf:type owl:Class ;
+    rdfs:label "Orientation" ;
+    rdfs:comment "Enumerated orientation values." ;
+    owl:oneOf ( :Undefined :Horizontal :Vertical ) .
+
+:Undefined rdf:type owl:NamedIndividual , :OrientationValue ; rdfs:label "Undefined" .
+:Horizontal rdf:type owl:NamedIndividual , :OrientationValue ; rdfs:label "Horizontal" .
+:Vertical rdf:type owl:NamedIndividual , :OrientationValue ; rdfs:label "Vertical" .
+
+:hasOrientation rdf:type owl:ObjectProperty ;
+    rdfs:label "hasOrientation" ;
+    rdfs:domain :Sheet ;
+    rdfs:range :OrientationValue .

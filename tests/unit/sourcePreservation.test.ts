@@ -98,6 +98,69 @@ describe('sourcePreservation', () => {
       const blocksWithQuads = cache.statementBlocks.filter(b => b.quads.length > 0);
       expect(blocksWithQuads.length).toBeGreaterThan(0);
     });
+
+    // #118: a subject described in two statements, the second closing its bracket at column 0.
+    it('gives each statement of a split subject only its own triples', async () => {
+      const content = `@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:A a owl:Class ;
+    rdfs:label "A" .
+
+:A rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :p ;
+    owl:someValuesFrom :B
+] .
+`;
+      const { cache } = await parseTurtleWithPositions(content);
+      const [first, second] = cache.statementBlocks.filter(b => b.subject === ':A');
+      const predicates = (b: StatementBlock): string[] =>
+        b.quads.filter(q => q.subject.termType === 'NamedNode').map(q => q.predicate.value.split('#').pop()!);
+
+      expect(cache.statementBlocks.filter(b => b.type !== 'Header')).toHaveLength(2);
+      expect(second.originalText.trimEnd().endsWith('] .')).toBe(true);
+      expect(predicates(first).sort()).toEqual(['label', 'type']);
+      expect(predicates(second)).toEqual(['subClassOf']);
+      expect(second.quads).toHaveLength(4);
+    });
+
+    // #124: a statement that starts on the line where the previous one ends.
+    it('starts a block where a statement starts mid-line, after the previous one\'s period', async () => {
+      const content = `@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+:A a owl:Class ;
+    :p _:b0.:B a owl:Class ;
+    :q :A .
+`;
+      const { cache } = await parseTurtleWithPositions(content);
+      const [a, b] = cache.statementBlocks.filter(block => block.type !== 'Header');
+
+      expect([a.subject, b.subject]).toEqual([':A', ':B']);
+      expect(a.originalText).toBe(':A a owl:Class ;\n    :p _:b0.');
+      expect(b.originalText).toBe(':B a owl:Class ;\n    :q :A .\n');
+      expect(a.position.end + cache.formattingStyle.lineEnding.length).toBe(b.position.start);
+      expect(b.quads.filter(q => q.subject.termType === 'NamedNode')).toHaveLength(2);
+    });
+
+    it('starts a block after the `] .` that closes a bracket opened on an earlier line', async () => {
+      const content = `@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+:A a owl:Class ;
+    :p [
+      :q :r
+] . :B a owl:Class .
+`;
+      const { cache } = await parseTurtleWithPositions(content);
+      const [a, b] = cache.statementBlocks.filter(block => block.type !== 'Header');
+
+      expect([a.subject, b?.subject]).toEqual([':A', ':B']);
+      expect(a.originalText).toBe(':A a owl:Class ;\n    :p [\n      :q :r\n] .');
+      expect(b.originalText).toBe(':B a owl:Class .\n');
+    });
   });
 
   describe('reconstructFromOriginalText', () => {

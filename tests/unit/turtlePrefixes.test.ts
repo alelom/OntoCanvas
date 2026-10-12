@@ -6,7 +6,7 @@
  * the document did not contain — and was appended again on save.
  */
 import { describe, it, expect } from 'vitest';
-import { parseTurtlePrefixes, resolveTurtlePrefixedName } from '../../src/rdf/turtlePrefixes';
+import { parseTurtleBase, parseTurtlePrefixes, resolveTurtlePrefixedName } from '../../src/rdf/turtlePrefixes';
 
 const HEADER = `@prefix : <https://w3id.org/adiro/aec_provenance#> .
 @base <https://w3id.org/adiro/> .
@@ -80,5 +80,30 @@ describe('resolveTurtlePrefixedName', () => {
   it('returns null rather than guessing at an unknown prefix', () => {
     expect(resolveTurtlePrefixedName('nope:Thing', prefixes)).toBeNull();
     expect(resolveTurtlePrefixedName('NotPrefixed', prefixes)).toBeNull();
+  });
+});
+
+// #122: terms written as relative IRIs under @base looked absent from the document, and were appended again.
+describe('relative IRIs under @base', () => {
+  it('resolves <#Term> against the base in force', () => {
+    const base = parseTurtleBase('@base <http://example.org/test#> .');
+    expect(resolveTurtlePrefixedName('<#TestClass>', new Map(), base)).toBe('http://example.org/test#TestClass');
+    expect(resolveTurtlePrefixedName('<#TestClass>', new Map(), parseTurtleBase('BASE <http://example.org/>'))).toBe('http://example.org/#TestClass');
+  });
+
+  it('lets a later @base win, resolving a relative one against the one before', () => {
+    expect(parseTurtleBase('@base <http://example.org/a/> .\n@base <b/> .')).toBe('http://example.org/a/b/');
+  });
+
+  it('ignores declarations in comments, but not a `#` inside an IRI', () => {
+    expect(parseTurtleBase('@base <http://example.org/o#> . # was @base <http://old.example.org/>')).toBe('http://example.org/o#');
+    expect(parseTurtleBase('# @base <http://old.example.org/> .\n@base <http://example.org/> .\n# BASE <http://old.example.org/>')).toBe('http://example.org/');
+    expect(parseTurtlePrefixes('@prefix : <http://example.org/o#> . # @prefix : <http://old.example.org/#> .').get('')).toBe('http://example.org/o#');
+  });
+
+  it('leaves absolute IRIs alone, and relative ones when there is no base', () => {
+    const base = parseTurtleBase('@base <http://example.org/> .');
+    expect(resolveTurtlePrefixedName('<urn:x:Thing>', new Map(), base)).toBe('urn:x:Thing');
+    expect(resolveTurtlePrefixedName('<#Thing>', new Map())).toBe('#Thing');
   });
 });

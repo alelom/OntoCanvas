@@ -89,6 +89,13 @@ export function parsePropertyLinesWithStateMachine(
     currentLineNumbers = [];
   };
   
+  /** The index of the comma after `from` when another object follows (blank lines between allowed), else -1. */
+  const commaAfter = (from: number): number => {
+    let j = from;
+    while (j < blockText.length && /\s/.test(blockText[j])) j++;
+    return blockText[j] === ',' ? j : -1;
+  };
+
   const finalizeMatch = () => {
     if (currentMatch && predicateStart >= 0 && valueStart >= 0 && valueEnd >= 0) {
       const predicate = blockText.slice(predicateStart, predicateEnd).trim();
@@ -119,7 +126,8 @@ export function parsePropertyLinesWithStateMachine(
       lineIndex++;
       // Track line numbers for current match (if we're in the middle of parsing a property)
       // After incrementing lineIndex, we're now on the new line, so use blockStartLine + lineIndex
-      if (state !== ParserState.START && state !== ParserState.END) {
+      // Not after the separator that ends a value either: the newline after `;` is between properties.
+      if (state !== ParserState.START && state !== ParserState.END && state !== ParserState.SEPARATOR) {
         const newLine = blockStartLine + lineIndex;
         if (currentLineNumbers.length === 0) {
           // Add the previous line (before newline) and the new line
@@ -253,13 +261,13 @@ export function parsePropertyLinesWithStateMachine(
           state = ParserState.URI;
           inUri = true;
           // Don't reset valueStart if already set
-        } else if (char === '[') {
+        } else if (char === '[' || char === '(') {
+          // A blank node [ ... ], or a collection ( ... ) such as `owl:oneOf ( :A :B )` (#65)
           state = ParserState.BRACKET;
           bracketDepth = 1;
           // Don't reset valueStart if already set - we're continuing the same value
         } else if (char.match(/[:\w]/)) {
           // Prefixed name or literal - start reading value
-          valueStart = i;
           state = ParserState.VALUE_READING;
           // Don't use a while loop here - let the state machine handle transitions naturally
           // The VALUE_READING state will handle semicolons, periods, commas, and brackets
@@ -290,9 +298,9 @@ export function parsePropertyLinesWithStateMachine(
               state = ParserState.DATATYPE;
               i = j + 1; // Skip ^^
             } else if (blockText[j] === ',') {
-              // Comma continues the value (comma-separated list)
-              state = ParserState.VALUE_READING;
-              i = j; // Continue from comma
+              // Comma continues the value (comma-separated list): read the next object
+              state = ParserState.VALUE_START;
+              i = j; // Continue after the comma
             } else {
               // Value complete
               state = ParserState.SEPARATOR;
@@ -314,21 +322,9 @@ export function parsePropertyLinesWithStateMachine(
             state = ParserState.END;
           }
         } else if (char === ',') {
-          // Comma continues the value (comma-separated list), keep reading
-          // Don't update valueEnd, continue reading
-          // Check if next non-whitespace character is a bracket
-          let j = i + 1;
-          while (j < blockText.length && (blockText[j] === ' ' || blockText[j] === '\t' || blockText[j] === '\r' || blockText[j] === '\n')) {
-            j++;
-          }
-          if (j < blockText.length && blockText[j] === '[') {
-            // Bracket follows - transition to BRACKET state
-            state = ParserState.BRACKET;
-            bracketDepth = 1;
-            // Don't reset valueStart - we're continuing the same value
-            i = j; // Skip to bracket (will be incremented by loop)
-          }
-          // Otherwise, continue in VALUE_READING to read next prefixed name/literal
+          // Comma continues the value (comma-separated list): the next object, of any kind (a name,
+          // `<IRI>`, literal, `[ … ]`), may be on the next line (#120)
+          state = ParserState.VALUE_START;
         } else if (char === '[') {
           // Bracket encountered - transition to BRACKET state
           state = ParserState.BRACKET;
@@ -371,8 +367,8 @@ export function parsePropertyLinesWithStateMachine(
             state = ParserState.END;
           }
         } else if (char === ',') {
-          // Comma continues the value, switch back to VALUE_READING
-          state = ParserState.VALUE_READING;
+          // Comma continues the value: read the next object
+          state = ParserState.VALUE_START;
         }
         break;
         
@@ -386,16 +382,17 @@ export function parsePropertyLinesWithStateMachine(
             state = ParserState.END;
           }
         } else if (char === ',') {
-          // Comma continues the value, switch back to VALUE_READING
-          state = ParserState.VALUE_READING;
+          // Comma continues the value: read the next object
+          state = ParserState.VALUE_START;
         }
         break;
         
       case ParserState.BRACKET:
-        // Inside brackets, ignore semicolons and other separators - they're part of the blank node structure
-        if (char === '[' && !inString && !inUri) {
+        // Inside brackets, ignore semicolons and other separators - they're part of the blank node structure.
+        // [ ] and ( ) nest properly in Turtle, so one depth counts both.
+        if ((char === '[' || char === '(') && !inString && !inUri) {
           bracketDepth++;
-        } else if (char === ']' && !inString && !inUri) {
+        } else if ((char === ']' || char === ')') && !inString && !inUri) {
           bracketDepth--;
           if (bracketDepth === 0) {
             // Bracket closed - check if comma follows (comma-separated values)
@@ -432,9 +429,16 @@ export function parsePropertyLinesWithStateMachine(
         
       case ParserState.URI:
         if (char === '>') {
-          valueEnd = i + 1;
           inUri = false;
-          state = ParserState.SEPARATOR;
+          const comma = commaAfter(i + 1);
+          if (comma >= 0) {
+            // `<a> , <b>`: another object of the same predicate follows (#120, #121)
+            state = ParserState.VALUE_START;
+            i = comma;
+          } else {
+            valueEnd = i + 1;
+            state = ParserState.SEPARATOR;
+          }
         }
         break;
         
