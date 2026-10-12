@@ -14,8 +14,16 @@ import { debugError, debugLog } from './utils/debug';
  * (`[ … ]`); a leftover `_:id` object ref that is never defined means its contents were dropped —
  * e.g. an anonymous `owl:unionOf`/`owl:intersectionOf` class expression in rdfs:domain/range that
  * the serializer could not inline. Used to detect data loss and fall back to rdflib. See #64.
+ *
+ * A label already left undefined in `source` (the file as loaded) is not a loss: the save kept it
+ * as it was (#124).
  */
-export function hasUndefinedBlankNodeRefs(ttl: string): boolean {
+export function hasUndefinedBlankNodeRefs(ttl: string, source = ''): boolean {
+  const before = undefinedBlankNodeRefs(source);
+  return [...undefinedBlankNodeRefs(ttl)].some((ref) => !before.has(ref));
+}
+
+function undefinedBlankNodeRefs(ttl: string): Set<string> {
   const defined = new Set<string>();
   const referenced = new Set<string>();
   for (const rawLine of ttl.split(/\r?\n/)) {
@@ -27,10 +35,7 @@ export function hasUndefinedBlankNodeRefs(ttl: string): boolean {
     // Any blank node token (subject or object); subjects are filtered out below.
     for (const m of line.matchAll(/(?<![\w:-])(_:[A-Za-z0-9_-]+)/g)) referenced.add(m[1]);
   }
-  for (const ref of referenced) {
-    if (!defined.has(ref)) return true;
-  }
-  return false;
+  return new Set([...referenced].filter((ref) => !defined.has(ref)));
 }
 
 // --- Constants (aligned with parser.ts) ---
@@ -57,6 +62,9 @@ const SECTION_ORDER = [
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const OWL_NS = 'http://www.w3.org/2002/07/owl#';
+const RDF_FIRST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#first';
+const RDF_REST = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#rest';
+const RDF_NIL = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil';
 const OWL_ON_PROPERTY = OWL_NS + 'onProperty';
 const OWL_ON_CLASS = OWL_NS + 'onClass';
 const OWL_SOME_VALUES_FROM = OWL_NS + 'someValuesFrom';
@@ -254,9 +262,42 @@ export function buildInlineForms(
   const inlinedIds = new Set(blankAsObject);
   const result = new Map<string, string>();
 
+  /** The members of the RDF list starting at `id`, or null if it is not a well-formed list. */
+  function listMembers(id: string): Term[] | null {
+    const members: Term[] = [];
+    const visited = new Set<string>();
+    for (let node = id; !visited.has(node); ) {
+      visited.add(node);
+      const quads = quadsBySubject.get(node) ?? [];
+      const first = quads.find((q) => q.predicate.value === RDF_FIRST);
+      const rest = quads.find((q) => q.predicate.value === RDF_REST);
+      if (quads.length !== 2 || !first || !rest) return null;
+      members.push(first.object);
+      if (rest.object.termType === 'NamedNode' && rest.object.value === RDF_NIL) return members;
+      if (rest.object.termType !== 'BlankNode') return null;
+      node = blankNodeId(rest.object as BlankNode);
+    }
+    return null; // the list loops back on itself
+  }
+
   function buildFor(id: string): string {
     const cached = result.get(id);
     if (cached) return cached;
+
+    // An RDF list (the members of owl:unionOf, owl:oneOf, …) is written as a collection, `( :A :B )`,
+    // as it is in the source, not as nested rdf:first / rdf:rest blank nodes (#65).
+    const members = listMembers(id);
+    if (members) {
+      const items = members.map((m) => {
+        if (m.termType !== 'BlankNode') return serializeTerm(m, result, externalRefs, useColonNotation);
+        const memberId = blankNodeId(m as BlankNode);
+        inlinedIds.add(memberId);
+        return buildFor(memberId);
+      });
+      const collection = `( ${items.join(' ')} )`;
+      result.set(id, collection);
+      return collection;
+    }
 
     let list = quadsBySubject.get(id) ?? [];
     if (isDrawingSheetBlock) {

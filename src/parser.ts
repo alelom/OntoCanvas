@@ -6,9 +6,11 @@ import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPro
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
-import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
+import { parseTurtleBase, parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
 import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
 import { hasUndefinedBlankNodeRefs } from './turtlePostProcess';
+import { blankNodeClosureQuads, blockStructurallyChanged } from './rdf/blankNodes';
+import { currentSplitShares } from './rdf/splitSubjects';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
 import {
@@ -2804,13 +2806,13 @@ export async function storeToTurtle(
     }
     debugLog('[storeToTurtle] Using custom TTL serializer with cache-based reconstruction, cache has', originalFileCache.statementBlocks.length, 'blocks');
     const custom = await reconstructFromCache(store, originalFileCache, externalRefs);
-    // Safety net (#64): the custom serializer cannot inline anonymous class expressions that
-    // contain RDF lists (owl:unionOf / intersectionOf / oneOf) in domain/range, and would emit a
-    // dangling "_:df_x" reference — silently dropping the expression. Rather than lose data, fall
-    // back to rdflib (which preserves the expression, at the cost of reformatting the file).
-    if (hasUndefinedBlankNodeRefs(custom)) {
-      debugWarn('[storeToTurtle] Custom serialization produced an undefined blank-node reference ' +
-        '(likely an anonymous class expression in domain/range); falling back to rdflib to avoid data loss. See issue #64.');
+    // Safety net (#64): if the custom serializer ever emits a dangling "_:df_x" reference, the blank
+    // node it named has been dropped. Rather than lose data, fall back to rdflib (which keeps it, at
+    // the cost of reformatting the file). Class expressions in domain/range no longer need it (#65),
+    // and a dangling label the file already had is kept as it was, not a loss (#124).
+    if (hasUndefinedBlankNodeRefs(custom, originalFileCache.content)) {
+      debugWarn('[storeToTurtle] Custom serialization produced an undefined blank-node reference; ' +
+        'falling back to rdflib to avoid data loss. See issue #64.');
       return serializeStoreWithRdflib(store, { externalRefs, originalTtlString });
     }
     return custom;
@@ -2851,15 +2853,18 @@ async function reconstructFromCache(
   
   // Every prefix the file declares, from every header block. Missing one is not cosmetic: a
   // subject whose prefix cannot be resolved looks absent from the document and gets appended again.
+  // The same goes for the base that relative IRIs like `<#Term>` resolve against (#122).
   const prefixMap = new Map<string, string>();
+  let base: string | null = null;
   if (cache.headerSection) {
     for (const block of cache.headerSection.blocks) {
       if (block.originalText) parseTurtlePrefixes(block.originalText, prefixMap);
+      if (block.originalText) base = parseTurtleBase(block.originalText, base);
     }
   }
   
   const resolvePrefixedName = (prefixedName: string): string | null => {
-    const resolved = resolveTurtlePrefixedName(prefixedName, prefixMap);
+    const resolved = resolveTurtlePrefixedName(prefixedName, prefixMap, base);
     if (resolved === null) {
       debugWarn('[reconstructFromCache] Failed to resolve prefixed name:', prefixedName);
       return null;
@@ -2870,9 +2875,12 @@ async function reconstructFromCache(
   
   // Detect modifications by comparing current store with cache
   const modifiedBlocks: StatementBlock[] = [];
-  // Subjects whose blocks are structurally unchanged (used to suppress false-positive
-  // property-level "changes" caused by blank-node id drift — see filtering below).
-  const structurallyUnchangedSubjects = new Set<string>();
+  // Blocks that are structurally unchanged (used to suppress false-positive property-level
+  // "changes" caused by blank-node id drift — see filtering below). By block, not by subject: a
+  // subject can be described in several statements, and only one of them may have changed (#118).
+  const structurallyUnchangedBlocks = new Set<StatementBlock>();
+  // For a subject described in several statements, the triples each statement holds now (#118).
+  const splitShares = currentSplitShares(store, cache.statementBlocks);
 
   const blockCheckStart = Date.now();
   debugLog('[PERF] Starting block check loop, blocks:', cache.statementBlocks.length);
@@ -3264,6 +3272,14 @@ async function reconstructFromCache(
     // This ensures that when we serialize, we have all the quads, including blank node quads
     // The blank node quads are already collected above for class blocks, so currentQuads should have them
     
+    const share = splitShares.get(block);
+    if (share) currentQuads = share as N3Quad[];
+
+    // Every block, not only classes, can point at a blank node: a property's domain or range can be
+    // a class expression holding an RDF list (#65). Take the whole structure, list nodes included,
+    // as the cache side does; otherwise an unchanged block reads as changed and is re-serialized.
+    currentQuads = [...currentQuads, ...(blankNodeClosureQuads(currentQuads as never, (b) => store.getQuads(b, null, null, null)) as N3Quad[])];
+
     // Compare quads - check if they're different
     // IMPORTANT: Compare BEFORE updating block.quads, otherwise isModified will always be false
     const originalQuads = [...block.quads]; // Create a copy to avoid mutation issues
@@ -3325,7 +3341,7 @@ async function reconstructFromCache(
     } else {
       // Block is structurally unchanged. Remember its subject so we can drop any
       // false-positive property-level changes detected on it (blank-node id drift).
-      if (block.subject) structurallyUnchangedSubjects.add(block.subject);
+      structurallyUnchangedBlocks.add(block);
       if (block.type === 'Class' && currentQuads.length > 0) {
         // For unchanged class blocks, still refresh block.quads with currentQuads for consistency.
         block.quads = currentQuads;
@@ -3392,12 +3408,12 @@ async function reconstructFromCache(
   // on a blank-node property would otherwise disable targeted line replacement for the WHOLE
   // file, forcing the genuinely-edited (simple) block through full re-serialization (which
   // rewrites rdf:type→a, normalizes typed literals, reorders/reflows). Drop them here.
-  if (structurallyUnchangedSubjects.size > 0) {
+  if (structurallyUnchangedBlocks.size > 0) {
     for (const propLine of [...propertyLevelChanges.keys()]) {
       const owner = cache.statementBlocks.find(
         b => b.position.start <= propLine.position.start && b.position.end >= propLine.position.end
       );
-      if (owner && owner.subject && structurallyUnchangedSubjects.has(owner.subject)) {
+      if (owner && structurallyUnchangedBlocks.has(owner)) {
         propertyLevelChanges.delete(propLine);
         debugLog('[reconstructFromCache] Dropped false-positive change on unchanged block:', owner.subject, propLine.predicate);
       }
@@ -3425,39 +3441,36 @@ async function reconstructFromCache(
   let canUseTargetedReplacement = allChangesSimple && propertyLevelChanges.size > 0 && newBlocks.length === 0;
   if (canUseTargetedReplacement) {
     // Check which blocks have changes and which ones have blank node properties
-    const blocksWithChanges = new Set<string>();
-    const blocksWithBlankNodes = new Set<string>();
+    const blocksWithChanges = new Set<StatementBlock>();
+    const blocksWithBlankNodes = new Set<StatementBlock>();
     
     for (const changeSet of propertyLevelChanges.values()) {
       // Find which block this property line belongs to
       for (const block of cache.statementBlocks) {
         if (block.position.start <= changeSet.propertyLine.position.start && 
             block.position.end >= changeSet.propertyLine.position.end) {
-          blocksWithChanges.add(block.subject || '');
+          blocksWithChanges.add(block);
           break;
         }
       }
     }
     
     // For each block with changes, check if it has any blank node properties
-    for (const blockSubject of blocksWithChanges) {
-      const block = cache.statementBlocks.find(b => b.subject === blockSubject);
-      if (block) {
-        // Check if block has any property lines with blank nodes (multi-line properties)
-        try {
-          const propertyLines = extractPropertyLines(block, cache);
-          const hasBlankNodeProperties = propertyLines.some(propLine => 
-            propLine.isMultiLine || propLine.quads.some(q => q.object.termType === 'BlankNode')
-          );
-          if (hasBlankNodeProperties) {
-            debugLog('[reconstructFromCache] Block', blockSubject, 'has blank node properties, will use block-level serialization for this block');
-            blocksWithBlankNodes.add(blockSubject);
-          }
-        } catch (error) {
-          // If property line extraction fails, fall back to block-level for this block
-          debugWarn('[reconstructFromCache] Failed to extract property lines for', blockSubject, ', will use block-level serialization:', error);
-          blocksWithBlankNodes.add(blockSubject);
+    for (const block of blocksWithChanges) {
+      // Check if block has any property lines with blank nodes (multi-line properties)
+      try {
+        const propertyLines = extractPropertyLines(block, cache);
+        const hasBlankNodeProperties = propertyLines.some(propLine => 
+          propLine.isMultiLine || propLine.quads.some(q => q.object.termType === 'BlankNode')
+        );
+        if (hasBlankNodeProperties) {
+          debugLog('[reconstructFromCache] Block', block.subject, 'has blank node properties, will use block-level serialization for this block');
+          blocksWithBlankNodes.add(block);
         }
+      } catch (error) {
+        // If property line extraction fails, fall back to block-level for this block
+        debugWarn('[reconstructFromCache] Failed to extract property lines for', block.subject, ', will use block-level serialization:', error);
+        blocksWithBlankNodes.add(block);
       }
     }
     
@@ -3570,11 +3583,8 @@ async function reconstructFromCache(
  * Handles blank nodes, literals, and named nodes correctly
  */
 export function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolean {
-  if (original.length !== current.length) {
-    debugLog('[quadsAreDifferent] Different lengths:', original.length, 'vs', current.length);
-    return true;
-  }
-  
+  // Compared as sets, not by count: a triple the source states twice (`owl:imports <x>` on two
+  // lines) is one triple in the store, and the statement has not changed (#121).
   // Create a signature for each quad (subject, predicate, object)
   // Handle different term types correctly
   const createSignature = (q: N3Quad): string => {
@@ -3621,103 +3631,3 @@ export function quadsAreDifferent(original: N3Quad[], current: N3Quad[]): boolea
   return false;
 }
 
-/**
- * Structural comparison of two quad sets that IGNORES blank-node identity.
- *
- * quadsAreDifferent() signs blank nodes by their raw id (`_:id`), so a block containing
- * an inline blank-node restriction reads as "different" whenever blank-node ids drift
- * between the cache parse and the store parse — even when nothing actually changed. That
- * false positive is what forced the custom serializer to re-serialize (and thereby reflow
- * / reorder / normalize) every restriction-bearing block on every save.
- *
- * This compares structure instead:
- *  - Named-subject quads are matched by (subject, predicate, object), with blank-node
- *    OBJECTS reduced to a placeholder (their identity is irrelevant; their structure is
- *    compared separately).
- *  - Blank-subject quads are grouped per blank node (normalized id) and matched 1:1 by
- *    structure via blankNodesMatchByStructure.
- *
- * Returns true if the block is genuinely (structurally) changed.
- */
-export function blockStructurallyChanged(original: N3Quad[], current: N3Quad[]): boolean {
-  const litSig = (lit: { value: string; datatype?: { value: string }; language?: string }): string =>
-    `"${lit.value}"${lit.language ? `@${lit.language}` : lit.datatype ? `^^${lit.datatype.value}` : ''}`;
-
-  const objSig = (obj: N3Quad['object']): string => {
-    if (obj.termType === 'NamedNode') return (obj as { value: string }).value;
-    if (obj.termType === 'BlankNode') return '_:BLANK';
-    if (obj.termType === 'Literal') return litSig(obj as { value: string; datatype?: { value: string }; language?: string });
-    return '';
-  };
-
-  // 1) Named-subject quads: exact signature, blank objects collapsed to a placeholder.
-  const namedSigs = (qs: N3Quad[]): Map<string, number> => {
-    const m = new Map<string, number>();
-    for (const q of qs) {
-      if (q.subject.termType !== 'NamedNode') continue;
-      const sig = `${(q.subject as { value: string }).value}|${(q.predicate as { value: string }).value}|${objSig(q.object)}`;
-      m.set(sig, (m.get(sig) ?? 0) + 1);
-    }
-    return m;
-  };
-  const oNamed = namedSigs(original);
-  const cNamed = namedSigs(current);
-  if (oNamed.size !== cNamed.size) return true;
-  for (const [sig, count] of oNamed) {
-    if (cNamed.get(sig) !== count) return true;
-  }
-
-  // 2) Blank-subject quads: group per blank node, match 1:1 by structure.
-  const groupBlanks = (qs: N3Quad[]): N3Quad[][] => {
-    const m = new Map<string, N3Quad[]>();
-    for (const q of qs) {
-      if (q.subject.termType !== 'BlankNode') continue;
-      const raw = (q.subject as { id?: string; value?: string }).id ?? (q.subject as { value?: string }).value ?? '';
-      const id = raw.startsWith('_:') ? raw.slice(2) : raw;
-      const list = m.get(id) ?? [];
-      list.push(q);
-      m.set(id, list);
-    }
-    return Array.from(m.values());
-  };
-  const oBlanks = groupBlanks(original);
-  const cBlanks = groupBlanks(current);
-  if (oBlanks.length !== cBlanks.length) return true;
-
-  const used = new Set<number>();
-  for (const og of oBlanks) {
-    let matched = false;
-    for (let i = 0; i < cBlanks.length; i++) {
-      if (used.has(i)) continue;
-      if (blankGroupsMatchByStructure(og, cBlanks[i], objSig)) {
-        used.add(i);
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) return true;
-  }
-  return false;
-}
-
-/** Match two blank-node quad groups by (predicate, object) signatures, blank objects collapsed. */
-function blankGroupsMatchByStructure(
-  a: N3Quad[],
-  b: N3Quad[],
-  objSig: (o: N3Quad['object']) => string
-): boolean {
-  if (a.length !== b.length) return false;
-  const sig = (qs: N3Quad[]): Map<string, number> => {
-    const m = new Map<string, number>();
-    for (const q of qs) {
-      const s = `${(q.predicate as { value: string }).value}|${objSig(q.object)}`;
-      m.set(s, (m.get(s) ?? 0) + 1);
-    }
-    return m;
-  };
-  const as = sig(a);
-  const bs = sig(b);
-  if (as.size !== bs.size) return false;
-  for (const [s, c] of as) if (bs.get(s) !== c) return false;
-  return true;
-}

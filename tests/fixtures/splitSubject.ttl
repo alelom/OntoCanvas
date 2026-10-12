@@ -1,0 +1,32 @@
+@prefix : <http://example.org/split#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# One subject described in two separate statements, as in the UC-01 merged ontology:
+# the second statement adds a restriction to :Layout after :hasDiscipline is declared.
+
+<http://example.org/split> rdf:type owl:Ontology .
+
+:Layout rdf:type owl:Class ;
+    rdfs:label "Layout" ;
+    rdfs:comment "A drawing layout." .
+
+:Discipline rdf:type owl:Class ;
+    rdfs:label "Discipline" .
+
+:hasDiscipline rdf:type owl:ObjectProperty ;
+    rdfs:label "hasDiscipline" ;
+    rdfs:domain :Layout ;
+    rdfs:range :Discipline .
+
+:Layout rdfs:subClassOf [
+    rdf:type owl:Restriction ;
+    owl:onProperty :hasDiscipline ;
+    owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+    owl:onClass :Discipline
+] .
+
+:Sheet rdf:type owl:Class ;
+    rdfs:label "Sheet" .

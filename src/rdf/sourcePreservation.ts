@@ -11,8 +11,11 @@ import { buildInlineForms, replaceBlankRefs, convertBlanksToInline } from '../tu
 import { debugLog, debugWarn, debugError } from '../utils/debug';
 import { quadsAreDifferent } from '../parser';
 import { parsePropertyLinesWithStateMachine, type PropertyLineMatch } from './propertyLineParser';
-import { parseTurtlePrefixes, resolveTurtlePrefixedName } from './turtlePrefixes';
+import { parseTurtlePrefixes } from './turtlePrefixes';
 import { findSubClassOfItems, formatLikeOriginal } from './subClassOfListText';
+import { blankNodeClosureQuads, blankNodeId, structureSigner } from './blankNodes';
+import { assignToStatements, currentSplitShares, splitSubjects, statementContext, statementTriples } from './splitSubjects';
+import { statementStartAfterPeriod } from './statementBoundaries';
 
 // ============================================================================
 // Phase 1: Core Data Structures
@@ -176,6 +179,53 @@ export async function parseTurtleWithPositions(
   
   // Note: Header tracking removed - not currently used in logic
   
+  // A block for the statement whose text begins at `start` (line `lineNumber`), in `section`, or in
+  // a new section when its type differs from that section's (the previous one is then closed).
+  const startBlock = (start: number, text: string, section: Section | null): { block: StatementBlock; section: Section } => {
+    const statementType = detectStatementTypeFromLine(text.trim());
+    const subject = extractSubject(text);
+    const block: StatementBlock = {
+      type: statementType,
+      position: {
+        start,
+        end: start + text.length, // Will be updated when block ends
+        startLine: lineNumber,
+        endLine: lineNumber
+      },
+      originalText: '', // Will be set when block ends
+      quads: [], // Will be populated
+      subject: subject ?? undefined,
+      isModified: false,
+      isNew: false,
+      isDeleted: false
+    };
+    blocks.push(block);
+
+    // Handle section transitions
+    if (!section || section.type !== statementType) {
+      // End previous section
+      if (section) {
+        section.endPosition = {
+          start: start - formattingStyle.lineEnding.length,
+          end: start - formattingStyle.lineEnding.length,
+          startLine: lineNumber - 1,
+          endLine: lineNumber - 1
+        };
+        sections.push(section);
+      }
+      sectionTypeCounts.set(statementType, (sectionTypeCounts.get(statementType) || 0) + 1);
+      section = {
+        type: statementType,
+        startPosition: { start, end: start, startLine: lineNumber, endLine: lineNumber },
+        endPosition: { start: 0, end: 0, startLine: 0, endLine: 0 },
+        blocks: [],
+        hasStructure: true
+      };
+    }
+    section.blocks.push(block);
+    return { block, section };
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
@@ -252,10 +302,12 @@ export async function parseTurtleWithPositions(
       continue;
     }
     
-    // Detect statement start: not indented, not a comment
-    const isStatementStart = !line.startsWith(' ') && 
-                             !line.startsWith('\t') && 
-                             !trimmed.startsWith('#');
+    // Detect statement start: not indented, not a comment, and not the `] .` / `) .` that closes a
+    // bracket opened on an earlier line (no statement can start with a closing bracket).
+    const isStatementStart = !line.startsWith(' ') &&
+                             !line.startsWith('\t') &&
+                             !trimmed.startsWith('#') &&
+                             !/^[\])]/.test(trimmed);
     
     if (isStatementStart) {
       // Past header section
@@ -272,70 +324,30 @@ export async function parseTurtleWithPositions(
         currentBlock.formattingStyle = detectBlockFormatting(currentBlock.originalText, formattingStyle);
       }
       
-      // Detect statement type from line
-      const statementType = detectStatementTypeFromLine(trimmed);
-      const subject = extractSubject(trimmed);
-      
-      // Start new block
-      currentBlock = {
-        type: statementType,
-        position: {
-          start: lineStart,
-          end: lineEnd, // Will be updated when block ends
-          startLine: lineNumber,
-          endLine: lineNumber
-        },
-        originalText: '', // Will be set when block ends
-        quads: [], // Will be populated
-        subject: subject ?? undefined,
-        isModified: false,
-        isNew: false,
-        isDeleted: false
-      };
-      
-      blocks.push(currentBlock);
-      
-      // Handle section transitions
-      if (!currentSection || currentSection.type !== statementType) {
-        // End previous section
-        if (currentSection) {
-          currentSection.endPosition = {
-            start: lineStart - formattingStyle.lineEnding.length,
-            end: lineStart - formattingStyle.lineEnding.length,
-            startLine: lineNumber - 1,
-            endLine: lineNumber - 1
-          };
-          sections.push(currentSection);
-        }
-        
-        // Count section types
-        sectionTypeCounts.set(
-          statementType,
-          (sectionTypeCounts.get(statementType) || 0) + 1
-        );
-        
-        // Start new section
-        currentSection = {
-          type: statementType,
-          startPosition: {
-            start: lineStart,
-            end: lineStart,
-            startLine: lineNumber,
-            endLine: lineNumber
-          },
-          endPosition: { start: 0, end: 0, startLine: 0, endLine: 0 },
-          blocks: [],
-          hasStructure: true
-        };
-      }
-      
-      currentSection.blocks.push(currentBlock);
+      ({ block: currentBlock, section: currentSection } = startBlock(lineStart, line, currentSection));
       
     } else if (currentBlock && !currentBlock.originalText && trimmed !== '') {
       // Continuation of the current OPEN block (indented line or property continuation); do not
       // extend over blank lines, and never re-extend a block that already terminated at its '.'.
       currentBlock.position.end = lineEnd;
       currentBlock.position.endLine = lineNumber;
+    }
+
+    // A statement can start on the line where the previous one ends (`… _:b3.:Next a owl:Class ;`,
+    // #124). End the open block at that `.` and start the next one there. A block's text always
+    // runs to `position.end + lineEnding`, so for a block ending mid-line `end` sits that far
+    // before the character after its `.`.
+    for (
+      let split = currentBlock && !currentBlock.originalText ? statementStartAfterPeriod(line) : null;
+      split && currentBlock && !currentBlock.originalText;
+      split = statementStartAfterPeriod(line, split.next)
+    ) {
+      const blockEnd = lineStart + split.period + 1;
+      currentBlock.position.end = blockEnd - formattingStyle.lineEnding.length;
+      currentBlock.position.endLine = lineNumber;
+      currentBlock.originalText = content.slice(currentBlock.position.start, blockEnd);
+      currentBlock.formattingStyle = detectBlockFormatting(currentBlock.originalText, formattingStyle);
+      ({ block: currentBlock, section: currentSection } = startBlock(lineStart + split.next, line.slice(split.next), currentSection));
     }
     
     // Check if this line ends the block (ends with period, and next non-empty line is statement start or EOF)
@@ -500,16 +512,9 @@ function matchQuadsToBlocks(
   blocks: StatementBlock[],
   quadToBlockMap: Map<N3Quad, StatementBlock>
 ): void {
-  // Every prefix the file declares, from every header block.
-  const prefixMap = new Map<string, string>();
-  for (const block of blocks) {
-    if (block.type === 'Header' && block.originalText) parseTurtlePrefixes(block.originalText, prefixMap);
-  }
-  
-  // Helper to resolve prefixed name to full URI
-  const resolvePrefixedName = (prefixedName: string): string | null =>
-    resolveTurtlePrefixedName(prefixedName, prefixMap);
-  
+  // The file's header, and each block's subject resolved with every prefix the header declares.
+  const { header, subjectUri: blockSubjectUri } = statementContext(blocks);
+
   // Group quads by subject URI
   const quadsBySubject = new Map<string, N3Quad[]>();
   
@@ -526,46 +531,50 @@ function matchQuadsToBlocks(
   const blankNodeQuadsBySubject = new Map<string, N3Quad[]>();
   for (const quad of quads) {
     if (quad.subject.termType === 'BlankNode') {
-      const blankId = getBlankNodeId(quad.subject as { id?: string; value?: string });
+      const blankId = blankNodeId(quad.subject as { id?: string; value?: string });
       const list = blankNodeQuadsBySubject.get(blankId) || [];
       list.push(quad);
       blankNodeQuadsBySubject.set(blankId, list);
     }
   }
-  
-  // Match quads to blocks by resolving block subjects to URIs
-  for (const block of blocks) {
-    if (block.type === 'Header') continue; // Header blocks don't have quads
-    
-    if (block.subject) {
-      // Resolve block subject to full URI
-      const resolvedUri = resolvePrefixedName(block.subject); // block.subject is checked above, so it's string here
-      if (resolvedUri) {
-        const subjectQuads = quadsBySubject.get(resolvedUri);
-        if (subjectQuads) {
-          for (const quad of subjectQuads) {
-            block.quads.push(quad);
-            quadToBlockMap.set(quad, block);
-            
-            // If this quad has a blank node as object (e.g., rdfs:subClassOf _:blank1),
-            // also match all quads where that blank node is the subject
-            if (quad.object.termType === 'BlankNode') {
-              const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
-              const blankQuads = blankNodeQuadsBySubject.get(blankId);
-              if (blankQuads) {
-                for (const blankQuad of blankQuads) {
-                  // Only add if not already matched
-                  if (!quadToBlockMap.has(blankQuad)) {
-                    block.quads.push(blankQuad);
-                    quadToBlockMap.set(blankQuad, block);
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+
+  // Give a block every blank node its quad reaches, however nested: a restriction, or a class
+  // expression and the RDF list inside it (#65). One level would leave the list nodes unclaimed, so
+  // the block's quads would never match the store's and the block would always read as changed.
+  const claimBlankNodes = (quad: N3Quad, block: StatementBlock): void => {
+    const reached = blankNodeClosureQuads([quad] as never, (b) => (blankNodeQuadsBySubject.get(blankNodeId(b as never)) ?? []) as never);
+    for (const blankQuad of reached as N3Quad[]) {
+      if (quadToBlockMap.has(blankQuad)) continue;
+      block.quads.push(blankQuad);
+      quadToBlockMap.set(blankQuad, block);
     }
+  };
+  
+  // Match quads to blocks by resolving block subjects to URIs. A subject described in several
+  // statements (#118) gives each statement only the triples its own text holds.
+  const split = splitSubjects(blocks, blockSubjectUri);
+  const signQuad = split.size > 0 ? structureSigner(quads as never) : null;
+  // If a statement cannot be read on its own, its subject's first statement takes every triple.
+  const shareOut = (subjectQuads: N3Quad[], statements: StatementBlock[]): N3Quad[][] => {
+    if (statements.length === 1) return [subjectQuads];
+    const own = statements.map((s) => statementTriples(header, s.originalText));
+    if (own.some((triples) => !triples)) return statements.map((_, i) => (i === 0 ? subjectQuads : []));
+    return assignToStatements(subjectQuads as never, signQuad!, own as never) as unknown as N3Quad[][];
+  };
+  for (const block of blocks) {
+    const uri = blockSubjectUri(block);
+    const subjectQuads = uri ? quadsBySubject.get(uri) : undefined;
+    if (!uri || !subjectQuads) continue;
+    const statements = split.get(uri) ?? [block];
+    if (statements[0] !== block) continue; // shared out with its subject's first statement
+    shareOut(subjectQuads, statements).forEach((share, i) => {
+      const statement = statements[i];
+      for (const quad of share) {
+        statement.quads.push(quad);
+        quadToBlockMap.set(quad, statement);
+        claimBlankNodes(quad, statement);
+      }
+    });
   }
   
   // For any remaining quads, try to match by checking if URI appears in block text
@@ -584,7 +593,7 @@ function matchQuadsToBlocks(
       let fallbackBlock: StatementBlock | null = null;
       for (const block of blocks) {
         if (block.type === 'Header') continue;
-        const resolved = block.subject ? resolvePrefixedName(block.subject) : null;
+        const resolved = blockSubjectUri(block);
         if (resolved === subjectUri) {
           matchedBlock = block;
           break;
@@ -603,18 +612,7 @@ function matchQuadsToBlocks(
       if (target) {
         target.quads.push(quad);
         quadToBlockMap.set(quad, target);
-        if (quad.object.termType === 'BlankNode') {
-          const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
-          const blankQuads = blankNodeQuadsBySubject.get(blankId);
-          if (blankQuads) {
-            for (const blankQuad of blankQuads) {
-              if (!quadToBlockMap.has(blankQuad)) {
-                target.quads.push(blankQuad);
-                quadToBlockMap.set(blankQuad, target);
-              }
-            }
-          }
-        }
+        claimBlankNodes(quad, target);
       }
     }
   }
@@ -633,19 +631,9 @@ function matchQuadsToBlocks(
         // Find the block for this subject
         for (const block of blocks) {
           if (block.type === 'Header') continue;
-          const resolvedUri = block.subject ? resolvePrefixedName(block.subject) : null;
+          const resolvedUri = blockSubjectUri(block);
           if (resolvedUri && resolvedUri === subjectUri) {
-            // This blank node quad belongs to this block
-            const blankId = getBlankNodeId(quad.object as { id?: string; value?: string });
-            const blankQuads = blankNodeQuadsBySubject.get(blankId);
-            if (blankQuads) {
-              for (const blankQuad of blankQuads) {
-                if (!quadToBlockMap.has(blankQuad)) {
-                  block.quads.push(blankQuad);
-                  quadToBlockMap.set(blankQuad, block);
-                }
-              }
-            }
+            claimBlankNodes(quad, block);
             break;
           }
         }
@@ -766,11 +754,6 @@ export async function reconstructFromOriginalText(
   debugLog('[PERF] Processing', sortedBlocks.length, 'modified/deleted blocks');
   const serializeStart = Date.now();
   
-  // Track cumulative length changes for blocks processed so far (in reverse order)
-  // Key: original block position.end (unique identifier)
-  // Value: length change (newLength - originalLength)
-  const lengthChanges = new Map<number, number>();
-  
   // quadsAreDifferent is now imported at the top of the file
   
   for (let i = 0; i < sortedBlocks.length; i++) {
@@ -779,14 +762,13 @@ export async function reconstructFromOriginalText(
       debugLog('[PERF] Serializing block', i, 'of', sortedBlocks.length, 'elapsed:', Date.now() - serializeStart, 'ms');
     }
     if (block.isDeleted) {
-      // Remove the text (including the newline after)
-      const originalLength = block.position.end - block.position.start + cache.formattingStyle.lineEnding.length;
-      const newLength = 0;
-      const lengthChange = newLength - originalLength;
-      lengthChanges.set(block.position.end, lengthChange);
-      
-      const endPos = block.position.end + cache.formattingStyle.lineEnding.length;
-      result = result.slice(0, block.position.start) + 
+      // Remove the text (including the newline after). With a blank line on both sides, remove one
+      // of them too, so the statements around it keep the one blank line they had between them (#123).
+      const eol = cache.formattingStyle.lineEnding;
+      let endPos = block.position.end + eol.length;
+      if (result.slice(0, block.position.start).endsWith(eol + eol) && result.startsWith(eol, endPos)) endPos += eol.length;
+
+      result = result.slice(0, block.position.start) +
                result.slice(endPos);
     } else if (block.isModified) {
       // ARCHITECTURAL FIX: Before serializing, check if current quads match original quads
@@ -916,20 +898,12 @@ export async function reconstructFromOriginalText(
       // So we can't use originalNextContentStart directly - we need to find the equivalent position
       // in the current result by looking for the next block's start position
       
-      // Calculate original block length
-      const originalLength = block.position.end - block.position.start + cache.formattingStyle.lineEnding.length;
-      
       // Replace ONLY this block's own text; keep everything after it verbatim by slicing the
       // suffix at endPos (just past the block's terminating newline). That suffix contains the
       // original blank lines, any section-divider comments, and the already-processed later
       // blocks — all preserved exactly. This is position-safe because blocks are processed in
       // reverse order, so content at positions <= block.position.end is unchanged in `result`.
       result = result.slice(0, block.position.start) + finalNewText + result.slice(endPos);
-      
-      // Track length change for this block
-      const newLength = finalNewText.length;
-      const lengthChange = newLength - originalLength;
-      lengthChanges.set(block.position.end, lengthChange);
     }
   }
   
@@ -1068,6 +1042,7 @@ function restoreShortenedLiterals(
 }
 
 const RDFS_SUBCLASSOF = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+const RDF_NIL = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil';
 
 /**
  * If the only changes to a class block are to its rdfs:subClassOf items (every other property
@@ -2257,14 +2232,14 @@ async function serializeBlockToTurtle(
       // If original text has spaces before semicolons/periods, preserve them
       if (block.originalText) {
         // Check if original has spaces before semicolons (not inside strings or URIs)
-        // Look for pattern: closing quote or non-whitespace, then space, then semicolon
-        const hasSpaceBeforeSemicolon = block.originalText.match(/["\w]\s+;/);
+        // Look for pattern: a closing quote, word char, `]` or `)`, then space, then semicolon
+        const hasSpaceBeforeSemicolon = block.originalText.match(/["\w\])]\s+;/);
         if (hasSpaceBeforeSemicolon) {
           // Add spaces before semicolons in formatted output
           // CRITICAL: Only replace semicolons that are at the end of property values
-          // Pattern: closing quote or word char, then semicolon (with no space between), then optional whitespace and newline
-          // This matches: "value"; or value; but not inside strings
-          formatted = formatted.replace(/(["\w])(;\s*)/g, (match, before, after) => {
+          // Pattern: closing quote, word char, or the `]` / `)` closing an inline blank node or list
+          // (#65), then semicolon (with no space between). This matches: "value"; value; [ … ];
+          formatted = formatted.replace(/(["\w\])])(;\s*)/g, (match, before, after) => {
             // Only add space if there isn't already one
             if (!before.endsWith(' ')) {
               return before + ' ' + after;
@@ -2314,6 +2289,11 @@ async function serializeBlockToTurtle(
       // doesn't silently rewrite typed literals on the same block.
       if (block.originalText && block.originalText.includes('^^')) {
         formatted = restoreShortenedLiterals(formatted, block.quads, prefixMap);
+      }
+
+      // N3 Writer writes an empty collection as rdf:nil; keep the `()` the source wrote (#119).
+      if (block.originalText && /\(\s*\)/.test(block.originalText)) {
+        formatted = formatted.replace(/(\s)(?:rdf:nil|<http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#nil>)(?=\s*[;,.\])])/g, '$1()');
       }
 
       if (block.subject && block.subject.includes('DrawingSheet')) {
@@ -3066,10 +3046,12 @@ function matchQuadsToProperty(
     return { matchedQuads, quadPositions, confidence: 0, errors };
   }
   
-  // Find quads with matching predicate
+  // Find quads with matching predicate. A property line states something about the block's subject;
+  // triples about a blank node nested in a value (`rdf:type owl:Class` inside `[ … ]`) belong to that
+  // value's line, and are attached to it by the caller.
   const candidateQuads = blockQuads.filter(q => {
     const qPredUri = (q.predicate as { value: string }).value;
-    return qPredUri === predicateUri;
+    return qPredUri === predicateUri && q.subject.termType !== 'BlankNode';
   });
   
   if (candidateQuads.length === 0) {
@@ -3131,10 +3113,10 @@ function matchQuadsToProperty(
       objectValueSimple = prefixed;
     } else if (quad.object.termType === 'BlankNode') {
       // For blank nodes, we match by structure (presence in brackets)
-      // Check if value text contains bracket structures [ ... ]
-      // Blank nodes are always represented as [ ... ] in Turtle, so if the value text has brackets,
+      // An inline blank node is written [ ... ], and an RDF list as a collection ( ... ) — e.g.
+      // `owl:oneOf ( :A :B )` straight on a class (#65) — so if the value text has either,
       // we can match by position/proximity
-      const hasBrackets = /\[[\s\S]*?\]/.test(valueText);
+      const hasBrackets = /\[[\s\S]*?\]|\([\s\S]*?\)/.test(valueText);
       if (hasBrackets) {
         // Value text contains brackets, so this quad likely matches this property line
         // We'll use proximity-based matching (all blank node quads for this predicate will match)
@@ -3152,8 +3134,8 @@ function matchQuadsToProperty(
     let valueMatches = false;
     if (objectValue) {
       if (quad.object.termType === 'BlankNode') {
-        // For blank nodes, if value text has brackets, it's a match (we already checked above)
-        valueMatches = /\[[\s\S]*?\]/.test(valueText);
+        // For blank nodes, objectValue is only set when the value text has brackets (checked above)
+        valueMatches = true;
       } else {
         // For literals, try to extract the unescaped string value from the value text
         if (quad.object.termType === 'Literal' && objectValueSimple) {
@@ -3195,6 +3177,11 @@ function matchQuadsToProperty(
       }
     }
     
+    // An empty collection `()` is rdf:nil, a named node written with no name (#119).
+    if (!valueMatches && quad.object.termType === 'NamedNode' && quad.object.value === RDF_NIL && /\(\s*\)/.test(valueText)) {
+      valueMatches = true;
+    }
+
     // Fallback for IRI objects written as RELATIVE IRIs in the source (e.g. <img/foo.png>) that
     // the parser resolved to an absolute URI against the document @base. The angle-bracket path is
     // a suffix of the resolved absolute URI, so match on that (or an exact absolute <...> match).
@@ -3425,45 +3412,22 @@ export function extractPropertyLines(
       block.position.startLine
     );
     
-    // For properties with blank node objects (like rdfs:subClassOf [ ... ]), 
-    // also include the quads where those blank nodes are subjects
+    // For properties with blank node objects (like rdfs:subClassOf [ ... ], or a class expression
+    // with its RDF list in rdfs:domain [ ... ] — #65), also include the quads of every blank node
+    // nested in the value. They sit inside the value's text, so they share its position.
     const allMatchedQuads = [...matchResult.matchedQuads];
     const allQuadPositions = new Map(matchResult.quadPositions);
-    
-    // Find blank node IDs from matched quads
-    const blankNodeIds = new Set<string>();
-    for (const quad of matchResult.matchedQuads) {
-      if (quad.object.termType === 'BlankNode') {
-        const blankId = (quad.object as { id?: string; value?: string }).id || 
-                        (quad.object as { id?: string; value?: string }).value || '';
-        if (blankId) {
-          blankNodeIds.add(blankId.startsWith('_:') ? blankId.slice(2) : blankId);
-        }
-      }
-    }
-    
-    // Find all quads where these blank nodes are subjects
-    for (const blankId of blankNodeIds) {
-      for (const quad of blockQuads) {
-        if (quad.subject.termType === 'BlankNode') {
-          const subjectBlankId = (quad.subject as { id?: string; value?: string }).id || 
-                                 (quad.subject as { id?: string; value?: string }).value || '';
-          const cleanSubjectId = subjectBlankId.startsWith('_:') ? subjectBlankId.slice(2) : subjectBlankId;
-          if (cleanSubjectId === blankId) {
-            // This quad belongs to the blank node structure in this property
-            if (!allMatchedQuads.some(q => q.equals(quad))) {
-              allMatchedQuads.push(quad);
-              // Use the same position as the property line for blank node quads
-              allQuadPositions.set(quad, {
-                start: propMatch.valueStart,
-                end: propMatch.valueEnd,
-                startLine: propMatch.lineNumbers[0],
-                endLine: propMatch.lineNumbers[propMatch.lineNumbers.length - 1]
-              });
-            }
-          }
-        }
-      }
+    const nestedQuads = blankNodeClosureQuads(matchResult.matchedQuads as never, (b) =>
+      blockQuads.filter((q) => q.subject.termType === 'BlankNode' && blankNodeId(q.subject as never) === blankNodeId(b as never)) as never
+    ) as unknown as typeof blockQuads;
+    for (const quad of nestedQuads) {
+      allMatchedQuads.push(quad);
+      allQuadPositions.set(quad, {
+        start: propMatch.valueStart,
+        end: propMatch.valueEnd,
+        startLine: propMatch.lineNumbers[0],
+        endLine: propMatch.lineNumbers[propMatch.lineNumbers.length - 1]
+      });
     }
     
     // Calculate position relative to full content
@@ -3596,6 +3560,13 @@ export function detectPropertyLevelChanges(
 ): Map<PropertyLine, PropertyLineChangeSet> {
   const changes = new Map<PropertyLine, PropertyLineChangeSet>();
   
+  const splitShares = currentSplitShares(store, cache.statementBlocks);
+  const quadsByPredicate = (quads: N3Quad[]): Map<string, N3Quad[]> => {
+    const byPredicate = new Map<string, N3Quad[]>();
+    for (const q of quads) byPredicate.set(q.predicate.value, [...(byPredicate.get(q.predicate.value) ?? []), q]);
+    return byPredicate;
+  };
+
   // Build a map of current quads by subject and predicate
   const currentQuadsBySubjectAndPred = new Map<string, Map<string, N3Quad[]>>();
   for (const quad of store) {
@@ -3615,66 +3586,48 @@ export function detectPropertyLevelChanges(
     }
   }
 
-  // Extract prefix map for resolving prefixed names
-  const prefixMap = new Map<string, string>();
-  if (cache.headerSection) {
-    for (const block of cache.headerSection.blocks) {
-      if (block.originalText) {
-        const prefixMatch = block.originalText.match(/@prefix\s+(\w+):\s*<([^>]+)>/);
-        if (prefixMatch) {
-          prefixMap.set(prefixMatch[1], prefixMatch[2]);
-        }
-        const emptyPrefixMatch = block.originalText.match(/@prefix\s+:\s*<([^>]+)>/);
-        if (emptyPrefixMatch) {
-          prefixMap.set('', emptyPrefixMatch[1]);
-        }
-      }
-    }
-  }
-
-  // Helper to resolve prefixed name to full URI
-  const resolvePrefixedName = (prefixedName: string): string => {
-    if (prefixedName.startsWith('<') && prefixedName.endsWith('>')) {
-      return prefixedName.slice(1, -1);
-    }
-    if (prefixedName.includes(':')) {
-      const [prefix, local] = prefixedName.split(':', 2);
-      const namespace = prefixMap.get(prefix);
-      if (namespace) {
-        return namespace + (namespace.endsWith('#') || namespace.endsWith('/') ? '' : '#') + local;
-      }
-    }
-    const defaultNamespace = prefixMap.get('') || '';
-    return defaultNamespace + (defaultNamespace.endsWith('#') || defaultNamespace.endsWith('/') ? '' : '#') + prefixedName;
-  };
+  // Each block's subject, resolved with every prefix and the base the file declares.
+  const { subjectUri: blockSubjectUri } = statementContext(cache.statementBlocks);
 
   // For each block in cache, extract property lines and compare with current store
   for (const block of cache.statementBlocks) {
-    if (block.type !== 'Class' && block.type !== 'ObjectProperty' && block.type !== 'DatatypeProperty' && block.type !== 'AnnotationProperty') {
-      continue; // Only process class and property blocks
+    if (block.type !== 'Class' && block.type !== 'ObjectProperty' && block.type !== 'DatatypeProperty' && block.type !== 'AnnotationProperty' && block.type !== 'Ontology') {
+      continue; // Only process the ontology header, class and property blocks
     }
 
-    const subjectPrefixedName = block.subject;
-    if (!subjectPrefixedName) {
+    if (!block.subject) {
       continue;
     }
 
-    // Resolve prefixed name to full URI
-    const subjectUri = resolvePrefixedName(subjectPrefixedName);
+    const subjectUri = blockSubjectUri(block);
     if (!subjectUri) {
-      debugWarn('[detectPropertyLevelChanges] Failed to resolve subject:', subjectPrefixedName);
+      debugWarn('[detectPropertyLevelChanges] Failed to resolve subject:', block.subject);
       continue;
     }
 
     // Extract property lines from this block
     const propertyLines = extractPropertyLines(block, cache);
     
-    // Get current quads for this subject (using full URI)
-    const currentPredMap = currentQuadsBySubjectAndPred.get(subjectUri);
+    // Get current quads for this subject (using full URI). A subject described in several
+    // statements is compared statement by statement, with what each one holds now (#118).
+    const share = splitShares.get(block);
+    const currentPredMap = share ? quadsByPredicate(share as N3Quad[]) : currentQuadsBySubjectAndPred.get(subjectUri);
     
+    // A predicate given on several lines of the statement: each line is compared with the triples
+    // it holds now, not with all of the predicate's (#121).
+    const linesByPredicate = new Map<string, PropertyLine[]>();
+    for (const line of propertyLines) linesByPredicate.set(line.predicateUri, [...(linesByPredicate.get(line.predicateUri) ?? []), line]);
+    const lineShares = new Map<PropertyLine, N3Quad[]>();
+    for (const [predicateUri, lines] of linesByPredicate) {
+      if (lines.length < 2) continue;
+      const current = (currentPredMap?.get(predicateUri) ?? []) as never as Quad[];
+      const sign = structureSigner([...current, ...blankNodeClosureQuads(current, (b) => store.getQuads(b, null, null, null))]);
+      assignToStatements(current, sign, lines.map((line) => line.quads as never)).forEach((share, k) => lineShares.set(lines[k], share as never));
+    }
+
     // For each property line, check if it has changed
     for (const propLine of propertyLines) {
-      const currentQuads = currentPredMap?.get(propLine.predicateUri) || [];
+      const currentQuads = lineShares.get(propLine) ?? currentPredMap?.get(propLine.predicateUri) ?? [];
       const originalQuads = propLine.quads;
       
       // Compare quads to see if changed
@@ -3954,7 +3907,13 @@ export function performTargetedLineReplacement(
 
       const removeEnd = lineEnd < result.length ? lineEnd + 1 : lineEnd; // include newline
       let before = result.slice(0, lineStart);
-      const after = result.slice(removeEnd);
+      let after = result.slice(removeEnd);
+
+      // Changes run end to start, so a blank line on both sides means this was the statement's last
+      // remaining line: the whole statement is gone. Drop one of the two blank lines, so the
+      // statements around it keep the one blank line they had between them (#123).
+      const eol = cache.formattingStyle.lineEnding;
+      if (before.endsWith(eol + eol) && after.startsWith(eol)) after = after.slice(eol.length);
 
       if (isLastProperty) {
         // The removed property terminated the statement with '.'. The preceding property
