@@ -1,4 +1,6 @@
 @prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
@@ -7,5 +9,4 @@
     rdfs:comment "String with \"escaped quotes\"" ;
     :description "String with \\backslash" ;
     :englishLabel "Example"@en ;
-    :age "25"^^xsd:integer ;
-    :combined "Value"@en^^xsd:string .
+    :age "25"^^xsd:integer .
