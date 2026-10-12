@@ -301,7 +301,7 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     },
     getObjectPropertyByName: (
       name: string
-    ): { domain?: string; range?: string; hasGlobalDomain?: boolean; hasGlobalRange?: boolean; uri?: string } | null => {
+    ): { domain?: string | null; range?: string | null; hasGlobalDomain?: boolean; hasGlobalRange?: boolean; uri?: string } | null => {
       const op = getObjectProperties().find((p) => p.name === name);
       if (!op) return null;
       return {

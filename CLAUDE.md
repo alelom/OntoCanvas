@@ -18,12 +18,13 @@ Guidance for working in this repository. These rules are distilled from `.cursor
 npm install
 npm run dev          # Vite dev server on http://localhost:5173
 npm run build        # vite build → dist/  (NOTE: no tsc typecheck in build)
+npm run typecheck    # tsc --noEmit over src/ (CI runs it on every PR)
 npm run test         # vitest run (unit)
 npm run test:watch   # vitest watch
 npm run test:e2e     # vitest run -c vitest.e2e.config.ts (Playwright-driven)
 ```
 
-> `npm run build` does **not** run `tsc`, so type errors do not fail the build. Don't rely on the build to catch type mistakes — check types deliberately.
+> `npm run build` does **not** run `tsc`, so type errors do not fail the build. Don't rely on the build to catch type mistakes — run `npm run typecheck`. It covers `src/` only; `tests/` is not type-checked.
 
 ## Architecture: the save pipeline (the hard part)
 

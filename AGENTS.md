@@ -54,7 +54,7 @@ OntoCanvas is a **personal open-source project on GitHub** ([alelom/OntoCanvas](
   UI/rendering/workflow behavior.
 - **Run the tests and confirm they pass** after every change (`npm run test`, plus
   `npm run test:e2e` when UI is involved). Note: `npm run build` does **not** run `tsc`, so
-  it won't catch type errors — check types deliberately.
+  it won't catch type errors — run `npm run typecheck` (CI runs it on every PR).
 - **Verify visual/editor changes by actually running the app** (screenshot or browser),
   not only via tests.
 - **Keep `src/main.ts` thin** (it is already ~9,300 lines). Put new logic in dedicated
@@ -72,6 +72,7 @@ OntoCanvas is a **personal open-source project on GitHub** ([alelom/OntoCanvas](
 npm install
 npm run dev          # Vite dev server on http://localhost:5173
 npm run build        # vite build → dist/  (no tsc typecheck)
+npm run typecheck    # tsc --noEmit over src/
 npm run test         # vitest run (unit)
 npm run test:e2e     # Playwright-driven E2E
 ```
