@@ -2,7 +2,8 @@
  * Minimal-diff contract for Turtle layouts the custom serializer used to reject or rewrite:
  * collections as values (#119), a full IRI continuing an object list (#120), a predicate repeated
  * on several lines (#121), relative IRIs under @base (#122), deleting a statement (#123), and a
- * statement starting where the previous one ends, with blank-node labels that have no triples (#124).
+ * statement starting where the previous one ends, with blank-node labels that have no triples (#124),
+ * escaped and tagged literals, and a full IRI as a predicate (#125).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -45,6 +46,8 @@ const CASES: { issue: string; file: string; labelled: string }[] = [
   { issue: '#122', file: 'tests/fixtures/base-iri.ttl', labelled: 'http://example.org/#AnotherClass' },
   { issue: '#122', file: 'tests/fixtures/base-notation-test.ttl', labelled: 'http://example.org/test#TestClass' },
   { issue: '#124', file: 'tests/fixtures/aec_drawing_metadata_drawing_sheet_renamed_gui.ttl', labelled: 'https://burohappoldmachinelearning.github.io/ADIRO/aec-drawing-metadata#RevisionTable' },
+  { issue: '#125', file: 'tests/fixtures/customSerializerFixtures/quoted-strings.ttl', labelled: 'http://example.org/test#TestClass' },
+  { issue: '#125', file: 'tests/fixtures/customSerializerFixtures/uri-variations.ttl', labelled: 'http://example.org/test#TestClass' },
 ];
 
 describe('custom serializer keeps unusual source layouts minimal-diff', () => {
