@@ -1,0 +1,70 @@
+@prefix : <http://example.org/examples/keepslayout#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Saving keeps a Turtle file as it was written: only the lines an edit touches change. Each statement
+# below is written in a way the saver used to reformat, reject (the whole file came back reformatted),
+# or get wrong:
+#   - a union class expression as a property's domain, and a bare `owl:oneOf ( … )` (#65)
+#   - :Sheet described in two statements, the second added after :hasRoom is declared (#118)
+#   - list values: a list, an empty list `()` and a list of lists (#119)
+#   - an object list continued on the next lines with a full IRI (#120)
+#   - owl:imports and rdfs:comment each given on two lines (#121)
+#
+# Try it: Save without editing: the file is unchanged. Then rename "Room" to "Space" and Save: only
+# the line `rdfs:label "Room" .` changes. Then delete the class Annex and Save: its statement goes,
+# with one of the blank lines around it (#123), and nothing else changes.
+
+<http://example.org/examples/keepslayout> rdf:type owl:Ontology ;
+    rdfs:label "Keeps source layout" ;
+    owl:imports <http://example.org/examples/keepslayout-base> ;
+    owl:imports <http://example.org/examples/keepslayout-extra> ;
+    rdfs:comment "Saving changes only the lines an edit touches." ;
+    rdfs:comment "Imports and comments are given on two lines each." .
+
+:aliases rdf:type owl:AnnotationProperty ;
+    rdfs:label "aliases" .
+
+:Sheet rdf:type owl:Class ;
+    rdfs:label "Sheet" ;
+    :aliases ( "Drawing sheet" "Page" ) .
+
+:Document rdf:type owl:Class ;
+    rdfs:label "Document" .
+
+:Room rdf:type owl:Class ;
+    rdfs:label "Room" .
+
+:Annex rdf:type owl:Class ;
+    rdfs:label "Annex" ;
+    :aliases () .
+
+:Plan rdf:type owl:Class ;
+    rdfs:label "Plan" ;
+    rdfs:subClassOf :Sheet ,
+        <http://example.org/examples/keepslayout#Document> ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty :hasRoom ;
+          owl:someValuesFrom :Room ] ;
+    :aliases ( ( "Floor plan" "Layout" ) ( "Site plan" ) ) .
+
+:Orientation rdf:type owl:Class ;
+    rdfs:label "Orientation" ;
+    owl:oneOf ( :Portrait :Landscape ) .
+
+:Portrait rdf:type owl:NamedIndividual , :Orientation ; rdfs:label "Portrait" .
+:Landscape rdf:type owl:NamedIndividual , :Orientation ; rdfs:label "Landscape" .
+
+:hasRoom rdf:type owl:ObjectProperty ;
+    rdfs:label "hasRoom" ;
+    rdfs:domain [ rdf:type owl:Class ; owl:unionOf ( :Sheet :Plan ) ] ;
+    rdfs:range :Room .
+
+:Sheet rdfs:subClassOf [
+    rdf:type owl:Restriction ;
+    owl:onProperty :hasRoom ;
+    owl:minQualifiedCardinality "1"^^xsd:nonNegativeInteger ;
+    owl:onClass :Room
+] .
