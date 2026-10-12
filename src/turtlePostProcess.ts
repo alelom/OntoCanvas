@@ -7,6 +7,7 @@ import { Parser } from 'n3';
 import type { Quad, Term, BlankNode, NamedNode, Literal } from 'n3';
 import { getAppVersion } from './utils/version';
 import { debugError, debugLog } from './utils/debug';
+import { statementStartAfterPeriod } from './rdf/statementBoundaries';
 
 /**
  * True when the Turtle text references a blank node (`_:id`) in object position that is never
@@ -29,9 +30,14 @@ function undefinedBlankNodeRefs(ttl: string): Set<string> {
   for (const rawLine of ttl.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (line.startsWith('#') || line.startsWith('@')) continue;
-    // A blank node in SUBJECT position starts the statement: "_:id <pred> …".
-    const subj = line.match(/^(_:[A-Za-z0-9_-]+)\s+\S/);
-    if (subj) defined.add(subj[1]);
+    // A blank node in SUBJECT position starts the statement: "_:id <pred> …", at the start of the
+    // line or after the `.` that ends the statement before it on the same line (#124).
+    const isSubject = (from: number): void => {
+      const subj = line.slice(from).match(/^(_:[A-Za-z0-9_-]+)\s+\S/);
+      if (subj) defined.add(subj[1]);
+    };
+    isSubject(0);
+    for (let split = statementStartAfterPeriod(line); split; split = statementStartAfterPeriod(line, split.next)) isSubject(split.next);
     // Any blank node token (subject or object); subjects are filtered out below.
     for (const m of line.matchAll(/(?<![\w:-])(_:[A-Za-z0-9_-]+)/g)) referenced.add(m[1]);
   }

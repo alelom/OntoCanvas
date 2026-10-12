@@ -27,6 +27,11 @@ describe('statementStartAfterPeriod (#124)', () => {
     }
   });
 
+  it('finds a statement after the `] .` or `) .` that closes a bracket opened on an earlier line', () => {
+    expect(nextStatement('] . :B a owl:Class .')).toBe(':B a owl:Class .');
+    expect(nextStatement('    :q :r ] ) . :B a owl:Class .')).toBe(':B a owl:Class .');
+  });
+
   it('ignores a `.` inside brackets', () => {
     expect(nextStatement('    :p [ :q "a" ] .')).toBeNull();
   });

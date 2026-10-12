@@ -101,19 +101,37 @@ function blankNodeContents(quads: readonly Quad[]): (term: Quad['object']) => st
   return (term) => contents(term, new Set());
 }
 
-/** Each named-subject triple, and each blank node nothing points at, with blank nodes written out as their contents. */
+/**
+ * Each named-subject triple, and each blank node nothing points at, with blank nodes written out as
+ * their contents. Blank nodes that only point at each other (`_:b1 :p _:b2 . _:b2 :p _:b1 .`) have
+ * no such root, so the first of them not yet written out stands for the rest.
+ */
 function structureSignatures(quads: readonly Quad[]): Map<string, number> {
   const sign = structureSigner(quads);
   const contents = blankNodeContents(quads);
   const referenced = new Set(quads.filter((q) => q.object.termType === 'BlankNode').map((q) => blankNodeId(q.object as never)));
   const sigs = new Map<string, number>();
   const add = (sig: string): void => { sigs.set(sig, (sigs.get(sig) ?? 0) + 1); };
+  const covered = new Set<string>();
+  const cover = (term: Quad['object']): void => {
+    if (term.termType !== 'BlankNode' || covered.has(blankNodeId(term as never))) return;
+    covered.add(blankNodeId(term as never));
+    for (const q of quads) if (q.subject.equals(term)) cover(q.object);
+  };
   for (const q of quads) {
-    if (q.subject.termType !== 'BlankNode') add(sign(q));
-    else if (!referenced.has(blankNodeId(q.subject as never))) {
+    if (q.subject.termType !== 'BlankNode') {
+      add(sign(q));
+      cover(q.object);
+    } else if (!referenced.has(blankNodeId(q.subject as never))) {
       referenced.add(blankNodeId(q.subject as never));
       add(contents(q.subject));
+      cover(q.subject);
     }
+  }
+  for (const q of quads) {
+    if (q.subject.termType !== 'BlankNode' || covered.has(blankNodeId(q.subject as never))) continue;
+    add(contents(q.subject));
+    cover(q.subject);
   }
   return sigs;
 }

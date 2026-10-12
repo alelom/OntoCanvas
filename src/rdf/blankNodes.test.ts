@@ -30,6 +30,12 @@ describe('blockStructurallyChanged', () => {
     expect(blockStructurallyChanged(parse(':p :domain [ owl:unionOf ( :A :B ) ] .'), parse(':p :domain [ owl:unionOf ( :A :C ) ] .'))).toBe(true);
   });
 
+  it('is true when a blank node that is part of a cycle changes, though no blank node is a root', () => {
+    const cycle = (label: string): Quad[] => parse(`_:b1 :p _:b2 ; :label "${label}" . _:b2 :p _:b1 .`);
+    expect(blockStructurallyChanged(cycle('x'), cycle('x'))).toBe(false);
+    expect(blockStructurallyChanged(cycle('x'), cycle('y'))).toBe(true);
+  });
+
   it('is true when two lists swap members, though each list node still looks the same on its own', () => {
     const before = parse(':p :domain [ owl:unionOf ( :A :B ) ] ; :range [ owl:unionOf ( :C :D ) ] .');
     const after = parse(':p :domain [ owl:unionOf ( :A :D ) ] ; :range [ owl:unionOf ( :C :B ) ] .');

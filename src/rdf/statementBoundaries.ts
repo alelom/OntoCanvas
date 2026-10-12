@@ -32,7 +32,8 @@ export function statementStartAfterPeriod(line: string, from = 0): { period: num
     else if (c === '<') inIri = true;
     else if (c === '#') return null;
     else if (c === '[' || c === '(') depth++;
-    else if (c === ']' || c === ')') depth--;
+    // A bracket opened on an earlier line can close here (`] . :Next …`): depth never goes below 0.
+    else if (c === ']' || c === ')') depth = Math.max(0, depth - 1);
     else if (c === '.' && depth === 0 && endsToken(line, i)) {
       const next = line.slice(i + 1).search(/\S/);
       if (next < 0 || line[i + 1 + next] === '#') return null;

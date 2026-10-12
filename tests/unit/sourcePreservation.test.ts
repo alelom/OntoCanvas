@@ -144,6 +144,23 @@ describe('sourcePreservation', () => {
       expect(a.position.end + cache.formattingStyle.lineEnding.length).toBe(b.position.start);
       expect(b.quads.filter(q => q.subject.termType === 'NamedNode')).toHaveLength(2);
     });
+
+    it('starts a block after the `] .` that closes a bracket opened on an earlier line', async () => {
+      const content = `@prefix : <http://example.org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+:A a owl:Class ;
+    :p [
+      :q :r
+] . :B a owl:Class .
+`;
+      const { cache } = await parseTurtleWithPositions(content);
+      const [a, b] = cache.statementBlocks.filter(block => block.type !== 'Header');
+
+      expect([a.subject, b?.subject]).toEqual([':A', ':B']);
+      expect(a.originalText).toBe(':A a owl:Class ;\n    :p [\n      :q :r\n] .');
+      expect(b.originalText).toBe(':B a owl:Class .\n');
+    });
   });
 
   describe('reconstructFromOriginalText', () => {

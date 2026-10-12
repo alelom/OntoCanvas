@@ -95,6 +95,12 @@ describe('relative IRIs under @base', () => {
     expect(parseTurtleBase('@base <http://example.org/a/> .\n@base <b/> .')).toBe('http://example.org/a/b/');
   });
 
+  it('ignores declarations in comments, but not a `#` inside an IRI', () => {
+    expect(parseTurtleBase('@base <http://example.org/o#> . # was @base <http://old.example.org/>')).toBe('http://example.org/o#');
+    expect(parseTurtleBase('# @base <http://old.example.org/> .\n@base <http://example.org/> .\n# BASE <http://old.example.org/>')).toBe('http://example.org/');
+    expect(parseTurtlePrefixes('@prefix : <http://example.org/o#> . # @prefix : <http://old.example.org/#> .').get('')).toBe('http://example.org/o#');
+  });
+
   it('leaves absolute IRIs alone, and relative ones when there is no base', () => {
     const base = parseTurtleBase('@base <http://example.org/> .');
     expect(resolveTurtlePrefixedName('<urn:x:Thing>', new Map(), base)).toBe('urn:x:Thing');

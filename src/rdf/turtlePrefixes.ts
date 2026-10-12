@@ -23,7 +23,7 @@ export function parseTurtlePrefixes(
   into: Map<string, string> = new Map()
 ): Map<string, string> {
   if (!text) return into;
-  for (const match of text.matchAll(PREFIX_DECLARATION)) {
+  for (const match of withoutComments(text).matchAll(PREFIX_DECLARATION)) {
     into.set(match[1] ?? '', match[2]);
   }
   return into;
@@ -36,8 +36,13 @@ const BASE_DECLARATION = /(?:@base|BASE)\s+<([^>]*)>/gi;
  * relative one resolves against the base before it, as a Turtle parser does.
  */
 export function parseTurtleBase(text: string, base: string | null = null): string | null {
-  for (const match of text.matchAll(BASE_DECLARATION)) base = resolveIri(match[1], base);
+  for (const match of withoutComments(text).matchAll(BASE_DECLARATION)) base = resolveIri(match[1], base);
   return base;
+}
+
+/** `text` with its `#` comments removed; a `#` inside an IRI (`<http://example.org/o#>`) or a string is not a comment. */
+function withoutComments(text: string): string {
+  return text.replace(/(<[^>\s]*>|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|#[^\n]*/g, (_comment, kept: string | undefined) => kept ?? '');
 }
 
 /** `iri` resolved against `base` when it is relative (`<#Term>`, `<Term>`); unchanged otherwise. */

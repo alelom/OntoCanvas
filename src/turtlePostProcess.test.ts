@@ -14,6 +14,9 @@ describe('hasUndefinedBlankNodeRefs', () => {
     const ttl = `:hasOrientation rdfs:domain [ a owl:Class ; owl:unionOf ( :A :B ) ] .`;
     expect(hasUndefinedBlankNodeRefs(ttl)).toBe(false);
   });
+  it('is false when the blank node is defined by a statement that starts mid-line', () => {
+    expect(hasUndefinedBlankNodeRefs(`:A a owl:Class . _:b2 a owl:Class .\n:C :p _:b2 .`)).toBe(false);
+  });
   it('is false for a label the source already left undefined, true for a new one (#124)', () => {
     const source = `:A rdfs:subClassOf _:df_0_0 .`;
     expect(hasUndefinedBlankNodeRefs(`:A rdfs:subClassOf _:df_0_0 .`, source)).toBe(false);
