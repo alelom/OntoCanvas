@@ -1,15 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { Parser, Store } from 'n3';
-import { readOntologyVersion, versionPinnedUri, type OntologyVersion } from './versionPinnedUri';
+import { versionPinnedUri } from './versionPinnedUri';
+import type { OntologyVersion } from './ontologyVersion';
 
 const ONTO = 'https://w3id.org/adiro/aec_provenance';
 const version = (versionIri: string | null, versionInfo: string | null = null, ontologyIri = ONTO): OntologyVersion =>
   ({ ontologyIri, versionIri, versionInfo });
-
-const store = (ttl: string): Store =>
-  new Store(new Parser().parse(
-    '@prefix owl: <http://www.w3.org/2002/07/owl#> . @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n' + ttl
-  ));
 
 describe('versionPinnedUri (#128)', () => {
   it('puts the version IRI in place of the ontology IRI, for hash and slash terms alike', () => {
@@ -48,17 +43,5 @@ describe('versionPinnedUri (#128)', () => {
     const reason = (r: ReturnType<typeof versionPinnedUri>): string => ('reason' in r ? r.reason : '');
     expect(reason(versionPinnedUri(`${ONTO}#Agent`, version(null)))).toMatch(/owl:versionIRI/);
     expect(reason(versionPinnedUri('http://other.org/x#A', version(`${ONTO}/1.0.0`)))).toContain(ONTO);
-  });
-});
-
-describe('readOntologyVersion (#128)', () => {
-  it('reads the ontology IRI, owl:versionIRI and owl:versionInfo', () => {
-    expect(readOntologyVersion(store(`<${ONTO}> rdf:type owl:Ontology ; owl:versionIRI <${ONTO}/1.0.0> ; owl:versionInfo "1.0.0" .`)))
-      .toEqual(version(`${ONTO}/1.0.0`, '1.0.0'));
-  });
-
-  it('gives nulls for what the ontology does not declare, and null without an ontology', () => {
-    expect(readOntologyVersion(store(`<${ONTO}> rdf:type owl:Ontology .`))).toEqual(version(null));
-    expect(readOntologyVersion(store('<http://example.org/o#A> rdf:type owl:Class .'))).toBeNull();
   });
 });

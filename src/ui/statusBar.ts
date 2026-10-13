@@ -1,6 +1,7 @@
 import { detectOntologyIssues, groupIssuesByType, getIssueTypeLabel, type OntologyIssue } from './ontologyIssues';
 import { Store } from 'n3';
 import { fileDisplayName, type OntologyInfo } from './ontologyInfo';
+import { versionLabel, type OntologyVersion } from '../lib/ontologyVersion';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
@@ -8,6 +9,7 @@ let issuesPopup: HTMLElement | null = null;
 let currentStore: Store | null = null;
 let currentOntologyLocation: string | null = null;
 let currentOntologyInfo: OntologyInfo | null = null;
+let currentOntologyVersion: OntologyVersion | null = null;
 let currentFilePath: string | null = null;
 
 /**
@@ -205,6 +207,12 @@ export function updateOntologyInfoDisplay(info: OntologyInfo | null): void {
   renderOntologyPart();
 }
 
+/** Show the version the open ontology declares after its name (#130), or nothing when it declares none. */
+export function updateOntologyVersionDisplay(version: OntologyVersion | null): void {
+  currentOntologyVersion = version;
+  renderOntologyPart();
+}
+
 /** A link opening `href` in a new tab. */
 function createLink(href: string, text: string, title: string): HTMLAnchorElement {
   const link = document.createElement('a');
@@ -226,7 +234,7 @@ function createLink(href: string, text: string, title: string): HTMLAnchorElemen
 
 /**
  * The ontology part of the status bar (#113): "Ontology: " and the ontology's name, linking to the file or URL it was opened
- * from when that is a URL, then "(prefix: <i>foaf</i>)" when the file declares a prefix for it. With no
+ * from when that is a URL, then its version ("v2.1.0", #130) and "(prefix: <i>foaf</i>)" when the file declares a prefix for it. With no
  * ontology declared, the file's own name stands in; with neither, the part is hidden.
  */
 function renderOntologyPart(): void {
@@ -251,6 +259,15 @@ function renderOntologyPart(): void {
     el.appendChild(document.createTextNode(name));
   }
   el.title = where;
+  const version = versionLabel(currentOntologyVersion);
+  if (version) {
+    el.appendChild(document.createTextNode(' '));
+    const span = document.createElement('span');
+    span.id = 'ontologyVersion';
+    span.textContent = /^\d/.test(version) ? `v${version}` : version;
+    span.title = currentOntologyVersion?.versionIri ? `owl:versionIRI: ${currentOntologyVersion.versionIri}` : 'owl:versionInfo';
+    el.appendChild(span);
+  }
   if (currentOntologyInfo?.prefix) {
     el.appendChild(document.createTextNode(' (prefix: '));
     const prefix = document.createElement('i');

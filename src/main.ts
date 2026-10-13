@@ -146,6 +146,7 @@ import {
   updateNodeEdgeCounts,
   updateFilePathDisplay as updateStatusBarFilePath,
   updateOntologyInfoDisplay,
+  updateOntologyVersionDisplay,
   updateSelectionInfo as updateStatusBarSelection,
   updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
@@ -156,7 +157,8 @@ import {
   setTermUriResolver,
   setVersionPinnedUriResolver,
 } from './ui/contextMenu';
-import { readOntologyVersion, versionPinnedUri } from './lib/versionPinnedUri';
+import { versionPinnedUri } from './lib/versionPinnedUri';
+import { readOntologyVersion } from './lib/ontologyVersion';
 import {
   resolveNodeTerm,
   resolveEdgeTerm,
@@ -7161,6 +7163,7 @@ hasUnsavedChanges = false;
     setTimeout(() => {
       updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
       updateOntologyInfoDisplay(ttlStore ? getOntologyInfo(ttlStore, prefixMap) : null);
+      updateOntologyVersionDisplay(ttlStore ? readOntologyVersion(ttlStore) : null);
     }, 0);
 
     if (handle && fileName) {

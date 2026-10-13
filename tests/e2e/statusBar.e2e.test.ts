@@ -80,6 +80,11 @@ describe('bottom bar (#113)', () => {
     expect(bar.counts).toBe('Nodes: 2 / Edges: 1');
   }, 10000);
 
+  it('shows the version the ontology declares after its name (#130)', async () => {
+    await openEditorWithTtl(page, WITH_ONTOLOGY.replace('rdfs:label "Status bar ontology" .', 'rdfs:label "Status bar ontology" ; owl:versionInfo "2.1.0" .'));
+    expect((await statusBar()).ontologyText).toBe('Ontology: Status bar ontology v2.1.0 (prefix: sb)');
+  }, 10000);
+
   it('sets the prefix itself in italics', async () => {
     await openEditorWithTtl(page, WITH_ONTOLOGY);
     expect((await statusBar()).italic).toEqual(['sb']);

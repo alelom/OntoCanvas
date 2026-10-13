@@ -4,7 +4,8 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/parser';
 import { resolveEdgeTerm, resolveNodeTerm, type TermLookup } from '../../src/lib/termUri';
-import { readOntologyVersion, versionPinnedUri } from '../../src/lib/versionPinnedUri';
+import { versionPinnedUri } from '../../src/lib/versionPinnedUri';
+import { readOntologyVersion } from '../../src/lib/ontologyVersion';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples');
 
