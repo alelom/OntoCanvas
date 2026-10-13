@@ -17,6 +17,7 @@ import {
 } from '../lib/classGraphTraversal';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/debug';
+import type { PinnedUri } from '../lib/versionPinnedUri';
 
 /**
  * Callback type for when relationships are pasted.
@@ -56,6 +57,9 @@ export type OnOpenExternalOntologyCallback = (url: string) => Promise<void>;
  */
 export type TermUriResolver = (kind: 'node' | 'edge', id: string) => string | null;
 
+/** Resolves the version-pinned URI of the term behind a node or edge, or why it has none (#128). */
+export type VersionPinnedUriResolver = (kind: 'node' | 'edge', id: string) => PinnedUri;
+
 export interface ExternalRefForContextMenu {
   url: string;
 }
@@ -72,12 +76,18 @@ let onEditNodeCallback: ((nodeId: string) => void) | null = null;
 let onEditEdgeCallback: ((edgeId: string) => void) | null = null;
 let onSelectionChangedCallback: OnSelectionChangedCallback | null = null;
 let termUriResolver: TermUriResolver | null = null;
-/** When true (embedded, read-only mode) the menu offers only "Copy URI". */
+let versionPinnedUriResolver: VersionPinnedUriResolver | null = null;
+/** When true (embedded, read-only mode) the menu offers only the "Copy URI" items. */
 let copyOnlyMenu = false;
 
 /** Register how "Copy URI" resolves a node/edge to its term URI. */
 export function setTermUriResolver(resolver: TermUriResolver | null): void {
   termUriResolver = resolver;
+}
+
+/** Register how "Copy version-pinned URI" resolves a node/edge to its version-pinned URI. */
+export function setVersionPinnedUriResolver(resolver: VersionPinnedUriResolver | null): void {
+  versionPinnedUriResolver = resolver;
 }
 
 function normalizeUrl(u: string): string {
@@ -243,7 +253,7 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
 
   contextMenuElement.innerHTML = '';
 
-  // "Copy URI" is always the first item for a node or edge.
+  // "Copy URI" and "Copy version-pinned URI" are always the first items for a node or edge.
   const target = nodeId
     ? { kind: 'node' as const, id: nodeId }
     : edgeId
@@ -251,6 +261,7 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       : null;
   if (target) {
     contextMenuElement.appendChild(createCopyUriItem(target.kind, target.id));
+    contextMenuElement.appendChild(createCopyVersionPinnedUriItem(target.kind, target.id));
     if (copyOnlyMenu) return;
     contextMenuElement.appendChild(createSeparator());
   }
@@ -385,6 +396,30 @@ function createCopyUriItem(kind: 'node' | 'edge', id: string): HTMLElement {
     !uri
   );
   item.title = uri ?? 'No URI recorded for this item';
+  return item;
+}
+
+/**
+ * "Copy version-pinned URI (<version>)" menu item: the term's URI in the loaded release (#128).
+ * Disabled, with the reason as its tooltip, when the term has none.
+ */
+function createCopyVersionPinnedUriItem(kind: 'node' | 'edge', id: string): HTMLElement {
+  const pinned = versionPinnedUriResolver?.(kind, id) ?? { uri: null, reason: 'No version information' };
+  const uri = pinned.uri;
+  const item = createMenuItem(
+    uri ? `Copy version-pinned URI (${pinned.version})` : 'Copy version-pinned URI',
+    () => {
+      if (uri) {
+        void copyTextToClipboard(uri).then((ok) =>
+          debugLog(`[contextMenu] Copy version-pinned URI ${ok ? 'copied' : 'failed'}: ${uri}`)
+        );
+      }
+      hideContextMenu();
+    },
+    !uri
+  );
+  if (pinned.uri === null) item.title = pinned.reason;
+  else item.title = pinned.derived ? `${pinned.uri}\n(built from owl:versionInfo: the ontology declares no owl:versionIRI)` : pinned.uri;
   return item;
 }
 

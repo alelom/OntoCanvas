@@ -58,3 +58,10 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | [undo-delete-class.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fundo-delete-class.ttl) | Undo after deleting a class restores all of it: comment, annotation, axioms, restrictions, and read-only restrictions pointing to it | #77 | [TTL](saving/undo-delete-class.ttl) |
 | [keeps-source-layout.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fkeeps-source-layout.ttl) | Saving changes only the lines an edit touches, in a file with class expressions, a class described in two statements, list values, an object list over several lines and a predicate on two lines | #65, #118–#121, #123 | [TTL](saving/keeps-source-layout.ttl) |
 | [base-relative-iris.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fbase-relative-iris.ttl) | Terms written as `<#Term>` under `@base` are saved in place, not appended again | #122 | [TTL](saving/base-relative-iris.ttl) |
+
+## Term URIs
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [version-pinned-uris.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Furis%2Fversion-pinned-uris.ttl) | Right-click → **Copy version-pinned URI (2.1.0)** copies a term URI in the loaded release (`…/2.1.0#Building`), from `owl:versionIRI`; greyed out for `rdfs:subClassOf`; also in embedded mode | #128 | [TTL](uris/version-pinned-uris.ttl) |
+| [version-from-version-info.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Furis%2Fversion-from-version-info.ttl) | With only `owl:versionInfo "1.4.0"`, the version-pinned URI is built as `<ontology IRI>/1.4.0#Term`, and its tooltip says so | #128 | [TTL](uris/version-from-version-info.ttl) |

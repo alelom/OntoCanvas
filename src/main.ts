@@ -154,7 +154,9 @@ import {
   showContextMenu,
   updateContextMenuData,
   setTermUriResolver,
+  setVersionPinnedUriResolver,
 } from './ui/contextMenu';
+import { readOntologyVersion, versionPinnedUri } from './lib/versionPinnedUri';
 import {
   resolveNodeTerm,
   resolveEdgeTerm,
@@ -3941,6 +3943,9 @@ function getTermLookup(): TermLookup {
   return { nodes: (currentGraphDataForBuild ?? rawData).nodes, objectProperties, dataProperties };
 }
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
+setVersionPinnedUriResolver((kind, id) =>
+  versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, ttlStore ? readOntologyVersion(ttlStore) : null)
+);
 
 function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
   return kind === 'node' ? resolveNodeTerm(id, getTermLookup()) : resolveEdgeTerm(id, getTermLookup());
