@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from 'vitest';
-import { Store, DataFactory } from 'n3';
+import { Store, DataFactory, Parser } from 'n3';
 import {
   extractExternalRefsFromStore,
   extractUsedNamespaceRefsFromStore,
@@ -18,6 +18,45 @@ import type { GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 
 describe('externalRefs', () => {
+  describe('extractUsedNamespaceRefsFromStore: values of annotations are links, not vocabulary terms (#135)', () => {
+    const refsOf = (ttl: string) =>
+      extractUsedNamespaceRefsFromStore(
+        new Store(new Parser({ baseIRI: 'https://example.org/onto/' }).parse(
+          `@prefix : <https://example.org/onto#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .
+           @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+           @prefix dcterms: <http://purl.org/dc/terms/> . @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+           <https://example.org/onto> rdf:type owl:Ontology .
+           ${ttl}`
+        )),
+        'https://example.org/onto#'
+      ).map((r) => r.url);
+
+    it('lists no reference for the value of an annotation property the file declares (an example image)', () => {
+      const urls = refsOf(`:exampleImage rdf:type owl:AnnotationProperty .
+        :Plan rdf:type owl:Class ; :exampleImage <img/drawings/plan_01.png> .`);
+      expect(urls.some((u) => u.includes('/img/'))).toBe(false);
+    });
+
+    it('lists no reference for the value of a standard annotation (seeAlso, licence, homepage)', () => {
+      const urls = refsOf(`:Plan rdf:type owl:Class ; rdfs:seeAlso <https://docs.example.com/guide/plans> .
+        <https://example.org/onto> dcterms:license <https://licences.example.net/by/4.0/> ; foaf:homepage <https://www.example.com/team/page> .`);
+      expect(urls.filter((u) => /docs\.example\.com|licences\.example\.net|www\.example\.com/.test(u))).toEqual([]);
+    });
+
+    it('lists no parent folder of an ontology IRI: the ontology\'s own, an import, a version IRI', () => {
+      const urls = refsOf(`<https://example.org/onto> owl:imports <https://example.org/other-onto> ;
+        owl:versionIRI <https://example.org/onto/1.0.0> .`);
+      expect(urls).not.toContain('https://example.org');
+      expect(urls.filter((u) => u.startsWith('https://example.org/onto/'))).toEqual([]);
+    });
+
+    it('still lists the vocabularies a term comes from: a superclass, an rdfs:isDefinedBy', () => {
+      const urls = refsOf(`:Plan rdf:type owl:Class ; rdfs:subClassOf <https://vocab.example.com/drawings#Drawing> ;
+        rdfs:isDefinedBy <https://defs.example.com/core> .`);
+      expect(urls).toEqual(expect.arrayContaining(['https://vocab.example.com/drawings#', 'https://defs.example.com']));
+    });
+  });
+
   describe('extractExternalRefsFromStore', () => {
     it('should extract external references from owl:imports', () => {
       const store = new Store();

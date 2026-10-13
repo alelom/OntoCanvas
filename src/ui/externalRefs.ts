@@ -62,6 +62,33 @@ export function extractExternalRefsFromStore(store: Store): ExternalOntologyRefe
 /** Core W3C namespaces we do not show as external refs (always present). */
 const CORE_NAMESPACES = new Set(RESERVED_VOCABULARY_NAMESPACES);
 
+/**
+ * Annotation properties whose value is a link (a page, a licence, a person, an image, another version), not a
+ * term of a vocabulary (#135). rdfs:isDefinedBy is left out: its value names the ontology a term comes from.
+ */
+const STANDARD_ANNOTATION_PREDICATES = new Set([
+  'http://www.w3.org/2000/01/rdf-schema#seeAlso',
+  'http://www.w3.org/2002/07/owl#priorVersion',
+  'http://www.w3.org/2002/07/owl#backwardCompatibleWith',
+  'http://www.w3.org/2002/07/owl#incompatibleWith',
+  'http://xmlns.com/foaf/0.1/homepage',
+  'http://xmlns.com/foaf/0.1/page',
+  'http://xmlns.com/foaf/0.1/depiction',
+  'http://xmlns.com/foaf/0.1/img',
+  'http://xmlns.com/foaf/0.1/logo',
+]);
+/** Namespaces all of whose properties annotate (Dublin Core: creator, licence, source, …; schema.org's). */
+const ANNOTATION_NAMESPACES = ['http://purl.org/dc/terms/', 'http://purl.org/dc/elements/1.1/', 'http://schema.org/', 'https://schema.org/'];
+
+/** The annotation properties of `store`: the standard ones, and those it declares as owl:AnnotationProperty. */
+function annotationPredicates(store: Store): (predicate: string) => boolean {
+  const declared = new Set(
+    store.getSubjects(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), DataFactory.namedNode('http://www.w3.org/2002/07/owl#AnnotationProperty'), null)
+      .map((s) => s.value)
+  );
+  return (p) => declared.has(p) || STANDARD_ANNOTATION_PREDICATES.has(p) || ANNOTATION_NAMESPACES.some((ns) => p.startsWith(ns));
+}
+
 /** Non-vocabulary: identifiers, licenses, docs, people pages, source repos. Never show as external ontology refs. */
 function isNonVocabularyNamespace(normalized: string): boolean {
   const n = normalized.toLowerCase();
@@ -133,13 +160,26 @@ export function extractUsedNamespaceRefsFromStore(
     refs.push({ url, usePrefix: prefix !== undefined, prefix });
   }
 
+  const isAnnotation = annotationPredicates(store);
+  // An ontology IRI names a whole ontology, not a term in a namespace: cut back, it gives its parent folder
+  // (#135). The imports are listed from owl:imports already.
+  const OWL = 'http://www.w3.org/2002/07/owl#';
+  const ontologyIris = new Set([
+    ...store.getSubjects(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), DataFactory.namedNode(OWL + 'Ontology'), null),
+    ...store.getObjects(null, DataFactory.namedNode(OWL + 'imports'), null),
+    ...store.getObjects(null, DataFactory.namedNode(OWL + 'versionIRI'), null),
+  ].map((t) => t.value));
+  const addTerm = (iri: string): void => {
+    if (!ontologyIris.has(iri)) addNamespace(iri);
+  };
   for (const q of store) {
     if (q.subject.termType === 'NamedNode' && (q.subject as { value?: string }).value)
-      addNamespace((q.subject as { value: string }).value);
+      addTerm((q.subject as { value: string }).value);
     if (q.predicate.termType === 'NamedNode' && (q.predicate as { value?: string }).value)
       addNamespace((q.predicate as { value: string }).value);
-    if (q.object.termType === 'NamedNode' && (q.object as { value?: string }).value)
-      addNamespace((q.object as { value: string }).value);
+    // The value of an annotation is a link (an image, a page, a licence), not a term of a vocabulary (#135).
+    if (q.object.termType === 'NamedNode' && (q.object as { value?: string }).value && !isAnnotation(q.predicate.value))
+      addTerm((q.object as { value: string }).value);
   }
 
   return refs;
