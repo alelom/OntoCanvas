@@ -147,6 +147,7 @@ import {
   updateFilePathDisplay as updateStatusBarFilePath,
   updateOntologyInfoDisplay,
   updateOntologyVersionDisplay,
+  updateAvailableVersions,
   updateSelectionInfo as updateStatusBarSelection,
   updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
@@ -159,6 +160,8 @@ import {
 } from './ui/contextMenu';
 import { versionPinnedUri } from './lib/versionPinnedUri';
 import { readOntologyVersion, bareIri } from './lib/ontologyVersion';
+import { findVersions } from './lib/ontologyVersions';
+import { browserVersionSources } from './lib/versionSources';
 import {
   resolveNodeTerm,
   resolveEdgeTerm,
@@ -6740,6 +6743,8 @@ let importedDeclarations: PropertyLists | null = null;
 /** The loaded ontology's imports that could be read (#131), and whether they are still being read. */
 let importedOntologies: ImportedOntology[] = [];
 let importsBeingRead = false;
+/** For each import that was read, the newer release found for it, if any (#132). */
+let importNewerVersions = new Map<string, string | null>();
 
 /** What the imports dialog shows of an import's version (#131); null for a reference that is not an import. */
 setImportVersionLookup((url) => {
@@ -6747,7 +6752,7 @@ setImportVersionLookup((url) => {
   const isImport = ttlStore.getQuads(null, 'http://www.w3.org/2002/07/owl#imports', null, null).some((q) => bareIri(q.object.value) === bareIri(url));
   if (!isImport) return null;
   const imported = importedOntologies.find((o) => bareIri(o.url) === bareIri(url));
-  if (imported) return { state: 'read', version: readOntologyVersion(imported.store) };
+  if (imported) return { state: 'read', version: readOntologyVersion(imported.store), newer: importNewerVersions.get(imported.url) };
   return importsBeingRead ? { state: 'reading' } : { state: 'unread' };
 });
 
@@ -6791,6 +6796,7 @@ function refreshPropertyMenus(): void {
 function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
   beginImportsSettle();
   importedOntologies = [];
+  importNewerVersions = new Map();
   importsBeingRead = true;
   void (async () => {
     try {
@@ -6817,9 +6823,38 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
         importsBeingRead = false;
         refreshExternalRefsList();
         importsSettled();
+        void findImportsNewerVersions(store);
       }
     }
   })();
+}
+
+/** Look, in the background, for a newer release of each import that was read (#132); the imports dialog names it. */
+async function findImportsNewerVersions(store: NonNullable<typeof ttlStore>): Promise<void> {
+  const found = await Promise.all(importedOntologies.map(async (o) => [o.url, (await findVersions(o.store, o.url, browserVersionSources)).newer?.version ?? null] as const));
+  if (store !== ttlStore) return;
+  importNewerVersions = new Map(found);
+  refreshExternalRefsList();
+}
+
+/**
+ * Look, in the background, for the other versions of the loaded ontology (#132), and offer them in the bottom bar
+ * (#133). Choosing one opens it, after asking when there are unsaved edits; embedded, it opens in a new tab.
+ */
+function startFindingVersions(store: NonNullable<typeof ttlStore>, loadedUrl: string | null): void {
+  updateAvailableVersions(null, () => {});
+  void findVersions(store, loadedUrl, browserVersionSources).then((available) => {
+    if (store !== ttlStore) return;
+    updateAvailableVersions(available, (entry) => {
+      if (!entry.url) return;
+      if (isEmbedded()) {
+        window.open(`${window.location.origin + window.location.pathname}?onto=${encodeURIComponent(entry.url)}`, '_blank', 'noopener');
+        return;
+      }
+      if (hasUnsavedChanges && !confirm(`Open version ${entry.version}? Your unsaved changes will be lost.`)) return;
+      void loadFromUrl(entry.url);
+    });
+  });
 }
 
 async function loadTtlAndRender(
@@ -7186,6 +7221,7 @@ hasUnsavedChanges = false;
       updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
       updateOntologyInfoDisplay(ttlStore ? getOntologyInfo(ttlStore, prefixMap) : null);
       updateOntologyVersionDisplay(ttlStore ? readOntologyVersion(ttlStore) : null);
+      if (ttlStore) startFindingVersions(ttlStore, pathHint && /^https?:\/\//i.test(pathHint) ? pathHint : null);
     }, 0);
 
     if (handle && fileName) {

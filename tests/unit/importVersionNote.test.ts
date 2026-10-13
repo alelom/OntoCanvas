@@ -22,6 +22,11 @@ describe('describeImportVersion (#131)', () => {
     expect(note.title).toContain(`${ONTO}/1.2.0`);
   });
 
+  it('says when a newer release than the imported one exists (#132)', () => {
+    const note = describeImportVersion(`${ONTO}/1.2.0`, { ...read(`${ONTO}/1.2.0`, '1.2.0'), newer: '2.0.0' });
+    expect(note.text).toBe('Version 1.2.0 · pinned to this release · 2.0.0 available');
+  });
+
   it('names only the version when the import is neither, e.g. a file address', () => {
     expect(describeImportVersion('https://cdn.example.org/base.ttl', read(null, '1.2.0')).text).toBe('Version 1.2.0');
   });

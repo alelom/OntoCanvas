@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
-import { compareVersions, importPinning, readOntologyVersion, versionLabel, type OntologyVersion } from './ontologyVersion';
+import { compareVersions, importPinning, readOntologyVersion, versionInIri, versionLabel, type OntologyVersion } from './ontologyVersion';
 
 const ONTO = 'https://example.org/onto';
 const version = (versionIri: string | null, versionInfo: string | null = null, ontologyIri = ONTO): OntologyVersion =>
@@ -36,6 +36,19 @@ describe('versionLabel (#130)', () => {
   it('is null when nothing is declared', () => {
     expect(versionLabel(version(null))).toBeNull();
     expect(versionLabel(null)).toBeNull();
+  });
+});
+
+describe('versionInIri (#132)', () => {
+  it('finds the version number a version IRI is named with', () => {
+    expect(versionInIri(`${ONTO}/1.2.0`)).toBe('1.2.0');
+    expect(versionInIri(`${ONTO}/1.2.0/onto.owl`)).toBe('1.2.0');
+    expect(versionInIri('https://example.org/files/building-1.1.0.ttl')).toBe('1.1.0');
+    expect(versionInIri('https://example.org/files/onto-v2.0.0-rc.1.ttl')).toBe('v2.0.0-rc.1');
+  });
+
+  it('is null when the IRI holds no version number', () => {
+    expect(versionInIri(`${ONTO}/latest/onto.owl`)).toBeNull();
   });
 });
 

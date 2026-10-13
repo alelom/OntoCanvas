@@ -22,6 +22,28 @@ export const bareIri = (iri: string): string => iri.replace(/[#/]+$/, '');
 /** The last path segment of an IRI (`…/onto/1.2.0/` → `1.2.0`). */
 export const lastSegment = (iri: string): string => bareIri(iri).slice(bareIri(iri).lastIndexOf('/') + 1);
 
+/** A version number inside a path segment: `building-1.1.0.ttl`, `onto-v2.0.0-rc.1.owl`. */
+const VERSION_IN_SEGMENT = /(?:^|[^A-Za-z0-9.])(v?\d+(?:\.\d+)+(?:-[A-Za-z]+(?:\.?\d+)*)?)/;
+
+/**
+ * The version number a version IRI is named with, from the last path segment that holds one
+ * (`…/1.2.0`, `…/1.2.0/onto.owl`, `…/building-1.1.0.ttl`); null when none does.
+ */
+export function versionInIri(iri: string): string | null {
+  let path: string;
+  try {
+    path = new URL(iri).pathname;
+  } catch {
+    path = iri;
+  }
+  for (const segment of path.split('/').filter(Boolean).reverse()) {
+    if (VERSION_NUMBER.test(segment) && !/\.[A-Za-z]+$/.test(segment)) return segment;
+    const found = VERSION_IN_SEGMENT.exec(segment);
+    if (found) return found[1];
+  }
+  return null;
+}
+
 /** The main ontology's IRI and declared version: the first owl:Ontology, as `getMainOntologyBase` picks it. Null without one. */
 export function readOntologyVersion(store: Store): OntologyVersion | null {
   const ontology = store.getQuads(null, RDF_TYPE, OWL + 'Ontology', null).find((q) => q.subject.termType === 'NamedNode')?.subject;
@@ -30,12 +52,11 @@ export function readOntologyVersion(store: Store): OntologyVersion | null {
   return { ontologyIri: ontology.value, versionIri: value('versionIRI'), versionInfo: value('versionInfo') };
 }
 
-/** How to name the version (#130): owl:versionInfo, else the version number ending owl:versionIRI; null when neither. */
+/** How to name the version (#130): owl:versionInfo, else the version number in owl:versionIRI; null when neither. */
 export function versionLabel(version: OntologyVersion | null): string | null {
   if (!version) return null;
   if (version.versionInfo) return version.versionInfo;
-  const fromIri = version.versionIri ? lastSegment(version.versionIri) : '';
-  return VERSION_NUMBER.test(fromIri) ? fromIri : null;
+  return version.versionIri ? versionInIri(version.versionIri) : null;
 }
 
 /**

@@ -1,0 +1,29 @@
+@prefix : <http://example.org/examples/building#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# The versions of an ontology (issues #130, #132, #133). Open this file by URL (the earlier versions are
+# found next to it). The bottom bar shows "Ontology: Building v2.0.0", then "versions ▾": click it for the
+# list of versions, newest first:
+#   2.0.0 · open now
+#   1.1.0 · earlier version (owl:priorVersion)
+#   1.0.0 · earlier version (owl:priorVersion)
+# Choose 1.1.0 to open it: the graph shows Room where this version has Space.
+# Here owl:priorVersion names the earlier versions' files, as relative IRIs, so this example works wherever
+# it is opened from; a published ontology names their version IRIs.
+
+<http://example.org/examples/building> rdf:type owl:Ontology ;
+    rdfs:label "Building" ;
+    owl:versionIRI <http://example.org/examples/building/2.0.0> ;
+    owl:versionInfo "2.0.0" ;
+    owl:priorVersion <building-1.1.0.ttl> , <building-1.0.0.ttl> .
+
+:Building rdf:type owl:Class ;
+    rdfs:label "Building" .
+
+:Floor rdf:type owl:Class ;
+    rdfs:label "Floor" .
+
+:Space rdf:type owl:Class ;
+    rdfs:label "Space" .

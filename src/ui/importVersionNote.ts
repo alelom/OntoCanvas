@@ -8,7 +8,8 @@ import { importPinning, versionLabel, type OntologyVersion } from '../lib/ontolo
 export type ImportVersionStatus =
   | { state: 'reading' }
   | { state: 'unread' }
-  | { state: 'read'; version: OntologyVersion | null };
+  /** `newer`: a release newer than the imported one, once looked for (#132). */
+  | { state: 'read'; version: OntologyVersion | null; newer?: string | null };
 
 const PINNING_TEXT = {
   pinned: ' · pinned to this release',
@@ -31,7 +32,7 @@ export function describeImportVersion(importIri: string, status: ImportVersionSt
   const pinning = importPinning(importIri, status.version);
   const versionIri = status.version?.versionIri ? `\nowl:versionIRI: ${status.version.versionIri}` : '';
   return {
-    text: (label ? `Version ${label}` : 'No version declared') + PINNING_TEXT[pinning],
-    title: PINNING_TITLE[pinning] + versionIri,
+    text: (label ? `Version ${label}` : 'No version declared') + PINNING_TEXT[pinning] + (status.newer ? ` · ${status.newer} available` : ''),
+    title: PINNING_TITLE[pinning] + versionIri + (status.newer ? `\nA newer release, ${status.newer}, exists.` : ''),
   };
 }

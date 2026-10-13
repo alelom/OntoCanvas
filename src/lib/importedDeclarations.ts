@@ -122,7 +122,7 @@ export async function loadImportedOntologies(
 }
 
 /** The RDF format of a document, from its content. Turtle also reads N-Triples. */
-function sniffContentType(content: string): string {
+export function sniffContentType(content: string): string {
   const head = content.trimStart().slice(0, 200);
   if (/^<\?xml|^<(?:rdf:)?RDF[\s>]/i.test(head)) return 'application/rdf+xml';
   if (/^[{[]/.test(head)) return 'application/ld+json';

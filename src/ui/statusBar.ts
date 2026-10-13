@@ -2,6 +2,8 @@ import { detectOntologyIssues, groupIssuesByType, getIssueTypeLabel, type Ontolo
 import { Store } from 'n3';
 import { fileDisplayName, type OntologyInfo } from './ontologyInfo';
 import { versionLabel, type OntologyVersion } from '../lib/ontologyVersion';
+import type { AvailableVersions, VersionEntry } from '../lib/ontologyVersions';
+import { hideVersionList, toggleVersionList } from './versionList';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
@@ -10,6 +12,8 @@ let currentStore: Store | null = null;
 let currentOntologyLocation: string | null = null;
 let currentOntologyInfo: OntologyInfo | null = null;
 let currentOntologyVersion: OntologyVersion | null = null;
+let availableVersions: AvailableVersions | null = null;
+let onVersionChosen: (entry: VersionEntry) => void = () => {};
 let currentFilePath: string | null = null;
 
 /**
@@ -213,6 +217,33 @@ export function updateOntologyVersionDisplay(version: OntologyVersion | null): v
   renderOntologyPart();
 }
 
+/**
+ * The other versions of the open ontology, once found in the background (#132): a button after the version
+ * opens their list (#133), and says when one is newer. Null hides it.
+ */
+export function updateAvailableVersions(available: AvailableVersions | null, onChoose: (entry: VersionEntry) => void): void {
+  availableVersions = available;
+  onVersionChosen = onChoose;
+  hideVersionList();
+  renderOntologyPart();
+}
+
+/** The button opening the list of versions (#133), when more than the open one is known. */
+function createVersionsButton(available: AvailableVersions): HTMLElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'ontologyVersionsBtn';
+  button.textContent = available.newer ? `${available.newer.version} available ▾` : 'versions ▾';
+  button.title = (available.newer ? `A newer version, ${available.newer.version}, exists. ` : '') + 'Click to list the versions of this ontology.';
+  button.style.cssText = `margin-left: 4px; padding: 0 4px; font-size: 11px; border: none; background: none; cursor: pointer;
+    color: ${available.newer ? '#d35400' : '#3498db'};`;
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleVersionList(button, available, (entry) => onVersionChosen(entry));
+  });
+  return button;
+}
+
 /** A link opening `href` in a new tab. */
 function createLink(href: string, text: string, title: string): HTMLAnchorElement {
   const link = document.createElement('a');
@@ -268,6 +299,7 @@ function renderOntologyPart(): void {
     span.title = currentOntologyVersion?.versionIri ? `owl:versionIRI: ${currentOntologyVersion.versionIri}` : 'owl:versionInfo';
     el.appendChild(span);
   }
+  if (availableVersions && availableVersions.entries.length > 1) el.appendChild(createVersionsButton(availableVersions));
   if (currentOntologyInfo?.prefix) {
     el.appendChild(document.createTextNode(' (prefix: '));
     const prefix = document.createElement('i');
