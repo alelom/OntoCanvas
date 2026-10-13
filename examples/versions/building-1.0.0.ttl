@@ -1,0 +1,18 @@
+@prefix : <http://example.org/examples/building#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Version 1.0.0 of building-2.0.0.ttl (issues #132, #133): open that one, then choose 1.0.0 from its list. This
+# first version names no other, so opened on its own the bottom bar shows its version and no list.
+
+<http://example.org/examples/building> rdf:type owl:Ontology ;
+    rdfs:label "Building" ;
+    owl:versionIRI <http://example.org/examples/building/1.0.0> ;
+    owl:versionInfo "1.0.0" .
+
+:Building rdf:type owl:Class ;
+    rdfs:label "Building" .
+
+:Floor rdf:type owl:Class ;
+    rdfs:label "Floor" .

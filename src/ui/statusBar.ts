@@ -1,6 +1,9 @@
 import { detectOntologyIssues, groupIssuesByType, getIssueTypeLabel, type OntologyIssue } from './ontologyIssues';
 import { Store } from 'n3';
 import { fileDisplayName, type OntologyInfo } from './ontologyInfo';
+import { versionLabel, type OntologyVersion } from '../lib/ontologyVersion';
+import type { AvailableVersions, VersionEntry } from '../lib/ontologyVersions';
+import { hideVersionList, toggleVersionList } from './versionList';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
@@ -8,6 +11,9 @@ let issuesPopup: HTMLElement | null = null;
 let currentStore: Store | null = null;
 let currentOntologyLocation: string | null = null;
 let currentOntologyInfo: OntologyInfo | null = null;
+let currentOntologyVersion: OntologyVersion | null = null;
+let availableVersions: AvailableVersions | null = null;
+let onVersionChosen: (entry: VersionEntry) => void = () => {};
 let currentFilePath: string | null = null;
 
 /**
@@ -205,6 +211,38 @@ export function updateOntologyInfoDisplay(info: OntologyInfo | null): void {
   renderOntologyPart();
 }
 
+/** Show the version the open ontology declares after its name (#130), or nothing when it declares none. */
+export function updateOntologyVersionDisplay(version: OntologyVersion | null): void {
+  currentOntologyVersion = version;
+  renderOntologyPart();
+}
+
+/**
+ * The other versions of the open ontology, once found in the background (#132): a button after the version
+ * opens their list (#133), and says when one is newer. Null hides it.
+ */
+export function updateAvailableVersions(available: AvailableVersions | null, onChoose: (entry: VersionEntry) => void): void {
+  availableVersions = available;
+  onVersionChosen = onChoose;
+  hideVersionList();
+  renderOntologyPart();
+}
+
+/** The button opening the list of versions (#133), when more than the open one is known. */
+function createVersionsButton(available: AvailableVersions): HTMLElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'ontologyVersionsBtn';
+  button.textContent = 'versions ▾';
+  button.title = 'Click to list the versions of this ontology, and open one.';
+  button.style.cssText = 'margin-left: 4px; padding: 0 4px; font-size: 11px; border: none; background: none; cursor: pointer; color: #3498db;';
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleVersionList(button, available, (entry) => onVersionChosen(entry));
+  });
+  return button;
+}
+
 /** A link opening `href` in a new tab. */
 function createLink(href: string, text: string, title: string): HTMLAnchorElement {
   const link = document.createElement('a');
@@ -226,7 +264,7 @@ function createLink(href: string, text: string, title: string): HTMLAnchorElemen
 
 /**
  * The ontology part of the status bar (#113): "Ontology: " and the ontology's name, linking to the file or URL it was opened
- * from when that is a URL, then "(prefix: <i>foaf</i>)" when the file declares a prefix for it. With no
+ * from when that is a URL, then its version ("v2.1.0", #130) and "(prefix: <i>foaf</i>)" when the file declares a prefix for it. With no
  * ontology declared, the file's own name stands in; with neither, the part is hidden.
  */
 function renderOntologyPart(): void {
@@ -251,6 +289,33 @@ function renderOntologyPart(): void {
     el.appendChild(document.createTextNode(name));
   }
   el.title = where;
+  const version = versionLabel(currentOntologyVersion);
+  if (version) {
+    el.appendChild(document.createTextNode(' '));
+    const span = document.createElement('span');
+    span.id = 'ontologyVersion';
+    span.textContent = /^\d/.test(version) ? `v${version}` : version;
+    span.title = currentOntologyVersion?.versionIri ? `owl:versionIRI: ${currentOntologyVersion.versionIri}` : 'owl:versionInfo';
+    el.appendChild(span);
+    if (availableVersions?.latest) {
+      const latest = document.createElement('span');
+      latest.id = 'ontologyLatest';
+      latest.textContent = ' (latest)';
+      latest.title = availableVersions.latest === 'certain'
+        ? 'The latest release: the ontology IRI names this version.'
+        : 'No newer version is known: none of the versions found is newer, but a release they do not name may exist.';
+      el.appendChild(latest);
+    }
+    if (availableVersions?.newer) {
+      const newer = document.createElement('span');
+      newer.id = 'ontologyNewer';
+      newer.textContent = ` (${availableVersions.newer.version} available)`;
+      newer.title = `A newer version, ${availableVersions.newer.version}, exists: open it from "versions ▾".`;
+      newer.style.color = '#f39c12'; // the bar's warning colour, as for "issues"
+      el.appendChild(newer);
+    }
+  }
+  if (availableVersions && availableVersions.entries.length > 1) el.appendChild(createVersionsButton(availableVersions));
   if (currentOntologyInfo?.prefix) {
     el.appendChild(document.createTextNode(' (prefix: '));
     const prefix = document.createElement('i');

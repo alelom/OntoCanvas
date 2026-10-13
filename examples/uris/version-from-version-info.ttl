@@ -1,0 +1,26 @@
+@prefix : <http://example.org/examples/version-from-version-info#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# An ontology that gives its version only as owl:versionInfo "1.4.0", with no owl:versionIRI (issue
+# #128). "Copy version-pinned URI (1.4.0)" builds the version IRI as <ontology IRI>/1.4.0, so for
+# Sensor it copies
+#   http://example.org/examples/version-from-version-info/1.4.0#Sensor
+# and its tooltip says the URI was built from owl:versionInfo. An owl:versionInfo that is not a
+# version number (e.g. "Release of March 2020") gives no pinned URI: the item is greyed out.
+
+<http://example.org/examples/version-from-version-info> rdf:type owl:Ontology ;
+    rdfs:label "Version from owl:versionInfo" ;
+    owl:versionInfo "1.4.0" .
+
+:hasReading rdf:type owl:ObjectProperty ;
+    rdfs:label "hasReading" ;
+    rdfs:domain :Sensor ;
+    rdfs:range :Reading .
+
+:Sensor rdf:type owl:Class ;
+    rdfs:label "Sensor" .
+
+:Reading rdf:type owl:Class ;
+    rdfs:label "Reading" .

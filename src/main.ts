@@ -105,7 +105,7 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
-import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists } from './lib/importedDeclarations';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists, type ImportedOntology } from './lib/importedDeclarations';
 import { beginImportsSettle, importsSettled } from './ui/importsSettle';
 import { escapeHtml } from './utils/escapeHtml';
 import { getOntologyInfo } from './ui/ontologyInfo';
@@ -146,6 +146,8 @@ import {
   updateNodeEdgeCounts,
   updateFilePathDisplay as updateStatusBarFilePath,
   updateOntologyInfoDisplay,
+  updateOntologyVersionDisplay,
+  updateAvailableVersions,
   updateSelectionInfo as updateStatusBarSelection,
   updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
@@ -154,7 +156,13 @@ import {
   showContextMenu,
   updateContextMenuData,
   setTermUriResolver,
+  setVersionPinnedUriResolver,
 } from './ui/contextMenu';
+import { versionPinnedUri } from './lib/versionPinnedUri';
+import { readOntologyVersion, bareIri } from './lib/ontologyVersion';
+import { findVersions } from './lib/ontologyVersions';
+import { browserVersionSources } from './lib/versionSources';
+import { recallSeenVersions, rememberSeenVersions } from './lib/seenVersions';
 import {
   resolveNodeTerm,
   resolveEdgeTerm,
@@ -179,6 +187,8 @@ import {
   formatNodeLabelWithPrefix,
   formatRelationshipLabelWithPrefix,
   renderExternalRefsList,
+  refreshExternalRefsList,
+  setImportVersionLookup,
   showExternalRefsModal,
   hideExternalRefsModal,
   sortExternalRefsByUrl,
@@ -3941,6 +3951,9 @@ function getTermLookup(): TermLookup {
   return { nodes: (currentGraphDataForBuild ?? rawData).nodes, objectProperties, dataProperties };
 }
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
+setVersionPinnedUriResolver((kind, id) =>
+  versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, ttlStore ? readOntologyVersion(ttlStore) : null)
+);
 
 function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
   return kind === 'node' ? resolveNodeTerm(id, getTermLookup()) : resolveEdgeTerm(id, getTermLookup());
@@ -6728,6 +6741,21 @@ function openExternalOntology(url: string): Promise<void> {
 /** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
  * after some edits; this is merged back in each time. */
 let importedDeclarations: PropertyLists | null = null;
+/** The loaded ontology's imports that could be read (#131), and whether they are still being read. */
+let importedOntologies: ImportedOntology[] = [];
+let importsBeingRead = false;
+/** For each import that was read, the newer release found for it, if any (#132). */
+let importNewerVersions = new Map<string, string | null>();
+
+/** What the imports dialog shows of an import's version (#131); null for a reference that is not an import. */
+setImportVersionLookup((url) => {
+  if (!ttlStore) return null;
+  const isImport = ttlStore.getQuads(null, 'http://www.w3.org/2002/07/owl#imports', null, null).some((q) => bareIri(q.object.value) === bareIri(url));
+  if (!isImport) return null;
+  const imported = importedOntologies.find((o) => bareIri(o.url) === bareIri(url));
+  if (imported) return { state: 'read', version: readOntologyVersion(imported.store), newer: importNewerVersions.get(imported.url) };
+  return importsBeingRead ? { state: 'reading' } : { state: 'unread' };
+});
 
 /** The object properties of `store`, with what the imports declare merged in. */
 function currentObjectProperties(store: NonNullable<typeof ttlStore>): ObjectPropertyInfo[] {
@@ -6768,6 +6796,9 @@ function refreshPropertyMenus(): void {
  */
 function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
   beginImportsSettle();
+  importedOntologies = [];
+  importNewerVersions = new Map();
+  importsBeingRead = true;
   void (async () => {
     try {
       // Background reads are bounded: a slow or huge import is given up on, not waited for (and not kept).
@@ -6775,6 +6806,7 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
         fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
       );
       if (store !== ttlStore || imported.length === 0) return;
+      importedOntologies = imported;
       importedDeclarations = readImportedDeclarations(imported);
       const before = { objectProperties, dataProperties, annotationProperties };
       const merged = mergeImportedDeclarations(before, importedDeclarations);
@@ -6788,9 +6820,42 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
     } catch (err) {
       debugWarn('Could not read the declarations of the imports:', err);
     } finally {
-      if (store === ttlStore) importsSettled();
+      if (store === ttlStore) {
+        importsBeingRead = false;
+        refreshExternalRefsList();
+        importsSettled();
+        void findImportsNewerVersions(store);
+      }
     }
   })();
+}
+
+/** Look, in the background, for a newer release of each import that was read (#132); the imports dialog names it. */
+async function findImportsNewerVersions(store: NonNullable<typeof ttlStore>): Promise<void> {
+  const found = await Promise.all(importedOntologies.map(async (o) => [o.url, (await findVersions(o.store, o.url, browserVersionSources)).newer?.version ?? null] as const));
+  if (store !== ttlStore) return;
+  importNewerVersions = new Map(found);
+  refreshExternalRefsList();
+}
+
+/**
+ * Look, in the background, for the other versions of the loaded ontology (#132), and offer them in the bottom bar
+ * (#133). Choosing one opens it, after asking when there are unsaved edits. The versions seen are remembered for
+ * the tab, so an older version still offers the later ones. Not offered when embedded: the view is read-only there.
+ */
+function startFindingVersions(store: NonNullable<typeof ttlStore>, loadedUrl: string | null): void {
+  updateAvailableVersions(null, () => {});
+  const ontologyIri = readOntologyVersion(store)?.ontologyIri;
+  if (isEmbedded() || !ontologyIri) return;
+  void findVersions(store, loadedUrl, browserVersionSources, recallSeenVersions(ontologyIri)).then((available) => {
+    if (store !== ttlStore) return;
+    rememberSeenVersions(ontologyIri, available.entries);
+    updateAvailableVersions(available, (entry) => {
+      if (!entry.url) return;
+      if (hasUnsavedChanges && !confirm(`Open version ${entry.version}? Your unsaved changes will be lost.`)) return;
+      void loadFromUrl(entry.url);
+    });
+  });
 }
 
 async function loadTtlAndRender(
@@ -7156,6 +7221,8 @@ hasUnsavedChanges = false;
     setTimeout(() => {
       updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
       updateOntologyInfoDisplay(ttlStore ? getOntologyInfo(ttlStore, prefixMap) : null);
+      updateOntologyVersionDisplay(ttlStore ? readOntologyVersion(ttlStore) : null);
+      if (ttlStore) startFindingVersions(ttlStore, pathHint && /^https?:\/\//i.test(pathHint) ? pathHint : null);
     }, 0);
 
     if (handle && fileName) {

@@ -3,7 +3,9 @@
  * no ?embed flag). Covers:
  *  - #47 embed behaviours active when framed (menu/legend hidden, Open-in-new-tab shown, left-pan dragView),
  *  - #50 the adaptive Max font size is applied inside the iframe,
- *  - #51 the bottom status bar fills the width and is left-aligned.
+ *  - #51 the bottom status bar fills the width and is left-aligned,
+ *  - #68 / #128 the read-only context menu: "Copy URI" and "Copy version-pinned URI",
+ *  - #133 no list of versions in the bottom bar.
  *
  * A host page and the ontology are served via Playwright routing so the iframe is same-origin and
  * storage is not partitioned (CI-reliable).
@@ -23,7 +25,7 @@ let TTL =
   `@prefix owl: <http://www.w3.org/2002/07/owl#> .\n` +
   `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n` +
   `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n` +
-  `<http://example.org/o> rdf:type owl:Ontology .\n`;
+  `<http://example.org/o> rdf:type owl:Ontology ; owl:versionIRI <http://example.org/o/1.0.0> ; owl:priorVersion <http://example.org/o/0.9.0> .\n`;
 for (let i = 0; i < N_CLASSES; i++) {
   TTL += `:C${i} rdf:type owl:Class ; rdfs:label "C${i}"${i > 0 ? ` ; rdfs:subClassOf :C${i - 1}` : ''} .\n`;
 }
@@ -115,7 +117,8 @@ describe('Embedded in a real iframe E2E', () => {
     expect(s.infoWidth).toBeGreaterThan(s.appWidth * 0.95);
   });
 
-  it('right-click on a node offers only "Copy URI", which copies the term URI (#68)', async () => {
+  /** Right-click a node inside the iframe; returns its id. */
+  async function rightClickNode(): Promise<string> {
     const pos = await frame.evaluate(() => {
       const net = (window as any).__EDITOR_TEST__.getNetwork();
       const id = net.body.data.nodes.getIds()[0];
@@ -125,15 +128,33 @@ describe('Embedded in a real iframe E2E', () => {
     });
     const frameBox = (await (await page.$('#f'))!.boundingBox())!;
     await page.mouse.click(frameBox.x + pos.x, frameBox.y + pos.y, { button: 'right' });
+    return pos.id;
+  }
+
+  // The copy is asynchronous (navigator.clipboard.writeText): wait for it to land instead of reading
+  // immediately, which raced on slow CI runners.
+  const clipboard = (expected: string) =>
+    expect.poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 }).toBe(expected);
+
+  it('right-click on a node offers only the two "Copy URI" items; "Copy URI" copies the term URI (#68, #128)', async () => {
+    const id = await rightClickNode();
     const items = await frame.evaluate(() =>
       [...document.getElementById('contextMenu')!.children].map((c) => c.textContent ?? '').filter(Boolean)
     );
-    expect(items).toEqual(['Copy URI']);
-    await frame.click('#contextMenu >> text=Copy URI');
-    // The copy is asynchronous (navigator.clipboard.writeText): wait for it to land instead of reading
-    // immediately, which raced on slow CI runners.
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 })
-      .toBe(`http://example.org/o#${pos.id}`);
+    expect(items).toEqual(['Copy URI', 'Copy version-pinned URI (1.0.0)']);
+    await frame.click('#contextMenu >> text="Copy URI"');
+    await clipboard(`http://example.org/o#${id}`);
+  });
+
+  it('offers no list of versions in the bottom bar, though the ontology names an earlier one (#133)', async () => {
+    // Outside a frame, owl:priorVersion alone shows the button (tests/e2e/ontologyVersions.e2e.test.ts).
+    expect(await frame.evaluate(() => document.getElementById('ontologyVersion')?.textContent)).toBe('v1.0.0');
+    expect(await frame.locator('#ontologyVersionsBtn').count()).toBe(0);
+  });
+
+  it('"Copy version-pinned URI" copies the term URI in the loaded version (#128)', async () => {
+    const id = await rightClickNode();
+    await frame.click('#contextMenu >> text=Copy version-pinned URI');
+    await clipboard(`http://example.org/o/1.0.0#${id}`);
   });
 });

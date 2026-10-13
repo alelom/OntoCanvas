@@ -1,0 +1,42 @@
+@prefix : <http://example.org/examples/version-pinned-uris#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Copy a term's version-pinned URI (issue #128). Right-click a class, a relationship or a data
+# property: under "Copy URI" there is "Copy version-pinned URI (2.1.0)". The version is the last part
+# of owl:versionIRI. For Building it copies
+#   http://example.org/examples/version-pinned-uris/2.1.0#Building
+# where "Copy URI" copies the latest one, http://example.org/examples/version-pinned-uris#Building.
+# The "subClassOf" relationship from Office to Room is greyed out: rdfs:subClassOf is not defined in
+# this ontology, so it has no version-pinned URI here (hover the item to see why). Embedded in an
+# iframe, the menu shows the same two items.
+
+<http://example.org/examples/version-pinned-uris> rdf:type owl:Ontology ;
+    rdfs:label "Version-pinned URIs" ;
+    owl:versionIRI <http://example.org/examples/version-pinned-uris/2.1.0> ;
+    owl:versionInfo "2.1.0" .
+
+:hasFloor rdf:type owl:ObjectProperty ;
+    rdfs:label "hasFloor" ;
+    rdfs:domain :Building ;
+    rdfs:range :Floor .
+
+:floorArea rdf:type owl:DatatypeProperty ;
+    rdfs:label "floorArea" ;
+    rdfs:domain :Floor ;
+    rdfs:range xsd:decimal .
+
+:Building rdf:type owl:Class ;
+    rdfs:label "Building" .
+
+:Floor rdf:type owl:Class ;
+    rdfs:label "Floor" .
+
+:Room rdf:type owl:Class ;
+    rdfs:label "Room" .
+
+:Office rdf:type owl:Class ;
+    rdfs:label "Office" ;
+    rdfs:subClassOf :Room .
