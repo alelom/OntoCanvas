@@ -12,6 +12,9 @@
 #   - Object Properties menu: parent:author, which this file never uses. Data Properties menu: parent:title
 #     (xsd:string) and parent:published on (xsd:date), likewise. They are context: listed, but not drawn on the
 #     canvas, not editable, not deletable, and not written into this ontology when you save.
+#   - Manage external references: under the parent's address, "Version 1.0.0", the version the parent declares
+#     (issue #131). The import is a file address, neither the parent's IRI nor its version IRI, so the line
+#     does not say whether it is pinned to that release.
 
 <http://example.org/examples/fetchable-child> rdf:type owl:Ontology ;
     rdfs:label "Fetchable child" ;

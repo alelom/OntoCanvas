@@ -5,6 +5,8 @@ import type { ExternalOntologyReference } from '../storage';
 import { saveExternalRefsToIndexedDB } from '../storage';
 import { debugLog } from '../utils/debug';
 import { extractLocalName } from '../utils/localName';
+import { escapeHtml } from '../utils/escapeHtml';
+import { describeImportVersion, type ImportVersionStatus } from './importVersionNote';
 
 /**
  * Extract external ontology references from owl:imports statements in the store.
@@ -518,6 +520,32 @@ export interface ExternalRefsModalCallbacks {
   onSave: () => void;
 }
 
+/** What is known of the version of the ontology a reference imports; null when the reference is not an import. */
+export type ImportVersionLookup = (url: string) => ImportVersionStatus | null;
+
+let importVersionLookup: ImportVersionLookup | null = null;
+/** The last list rendered, so it can be redrawn when the imports' versions become known. */
+let lastRendered: Parameters<typeof renderExternalRefsList> | null = null;
+
+/** Register how the dialog learns each import's version (#131). */
+export function setImportVersionLookup(lookup: ImportVersionLookup | null): void {
+  importVersionLookup = lookup;
+}
+
+/** Redraw the open imports dialog, e.g. once the imports have been read in the background (#131). */
+export function refreshExternalRefsList(): void {
+  const modal = document.getElementById('externalRefsModal');
+  if (lastRendered && modal?.style.display === 'flex') renderExternalRefsList(...lastRendered);
+}
+
+/** The line under an import naming its version (#131), or nothing for a reference that is not an import. */
+function importVersionLine(url: string): string {
+  const status = importVersionLookup?.(url);
+  if (!status) return '';
+  const { text, title } = describeImportVersion(url, status);
+  return `<div class="external-ref-version" style="margin-top: 4px; font-size: 11px; color: #555;" title="${escapeHtml(title)}">${escapeHtml(text)}</div>`;
+}
+
 /**
  * Render the external references list
  */
@@ -529,6 +557,7 @@ export function renderExternalRefsList(
 ): void {
   const listEl = document.getElementById('externalRefsList');
   if (!listEl) return;
+  lastRendered = [externalOntologyReferences, callbacks, loadedFilePath, loadedFileName];
   
   if (externalOntologyReferences.length === 0) {
     listEl.innerHTML = '<p style="font-size: 12px; color: #666; text-align: center; padding: 20px;">No external ontology references added yet.</p>';
@@ -542,6 +571,7 @@ export function renderExternalRefsList(
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px; margin-bottom: 8px; background: #fff; border: 1px solid #ddd; border-radius: 4px;">
         <div style="flex: 1;">
           <a href="${ref.url}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #3498db; text-decoration: none; word-break: break-all;" title="${ref.url}">${urlDisplay}</a>
+          ${importVersionLine(ref.url)}
           <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">

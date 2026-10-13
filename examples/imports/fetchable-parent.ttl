@@ -8,7 +8,9 @@
 # Open fetchable-child.ttl, not this file; it reads this one, which sits next to it.
 
 <http://example.org/examples/fetchable-parent> rdf:type owl:Ontology ;
-    rdfs:label "Fetchable parent" .
+    rdfs:label "Fetchable parent" ;
+    owl:versionIRI <http://example.org/examples/fetchable-parent/1.0.0> ;
+    owl:versionInfo "1.0.0" .
 
 :Document rdf:type owl:Class ;
     rdfs:label "Document" .

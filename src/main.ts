@@ -105,7 +105,7 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
-import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists } from './lib/importedDeclarations';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists, type ImportedOntology } from './lib/importedDeclarations';
 import { beginImportsSettle, importsSettled } from './ui/importsSettle';
 import { escapeHtml } from './utils/escapeHtml';
 import { getOntologyInfo } from './ui/ontologyInfo';
@@ -158,7 +158,7 @@ import {
   setVersionPinnedUriResolver,
 } from './ui/contextMenu';
 import { versionPinnedUri } from './lib/versionPinnedUri';
-import { readOntologyVersion } from './lib/ontologyVersion';
+import { readOntologyVersion, bareIri } from './lib/ontologyVersion';
 import {
   resolveNodeTerm,
   resolveEdgeTerm,
@@ -183,6 +183,8 @@ import {
   formatNodeLabelWithPrefix,
   formatRelationshipLabelWithPrefix,
   renderExternalRefsList,
+  refreshExternalRefsList,
+  setImportVersionLookup,
   showExternalRefsModal,
   hideExternalRefsModal,
   sortExternalRefsByUrl,
@@ -6735,6 +6737,19 @@ function openExternalOntology(url: string): Promise<void> {
 /** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
  * after some edits; this is merged back in each time. */
 let importedDeclarations: PropertyLists | null = null;
+/** The loaded ontology's imports that could be read (#131), and whether they are still being read. */
+let importedOntologies: ImportedOntology[] = [];
+let importsBeingRead = false;
+
+/** What the imports dialog shows of an import's version (#131); null for a reference that is not an import. */
+setImportVersionLookup((url) => {
+  if (!ttlStore) return null;
+  const isImport = ttlStore.getQuads(null, 'http://www.w3.org/2002/07/owl#imports', null, null).some((q) => bareIri(q.object.value) === bareIri(url));
+  if (!isImport) return null;
+  const imported = importedOntologies.find((o) => bareIri(o.url) === bareIri(url));
+  if (imported) return { state: 'read', version: readOntologyVersion(imported.store) };
+  return importsBeingRead ? { state: 'reading' } : { state: 'unread' };
+});
 
 /** The object properties of `store`, with what the imports declare merged in. */
 function currentObjectProperties(store: NonNullable<typeof ttlStore>): ObjectPropertyInfo[] {
@@ -6775,6 +6790,8 @@ function refreshPropertyMenus(): void {
  */
 function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
   beginImportsSettle();
+  importedOntologies = [];
+  importsBeingRead = true;
   void (async () => {
     try {
       // Background reads are bounded: a slow or huge import is given up on, not waited for (and not kept).
@@ -6782,6 +6799,7 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
         fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
       );
       if (store !== ttlStore || imported.length === 0) return;
+      importedOntologies = imported;
       importedDeclarations = readImportedDeclarations(imported);
       const before = { objectProperties, dataProperties, annotationProperties };
       const merged = mergeImportedDeclarations(before, importedDeclarations);
@@ -6795,7 +6813,11 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
     } catch (err) {
       debugWarn('Could not read the declarations of the imports:', err);
     } finally {
-      if (store === ttlStore) importsSettled();
+      if (store === ttlStore) {
+        importsBeingRead = false;
+        refreshExternalRefsList();
+        importsSettled();
+      }
     }
   })();
 }

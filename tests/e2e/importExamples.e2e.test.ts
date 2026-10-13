@@ -85,4 +85,12 @@ describe('fetchable-child.ttl (#104)', () => {
     const nodeIds = await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.nodeIndices.map(String) as string[]);
     expect(nodeIds.sort()).toEqual(['Report', 'http://example.org/examples/fetchable-parent#Document']);
   });
+
+  it('names the version the parent declares under its address in the imports dialog (#131)', async () => {
+    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await waitForAppReady(page);
+    await page.click('#manageExternalRefs');
+    const lines = await page.evaluate(() => [...document.querySelectorAll('#externalRefsList .external-ref-version')].map((el) => el.textContent));
+    expect(lines).toEqual(['Version 1.0.0']);
+  });
 });
