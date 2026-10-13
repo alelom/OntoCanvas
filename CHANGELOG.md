@@ -1,3 +1,19 @@
+# [1.30.0](https://github.com/alelom/OntoCanvas/compare/v1.29.2...v1.30.0) (2026-10-13)
+
+
+### Bug Fixes
+
+* **#132, #133:** review of [#134](https://github.com/alelom/OntoCanvas/issues/134); later versions stay selectable; "(latest)" and "(x available)" ([6abdb54](https://github.com/alelom/OntoCanvas/commit/6abdb54d9defd1e83d5ed908548f853ee1b1cdd9)), closes [#132](https://github.com/alelom/OntoCanvas/issues/132) [#133](https://github.com/alelom/OntoCanvas/issues/133)
+* **#135:** imports dialog no longer lists annotation values or ontology IRIs' folders as ontologies ([81b9b83](https://github.com/alelom/OntoCanvas/commit/81b9b838b61685fe6b2f283a017f4f31c1e0dfb4)), closes [#135](https://github.com/alelom/OntoCanvas/issues/135) [#135](https://github.com/alelom/OntoCanvas/issues/135)
+
+
+### Features
+
+* **#128:** "Copy version-pinned URI (<version>)" in the context menu ([60acf0b](https://github.com/alelom/OntoCanvas/commit/60acf0bc1cfd52feae7b21a1fcb73b84eeac64b1)), closes [#128](https://github.com/alelom/OntoCanvas/issues/128)
+* **#130:** show the open ontology's version in the bottom bar ([f5527d1](https://github.com/alelom/OntoCanvas/commit/f5527d18d2482edf8ae7e4e5d2f169f238dced47)), closes [#130](https://github.com/alelom/OntoCanvas/issues/130) [#128](https://github.com/alelom/OntoCanvas/issues/128) [131-#133](https://github.com/131-/issues/133)
+* **#131:** imports dialog names each import's version, and whether it is pinned ([d876445](https://github.com/alelom/OntoCanvas/commit/d876445bf17cac0b1eb76434afd6cd9ef946d08d)), closes [#131](https://github.com/alelom/OntoCanvas/issues/131)
+* **#132, #133:** find an ontology's other versions; list and open them from the bottom bar ([cef5bd9](https://github.com/alelom/OntoCanvas/commit/cef5bd9617a9c30c5557463239cc9d8919f33030)), closes [#132](https://github.com/alelom/OntoCanvas/issues/132) [#133](https://github.com/alelom/OntoCanvas/issues/133)
+
 ## [1.29.2](https://github.com/alelom/OntoCanvas/compare/v1.29.1...v1.29.2) (2026-10-12)
 
 
