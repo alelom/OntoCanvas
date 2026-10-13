@@ -44,17 +44,27 @@ function cache(url: string, value: unknown): void {
 export async function fetchJsonCached(url: string): Promise<unknown> {
   const hit = cached(url);
   if (hit !== undefined) return hit;
-  const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) return null;
-  const value: unknown = await response.json();
-  cache(url, value);
-  return value;
+  try {
+    const response = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) return null;
+    const value: unknown = await response.json();
+    cache(url, value);
+    return value;
+  } catch {
+    return null; // offline, CORS, timed out, not JSON
+  }
 }
 
 export const browserVersionSources: VersionSources = {
   fetchText: (url) => fetchExternalOntologyTtl(url, { timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES }),
   fetchJson: fetchJsonCached,
-  exists: async (url) => (await fetchWithTimeout(url, { method: 'HEAD' })).ok,
+  exists: async (url) => {
+    try {
+      return (await fetchWithTimeout(url, { method: 'HEAD' })).ok;
+    } catch {
+      return false; // offline, CORS, timed out: counts as not there
+    }
+  },
   parse: async (text, url) => {
     try {
       return (await loadOntologyFromContent(text, url, { contentType: sniffContentType(text) })).parseResult.store;

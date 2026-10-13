@@ -7,6 +7,12 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples/versions');
+const WHERE = 'https://examples.test/versions/';
 
 const raw = (tag: string) => `https://raw.githubusercontent.com/acme/onto/${tag}/onto.ttl`;
 const TAGS_API = 'https://api.github.com/repos/acme/onto/tags?per_page=100';
@@ -48,12 +54,39 @@ afterEach(async () => {
   if (page && !page.isClosed()) await page.close();
 });
 
+/** The list's entries, once the button is there. */
+async function listed(): Promise<string[]> {
+  await page.locator('#ontologyVersionsBtn').click();
+  const items = await page.locator('#ontologyVersionsList [data-version]').allTextContents();
+  await page.locator('#ontologyVersionsBtn').click();
+  return items;
+}
+
 describe('versions of the open ontology (#132, #133)', () => {
+  it('still offers the later versions after switching to the first one, which names none (examples/versions)', async () => {
+    await page.route(`${WHERE}*`, (route) => {
+      const file = route.request().url().slice(WHERE.length);
+      return /^building-[\d.]+\.ttl$/.test(file)
+        ? route.fulfill({ status: 200, contentType: 'text/turtle', headers: CORS, body: readFileSync(join(EXAMPLES, file), 'utf-8') })
+        : route.abort();
+    });
+    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}building-2.0.0.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await waitForAppReady(page);
+    await page.locator('#ontologyVersionsBtn').waitFor();
+    await page.locator('#ontologyVersionsBtn').click();
+    await page.locator('#ontologyVersionsList [data-version="1.0.0"]').click();
+
+    await expect.poll(() => page.evaluate(() => document.getElementById('ontologyVersion')?.textContent), { timeout: 5000 }).toBe('v1.0.0');
+    await expect.poll(() => page.locator('#ontologyNewer').textContent(), { timeout: 5000 }).toBe(' (2.0.0 available)');
+    expect(await listed()).toEqual(['2.0.0 · seen earlier in this tab', '1.1.0 · seen earlier in this tab', '✓ 1.0.0 · open now']);
+  });
+
   it('says a newer GitHub tag exists, lists the versions, and opens the one chosen', async () => {
     await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(raw('v1.0.0'))}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await waitForAppReady(page);
     const button = page.locator('#ontologyVersionsBtn');
-    await expect.poll(() => button.textContent(), { timeout: 5000 }).toBe('v2.0.0 available ▾');
+    await expect.poll(() => page.locator('#ontologyNewer').textContent(), { timeout: 5000 }).toBe(' (v2.0.0 available)');
+    expect(await button.textContent()).toBe('versions ▾');
 
     await button.click();
     // v0.1.0 has no onto.ttl, so it is not listed.

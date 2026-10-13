@@ -162,6 +162,7 @@ import { versionPinnedUri } from './lib/versionPinnedUri';
 import { readOntologyVersion, bareIri } from './lib/ontologyVersion';
 import { findVersions } from './lib/ontologyVersions';
 import { browserVersionSources } from './lib/versionSources';
+import { recallSeenVersions, rememberSeenVersions } from './lib/seenVersions';
 import {
   resolveNodeTerm,
   resolveEdgeTerm,
@@ -6839,18 +6840,18 @@ async function findImportsNewerVersions(store: NonNullable<typeof ttlStore>): Pr
 
 /**
  * Look, in the background, for the other versions of the loaded ontology (#132), and offer them in the bottom bar
- * (#133). Choosing one opens it, after asking when there are unsaved edits; embedded, it opens in a new tab.
+ * (#133). Choosing one opens it, after asking when there are unsaved edits. The versions seen are remembered for
+ * the tab, so an older version still offers the later ones. Not offered when embedded: the view is read-only there.
  */
 function startFindingVersions(store: NonNullable<typeof ttlStore>, loadedUrl: string | null): void {
   updateAvailableVersions(null, () => {});
-  void findVersions(store, loadedUrl, browserVersionSources).then((available) => {
+  const ontologyIri = readOntologyVersion(store)?.ontologyIri;
+  if (isEmbedded() || !ontologyIri) return;
+  void findVersions(store, loadedUrl, browserVersionSources, recallSeenVersions(ontologyIri)).then((available) => {
     if (store !== ttlStore) return;
+    rememberSeenVersions(ontologyIri, available.entries);
     updateAvailableVersions(available, (entry) => {
       if (!entry.url) return;
-      if (isEmbedded()) {
-        window.open(`${window.location.origin + window.location.pathname}?onto=${encodeURIComponent(entry.url)}`, '_blank', 'noopener');
-        return;
-      }
       if (hasUnsavedChanges && !confirm(`Open version ${entry.version}? Your unsaved changes will be lost.`)) return;
       void loadFromUrl(entry.url);
     });

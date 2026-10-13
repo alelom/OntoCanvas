@@ -31,6 +31,7 @@ describe('examples/versions', () => {
     expect(found.entries.map((e) => [e.version, e.source])).toEqual([['2.0.0', 'loaded'], ['1.1.0', 'prior'], ['1.0.0', 'prior']]);
     expect(found.entries[1].url).toBe(`${WHERE}building-1.1.0.ttl`);
     expect(found.newer).toBeNull();
+    expect(found.latest).toBe('known');
   });
 
   it('building-1.1.0.ttl offers 1.0.0; building-1.0.0.ttl offers no list', async () => {

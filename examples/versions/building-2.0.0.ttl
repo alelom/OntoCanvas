@@ -4,12 +4,14 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 # The versions of an ontology (issues #130, #132, #133). Open this file by URL (the earlier versions are
-# found next to it). The bottom bar shows "Ontology: Building v2.0.0", then "versions ▾": click it for the
-# list of versions, newest first:
+# found next to it). The bottom bar shows "Ontology: Building v2.0.0 (latest)": none of the versions found is
+# newer. Then "versions ▾": click it for the list of versions, newest first:
 #   2.0.0 · open now
 #   1.1.0 · earlier version (owl:priorVersion)
 #   1.0.0 · earlier version (owl:priorVersion)
-# Choose 1.1.0 to open it: the graph shows Room where this version has Space.
+# Choose 1.1.0 to open it: the graph shows Room where this version has Space, and the bar says
+# "v1.1.0 (2.0.0 available)", in yellow. The list still offers 2.0.0: an earlier version cannot name the later
+# ones, so the versions seen in the tab are kept.
 # Here owl:priorVersion names the earlier versions' files, as relative IRIs, so this example works wherever
 # it is opened from; a published ontology names their version IRIs.
 

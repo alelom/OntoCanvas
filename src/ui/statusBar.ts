@@ -233,10 +233,9 @@ function createVersionsButton(available: AvailableVersions): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.id = 'ontologyVersionsBtn';
-  button.textContent = available.newer ? `${available.newer.version} available ▾` : 'versions ▾';
-  button.title = (available.newer ? `A newer version, ${available.newer.version}, exists. ` : '') + 'Click to list the versions of this ontology.';
-  button.style.cssText = `margin-left: 4px; padding: 0 4px; font-size: 11px; border: none; background: none; cursor: pointer;
-    color: ${available.newer ? '#d35400' : '#3498db'};`;
+  button.textContent = 'versions ▾';
+  button.title = 'Click to list the versions of this ontology, and open one.';
+  button.style.cssText = 'margin-left: 4px; padding: 0 4px; font-size: 11px; border: none; background: none; cursor: pointer; color: #3498db;';
   button.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleVersionList(button, available, (entry) => onVersionChosen(entry));
@@ -298,6 +297,23 @@ function renderOntologyPart(): void {
     span.textContent = /^\d/.test(version) ? `v${version}` : version;
     span.title = currentOntologyVersion?.versionIri ? `owl:versionIRI: ${currentOntologyVersion.versionIri}` : 'owl:versionInfo';
     el.appendChild(span);
+    if (availableVersions?.latest) {
+      const latest = document.createElement('span');
+      latest.id = 'ontologyLatest';
+      latest.textContent = ' (latest)';
+      latest.title = availableVersions.latest === 'certain'
+        ? 'The latest release: the ontology IRI names this version.'
+        : 'No newer version is known: none of the versions found is newer, but a release they do not name may exist.';
+      el.appendChild(latest);
+    }
+    if (availableVersions?.newer) {
+      const newer = document.createElement('span');
+      newer.id = 'ontologyNewer';
+      newer.textContent = ` (${availableVersions.newer.version} available)`;
+      newer.title = `A newer version, ${availableVersions.newer.version}, exists: open it from "versions ▾".`;
+      newer.style.color = '#f39c12'; // the bar's warning colour, as for "issues"
+      el.appendChild(newer);
+    }
   }
   if (availableVersions && availableVersions.entries.length > 1) el.appendChild(createVersionsButton(availableVersions));
   if (currentOntologyInfo?.prefix) {

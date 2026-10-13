@@ -10,6 +10,7 @@ import type { AvailableVersions } from '../../src/lib/ontologyVersions';
 const ONTO = 'http://example.org/onto';
 const button = () => document.getElementById('ontologyVersionsBtn');
 const list = () => document.getElementById('ontologyVersionsList')!;
+const part = () => document.getElementById('ontologyInfoDisplay')!;
 const items = () => [...list().querySelectorAll('[data-version]')] as HTMLElement[];
 
 const AVAILABLE: AvailableVersions = {
@@ -20,6 +21,7 @@ const AVAILABLE: AvailableVersions = {
     { version: '0.9.0', url: `${ONTO}/0.9.0`, source: 'prior' },
   ],
   newer: { version: '1.2.0', url: ONTO, source: 'latest' },
+  latest: null,
 };
 
 describe('bottom bar: versions button and list (#132, #133)', () => {
@@ -39,10 +41,23 @@ describe('bottom bar: versions button and list (#132, #133)', () => {
     expect(button()).toBeNull();
   });
 
-  it('says when a newer version exists', () => {
+  it('says after the version, in warning yellow, when a newer one exists; the button only opens the list', () => {
     updateAvailableVersions(AVAILABLE, chosen);
-    expect(button()!.textContent).toBe('1.2.0 available ▾');
-    expect(button()!.title).toContain('A newer version, 1.2.0');
+    const newer = document.getElementById('ontologyNewer')!;
+    expect(part().textContent?.startsWith('Ontology: Onto v1.0.0 (1.2.0 available)')).toBe(true);
+    expect(newer.textContent).toBe(' (1.2.0 available)');
+    expect(newer.style.color).toBe('rgb(243, 156, 18)');
+    expect(newer.title).toContain('A newer version, 1.2.0');
+    expect(button()!.textContent).toBe('versions ▾');
+  });
+
+  it('appends "(latest)" to the version when the open one is the latest', () => {
+    updateAvailableVersions({ ...AVAILABLE, entries: AVAILABLE.entries.slice(1), newer: null, latest: 'known' }, chosen);
+    expect(document.getElementById('ontologyVersion')!.textContent).toBe('v1.0.0');
+    expect(document.getElementById('ontologyLatest')!.textContent).toBe(' (latest)');
+    expect(document.getElementById('ontologyLatest')!.title).toContain('No newer version is known');
+    updateAvailableVersions(AVAILABLE, chosen);
+    expect(document.getElementById('ontologyLatest')).toBeNull();
   });
 
   it('only offers the list when no version is newer', () => {

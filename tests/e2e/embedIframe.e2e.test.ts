@@ -4,7 +4,8 @@
  *  - #47 embed behaviours active when framed (menu/legend hidden, Open-in-new-tab shown, left-pan dragView),
  *  - #50 the adaptive Max font size is applied inside the iframe,
  *  - #51 the bottom status bar fills the width and is left-aligned,
- *  - #68 / #128 the read-only context menu: "Copy URI" and "Copy version-pinned URI".
+ *  - #68 / #128 the read-only context menu: "Copy URI" and "Copy version-pinned URI",
+ *  - #133 no list of versions in the bottom bar.
  *
  * A host page and the ontology are served via Playwright routing so the iframe is same-origin and
  * storage is not partitioned (CI-reliable).
@@ -24,7 +25,7 @@ let TTL =
   `@prefix owl: <http://www.w3.org/2002/07/owl#> .\n` +
   `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n` +
   `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n` +
-  `<http://example.org/o> rdf:type owl:Ontology ; owl:versionIRI <http://example.org/o/1.0.0> .\n`;
+  `<http://example.org/o> rdf:type owl:Ontology ; owl:versionIRI <http://example.org/o/1.0.0> ; owl:priorVersion <http://example.org/o/0.9.0> .\n`;
 for (let i = 0; i < N_CLASSES; i++) {
   TTL += `:C${i} rdf:type owl:Class ; rdfs:label "C${i}"${i > 0 ? ` ; rdfs:subClassOf :C${i - 1}` : ''} .\n`;
 }
@@ -143,6 +144,12 @@ describe('Embedded in a real iframe E2E', () => {
     expect(items).toEqual(['Copy URI', 'Copy version-pinned URI (1.0.0)']);
     await frame.click('#contextMenu >> text="Copy URI"');
     await clipboard(`http://example.org/o#${id}`);
+  });
+
+  it('offers no list of versions in the bottom bar, though the ontology names an earlier one (#133)', async () => {
+    // Outside a frame, owl:priorVersion alone shows the button (tests/e2e/ontologyVersions.e2e.test.ts).
+    expect(await frame.evaluate(() => document.getElementById('ontologyVersion')?.textContent)).toBe('v1.0.0');
+    expect(await frame.locator('#ontologyVersionsBtn').count()).toBe(0);
   });
 
   it('"Copy version-pinned URI" copies the term URI in the loaded version (#128)', async () => {

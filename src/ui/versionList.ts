@@ -9,6 +9,7 @@ const SOURCE_TEXT: Record<VersionEntry['source'], string> = {
   latest: 'latest release',
   github: 'GitHub tag',
   prior: 'earlier version (owl:priorVersion)',
+  seen: 'seen earlier in this tab',
 };
 
 let listElement: HTMLElement | null = null;

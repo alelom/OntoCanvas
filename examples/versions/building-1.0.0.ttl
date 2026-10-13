@@ -3,8 +3,8 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
-# Version 1.0.0 of building-2.0.0.ttl (issues #132, #133): open that one. This first version names no
-# earlier one, so the bottom bar shows its version and no list.
+# Version 1.0.0 of building-2.0.0.ttl (issues #132, #133): open that one, then choose 1.0.0 from its list. This
+# first version names no other, so opened on its own the bottom bar shows its version and no list.
 
 <http://example.org/examples/building> rdf:type owl:Ontology ;
     rdfs:label "Building" ;

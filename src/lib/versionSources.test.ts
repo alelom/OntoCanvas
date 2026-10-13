@@ -36,3 +36,19 @@ describe('fetchJsonCached (#132)', () => {
     expect(await fetchJsonCached(URL)).toEqual([{ name: 'v1.0.0' }]);
   });
 });
+
+describe('browserVersionSources (review of #134)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a file that cannot be checked (network error, timeout) counts as missing, rather than failing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    const { browserVersionSources } = await import('./versionSources');
+    expect(await browserVersionSources.exists('https://raw.githubusercontent.com/acme/onto/v1.0.0/onto.ttl')).toBe(false);
+  });
+
+  it('JSON that cannot be read (network error, timeout) is null, rather than failing', async () => {
+    sessionStorage.clear();
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    expect(await fetchJsonCached('https://api.github.com/repos/acme/onto/tags?per_page=100')).toBeNull();
+  });
+});
