@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
-import { propertySource, annotationUsedOnClass } from './propertyMenuFacts';
+import { propertySource, annotationUsedOnClass, annotationUsedAnywhere, annotationDisplayName } from './propertyMenuFacts';
 
 const MAIN = 'https://w3id.org/adiro/aec_drawing_metadata#';
 const refs = [{ url: 'https://w3id.org/adiro/aec_provenance', usePrefix: true, prefix: 'aprov' }];
@@ -36,5 +36,23 @@ describe('annotationUsedOnClass (#137)', () => {
     expect(annotationUsedOnClass(store, 'http://purl.org/dc/terms/license')).toBe(false);
     expect(annotationUsedOnClass(store, 'http://www.w3.org/2004/02/skos/core#altLabel')).toBe(false);
     expect(annotationUsedOnClass(store, `${MAIN}labellableRoot`)).toBe(false);
+  });
+});
+
+describe('annotationUsedAnywhere and annotationDisplayName (#137 follow-up)', () => {
+  const store = new Store(new Parser().parse(`@prefix : <${MAIN}> . @prefix owl: <http://www.w3.org/2002/07/owl#> .
+    @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> . @prefix dcterms: <http://purl.org/dc/terms/> .
+    <https://w3id.org/adiro/aec_drawing_metadata> rdf:type owl:Ontology ; dcterms:license <https://example.org/gpl> .
+    :isCVATProperty rdf:type owl:AnnotationProperty .`));
+
+  it('is true for an annotation used on anything (here, the ontology header), false for one used nowhere', () => {
+    expect(annotationUsedAnywhere(store, 'http://purl.org/dc/terms/license')).toBe(true);
+    expect(annotationUsedAnywhere(store, `${MAIN}isCVATProperty`)).toBe(false);
+  });
+
+  it('names an annotation as the menu does: with its prefix when defined elsewhere', () => {
+    const skos = [{ url: 'http://www.w3.org/2004/02/skos/core', usePrefix: true, prefix: 'skos' }];
+    expect(annotationDisplayName({ name: 'altLabel', uri: 'http://www.w3.org/2004/02/skos/core#altLabel' }, skos, MAIN)).toBe('skos:altLabel');
+    expect(annotationDisplayName({ name: 'exampleImage', uri: `${MAIN}exampleImage` }, skos, MAIN)).toBe('exampleImage');
   });
 });

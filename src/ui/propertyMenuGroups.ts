@@ -1,7 +1,7 @@
 /**
  * How the property menus (Object, Data, Annotation) group their entries (#137): the open ontology's own
  * properties first; those defined elsewhere (imports, standard vocabularies) below, by where they are defined;
- * in the annotation menu, those used on no class (so they cannot style anything) last. Within a group, deprecated
+ * in the annotation menus, those used nowhere last ("Not used"). Within a group, deprecated
  * properties come after the active ones. Pure: the menus give each entry's facts, this decides the layout.
  */
 
@@ -10,7 +10,7 @@ export interface MenuEntry<T> {
   /** Where the property is defined when it is not the open ontology (a prefix or ontology name); null when it is. */
   source: string | null;
   deprecated: boolean;
-  /** Annotation menu: used on no class, so it cannot style anything. */
+  /** Annotation menus: used nowhere in the ontology ("Not used"). */
   unused?: boolean;
   /** Already changes what the canvas shows: a collapsed group holding it starts open, so it is never hidden. */
   affectsCanvas?: boolean;

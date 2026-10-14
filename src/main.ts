@@ -186,7 +186,7 @@ import { latestDisplayConfigSource } from './lib/displayConfigFallback';
 import { showWarningBar, hideWarningBar } from './ui/warningBar';
 import { groupMenuEntries } from './ui/propertyMenuGroups';
 import { renderMenuGroups, openGroupsInEffect } from './ui/propertyMenuGroupsDom';
-import { propertySource, annotationUsedOnClass } from './ui/propertyMenuFacts';
+import { propertySource, annotationUsedAnywhere, annotationDisplayName } from './ui/propertyMenuFacts';
 import { annotationUsages } from './lib/annotationUsages';
 import { fillUsagesSection } from './ui/annotationUsagesView';
 import { openExternalOntologyTab } from './lib/openExternalOntology';
@@ -643,9 +643,10 @@ function buildAnnotationPropsDeps(
     // Grouped as in the Annotation Properties menu (#141).
     groupFacts: (ap) => ({
       source: propertySource(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
-      unused: !!ttlStore && !!ap.uri && !annotationUsedOnClass(ttlStore, ap.uri),
+      unused: !!ttlStore && !!ap.uri && !annotationUsedAnywhere(ttlStore, ap.uri),
       deprecated: !!ap.deprecated,
     }),
+    displayName: (ap) => annotationDisplayName(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
   };
 }
 

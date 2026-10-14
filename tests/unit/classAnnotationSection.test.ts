@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * "Set annotation properties" in the class dialogs (#141): a scrollable list, grouped like the Annotation
- * Properties menu (#137): own first, others by source, those used on no class last, deprecated ones marked; a group
+ * Properties menu (#137): own first, others by source, those used nowhere last ("Not used"), deprecated ones marked; a group
  * holding a value set on this class starts open.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -19,7 +19,7 @@ const FACTS: Record<string, { source: string | null; unused: boolean }> = {
   isLabel: { source: null, unused: false },
   'skos:altLabel': { source: 'skos', unused: false },
   labellableRoot: { source: null, unused: true },
-  'dcterms:license': { source: 'dcterms', unused: true },
+  'dcterms:license': { source: 'dcterms', unused: false },
 };
 const deps = (values: Record<string, string[]> = {}): AnnotationPropsListDeps => ({
   getInitialValues: (ap) => values[ap.name] ?? [],
@@ -41,8 +41,9 @@ describe('Set annotation properties: scrollable and grouped (#141)', () => {
     renderRenameModalAnnotationPropsList('A', { id: 'A', label: 'A', labellableRoot: null } as GraphNode, PROPS, deps());
     expect(names(list())[0]).toBe('isLabel');
     expect(group('external').open).toBe(false);
-    expect(names(group('external'))).toEqual(['skos:altLabel']);
-    expect(names(group('unused'))).toEqual(['dcterms:license', 'labellableRoot']);
+    expect(names(group('external'))).toEqual(['dcterms:license', 'skos:altLabel']);
+    expect(names(group('unused'))).toEqual(['labellableRoot']);
+    expect(group('unused').querySelector('summary')!.textContent).toBe('Not used (1)');
     expect(group('unused').querySelector('.prop-deprecated')!.getAttribute('title')).toBe('Deprecated: use isLabel.');
   });
 
@@ -57,5 +58,19 @@ describe('Set annotation properties: scrollable and grouped (#141)', () => {
     renderRenameModalAnnotationPropsList('A', { id: 'A', label: 'A', labellableRoot: null } as GraphNode, PROPS, deps({ 'skos:altLabel': ['Space'] }));
     expect(group('external').open).toBe(true);
     expect(group('unused').open).toBe(false);
+  });
+});
+
+describe('Set annotation properties: names as in the menu (#137 follow-up)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="renameAnnotationPropsList"></div>';
+  });
+
+  it('shows every name in bold, Boolean and text alike, with its prefix when it has one', () => {
+    const withNames: AnnotationPropsListDeps = { ...deps(), displayName: (ap) => (ap.name === 'altLabel' ? 'skos:altLabel' : ap.name) };
+    renderRenameModalAnnotationPropsList('A', { id: 'A', label: 'A', labellableRoot: null } as GraphNode, [prop('isLabel', true), prop('altLabel', false)], withNames);
+    const nameEls = [...document.querySelectorAll<HTMLElement>('#renameAnnotationPropsList .prop-name')];
+    expect(nameEls.map((n) => n.textContent)).toEqual(['isLabel', 'skos:altLabel:']);
+    expect(nameEls.every((n) => n.style.fontWeight === 'bold')).toBe(true);
   });
 });

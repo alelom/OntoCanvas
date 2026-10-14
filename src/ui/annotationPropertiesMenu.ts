@@ -15,13 +15,12 @@ import type { AnnotationPropertyInfo, BorderLineType } from '../types';
 import type { AnnotationStyleConfig } from './constants';
 import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, BORDER_LINE_OPTIONS, DEFAULT_NODE_FALLBACK } from './constants';
 import { renderLineTypeDropdown, renderLineTypeSvg } from './edgeStyleUtils';
-import { getPrefixForUri } from './externalRefs';
 import { getMainOntologyBase, removeAnnotationPropertyFromStore, getAnnotationPropertyUriFromStore } from '../parser';
 import type { ExternalOntologyReference } from '../storage';
 import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotationStyle';
 import { groupMenuEntries, menuGroupKey, sortByMenuGroup, type MenuEntry } from './propertyMenuGroups';
 import { renderMenuGroups, openGroupsInEffect } from './propertyMenuGroupsDom';
-import { propertySource, annotationUsedOnClass } from './propertyMenuFacts';
+import { propertySource, annotationUsedOnClass, annotationUsedAnywhere, annotationDisplayName } from './propertyMenuFacts';
 import { annotationUsages } from '../lib/annotationUsages';
 import { toggleUsagesPopover } from './annotationUsagesView';
 
@@ -61,15 +60,19 @@ export function initAnnotationPropsMenu(
 
   // Grouped as shown (#137): own first, then by the ontology defining them, then those used on no class (which
   // cannot style anything); deprecated after active in each. The priority order follows what is shown.
+  // An annotation used on no class cannot style anything (annotation styles colour classes): its row is compact.
+  const cannotStyle = new Set<string>();
   const entryOf = (ap: AnnotationPropertyInfo): MenuEntry<AnnotationPropertyInfo> => {
-    const unused = !!ttlStore && !!ap.uri && !annotationUsedOnClass(ttlStore, ap.uri);
+    const unused = !!ttlStore && !!ap.uri && !annotationUsedAnywhere(ttlStore, ap.uri);
+    const onClass = !ttlStore || !ap.uri || annotationUsedOnClass(ttlStore, ap.uri);
+    if (!onClass) cannotStyle.add(ap.name);
     return {
       item: ap,
       source: propertySource(ap, externalRefs, mainBase),
       deprecated: !!ap.deprecated,
       unused,
       // A Boolean one used on classes colours them ("when true") by default.
-      affectsCanvas: ap.isBoolean && !unused,
+      affectsCanvas: ap.isBoolean && onClass,
     };
   };
   const sorted = sortByMenuGroup(deps.getAnnotationProperties().map(entryOf));
@@ -104,13 +107,13 @@ export function initAnnotationPropsMenu(
     </div>`;
   container.appendChild(defaultSection);
 
-  const formatPropName = (ap: AnnotationPropertyInfo): string => {
-    const prefix = getPrefixForUri(ap.uri, ap.isDefinedBy, externalRefs, mainBase);
-    return prefix ? `${prefix}:${ap.name}` : ap.name;
-  };
+  const formatPropName = (ap: AnnotationPropertyInfo): string => annotationDisplayName(ap, externalRefs, mainBase);
 
-  const boolProps = annotationProperties.filter((ap) => ap.isBoolean);
-  const textProps = annotationProperties.filter((ap) => !ap.isBoolean);
+  // Those used nowhere are listed once, in "Not used" at the end, whatever their kind.
+  const isUnused = (ap: AnnotationPropertyInfo): boolean => groupOf(ap) === 'unused';
+  const boolProps = annotationProperties.filter((ap) => ap.isBoolean && !isUnused(ap));
+  const textProps = annotationProperties.filter((ap) => !ap.isBoolean && !isUnused(ap));
+  const unusedEntries = sorted.filter((x) => x.unused);
   /** Whether `ap` is the first / last of its group in `list` (its section): it is moved only within the group. */
   const isFirstInGroup = (list: AnnotationPropertyInfo[], ap: AnnotationPropertyInfo) => list.find((p) => groupOf(p) === groupOf(ap)) === ap;
   const isLastInGroup = (list: AnnotationPropertyInfo[], ap: AnnotationPropertyInfo) => [...list].reverse().find((p) => groupOf(p) === groupOf(ap)) === ap;
@@ -146,8 +149,8 @@ export function initAnnotationPropsMenu(
     const boolSection = document.createElement('div');
     boolSection.style.marginBottom = '12px';
     boolSection.innerHTML = '<strong style="font-size: 11px;">Boolean properties</strong>';
-    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean)), ({ item: ap, unused }) => {
-      if (unused) return compactRow(ap);
+    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean && !x.unused)), ({ item: ap }) => {
+      if (cannotStyle.has(ap.name)) return compactRow(ap);
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }, activatable: boolean) => {
@@ -184,8 +187,8 @@ export function initAnnotationPropsMenu(
   if (textProps.length > 0) {
     const textSection = document.createElement('div');
     textSection.innerHTML = '<strong style="font-size: 11px;">Text properties (regex)</strong>';
-    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean)), ({ item: ap, unused }) => {
-      if (unused) return compactRow(ap);
+    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean && !x.unused)), ({ item: ap }) => {
+      if (cannotStyle.has(ap.name)) return compactRow(ap);
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       row.innerHTML = `
@@ -228,7 +231,9 @@ export function initAnnotationPropsMenu(
     container.appendChild(textSection);
   }
 
-  if (boolProps.length === 0 && textProps.length === 0) {
+  if (unusedEntries.length > 0) renderMenuGroups(container, groupMenuEntries(unusedEntries), ({ item }) => compactRow(item), 'annotationUnused');
+
+  if (boolProps.length === 0 && textProps.length === 0 && unusedEntries.length === 0) {
     const note = document.createElement('div');
     note.innerHTML = '<span style="font-size: 11px; color: #888;">No annotation properties in ontology</span>';
     container.appendChild(note);

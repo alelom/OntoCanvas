@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The property menus' groups on the page (#137): own rows first, then "From other ontologies (N)" and "Not used
- * on any class (N)" as collapsed sections, open when something in them is in effect or the viewer left them open;
+ * The property menus' groups on the page (#137): own rows first, then "From other ontologies (N)" and "Not used (N)"
+ * as collapsed sections, open when something in them is in effect or the viewer left them open;
  * deprecated rows greyed and struck through, with the reason as tooltip.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -49,9 +49,9 @@ describe('renderMenuGroups (#137)', () => {
     expect(group(render([entry('a'), entry('b', { source: 'x' })], 'objectProps'), 'external')!.open).toBe(false);
   });
 
-  it('puts what is used on no class in its own collapsed group', () => {
+  it('puts what is used nowhere in its own collapsed group, "Not used"', () => {
     const c = render([entry('a'), entry('dcterms:license', { source: 'dcterms', unused: true })]);
-    expect(group(c, 'unused')!.querySelector('summary')!.textContent).toBe('Not used on any class (1)');
+    expect(group(c, 'unused')!.querySelector('summary')!.textContent).toBe('Not used (1)');
     expect(group(c, 'external')).toBeNull();
   });
 

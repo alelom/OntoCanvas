@@ -11,11 +11,12 @@
 # menu-groups-base.ttl from next to it. What you should see in the three top menus:
 #   - Object Properties: hasRoom, then a collapsed "From other ontologies (1)" with base:recordedBy.
 #   - Data Properties: area, then a collapsed "From other ontologies (1)" with base:recordedOn.
-#   - Annotation Properties, Boolean: isLabel; under a collapsed "Not used on any class (1)", oldLabelFlag, greyed,
-#     struck through and marked "deprecated" (its tooltip says what replaces it).
-#   - Annotation Properties, Text: skos:altLabel (used on the class Room) under "From other ontologies"; and under
-#     "Not used on any class", dcterms:title and dcterms:license (only on the ontology header) and skos:definition
-#     (only on the SKOS concept), which cannot style any class.
+#   - Annotation Properties, Boolean: isLabel.
+#   - Annotation Properties, Text: under a collapsed "From other ontologies", dcterms:license and dcterms:title (only on
+#     the ontology header) and skos:altLabel (on the class Room) and skos:definition (only on the SKOS concept). Those
+#     used on no class cannot style anything, so their rows only have show usages (🔎), edit and delete.
+#   - Last, a collapsed "Not used (1)": oldLabelFlag, used nowhere, greyed, struck through and marked "deprecated"
+#     (its tooltip says what replaces it).
 
 <http://example.org/examples/menu-groups> rdf:type owl:Ontology ;
     rdfs:label "Menu groups" ;

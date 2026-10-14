@@ -293,20 +293,31 @@ describe('annotationPropertiesMenu - config read/write', () => {
   });
 });
 
-describe('annotationPropertiesMenu - not used on any class, and usages (#137, #139)', () => {
-  it('gives a property used on no class only edit, delete and "show usages": it cannot style anything', () => {
+describe('annotationPropertiesMenu - not used, used on no class, and usages (#137, #139)', () => {
+  it('puts the properties used nowhere, Boolean and text alike, in one "Not used" group at the end, with only show usages, edit and delete', () => {
     const { deps } = makeDeps([boolProp('used'), boolProp('unusedFlag'), textProp('unusedText')], makeStore(['used'], ['unusedFlag', 'unusedText']));
     initAnnotationPropsMenu(container, deps);
-    const unusedGroup = container.querySelectorAll('details[data-group="unused"]');
-    expect(unusedGroup).toHaveLength(2);
-    for (const group of unusedGroup) {
-      expect(group.querySelector('.ap-bool-show, .ap-bool-fill, .ap-add-rule, .ap-text-rules, .ap-move-up, .ap-move-down')).toBeNull();
-      expect(group.querySelector('.annotation-prop-edit-btn')).not.toBeNull();
-      expect(group.querySelector('.annotation-prop-delete-btn')).not.toBeNull();
-      expect(group.querySelector('.ap-usages-btn')).not.toBeNull();
-    }
+    const unused = container.querySelectorAll('details[data-group="unused"]');
+    expect(unused).toHaveLength(1);
+    expect(container.lastElementChild).toBe(unused[0]);
+    expect(unused[0].querySelector('summary')!.textContent).toBe('Not used (2)');
+    expect(unused[0].querySelector('.ap-bool-show, .ap-bool-fill, .ap-add-rule, .ap-text-rules, .ap-move-up, .ap-move-down')).toBeNull();
+    expect(unused[0].querySelectorAll('.ap-usages-btn, .annotation-prop-edit-btn, .annotation-prop-delete-btn')).toHaveLength(6);
     // The used one keeps its styling controls.
     expect(container.querySelector('.ap-bool-show[data-prop="used"]')).not.toBeNull();
+  });
+
+  it('gives a property used only on things other than classes the same compact row, in its usual group: it cannot style a class', () => {
+    const store = makeStore(['styled']);
+    store.addQuad(namedNode('http://example.org/o'), namedNode(RDF + 'type'), namedNode(OWL + 'Ontology'));
+    store.addQuad(namedNode(BASE + 'headerNote'), namedNode(RDF + 'type'), namedNode(OWL + 'AnnotationProperty'));
+    store.addQuad(namedNode('http://example.org/o'), namedNode(BASE + 'headerNote'), DataFactory.literal('about'));
+    const { deps } = makeDeps([textProp('styled'), textProp('headerNote')], store);
+    initAnnotationPropsMenu(container, deps);
+    expect(container.querySelector('details[data-group="unused"]')).toBeNull();
+    const row = container.querySelector('.ap-usages-btn[data-name="headerNote"]')!.parentElement!;
+    expect(row.querySelector('.ap-add-rule, .ap-move-up')).toBeNull();
+    expect(container.querySelector('.ap-add-rule[data-prop="styled"]')).not.toBeNull();
   });
 
   it('shows where a property is used from its "show usages" button', () => {

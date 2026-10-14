@@ -1,6 +1,6 @@
 /**
  * Draws a property menu's groups (#137, layout decided by ./propertyMenuGroups): the own rows, then "From other
- * ontologies (N)" with a heading per source, then "Not used on any class (N)". The two are collapsed unless
+ * ontologies (N)" with a heading per source, then "Not used (N)". The two are collapsed unless
  * something in them is in effect on the canvas, or the viewer left them open (remembered per viewer and menu).
  * A deprecated row is greyed and struck through, with the reason (its comment) as tooltip.
  *
@@ -85,7 +85,7 @@ export function renderMenuGroups<T extends { comment?: string | null }>(
   }
 
   if (groups.unused.length > 0) {
-    const details = collapsible(menuId, 'unused', `Not used on any class (${groups.unused.length})`, groups.unusedInEffect);
+    const details = collapsible(menuId, 'unused', `Not used (${groups.unused.length})`, groups.unusedInEffect);
     for (const entry of groups.unused) details.appendChild(draw(entry));
     container.appendChild(details);
   }

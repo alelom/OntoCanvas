@@ -27,6 +27,8 @@ export interface AnnotationPropsListDeps {
   onOpenLink: (value: string) => void;
   /** How the property is grouped, as in the Annotation Properties menu (#141, #137). */
   groupFacts: (ap: AnnotationPropertyInfo) => { source: string | null; unused: boolean; deprecated: boolean };
+  /** The name shown, as in the menu (`skos:altLabel`); its local name when not given. */
+  displayName?: (ap: AnnotationPropertyInfo) => string;
 }
 
 /** The list scrolls rather than pushing the rest of the dialog down (#141). */
@@ -45,8 +47,8 @@ function createAnnotationPropItem(
     item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
     const label = document.createElement('span');
     label.className = 'prop-name';
-    label.style.cssText = 'font-size: 11px; min-width: 120px;';
-    label.textContent = ap.name;
+    label.style.cssText = 'font-size: 11px; font-weight: bold; min-width: 120px;';
+    label.textContent = deps.displayName?.(ap) ?? ap.name;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `${idPrefix}${ap.name}`;
@@ -62,7 +64,7 @@ function createAnnotationPropItem(
   const label = document.createElement('div');
   label.className = 'prop-name';
   label.style.cssText = 'font-size: 11px; font-weight: bold; margin-bottom: 4px;';
-  label.textContent = ap.name + ':';
+  label.textContent = (deps.displayName?.(ap) ?? ap.name) + ':';
   if (ap.comment) label.title = ap.comment;
   item.appendChild(label);
 

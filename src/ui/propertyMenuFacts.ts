@@ -31,3 +31,18 @@ export function annotationUsedOnClass(store: Store, uri: string): boolean {
     store.getObjects(q.subject, RDF_TYPE, null).some((t) => CLASS_TYPES.has(t.value))
   );
 }
+
+/** Whether the annotation property `uri` is used at all, on anything: the "Not used" group holds those that are not. */
+export function annotationUsedAnywhere(store: Store, uri: string): boolean {
+  return store.getQuads(null, uri, null, null).length > 0;
+}
+
+/** An annotation property's name as the menus show it: `prefix:name` when it is defined elsewhere and has a prefix. */
+export function annotationDisplayName(
+  ap: { name: string; uri?: string | null; isDefinedBy?: string | null },
+  refs: ExternalOntologyReference[],
+  mainBase: string | null
+): string {
+  const prefix = getPrefixForUri(ap.uri, ap.isDefinedBy, refs, mainBase);
+  return prefix ? `${prefix}:${ap.name}` : ap.name;
+}

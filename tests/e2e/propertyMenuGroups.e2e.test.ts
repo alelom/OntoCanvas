@@ -1,8 +1,7 @@
 /**
  * The property menus' groups (#137), end to end, on examples/display/menu-groups.ttl and the ontology it imports
  * (served from a made-up address): the ontology's own properties first, the imported ones in a collapsed
- * "From other ontologies" group, the annotations used on no class in "Not used on any class", and a deprecated
- * one greyed and marked.
+ * "From other ontologies" group, the annotations used nowhere in "Not used", and a deprecated one greyed and marked.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
@@ -63,22 +62,22 @@ describe('property menus: own properties first, the others grouped (#137)', () =
     expect(await structure('dataPropsContent')).toEqual(['area', '[closed] From other ontologies (1)', '  -- base', '  base:recordedOn']);
   });
 
-  it('Annotation Properties: what cannot style a class last, the deprecated one marked', async () => {
+  it('Annotation Properties: what is used nowhere last, in one "Not used" group, the deprecated one marked', async () => {
     expect(await structure('annotationPropsContent')).toEqual([
       '## Default (no property applies)',
       '## Boolean properties',
       'isLabel',
-      '[closed] Not used on any class (1)',
-      '  oldLabelFlag (deprecated)',
       '## Text properties (regex)',
-      '[closed] From other ontologies (1)',
-      '  -- skos',
-      '  skos:altLabel',
-      // In priority order, which is the order the properties were found in.
-      '[closed] Not used on any class (3)',
-      '  skos:definition',
+      // In priority order within a source, which is the order the properties were found in.
+      '[closed] From other ontologies (4)',
+      '  -- dcterms',
       '  dcterms:license',
       '  dcterms:title',
+      '  -- skos',
+      '  skos:altLabel',
+      '  skos:definition',
+      '[closed] Not used (1)',
+      '  oldLabelFlag (deprecated)',
     ]);
     expect(await page.locator('#annotationPropsContent .prop-deprecated').getAttribute('title')).toBe('Deprecated: use isLabel.');
   });

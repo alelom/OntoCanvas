@@ -13,7 +13,7 @@ import { join } from 'node:path';
  * render. Use this after any load or re-render instead of a fixed sleep.
  */
 /**
- * Open the collapsed groups of a property menu ("From other ontologies", "Not used on any class", #137), so a test
+ * Open the collapsed groups of a property menu ("From other ontologies", "Not used", #137), so a test
  * can act on a row inside them as a user would after expanding them. `contentId` is the menu's content element.
  */
 export async function openMenuGroups(page: Page, contentId: string): Promise<void> {
