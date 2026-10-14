@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 /**
  * The property menus' groups on the page (#137): own rows first, then "From other ontologies (N)" and "Not used (N)"
- * as collapsed sections, open when something in them is in effect or the viewer left them open;
+ * as collapsed sections, always collapsed when drawn;
  * deprecated rows greyed and struck through, with the reason as tooltip.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { groupMenuEntries, type MenuEntry } from '../../src/ui/propertyMenuGroups';
-import { renderMenuGroups, openGroupsInEffect } from '../../src/ui/propertyMenuGroupsDom';
+import { renderMenuGroups } from '../../src/ui/propertyMenuGroupsDom';
 
 type P = { name: string; comment?: string };
 const entry = (name: string, over: Partial<MenuEntry<P>> = {}): MenuEntry<P> => ({ item: { name }, source: null, deprecated: false, ...over });
@@ -16,10 +16,10 @@ const row = (x: MenuEntry<P>): HTMLElement => {
   div.innerHTML = `<span class="prop-name">${x.item.name}</span>`;
   return div;
 };
-const render = (entries: MenuEntry<P>[], menuId = 'dataProps') => {
+const render = (entries: MenuEntry<P>[]) => {
   const container = document.createElement('div');
   document.body.replaceChildren(container);
-  renderMenuGroups(container, groupMenuEntries(entries), row, menuId);
+  renderMenuGroups(container, groupMenuEntries(entries), row);
   return container;
 };
 const group = (c: HTMLElement, g: string) => c.querySelector<HTMLDetailsElement>(`details[data-group="${g}"]`);
@@ -36,17 +36,13 @@ describe('renderMenuGroups (#137)', () => {
     expect([...external.querySelectorAll('.prop-menu-source')].map((el) => el.textContent)).toEqual(['aprov', 'geom']);
   });
 
-  it('opens a group that holds something in effect on the canvas', () => {
-    expect(group(render([entry('a'), entry('b', { source: 'x', affectsCanvas: true })]), 'external')!.open).toBe(true);
-  });
-
-  it('remembers, per menu, a group the viewer opened', () => {
-    const c = render([entry('a'), entry('b', { source: 'x' })]);
-    const external = group(c, 'external')!;
-    external.open = true;
-    external.dispatchEvent(new Event('toggle'));
-    expect(group(render([entry('a'), entry('b', { source: 'x' })]), 'external')!.open).toBe(true);
-    expect(group(render([entry('a'), entry('b', { source: 'x' })], 'objectProps'), 'external')!.open).toBe(false);
+  it('always starts its groups collapsed, also after the viewer opened them in an earlier render', () => {
+    const c = render([entry('a'), entry('b', { source: 'x' }), entry('c', { unused: true })]);
+    group(c, 'external')!.open = true;
+    group(c, 'external')!.dispatchEvent(new Event('toggle'));
+    const again = render([entry('a'), entry('b', { source: 'x' }), entry('c', { unused: true })]);
+    expect(group(again, 'external')!.open).toBe(false);
+    expect(group(again, 'unused')!.open).toBe(false);
   });
 
   it('puts what is used nowhere in its own collapsed group, "Not used"', () => {
@@ -65,23 +61,3 @@ describe('renderMenuGroups (#137)', () => {
   });
 });
 
-describe('openGroupsInEffect (#137)', () => {
-  beforeEach(() => localStorage.clear());
-
-  it('opens a group once a saved style in it is applied: a hidden relationship type, a regex rule', () => {
-    const withControl = (html: string) => {
-      const c = render([entry('a'), entry('b', { source: 'x' })]);
-      group(c, 'external')!.querySelector('.row')!.insertAdjacentHTML('beforeend', html);
-      return c;
-    };
-    const hidden = withControl('<input type="checkbox" class="edge-show-cb">');
-    openGroupsInEffect(hidden);
-    expect(group(hidden, 'external')!.open).toBe(true);
-    const regex = withControl('<input class="ap-regex" value="^Plan">');
-    openGroupsInEffect(regex);
-    expect(group(regex, 'external')!.open).toBe(true);
-    const nothing = withControl('<input type="checkbox" class="edge-show-cb" checked><input class="ap-regex" value="">');
-    openGroupsInEffect(nothing);
-    expect(group(nothing, 'external')!.open).toBe(false);
-  });
-});

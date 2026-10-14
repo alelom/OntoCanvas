@@ -2,7 +2,7 @@
 /**
  * "Set annotation properties" in the class dialogs (#141): a scrollable list, grouped like the Annotation
  * Properties menu (#137): own first, others by source, those used nowhere last ("Not used"), deprecated ones marked; a group
- * holding a value set on this class starts open.
+ * starts collapsed.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderRenameModalAnnotationPropsList, renderAddNodeAnnotationPropsList, type AnnotationPropsListDeps } from '../../src/ui/nodeModalFormUi';
@@ -54,9 +54,9 @@ describe('Set annotation properties: scrollable and grouped (#141)', () => {
     expect(el.style.maxHeight).not.toBe('');
   });
 
-  it('opens a group holding a value set on this class', () => {
+  it('starts its groups collapsed, also when this class has a value in one of them', () => {
     renderRenameModalAnnotationPropsList('A', { id: 'A', label: 'A', labellableRoot: null } as GraphNode, PROPS, deps({ 'skos:altLabel': ['Space'] }));
-    expect(group('external').open).toBe(true);
+    expect(group('external').open).toBe(false);
     expect(group('unused').open).toBe(false);
   });
 });

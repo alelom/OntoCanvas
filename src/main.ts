@@ -185,7 +185,7 @@ import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, dis
 import { latestDisplayConfigSource } from './lib/displayConfigFallback';
 import { showWarningBar, hideWarningBar } from './ui/warningBar';
 import { groupMenuEntries } from './ui/propertyMenuGroups';
-import { renderMenuGroups, openGroupsInEffect } from './ui/propertyMenuGroupsDom';
+import { renderMenuGroups } from './ui/propertyMenuGroupsDom';
 import { propertySource, annotationUsedAnywhere, annotationDisplayName } from './ui/propertyMenuFacts';
 import { annotationUsages } from './lib/annotationUsages';
 import { fillUsagesSection } from './ui/annotationUsagesView';
@@ -500,8 +500,6 @@ function applyDisplayConfig(config: DisplayConfig): void {
         }
       }
     });
-    // A hidden relationship type in a collapsed group opens it, so what hides it is never hidden itself (#137).
-    openGroupsInEffect(edgeStylesContent);
     // Debug logging (only in debug mode)
     if (isDebugMode()) {
       debugLog(`[DISPLAY CONFIG] Applied edge styles to ${appliedToCheckboxes} checkboxes in DOM`);
@@ -1608,10 +1606,9 @@ function initEdgeStylesMenu(
       item: { type, comment: op?.comment },
       source: propertySource(op ?? { uri: /^https?:\/\//.test(type) ? type : null }, externalOntologyReferences, mainBaseForGroups),
       deprecated: !!op?.deprecated,
-      affectsCanvas: preserved.get(type)?.show === false || loadedEdgeStyleConfig?.[type]?.show === false,
     };
   });
-  renderMenuGroups(edgeStylesContent, groupMenuEntries(entries), ({ item }) => rowFor(item.type), 'objectProps');
+  renderMenuGroups(edgeStylesContent, groupMenuEntries(entries), ({ item }) => rowFor(item.type));
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
@@ -1777,7 +1774,7 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
       <button type="button" class="data-prop-delete-btn" data-name="${escapeHtml(dp.name)}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`}
     `;
     return row;
-  }, 'dataProps');
+  });
   dataPropsContent.querySelectorAll('.data-prop-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const name = (btn as HTMLElement).dataset.name!;

@@ -19,7 +19,7 @@ import { getMainOntologyBase, removeAnnotationPropertyFromStore, getAnnotationPr
 import type { ExternalOntologyReference } from '../storage';
 import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotationStyle';
 import { groupMenuEntries, menuGroupKey, sortByMenuGroup, type MenuEntry } from './propertyMenuGroups';
-import { renderMenuGroups, openGroupsInEffect } from './propertyMenuGroupsDom';
+import { renderMenuGroups } from './propertyMenuGroupsDom';
 import { propertySource, annotationUsedOnClass, annotationUsedAnywhere, annotationDisplayName } from './propertyMenuFacts';
 import { annotationUsages } from '../lib/annotationUsages';
 import { toggleUsagesPopover } from './annotationUsagesView';
@@ -71,8 +71,6 @@ export function initAnnotationPropsMenu(
       source: propertySource(ap, externalRefs, mainBase),
       deprecated: !!ap.deprecated,
       unused,
-      // A Boolean one used on classes colours them ("when true") by default.
-      affectsCanvas: ap.isBoolean && onClass,
     };
   };
   const sorted = sortByMenuGroup(deps.getAnnotationProperties().map(entryOf));
@@ -180,7 +178,7 @@ export function initAnnotationPropsMenu(
         </div>
       `;
       return row;
-    }, 'annotationBool');
+    });
     container.appendChild(boolSection);
   }
 
@@ -227,11 +225,11 @@ export function initAnnotationPropsMenu(
         deps.onApply();
       });
       return row;
-    }, 'annotationText');
+    });
     container.appendChild(textSection);
   }
 
-  if (unusedEntries.length > 0) renderMenuGroups(container, groupMenuEntries(unusedEntries), ({ item }) => compactRow(item), 'annotationUnused');
+  if (unusedEntries.length > 0) renderMenuGroups(container, groupMenuEntries(unusedEntries), ({ item }) => compactRow(item));
 
   if (boolProps.length === 0 && textProps.length === 0 && unusedEntries.length === 0) {
     const note = document.createElement('div');
@@ -522,6 +520,4 @@ export function applyAnnotationStyleConfigToDom(
     if (dTrigger && dOpt) dTrigger.innerHTML = `${renderLineTypeSvg(dOpt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
   }
 
-  // A saved style in a collapsed group opens it, so what styles the canvas is never hidden (#137).
-  openGroupsInEffect(container);
 }

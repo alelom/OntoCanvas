@@ -35,12 +35,6 @@ describe('groupMenuEntries (#137)', () => {
     expect(groups.external).toEqual([]);
     expect(groups.unused.map((x) => x.item)).toEqual(['dcterms:license', 'skos:altLabel', 'labellableRoot']);
   });
-
-  it('says a collapsed group should start open when something in it is in effect on the canvas', () => {
-    expect(groupMenuEntries([e('a'), e('b', { source: 'x' })]).externalInEffect).toBe(false);
-    expect(groupMenuEntries([e('a'), e('b', { source: 'x', affectsCanvas: true })]).externalInEffect).toBe(true);
-    expect(groupMenuEntries([e('a', { unused: true, affectsCanvas: true })]).unusedInEffect).toBe(true);
-  });
 });
 
 describe('menuOrder and menuGroupKey (#137)', () => {

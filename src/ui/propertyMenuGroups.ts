@@ -12,8 +12,6 @@ export interface MenuEntry<T> {
   deprecated: boolean;
   /** Annotation menus: used nowhere in the ontology ("Not used"). */
   unused?: boolean;
-  /** Already changes what the canvas shows: a collapsed group holding it starts open, so it is never hidden. */
-  affectsCanvas?: boolean;
 }
 
 export interface MenuGroups<T> {
@@ -21,8 +19,6 @@ export interface MenuGroups<T> {
   /** By source, alphabetically. */
   external: { source: string; entries: MenuEntry<T>[] }[];
   unused: MenuEntry<T>[];
-  externalInEffect: boolean;
-  unusedInEffect: boolean;
 }
 
 /** Active entries first, deprecated after; otherwise the order given. */
@@ -40,8 +36,6 @@ export function groupMenuEntries<T>(entries: readonly MenuEntry<T>[]): MenuGroup
     own: activeFirst(used.filter((x) => x.source === null)),
     external,
     unused: activeFirst([...unused.filter((x) => x.source === null), ...unused.filter((x) => x.source !== null)]),
-    externalInEffect: external.some((g) => g.entries.some((x) => x.affectsCanvas)),
-    unusedInEffect: unused.some((x) => x.affectsCanvas),
   };
 }
 

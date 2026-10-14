@@ -95,12 +95,8 @@ function renderAnnotationPropsGroups(
 ): void {
   listEl.style.maxHeight = LIST_MAX_HEIGHT;
   listEl.style.overflowY = 'auto';
-  const entries = annotationProperties.map((ap) => {
-    const value = currentBooleanValue(ap);
-    const hasValue = ap.isBoolean ? value !== null && value !== undefined : deps.getInitialValues(ap).length > 0;
-    return { item: ap, ...deps.groupFacts(ap), affectsCanvas: hasValue };
-  });
-  renderMenuGroups(listEl, groupMenuEntries(entries), ({ item }) => createAnnotationPropItem(item, currentBooleanValue(item), idPrefix, deps), 'classAnnotations');
+  const entries = annotationProperties.map((ap) => ({ item: ap, ...deps.groupFacts(ap) }));
+  renderMenuGroups(listEl, groupMenuEntries(entries), ({ item }) => createAnnotationPropItem(item, currentBooleanValue(item), idPrefix, deps));
 }
 
 export function updateRenameDataPropAddButtonState(): void {
