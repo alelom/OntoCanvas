@@ -51,6 +51,14 @@ describe('renderMenuGroups (#137)', () => {
     expect(group(c, 'external')).toBeNull();
   });
 
+  it('lists deprecated properties in a collapsed "Deprecated (N)" group, before "Not used"', () => {
+    const c = render([entry('a'), entry('old', { deprecated: true }), entry('gone', { unused: true })]);
+    expect([...c.querySelectorAll('details')].map((d) => [d.dataset.group, d.open, d.querySelector('summary')!.textContent])).toEqual([
+      ['deprecated', false, 'Deprecated (1)'],
+      ['unused', false, 'Not used (1)'],
+    ]);
+  });
+
   it('greys and strikes a deprecated row, marks it, and gives the reason as tooltip', () => {
     const c = render([entry('labellableRoot', { deprecated: true, item: { name: 'labellableRoot', comment: 'Deprecated: use isLabel.' } })]);
     const r = c.querySelector<HTMLElement>('.row')!;

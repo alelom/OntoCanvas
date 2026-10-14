@@ -15,8 +15,9 @@
 #   - Annotation Properties, Text: under a collapsed "From other ontologies", dcterms:license and dcterms:title (only on
 #     the ontology header) and skos:altLabel (on the class Room) and skos:definition (only on the SKOS concept). Those
 #     used on no class cannot style anything, so their rows only have show usages (🔎), edit and delete.
-#   - Last, a collapsed "Not used (1)": oldLabelFlag, used nowhere, greyed, struck through and marked "deprecated"
-#     (its tooltip says what replaces it).
+#   - Then a collapsed "Deprecated (1)": oldLabelFlag (owl:deprecated), greyed, struck through and marked "deprecated"
+#     (its tooltip says what replaces it). Deprecated annotations never style a class, even Room, which carries it.
+#   - Last, a collapsed "Not used (1)": spareNote, declared but used nowhere.
 
 <http://example.org/examples/menu-groups> rdf:type owl:Ontology ;
     rdfs:label "Menu groups" ;
@@ -27,6 +28,9 @@
 :isLabel rdf:type owl:AnnotationProperty ;
     rdfs:label "isLabel" ;
     rdfs:range xsd:boolean .
+
+:spareNote rdf:type owl:AnnotationProperty ;
+    rdfs:label "spareNote" .
 
 :oldLabelFlag rdf:type owl:AnnotationProperty ;
     rdfs:label "obsolete oldLabelFlag" ;
@@ -51,7 +55,8 @@
 :Room rdf:type owl:Class ;
     rdfs:label "Room" ;
     skos:altLabel "Space" ;
-    :isLabel true .
+    :isLabel true ;
+    :oldLabelFlag true .
 
 :RoomField rdf:type skos:Concept ;
     skos:definition "The room a record is about." .

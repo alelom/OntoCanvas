@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * "Set annotation properties" in the class dialogs (#141): a scrollable list, grouped like the Annotation
- * Properties menu (#137): own first, others by source, those used nowhere last ("Not used"), deprecated ones marked; a group
+ * Properties menu (#137): own first, others by source, then the deprecated ones, then those used nowhere ("Not used"); a group
  * starts collapsed.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -42,9 +42,9 @@ describe('Set annotation properties: scrollable and grouped (#141)', () => {
     expect(names(list())[0]).toBe('isLabel');
     expect(group('external').open).toBe(false);
     expect(names(group('external'))).toEqual(['dcterms:license', 'skos:altLabel']);
-    expect(names(group('unused'))).toEqual(['labellableRoot']);
-    expect(group('unused').querySelector('summary')!.textContent).toBe('Not used (1)');
-    expect(group('unused').querySelector('.prop-deprecated')!.getAttribute('title')).toBe('Deprecated: use isLabel.');
+    expect(names(group('deprecated'))).toEqual(['labellableRoot']);
+    expect(group('deprecated').querySelector('summary')!.textContent).toBe('Deprecated (1)');
+    expect(group('deprecated').querySelector('.prop-deprecated')!.getAttribute('title')).toBe('Deprecated: use isLabel.');
   });
 
   it('scrolls instead of growing the dialog', () => {
@@ -57,7 +57,7 @@ describe('Set annotation properties: scrollable and grouped (#141)', () => {
   it('starts its groups collapsed, also when this class has a value in one of them', () => {
     renderRenameModalAnnotationPropsList('A', { id: 'A', label: 'A', labellableRoot: null } as GraphNode, PROPS, deps({ 'skos:altLabel': ['Space'] }));
     expect(group('external').open).toBe(false);
-    expect(group('unused').open).toBe(false);
+    expect(group('deprecated').open).toBe(false);
   });
 });
 

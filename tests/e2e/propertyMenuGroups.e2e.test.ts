@@ -1,7 +1,8 @@
 /**
  * The property menus' groups (#137), end to end, on examples/display/menu-groups.ttl and the ontology it imports
  * (served from a made-up address): the ontology's own properties first, the imported ones in a collapsed
- * "From other ontologies" group, the annotations used nowhere in "Not used", and a deprecated one greyed and marked.
+ * "From other ontologies" group, the deprecated annotations in "Deprecated" (greyed, marked, never styling a class),
+ * and those used nowhere in "Not used".
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
@@ -62,7 +63,7 @@ describe('property menus: own properties first, the others grouped (#137)', () =
     expect(await structure('dataPropsContent')).toEqual(['area', '[closed] From other ontologies (1)', '  -- base', '  base:recordedOn']);
   });
 
-  it('Annotation Properties: what is used nowhere last, in one "Not used" group, the deprecated one marked', async () => {
+  it('Annotation Properties: the deprecated ones in "Deprecated", what is used nowhere in "Not used", both last', async () => {
     expect(await structure('annotationPropsContent')).toEqual([
       '## Default (no property applies)',
       '## Boolean properties',
@@ -76,8 +77,10 @@ describe('property menus: own properties first, the others grouped (#137)', () =
       '  -- skos',
       '  skos:altLabel',
       '  skos:definition',
-      '[closed] Not used (1)',
+      '[closed] Deprecated (1)',
       '  oldLabelFlag (deprecated)',
+      '[closed] Not used (1)',
+      '  spareNote',
     ]);
     expect(await page.locator('#annotationPropsContent .prop-deprecated').getAttribute('title')).toBe('Deprecated: use isLabel.');
   });

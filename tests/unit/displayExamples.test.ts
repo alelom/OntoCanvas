@@ -9,7 +9,8 @@ import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 import { getMainOntologyBase } from '../../src/parser';
 import { importedNoteForNode, importedNoteForRelationship } from '../../src/ui/importedNote';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
-import { annotationUsedOnClass } from '../../src/ui/propertyMenuFacts';
+import { annotationUsedOnClass, annotationUsedAnywhere } from '../../src/ui/propertyMenuFacts';
+import { stylingOrder } from '../../src/lib/annotationStyle';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples');
 const load = (path: string) => parseRdfToGraph(readFileSync(join(EXAMPLES, path), 'utf-8'), { path });
@@ -60,14 +61,16 @@ describe('examples/display', () => {
     expect(objectProperties.find((p) => p.name === 'writes')?.comment).toBe('The author of a book.');
   });
 
-  it('menu-groups.ttl: oldLabelFlag is deprecated; isLabel and skos:altLabel are on classes, the rest of the annotations are not (#137)', async () => {
+  it('menu-groups.ttl: oldLabelFlag is deprecated and styles nothing though on a class; spareNote is used nowhere; isLabel and skos:altLabel are on classes, the rest not (#137)', async () => {
     const { store, annotationProperties } = await load('display/menu-groups.ttl');
     expect(annotationProperties.filter((p) => p.deprecated).map((p) => p.name)).toEqual(['oldLabelFlag']);
     const NS = 'http://example.org/examples/menu-groups#';
     const used = (uri: string) => annotationUsedOnClass(store, uri);
     expect(used(`${NS}isLabel`)).toBe(true);
     expect(used('http://www.w3.org/2004/02/skos/core#altLabel')).toBe(true);
-    expect(used(`${NS}oldLabelFlag`)).toBe(false);
+    expect(used(`${NS}oldLabelFlag`)).toBe(true);
+    expect(stylingOrder(annotationProperties)).not.toContain('oldLabelFlag');
+    expect(annotationUsedAnywhere(store, `${NS}spareNote`)).toBe(false);
     expect(used('http://purl.org/dc/terms/title')).toBe(false);
     expect(used('http://purl.org/dc/terms/license')).toBe(false);
     expect(used('http://www.w3.org/2004/02/skos/core#definition')).toBe(false);

@@ -107,11 +107,12 @@ export function initAnnotationPropsMenu(
 
   const formatPropName = (ap: AnnotationPropertyInfo): string => annotationDisplayName(ap, externalRefs, mainBase);
 
-  // Those used nowhere are listed once, in "Not used" at the end, whatever their kind.
-  const isUnused = (ap: AnnotationPropertyInfo): boolean => groupOf(ap) === 'unused';
-  const boolProps = annotationProperties.filter((ap) => ap.isBoolean && !isUnused(ap));
-  const textProps = annotationProperties.filter((ap) => !ap.isBoolean && !isUnused(ap));
-  const unusedEntries = sorted.filter((x) => x.unused);
+  // Deprecated ones (they never style anything) and those used nowhere are listed once, at the end, in
+  // "Deprecated" and "Not used", whatever their kind.
+  const inFinalGroup = (ap: AnnotationPropertyInfo): boolean => groupOf(ap) === 'unused' || groupOf(ap) === 'deprecated';
+  const boolProps = annotationProperties.filter((ap) => ap.isBoolean && !inFinalGroup(ap));
+  const textProps = annotationProperties.filter((ap) => !ap.isBoolean && !inFinalGroup(ap));
+  const finalEntries = sorted.filter((x) => inFinalGroup(x.item));
   /** Whether `ap` is the first / last of its group in `list` (its section): it is moved only within the group. */
   const isFirstInGroup = (list: AnnotationPropertyInfo[], ap: AnnotationPropertyInfo) => list.find((p) => groupOf(p) === groupOf(ap)) === ap;
   const isLastInGroup = (list: AnnotationPropertyInfo[], ap: AnnotationPropertyInfo) => [...list].reverse().find((p) => groupOf(p) === groupOf(ap)) === ap;
@@ -147,7 +148,7 @@ export function initAnnotationPropsMenu(
     const boolSection = document.createElement('div');
     boolSection.style.marginBottom = '12px';
     boolSection.innerHTML = '<strong style="font-size: 11px;">Boolean properties</strong>';
-    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean && !x.unused)), ({ item: ap }) => {
+    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean && !inFinalGroup(x.item))), ({ item: ap }) => {
       if (cannotStyle.has(ap.name)) return compactRow(ap);
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
@@ -185,7 +186,7 @@ export function initAnnotationPropsMenu(
   if (textProps.length > 0) {
     const textSection = document.createElement('div');
     textSection.innerHTML = '<strong style="font-size: 11px;">Text properties (regex)</strong>';
-    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean && !x.unused)), ({ item: ap }) => {
+    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean && !inFinalGroup(x.item))), ({ item: ap }) => {
       if (cannotStyle.has(ap.name)) return compactRow(ap);
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
@@ -229,9 +230,9 @@ export function initAnnotationPropsMenu(
     container.appendChild(textSection);
   }
 
-  if (unusedEntries.length > 0) renderMenuGroups(container, groupMenuEntries(unusedEntries), ({ item }) => compactRow(item));
+  if (finalEntries.length > 0) renderMenuGroups(container, groupMenuEntries(finalEntries), ({ item }) => compactRow(item));
 
-  if (boolProps.length === 0 && textProps.length === 0 && unusedEntries.length === 0) {
+  if (boolProps.length === 0 && textProps.length === 0 && finalEntries.length === 0) {
     const note = document.createElement('div');
     note.innerHTML = '<span style="font-size: 11px; color: #888;">No annotation properties in ontology</span>';
     container.appendChild(note);
@@ -363,6 +364,8 @@ export function getAnnotationStyleConfig(
   const config: AnnotationStyleConfig = { booleanProps: {}, textProps: {} };
   if (!container) return config;
   annotationProperties.forEach((ap) => {
+    // A deprecated property never styles anything: no style is read or saved for it.
+    if (ap.deprecated) return;
     if (ap.isBoolean) {
       const q = (cls: string, val: string) =>
         container.querySelector(`.${cls}[data-prop="${ap.name}"][data-val="${val}"]`) as HTMLInputElement | null;

@@ -256,7 +256,7 @@ import {
   validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
-import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
+import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder, stylingOrder } from './lib/annotationStyle';
 import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, RELATIONSHIP_LABEL_BG_RGB, type AnnotationStyleConfig } from './ui/constants';
 import { readableTextColor } from './lib/textContrast';
 import {
@@ -2793,8 +2793,9 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
 }
 
 /** Property local names in priority order (highest first) for annotation styling. */
+/** The annotation properties that style classes, in priority order: deprecated ones never do. */
 function annotationPriorityOrder(): string[] {
-  return annotationProperties.map((ap) => ap.name);
+  return stylingOrder(annotationProperties);
 }
 
 /** Build the dependency bundle the annotation-properties menu needs (injected, so the menu

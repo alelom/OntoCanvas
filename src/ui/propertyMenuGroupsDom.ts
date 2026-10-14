@@ -1,8 +1,8 @@
 /**
  * Draws a property menu's groups (#137, layout decided by ./propertyMenuGroups): the own rows, then "From other
- * ontologies (N)" with a heading per source, then "Not used (N)". Both always start collapsed, so the open
- * ontology's own properties lead.
- * A deprecated row is greyed and struck through, with the reason (its comment) as tooltip.
+ * ontologies (N)" with a heading per source, then "Deprecated (N)", then "Not used (N)". They always start collapsed,
+ * so the open ontology's own properties lead. A deprecated row is greyed and struck through, with the reason (its
+ * comment) as tooltip.
  *
  * Rows are built by each menu; a row's name element carries the class `prop-name`.
  */
@@ -59,6 +59,12 @@ export function renderMenuGroups<T extends { comment?: string | null }>(
       details.appendChild(heading);
       for (const entry of entries) details.appendChild(draw(entry));
     }
+    container.appendChild(details);
+  }
+
+  if (groups.deprecated.length > 0) {
+    const details = collapsible('deprecated', `Deprecated (${groups.deprecated.length})`);
+    for (const entry of groups.deprecated) details.appendChild(draw(entry));
     container.appendChild(details);
   }
 

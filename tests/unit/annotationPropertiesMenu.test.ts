@@ -329,3 +329,15 @@ describe('annotationPropertiesMenu - not used, used on no class, and usages (#13
     expect([...popover.querySelectorAll('.annotation-usage')].map((li) => li.textContent)).toEqual(['C (class): v']);
   });
 });
+
+describe('annotationPropertiesMenu - deprecated (#137 follow-up)', () => {
+  it('lists a deprecated property under "Deprecated", even when used on classes, with no styling controls and no style', () => {
+    const { deps } = makeDeps([boolProp('isLabel'), { ...boolProp('labellableRoot'), deprecated: true }], makeStore(['isLabel', 'labellableRoot']));
+    initAnnotationPropsMenu(container, deps);
+    const deprecated = container.querySelector('details[data-group="deprecated"]')!;
+    expect(deprecated.querySelector('summary')!.textContent).toBe('Deprecated (1)');
+    expect(deprecated.querySelector('.ap-usages-btn[data-name="labellableRoot"]')).not.toBeNull();
+    expect(container.querySelector('[data-prop="labellableRoot"]')).toBeNull();
+    expect(getAnnotationStyleConfig(container, deps.getAnnotationProperties()).booleanProps.labellableRoot).toBeUndefined();
+  });
+});

@@ -127,6 +127,14 @@ export function resolveNodeAnnotationStyle(
 }
 
 /**
+ * The annotation properties that may style classes, in priority order: all but the deprecated ones (owl:deprecated),
+ * which never style anything, whatever a saved display config says (#137 follow-up).
+ */
+export function stylingOrder(props: readonly { name: string; deprecated?: boolean }[]): string[] {
+  return props.filter((p) => !p.deprecated).map((p) => p.name);
+}
+
+/**
  * Order annotation properties by a saved priority order.
  *
  * Properties whose names appear in `savedOrder` come first, in that order; any remaining
