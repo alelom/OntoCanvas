@@ -253,6 +253,24 @@ describe('urlParams', () => {
       const displayUrls = getAllDisplayFileUrls(ontologyUrl);
       expect(displayUrls).toEqual([]);
     });
+
+    it('tries first next to the file a version IRI redirects to (#136)', () => {
+      const versionIri = 'https://w3id.org/adiro/aec_drawing_metadata/4.0.0';
+      const served = 'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/4.0.0/aec_drawing_metadata.ttl';
+      expect(getAllDisplayFileUrls(versionIri, served)[0]).toBe(
+        'https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata/4.0.0/aec_drawing_metadata.display.json'
+      );
+    });
+
+    it('does not read a version number as a file extension (#136)', () => {
+      expect(getDisplayFileUrl('https://w3id.org/adiro/aec_drawing_metadata/4.0.0')).toBe('https://w3id.org/adiro/aec_drawing_metadata/4.0.0.display.json');
+      expect(getDisplayFileUrl('https://example.org/onto.v2.owl')).toBe('https://example.org/onto.v2.display.json');
+    });
+
+    it('lists each address once when the final URL is the one asked for', () => {
+      const url = 'https://example.org/ontology.ttl';
+      expect(getAllDisplayFileUrls(url, url)).toEqual(['https://example.org/ontology.display.json']);
+    });
   });
 
   describe('convertOntologyUrlToHtmlUrl', () => {

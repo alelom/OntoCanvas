@@ -60,6 +60,7 @@ import {
   searchExternalObjectProperties,
   preloadExternalOntologyClasses,
   fetchExternalOntologyTtl,
+  servedFrom,
   getReferencedExternalClassesFromStore,
   getStubExternalClassForUri,
   type ExternalClassInfo,
@@ -180,7 +181,9 @@ import { openOnStartup } from './ui/startupOpen';
 import { debounced } from './utils/debounced';
 import { beginViewSettle, viewSettled } from './ui/viewSettle';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust, convertOntologyUrlToHtmlUrl } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust, convertOntologyUrlToHtmlUrl, getAllDisplayFileUrls } from './utils/urlParams';
+import { latestDisplayConfigSource } from './lib/displayConfigFallback';
+import { showWarningBar, hideWarningBar } from './ui/warningBar';
 import { openExternalOntologyTab } from './lib/openExternalOntology';
 import {
   extractUsedNamespaceRefsFromStore,
@@ -7197,25 +7200,9 @@ hasUnsavedChanges = false;
     }
     
     if (graphData.nodes.length === 0 && graphData.edges.length === 0 && !hasObjectPropertiesWithDomainRange) {
-      const warningText = document.getElementById('warningMsgText') as HTMLElement;
-      if (warningText) {
-        warningText.textContent = 'The current file defines no classes, so the canvas is empty.';
-      }
-      warningMsg.style.display = 'flex';
-      
-      // Setup close button
-      const closeBtn = document.getElementById('warningMsgClose') as HTMLElement;
-      if (closeBtn) {
-        // Remove any existing listeners by cloning
-        const newCloseBtn = closeBtn.cloneNode(true) as HTMLElement;
-        closeBtn.parentNode?.replaceChild(newCloseBtn, closeBtn);
-        const currentCloseBtn = document.getElementById('warningMsgClose') as HTMLElement;
-        currentCloseBtn.addEventListener('click', () => {
-          warningMsg.style.display = 'none';
-        });
-      }
+      showWarningBar('The current file defines no classes, so the canvas is empty.');
     } else {
-      warningMsg.style.display = 'none';
+      hideWarningBar();
     }
 
     setTimeout(() => {
@@ -7934,6 +7921,15 @@ async function loadFromFile(): Promise<void> {
  * Attempt to load display config from a URL.
  * Returns the config if found, null otherwise (doesn't throw on 404).
  */
+/** The first display config found among `displayUrls`, tried in order; null when none is. */
+async function firstDisplayConfig(displayUrls: string[]): Promise<DisplayConfig | null> {
+  for (const displayUrl of displayUrls) {
+    const config = await loadDisplayConfigFromUrl(displayUrl);
+    if (config) return config;
+  }
+  return null;
+}
+
 async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConfig | null> {
   try {
     // Cache-bust: the config may have just been re-published; GitHub Pages caches it for ~10 min.
@@ -8057,20 +8053,20 @@ async function loadFromUrl(url: string): Promise<void> {
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
     addRecentlyOpenedToIndexedDB({ kind: 'url', url, name: fileName, openedAt: Date.now() }).catch(() => {});
 
-    const { getAllDisplayFileUrls } = await import('./utils/urlParams');
-    const displayUrls = getAllDisplayFileUrls(url);
-    let urlDisplayConfig: DisplayConfig | null = null;
-    
-    // Try all possible display file URLs (primary first, then alternatives)
-    for (const displayUrl of displayUrls) {
-      urlDisplayConfig = await loadDisplayConfigFromUrl(displayUrl);
-      if (urlDisplayConfig) {
-        break; // Found it, stop trying alternatives
-      }
-    }
+    // Next to the file the URL was finally served from first: a version IRI redirects to its release (#136).
+    let urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(url, servedFrom(url)));
 
     await loadTtlAndRender(ttl, fileName, null, url);
     setOntologyUrlParamInAddressBar(url);
+
+    // A version opened without a config of its own borrows the latest version's, and says so (#136).
+    const latestSource = !urlDisplayConfig && ttlStore ? latestDisplayConfigSource(url, readOntologyVersion(ttlStore)) : null;
+    if (latestSource && (await fetchExternalOntologyTtl(latestSource, { timeoutMs: IMPORT_READ_TIMEOUT_MS }))) {
+      urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(latestSource, servedFrom(latestSource)));
+      if (urlDisplayConfig) {
+        showWarningBar('This version has no display settings of its own: the layout and colours of the latest version are used, so terms added or removed since may be placed oddly.');
+      }
+    }
 
     if (urlDisplayConfig) {
       loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Store, DataFactory } from 'n3';
-import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, FetchTimeoutError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, type ExternalOntologyReference } from './externalOntologySearch';
+import { searchExternalClasses, fetchExternalOntologyClasses, clearExternalClassesCache, preloadExternalOntologyClasses, fetchExternalOntologyTtl, CorsOrNetworkError, FetchTimeoutError, getReferencedExternalClassesFromStore, getStubExternalClassForUri, servedFrom, type ExternalOntologyReference } from './externalOntologySearch';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 // const OWL = 'http://www.w3.org/2002/07/owl#'; // Unused - kept for reference
@@ -706,6 +706,30 @@ describe('externalOntologySearch', () => {
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
       await get(0); // the oldest was evicted
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  describe('servedFrom: where an ontology was finally served from (#136)', () => {
+    const answer = (url: string) => ({
+      ok: true,
+      status: 200,
+      url,
+      headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/turtle' : null) },
+      text: async () => '@prefix : <http://example.org/o#> . :A a :B .',
+    });
+
+    it('is the address after redirects, e.g. the release file a version IRI points to', async () => {
+      const served = 'https://pages.example.org/onto/4.0.0/onto.ttl';
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(answer(served));
+      await fetchExternalOntologyTtl('https://w3id.example.org/onto/4.0.0');
+      expect(servedFrom('https://w3id.example.org/onto/4.0.0')).toBe(served);
+    });
+
+    it('is null for an address never fetched, or one that failed', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError('Failed to fetch'));
+      await fetchExternalOntologyTtl('https://example.com/never.ttl');
+      expect(servedFrom('https://example.com/never.ttl')).toBeNull();
+      expect(servedFrom('https://example.com/other.ttl')).toBeNull();
     });
   });
 

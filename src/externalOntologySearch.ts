@@ -78,6 +78,17 @@ export interface FetchExternalOntologyTtlOptions {
  */
 const externalTtlCache: Map<string, string> = new Map();
 
+/** Where each fetched ontology was finally served from, after redirects (#136). */
+const servedFromUrls: Map<string, string> = new Map();
+
+/**
+ * Where the ontology at `url` was finally served from, after redirects: a version IRI points to the release's
+ * file, next to which its display config is published (#136). Null when it was not fetched, or failed.
+ */
+export function servedFrom(url: string): string | null {
+  return servedFromUrls.get(url.endsWith('#') ? url.slice(0, -1) : url) ?? null;
+}
+
 /** The most ontologies kept in the cache, and the largest one kept (in characters): the texts stay in memory
  * for the life of the page, and imports are read in the background (#104). */
 const MAX_CACHED_ONTOLOGIES = 50;
@@ -243,6 +254,7 @@ export async function fetchExternalOntologyTtl(
       
       const contentType = response.headers.get('content-type') || '';
       const finalUrl = response.url; // Get final URL after redirects
+      if (finalUrl) servedFromUrls.set(normalizedUrl, finalUrl);
       if (isDebugMode()) {
         console.log(`Fetched ${response.status} from ${normalizedUrl}, final URL: ${finalUrl}, content-type: ${contentType}`);
       }
@@ -1050,6 +1062,7 @@ export function clearExternalClassesCache(): void {
   externalClassesCache.clear();
   externalObjectPropertiesCache.clear();
   externalTtlCache.clear();
+  servedFromUrls.clear();
 }
 
 /**
