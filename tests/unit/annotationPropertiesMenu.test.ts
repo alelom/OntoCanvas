@@ -16,12 +16,15 @@ const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const BASE = 'http://example.org/o#';
 
-function makeStore(names: string[]): Store {
+/** Declares each property, and uses it on a class (so it can style something and gets its full row, #137). */
+function makeStore(names: string[], unusedNames: string[] = []): Store {
   const store = new Store();
-  for (const n of names) {
+  store.addQuad(namedNode(BASE + 'C'), namedNode(RDF + 'type'), namedNode(OWL + 'Class'));
+  for (const n of [...names, ...unusedNames]) {
     store.addQuad(namedNode(BASE + n), namedNode(RDF + 'type'), namedNode(OWL + 'AnnotationProperty'));
     store.addQuad(namedNode(BASE + n), namedNode(RDFS + 'label'), DataFactory.literal(n));
   }
+  for (const n of names) store.addQuad(namedNode(BASE + 'C'), namedNode(BASE + n), DataFactory.literal('v'));
   return store;
 }
 
@@ -287,5 +290,31 @@ describe('annotationPropertiesMenu - config read/write', () => {
     // a's custom fill must survive the re-render.
     const fillAAfter = container.querySelector('.ap-bool-fill[data-prop="a"][data-val="true"]') as HTMLInputElement;
     expect(fillAAfter.value).toBe('#abcdef');
+  });
+});
+
+describe('annotationPropertiesMenu - not used on any class, and usages (#137, #139)', () => {
+  it('gives a property used on no class only edit, delete and "show usages": it cannot style anything', () => {
+    const { deps } = makeDeps([boolProp('used'), boolProp('unusedFlag'), textProp('unusedText')], makeStore(['used'], ['unusedFlag', 'unusedText']));
+    initAnnotationPropsMenu(container, deps);
+    const unusedGroup = container.querySelectorAll('details[data-group="unused"]');
+    expect(unusedGroup).toHaveLength(2);
+    for (const group of unusedGroup) {
+      expect(group.querySelector('.ap-bool-show, .ap-bool-fill, .ap-add-rule, .ap-text-rules, .ap-move-up, .ap-move-down')).toBeNull();
+      expect(group.querySelector('.annotation-prop-edit-btn')).not.toBeNull();
+      expect(group.querySelector('.annotation-prop-delete-btn')).not.toBeNull();
+      expect(group.querySelector('.ap-usages-btn')).not.toBeNull();
+    }
+    // The used one keeps its styling controls.
+    expect(container.querySelector('.ap-bool-show[data-prop="used"]')).not.toBeNull();
+  });
+
+  it('shows where a property is used from its "show usages" button', () => {
+    const { deps } = makeDeps([textProp('note')], makeStore(['note']));
+    initAnnotationPropsMenu(container, deps);
+    (container.querySelector('.ap-usages-btn[data-name="note"]') as HTMLButtonElement).click();
+    const popover = document.getElementById('annotationUsagesPopover')!;
+    expect(popover.style.display).toBe('block');
+    expect([...popover.querySelectorAll('.annotation-usage')].map((li) => li.textContent)).toEqual(['C (class): v']);
   });
 });

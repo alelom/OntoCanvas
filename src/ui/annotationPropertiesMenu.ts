@@ -22,6 +22,8 @@ import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotat
 import { groupMenuEntries, menuGroupKey, sortByMenuGroup, type MenuEntry } from './propertyMenuGroups';
 import { renderMenuGroups, openGroupsInEffect } from './propertyMenuGroupsDom';
 import { propertySource, annotationUsedOnClass } from './propertyMenuFacts';
+import { annotationUsages } from '../lib/annotationUsages';
+import { toggleUsagesPopover } from './annotationUsagesView';
 
 /** Everything the menu needs from the host app, injected so this module stays decoupled. */
 export interface AnnotationPropsMenuDeps {
@@ -125,17 +127,27 @@ export function initAnnotationPropsMenu(
     )}${btn('ap-move-down', '▼', 'Decrease priority', isLast)}</div>`;
   };
 
-  const rowHeaderControls = (ap: AnnotationPropertyInfo, isFirst: boolean, isLast: boolean): string => `
-    ${reorderControls(ap.name, isFirst, isLast)}
+  /** Name, "show usages", edit and delete: all a property used on no class gets, since it cannot style anything (#137, #139). */
+  const nameAndActions = (ap: AnnotationPropertyInfo): string => `
     <div class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${formatPropName(ap)}</div>
+    <button type="button" class="ap-usages-btn" data-name="${ap.name}" title="Show where it is used" style="background: none; border: none; cursor: pointer; padding: 2px; font-size: 13px;">🔎</button>
     <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
     <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`;
+  const rowHeaderControls = (ap: AnnotationPropertyInfo, isFirst: boolean, isLast: boolean): string => `
+    ${reorderControls(ap.name, isFirst, isLast)}${nameAndActions(ap)}`;
+  const compactRow = (ap: AnnotationPropertyInfo): HTMLElement => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin: 4px 0; padding: 4px 8px; background: #f9f9f9; border-radius: 4px;';
+    row.innerHTML = nameAndActions(ap);
+    return row;
+  };
 
   if (boolProps.length > 0) {
     const boolSection = document.createElement('div');
     boolSection.style.marginBottom = '12px';
     boolSection.innerHTML = '<strong style="font-size: 11px;">Boolean properties</strong>';
-    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean)), ({ item: ap }) => {
+    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean)), ({ item: ap, unused }) => {
+      if (unused) return compactRow(ap);
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }, activatable: boolean) => {
@@ -172,7 +184,8 @@ export function initAnnotationPropsMenu(
   if (textProps.length > 0) {
     const textSection = document.createElement('div');
     textSection.innerHTML = '<strong style="font-size: 11px;">Text properties (regex)</strong>';
-    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean)), ({ item: ap }) => {
+    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean)), ({ item: ap, unused }) => {
+      if (unused) return compactRow(ap);
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       row.innerHTML = `
@@ -235,6 +248,15 @@ export function initAnnotationPropsMenu(
   container.querySelectorAll('.ap-move-down').forEach((btn) => {
     if ((btn as HTMLButtonElement).disabled) return;
     btn.addEventListener('click', () => moveProp((btn as HTMLElement).dataset.name!, 1), { signal });
+  });
+
+  container.querySelectorAll('.ap-usages-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ap = annotationProperties.find((p) => p.name === (btn as HTMLElement).dataset.name);
+      if (!ap) return;
+      toggleUsagesPopover(btn as HTMLElement, formatPropName(ap), ttlStore && ap.uri ? annotationUsages(ttlStore, ap.uri) : []);
+    }, { signal });
   });
 
   container.querySelectorAll('.annotation-prop-edit-btn').forEach((btn) => {

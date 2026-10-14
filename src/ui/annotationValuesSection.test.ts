@@ -15,7 +15,6 @@ function make(overrides: Partial<Parameters<typeof initAnnotationValuesSection>[
   const api = initAnnotationValuesSection(container, {
     propertyName: 'exampleImage',
     comment: 'Links a class to an example image.',
-    isLocal: true,
     initialValues: [],
     onChange,
     ...overrides,
@@ -72,11 +71,12 @@ describe('annotationValuesSection', () => {
     expect(onChange).toHaveBeenCalledWith(['https://example.com/b.png']);
   });
 
-  it('shows no input or delete controls when not editable (isLocal=false)', () => {
-    make({ isLocal: false, initialValues: ['https://example.com/a.png'] });
-    expect(container.querySelector('input[type="text"]')).toBeNull();
-    expect(container.querySelector('button[title="Remove value"]')).toBeNull();
-    // The value is still shown as a link.
-    expect(container.querySelector('a')?.textContent).toBe('https://example.com/a.png');
+  it('always offers the input and the remove control, however the ontology was opened (#140)', () => {
+    // Values used to be read-only unless the file was opened with the file picker: opened by URL, nothing could be set.
+    const { onChange } = make({ initialValues: ['old hint'] });
+    expect(container.querySelector('input[type="text"]')).not.toBeNull();
+    expect(container.querySelector('button[title="Remove value"]')).not.toBeNull();
+    (container.querySelector('button[title="Remove value"]') as HTMLButtonElement).click();
+    expect(onChange).toHaveBeenCalledWith([]);
   });
 });

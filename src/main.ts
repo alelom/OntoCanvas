@@ -186,7 +186,9 @@ import { latestDisplayConfigSource } from './lib/displayConfigFallback';
 import { showWarningBar, hideWarningBar } from './ui/warningBar';
 import { groupMenuEntries } from './ui/propertyMenuGroups';
 import { renderMenuGroups, openGroupsInEffect } from './ui/propertyMenuGroupsDom';
-import { propertySource } from './ui/propertyMenuFacts';
+import { propertySource, annotationUsedOnClass } from './ui/propertyMenuFacts';
+import { annotationUsages } from './lib/annotationUsages';
+import { fillUsagesSection } from './ui/annotationUsagesView';
 import { openExternalOntologyTab } from './lib/openExternalOntology';
 import {
   extractUsedNamespaceRefsFromStore,
@@ -622,7 +624,6 @@ function buildAnnotationPropsDeps(
   valuesMap: Record<string, string[]>
 ): nodeModalFormUi.AnnotationPropsListDeps {
   return {
-    isLocal: !!fileHandle,
     getInitialValues: (ap) => {
       if (!ttlStore || !nodeId) {
         valuesMap[ap.name] = [];
@@ -639,6 +640,12 @@ function buildAnnotationPropsDeps(
     onOpenLink: (value) => {
       window.open(value, '_blank', 'noopener,noreferrer');
     },
+    // Grouped as in the Annotation Properties menu (#141).
+    groupFacts: (ap) => ({
+      source: propertySource(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
+      unused: !!ttlStore && !!ap.uri && !annotationUsedOnClass(ttlStore, ap.uri),
+      deprecated: !!ap.deprecated,
+    }),
   };
 }
 
@@ -2641,7 +2648,11 @@ function showEditAnnotationPropertyModal(name: string): void {
       rangeSel.innerHTML += `<option value="${currentRange}" selected>${rangeLabel}</option>`;
     }
   }
-  
+
+  // Where it is used (#139), collapsed.
+  const usagesSection = document.getElementById('editAnnotationPropUsages') as HTMLDetailsElement | null;
+  if (usagesSection) fillUsagesSection(usagesSection, ttlStore && ap?.uri ? annotationUsages(ttlStore, ap.uri) : []);
+
   modal.style.display = 'flex';
   labelInput?.focus();
 }
@@ -6663,6 +6674,10 @@ function renderApp(): void {
             <option value="">No range (untyped)</option>
           </select>
         </label>
+        <details id="editAnnotationPropUsages" style="margin-top: 12px;">
+          <summary style="cursor: pointer; font-size: 11px; color: #555;">Where it is used</summary>
+          <div class="annotation-usages-list" style="margin-top: 6px; max-height: 200px; overflow-y: auto;"></div>
+        </details>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editAnnotationPropCancel">Cancel</button>
           <button type="button" id="editAnnotationPropConfirm" class="primary">OK</button>
