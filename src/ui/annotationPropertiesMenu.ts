@@ -19,6 +19,9 @@ import { getPrefixForUri } from './externalRefs';
 import { getMainOntologyBase, removeAnnotationPropertyFromStore, getAnnotationPropertyUriFromStore } from '../parser';
 import type { ExternalOntologyReference } from '../storage';
 import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotationStyle';
+import { groupMenuEntries, menuGroupKey, sortByMenuGroup, type MenuEntry } from './propertyMenuGroups';
+import { renderMenuGroups, openGroupsInEffect } from './propertyMenuGroupsDom';
+import { propertySource, annotationUsedOnClass } from './propertyMenuFacts';
 
 /** Everything the menu needs from the host app, injected so this module stays decoupled. */
 export interface AnnotationPropsMenuDeps {
@@ -50,9 +53,28 @@ export function initAnnotationPropsMenu(
   annotationPropsMenuClickAbort = new AbortController();
   const signal = annotationPropsMenuClickAbort.signal;
 
-  const annotationProperties = deps.getAnnotationProperties();
   const ttlStore = deps.getTtlStore();
   const externalRefs = deps.getExternalRefs();
+  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+
+  // Grouped as shown (#137): own first, then by the ontology defining them, then those used on no class (which
+  // cannot style anything); deprecated after active in each. The priority order follows what is shown.
+  const entryOf = (ap: AnnotationPropertyInfo): MenuEntry<AnnotationPropertyInfo> => {
+    const unused = !!ttlStore && !!ap.uri && !annotationUsedOnClass(ttlStore, ap.uri);
+    return {
+      item: ap,
+      source: propertySource(ap, externalRefs, mainBase),
+      deprecated: !!ap.deprecated,
+      unused,
+      // A Boolean one used on classes colours them ("when true") by default.
+      affectsCanvas: ap.isBoolean && !unused,
+    };
+  };
+  const sorted = sortByMenuGroup(deps.getAnnotationProperties().map(entryOf));
+  const annotationProperties = sorted.map((x) => x.item);
+  if (annotationProperties.some((ap, i) => ap !== deps.getAnnotationProperties()[i])) deps.setAnnotationProperties(annotationProperties);
+  const groupKeyByName = new Map(sorted.map((x) => [x.item.name, menuGroupKey(x)] as const));
+  const groupOf = (ap: { name: string }): string => groupKeyByName.get(ap.name) ?? 'own';
 
   // Distinct default fill per property (by position) so two properties never share a colour
   // out of the box. Keyed by name; preservation below keeps a property's colour stable on reorder.
@@ -66,7 +88,6 @@ export function initAnnotationPropsMenu(
   const preserved = hadExistingControls ? getAnnotationStyleConfig(container, annotationProperties) : null;
 
   container.innerHTML = '';
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
 
   // Default style for nodes that no annotation property governs (configurable). Always shown,
   // since with "when false"/"when undefined" off by default most nodes land here.
@@ -88,6 +109,9 @@ export function initAnnotationPropsMenu(
 
   const boolProps = annotationProperties.filter((ap) => ap.isBoolean);
   const textProps = annotationProperties.filter((ap) => !ap.isBoolean);
+  /** Whether `ap` is the first / last of its group in `list` (its section): it is moved only within the group. */
+  const isFirstInGroup = (list: AnnotationPropertyInfo[], ap: AnnotationPropertyInfo) => list.find((p) => groupOf(p) === groupOf(ap)) === ap;
+  const isLastInGroup = (list: AnnotationPropertyInfo[], ap: AnnotationPropertyInfo) => [...list].reverse().find((p) => groupOf(p) === groupOf(ap)) === ap;
 
   /** Up/down priority controls. `isFirst`/`isLast` are within the property's own section. */
   const reorderControls = (name: string, isFirst: boolean, isLast: boolean): string => {
@@ -103,7 +127,7 @@ export function initAnnotationPropsMenu(
 
   const rowHeaderControls = (ap: AnnotationPropertyInfo, isFirst: boolean, isLast: boolean): string => `
     ${reorderControls(ap.name, isFirst, isLast)}
-    <div style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${formatPropName(ap)}</div>
+    <div class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 11px; flex: 1;">${formatPropName(ap)}</div>
     <button type="button" class="annotation-prop-edit-btn" data-name="${ap.name}" title="Edit annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
     <button type="button" class="annotation-prop-delete-btn" data-name="${ap.name}" title="Delete this annotation property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`;
 
@@ -111,7 +135,7 @@ export function initAnnotationPropsMenu(
     const boolSection = document.createElement('div');
     boolSection.style.marginBottom = '12px';
     boolSection.innerHTML = '<strong style="font-size: 11px;">Boolean properties</strong>';
-    boolProps.forEach((ap, i) => {
+    renderMenuGroups(boolSection, groupMenuEntries(sorted.filter((x) => x.item.isBoolean)), ({ item: ap }) => {
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       const renderBoolBlock = (val: 'true' | 'false' | 'undefined', defaults: { fill: string; border: string; lineType: BorderLineType }, activatable: boolean) => {
@@ -132,7 +156,7 @@ export function initAnnotationPropsMenu(
       };
       row.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          ${rowHeaderControls(ap, i === 0, i === boolProps.length - 1)}
+          ${rowHeaderControls(ap, isFirstInGroup(boolProps, ap), isLastInGroup(boolProps, ap))}
         </div>
         <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px;">
           ${renderBoolBlock('true', { ...DEFAULT_BOOL_COLORS.whenTrue, fill: defaultFillFor(ap.name) }, false)}
@@ -140,20 +164,20 @@ export function initAnnotationPropsMenu(
           ${renderBoolBlock('undefined', DEFAULT_BOOL_COLORS.whenUndefined, true)}
         </div>
       `;
-      boolSection.appendChild(row);
-    });
+      return row;
+    }, 'annotationBool');
     container.appendChild(boolSection);
   }
 
   if (textProps.length > 0) {
     const textSection = document.createElement('div');
     textSection.innerHTML = '<strong style="font-size: 11px;">Text properties (regex)</strong>';
-    textProps.forEach((ap, i) => {
+    renderMenuGroups(textSection, groupMenuEntries(sorted.filter((x) => !x.item.isBoolean)), ({ item: ap }) => {
       const row = document.createElement('div');
       row.style.cssText = 'margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;';
       row.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-          ${rowHeaderControls(ap, i === 0, i === textProps.length - 1)}
+          ${rowHeaderControls(ap, isFirstInGroup(textProps, ap), isLastInGroup(textProps, ap))}
         </div>
         <div class="ap-text-rules" data-prop="${ap.name}"></div>
         <button type="button" class="ap-add-rule" data-prop="${ap.name}" style="font-size: 11px; margin-top: 4px;">+ Add regex rule</button>
@@ -186,8 +210,8 @@ export function initAnnotationPropsMenu(
         addRule();
         deps.onApply();
       });
-      textSection.appendChild(row);
-    });
+      return row;
+    }, 'annotationText');
     container.appendChild(textSection);
   }
 
@@ -197,9 +221,9 @@ export function initAnnotationPropsMenu(
     container.appendChild(note);
   }
 
-  // Reorder: move a property up/down in priority (within its Boolean/Text section).
+  // Reorder: move a property up/down in priority (within its Boolean/Text section, and its group, #137).
   const moveProp = (name: string, direction: -1 | 1) => {
-    deps.setAnnotationProperties(reorderAnnotationProperty(deps.getAnnotationProperties(), name, direction));
+    deps.setAnnotationProperties(reorderAnnotationProperty(deps.getAnnotationProperties(), name, direction, groupOf));
     deps.scheduleSave();
     initAnnotationPropsMenu(container, deps);
     deps.onApply();
@@ -470,4 +494,7 @@ export function applyAnnotationStyleConfigToDom(
     const dOpt = BORDER_LINE_OPTIONS.find((o) => o.value === config.defaultStyle!.borderLineType);
     if (dTrigger && dOpt) dTrigger.innerHTML = `${renderLineTypeSvg(dOpt.svgDasharray)}<span style="margin-left: 4px;">▾</span>`;
   }
+
+  // A saved style in a collapsed group opens it, so what styles the canvas is never hidden (#137).
+  openGroupsInEffect(container);
 }

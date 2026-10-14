@@ -158,7 +158,9 @@ export function applyAnnotationPropertyOrder<T extends { name: string }>(
 export function reorderAnnotationProperty<T extends { name: string; isBoolean: boolean }>(
   props: T[],
   name: string,
-  direction: -1 | 1
+  direction: -1 | 1,
+  /** The menu group of a property (#137): it is never moved past its group's first or last. */
+  groupOf?: (p: T) => string
 ): T[] {
   const idx = props.findIndex((p) => p.name === name);
   if (idx < 0) return [...props];
@@ -166,6 +168,7 @@ export function reorderAnnotationProperty<T extends { name: string; isBoolean: b
   let j = idx + direction;
   while (j >= 0 && j < props.length && props[j].isBoolean !== kind) j += direction;
   if (j < 0 || j >= props.length) return [...props];
+  if (groupOf && groupOf(props[j]) !== groupOf(props[idx])) return [...props];
   const next = [...props];
   [next[idx], next[j]] = [next[j], next[idx]];
   return next;

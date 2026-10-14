@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { Store, DataFactory, Parser } from 'n3';
 import {
   extractExternalRefsFromStore,
@@ -13,11 +13,30 @@ import {
   importedIdentifier,
   formatRelationshipLabelWithPrefix,
   sortExternalRefsByUrl,
+  getPrefixForUri,
+  setImportedPrefixes,
 } from './externalRefs';
 import type { GraphNode } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 
 describe('externalRefs', () => {
+  describe('getPrefixForUri: prefixes the imports declare (#137)', () => {
+    const MAIN = 'https://w3id.org/adiro/aec_drawing_metadata#';
+    afterEach(() => setImportedPrefixes({}));
+
+    it('gives a term of a namespace no reference names the prefix an import declares for it (PROV via aec_provenance)', () => {
+      expect(getPrefixForUri('http://www.w3.org/ns/prov#used', null, [], MAIN)).toBeNull();
+      setImportedPrefixes({ prov: 'http://www.w3.org/ns/prov#', aprov: 'https://w3id.org/adiro/aec_provenance#' });
+      expect(getPrefixForUri('http://www.w3.org/ns/prov#used', null, [], MAIN)).toBe('prov');
+    });
+
+    it("never gives one to the open ontology's own terms, or the empty prefix", () => {
+      setImportedPrefixes({ md: MAIN, '': 'http://www.w3.org/ns/prov#' });
+      expect(getPrefixForUri(`${MAIN}drawingTitle`, null, [], MAIN)).toBeNull();
+      expect(getPrefixForUri('http://www.w3.org/ns/prov#used', null, [], MAIN)).toBeNull();
+    });
+  });
+
   describe('extractUsedNamespaceRefsFromStore: values of annotations are links, not vocabulary terms (#135)', () => {
     const refsOf = (ttl: string) =>
       extractUsedNamespaceRefsFromStore(

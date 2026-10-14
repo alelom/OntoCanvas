@@ -46,6 +46,8 @@ export interface GraphNode {
 }
 
 export interface AnnotationPropertyInfo {
+  /** Declared `owl:deprecated true` (#137). */
+  deprecated?: boolean;
   name: string;
   isBoolean: boolean; // Deprecated: kept for backward compatibility, use range instead
   /** Full URI of the datatype range (e.g. http://www.w3.org/2001/XMLSchema#boolean). null means no range specified. */
@@ -59,6 +61,8 @@ export interface AnnotationPropertyInfo {
 }
 
 export interface ObjectPropertyInfo {
+  /** Declared `owl:deprecated true` (#137). */
+  deprecated?: boolean;
   name: string;
   label: string;
   hasCardinality: boolean;
@@ -90,6 +94,8 @@ export interface ObjectPropertyInfo {
 }
 
 export interface DataPropertyInfo {
+  /** Declared `owl:deprecated true` (#137). */
+  deprecated?: boolean;
   name: string;
   label: string;
   /** rdfs:comment from the ontology */

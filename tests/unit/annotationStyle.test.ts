@@ -294,6 +294,12 @@ describe('reorderAnnotationProperty', () => {
     expect(reorderAnnotationProperty(bools, 'c', 1).map((p) => p.name)).toEqual(['a', 'b', 'c']);
   });
 
+  it('does not move a property out of its menu group (#137)', () => {
+    const groupOf = (p: { name: string }) => (p.name === 'c' ? 'external' : 'own');
+    expect(reorderAnnotationProperty(bools, 'b', 1, groupOf).map((p) => p.name)).toEqual(['a', 'b', 'c']);
+    expect(reorderAnnotationProperty(bools, 'b', -1, groupOf).map((p) => p.name)).toEqual(['b', 'a', 'c']);
+  });
+
   it('skips over the other kind, swapping only with the nearest same-kind neighbour', () => {
     const mixed = [
       { name: 'boolA', isBoolean: true },

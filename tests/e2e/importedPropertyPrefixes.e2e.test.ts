@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
-import { loadTestFile, openEditorWithTtl, plainLabel } from './testHelpers';
+import { loadTestFile, openEditorWithTtl, openMenuGroups, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -57,6 +57,7 @@ async function openMenu(page: Page, menuId: MenuId, expected: string): Promise<v
     const actual = await page.evaluate((id) => document.getElementById(id)?.textContent ?? '', MENU_CONTENT[menuId]);
     throw new Error(`The ${menuId} never showed "${expected}". It shows: ${actual.replace(/\s+/g, ' ').trim()}`);
   }
+  await openMenuGroups(page, MENU_CONTENT[menuId]);
 }
 
 /** Text of the bold name span of each row in a menu (the property's display name). */

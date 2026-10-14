@@ -1,0 +1,56 @@
+@prefix : <http://example.org/examples/menu-groups#> .
+@prefix base: <http://example.org/examples/menu-groups-base#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The property menus put this ontology's own properties first (issue #137). Open this file by URL: it imports
+# menu-groups-base.ttl from next to it. What you should see in the three top menus:
+#   - Object Properties: hasRoom, then a collapsed "From other ontologies (1)" with base:recordedBy.
+#   - Data Properties: area, then a collapsed "From other ontologies (1)" with base:recordedOn.
+#   - Annotation Properties, Boolean: isLabel; under a collapsed "Not used on any class (1)", oldLabelFlag, greyed,
+#     struck through and marked "deprecated" (its tooltip says what replaces it).
+#   - Annotation Properties, Text: skos:altLabel (used on the class Room) under "From other ontologies"; and under
+#     "Not used on any class", dcterms:title and dcterms:license (only on the ontology header) and skos:definition
+#     (only on the SKOS concept), which cannot style any class.
+
+<http://example.org/examples/menu-groups> rdf:type owl:Ontology ;
+    rdfs:label "Menu groups" ;
+    dcterms:title "Menu groups" ;
+    dcterms:license <https://creativecommons.org/licenses/by/4.0/> ;
+    owl:imports <menu-groups-base.ttl> .
+
+:isLabel rdf:type owl:AnnotationProperty ;
+    rdfs:label "isLabel" ;
+    rdfs:range xsd:boolean .
+
+:oldLabelFlag rdf:type owl:AnnotationProperty ;
+    rdfs:label "obsolete oldLabelFlag" ;
+    rdfs:comment "Deprecated: use isLabel." ;
+    owl:deprecated true ;
+    rdfs:range xsd:boolean .
+
+:hasRoom rdf:type owl:ObjectProperty ;
+    rdfs:label "hasRoom" ;
+    rdfs:domain :Building ;
+    rdfs:range :Room .
+
+:area rdf:type owl:DatatypeProperty ;
+    rdfs:label "area" ;
+    rdfs:domain :Room ;
+    rdfs:range xsd:decimal .
+
+:Building rdf:type owl:Class ;
+    rdfs:label "Building" ;
+    :isLabel true .
+
+:Room rdf:type owl:Class ;
+    rdfs:label "Room" ;
+    skos:altLabel "Space" ;
+    :isLabel true .
+
+:RoomField rdf:type skos:Concept ;
+    skos:definition "The room a record is about." .

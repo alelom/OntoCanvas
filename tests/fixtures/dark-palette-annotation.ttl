@@ -7,7 +7,9 @@
 # Reproduces https://github.com/alelom/OntoCanvas/issues/23: :labellableRoot is the tenth
 # annotation property in alphabetical order, so its default "when true" fill lands on the last
 # ANNOTATION_FILL_PALETTE entry (the dark slate that the node label used to be hardcoded to).
-# The nine filler properties exist only to push :labellableRoot onto that palette slot.
+# The nine filler properties exist only to push :labellableRoot onto that palette slot. They are used (false)
+# on :DrawingSheet so they stay among the properties used on a class, listed before it (#137); "false" colours
+# nothing by default.
 :aFiller01 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
 :aFiller02 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
 :aFiller03 rdf:type owl:AnnotationProperty ; rdfs:range xsd:boolean .
@@ -24,6 +26,8 @@
 
 :DrawingSheet rdf:type owl:Class ;
     rdfs:label "Drawing Sheet" ;
+    :aFiller01 false ; :aFiller02 false ; :aFiller03 false ; :aFiller04 false ; :aFiller05 false ;
+    :aFiller06 false ; :aFiller07 false ; :aFiller08 false ; :aFiller09 false ;
     :labellableRoot "false"^^xsd:boolean .
 
 :Titleblock rdf:type owl:Class ;

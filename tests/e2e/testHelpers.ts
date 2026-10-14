@@ -12,6 +12,16 @@ import { join } from 'node:path';
  * ontology" dialog covers the page, the toolbar is shown and the graph view has settled after its last
  * render. Use this after any load or re-render instead of a fixed sleep.
  */
+/**
+ * Open the collapsed groups of a property menu ("From other ontologies", "Not used on any class", #137), so a test
+ * can act on a row inside them as a user would after expanding them. `contentId` is the menu's content element.
+ */
+export async function openMenuGroups(page: Page, contentId: string): Promise<void> {
+  await page.evaluate((id) => {
+    document.querySelectorAll<HTMLDetailsElement>(`#${id} details.prop-menu-group`).forEach((d) => (d.open = true));
+  }, contentId);
+}
+
 export async function waitForAppReady(page: Page, timeout = 5000): Promise<void> {
   await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.isAppReady?.() === true, undefined, { timeout });
 }

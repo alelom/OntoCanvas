@@ -184,6 +184,9 @@ import { handleUrlParameterLoad } from './lib/urlParamLoader';
 import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust, convertOntologyUrlToHtmlUrl, getAllDisplayFileUrls } from './utils/urlParams';
 import { latestDisplayConfigSource } from './lib/displayConfigFallback';
 import { showWarningBar, hideWarningBar } from './ui/warningBar';
+import { groupMenuEntries } from './ui/propertyMenuGroups';
+import { renderMenuGroups, openGroupsInEffect } from './ui/propertyMenuGroupsDom';
+import { propertySource } from './ui/propertyMenuFacts';
 import { openExternalOntologyTab } from './lib/openExternalOntology';
 import {
   extractUsedNamespaceRefsFromStore,
@@ -192,6 +195,7 @@ import {
   renderExternalRefsList,
   refreshExternalRefsList,
   setImportVersionLookup,
+  setImportedPrefixes,
   showExternalRefsModal,
   hideExternalRefsModal,
   sortExternalRefsByUrl,
@@ -494,6 +498,8 @@ function applyDisplayConfig(config: DisplayConfig): void {
         }
       }
     });
+    // A hidden relationship type in a collapsed group opens it, so what hides it is never hidden itself (#137).
+    openGroupsInEffect(edgeStylesContent);
     // Debug logging (only in debug mode)
     if (isDebugMode()) {
       debugLog(`[DISPLAY CONFIG] Applied edge styles to ${appliedToCheckboxes} checkboxes in DOM`);
@@ -1487,7 +1493,38 @@ function initEdgeStylesMenu(
   const types = getAllRelationshipTypes(rawData, objectProperties);
   // Get default colors for all types (distributed across spectrum)
   const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
-  types.forEach((type) => {
+  /** The object property a relationship type stands for: by name, URI, or local name of its URI. */
+  const findOp = (type: string): ObjectPropertyInfo | undefined => objectProperties.find((p) => {
+    // Direct match by name or URI
+    if (p.name === type || p.uri === type) return true;
+    
+    // If type is a full URI, check if it matches p.uri or p.name (both should be full URI for external)
+    if (type.startsWith('http://') || type.startsWith('https://')) {
+      if (p.uri === type || p.name === type) return true;
+      // Also check if p.uri or p.name contains the type (for partial matches)
+      if (p.uri && (type.includes(p.uri) || p.uri.includes(type))) return true;
+      if (p.name && p.name.startsWith('http') && (type.includes(p.name) || p.name.includes(type))) return true;
+    }
+    
+    // If type is a local name, extract local name from p.uri or p.name and compare
+    if (!type.startsWith('http://') && !type.startsWith('https://')) {
+      // Extract local name from URI
+      if (p.uri) {
+        const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
+        if (uriLocalName === type) return true;
+      }
+      // Extract local name from name (if name is a full URI)
+      if (p.name && (p.name.startsWith('http://') || p.name.startsWith('https://'))) {
+        const nameLocalName = p.name.includes('#') ? p.name.split('#').pop() : p.name.split('/').pop();
+        if (nameLocalName === type) return true;
+      }
+      // Direct match if p.name is the local name
+      if (p.name === type && !p.name.startsWith('http://') && !p.name.startsWith('https://')) return true;
+    }
+    
+    return false;
+  });
+  const rowFor = (type: string): HTMLElement => {
     // Get default color - use the generated color directly
     const color = defaultColors[type] || getDefaultColor();
     const isEditable = type !== 'subClassOf';
@@ -1506,36 +1543,7 @@ function initEdgeStylesMenu(
     const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
     // Find property by name, URI, or local name extracted from URI
     // For external properties, name should be full URI (after parser fix), and type might be full URI or local name
-    let op = objectProperties.find((p) => {
-      // Direct match by name or URI
-      if (p.name === type || p.uri === type) return true;
-      
-      // If type is a full URI, check if it matches p.uri or p.name (both should be full URI for external)
-      if (type.startsWith('http://') || type.startsWith('https://')) {
-        if (p.uri === type || p.name === type) return true;
-        // Also check if p.uri or p.name contains the type (for partial matches)
-        if (p.uri && (type.includes(p.uri) || p.uri.includes(type))) return true;
-        if (p.name && p.name.startsWith('http') && (type.includes(p.name) || p.name.includes(type))) return true;
-      }
-      
-      // If type is a local name, extract local name from p.uri or p.name and compare
-      if (!type.startsWith('http://') && !type.startsWith('https://')) {
-        // Extract local name from URI
-        if (p.uri) {
-          const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
-          if (uriLocalName === type) return true;
-        }
-        // Extract local name from name (if name is a full URI)
-        if (p.name && (p.name.startsWith('http://') || p.name.startsWith('https://'))) {
-          const nameLocalName = p.name.includes('#') ? p.name.split('#').pop() : p.name.split('/').pop();
-          if (nameLocalName === type) return true;
-        }
-        // Direct match if p.name is the local name
-        if (p.name === type && !p.name.startsWith('http://') && !p.name.startsWith('https://')) return true;
-      }
-      
-      return false;
-    });
+    const op = findOp(type);
     const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
     // Use op.uri or op.name (if full URI) for prefix detection, otherwise use type
     // This ensures imported properties get their prefix even if type is a local name
@@ -1557,7 +1565,7 @@ function initEdgeStylesMenu(
     
     const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, externalOntologyReferences, op, mainBase);
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
+      <span class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
         <input type="checkbox" class="edge-show-cb" data-type="${htmlEscapedType}" checked>
         <span>Show</span>
@@ -1581,8 +1589,21 @@ function initEdgeStylesMenu(
       (row.querySelector('.edge-label-cb') as HTMLInputElement).checked = before.showLabel;
       if (before.color) (row.querySelector('.edge-color-picker') as HTMLInputElement).value = before.color;
     }
-    edgeStylesContent.appendChild(row);
+    return row;
+  };
+  // The ontology's own properties first, the imported ones in a collapsed group below (#137); a group holding a
+  // hidden relationship type starts open, so what hides it is never hidden itself.
+  const mainBaseForGroups = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const entries = types.map((type) => {
+    const op = findOp(type);
+    return {
+      item: { type, comment: op?.comment },
+      source: propertySource(op ?? { uri: /^https?:\/\//.test(type) ? type : null }, externalOntologyReferences, mainBaseForGroups),
+      deprecated: !!op?.deprecated,
+      affectsCanvas: preserved.get(type)?.show === false || loadedEdgeStyleConfig?.[type]?.show === false,
+    };
   });
+  renderMenuGroups(edgeStylesContent, groupMenuEntries(entries), ({ item }) => rowFor(item.type), 'objectProps');
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
@@ -1729,20 +1750,26 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     return prefix ? `${prefix}:${dp.label}` : dp.label;
   };
   
-  dataProperties.forEach((dp) => {
+  // The ontology's own properties first, the imported ones in a collapsed group below (#137).
+  const entries = dataProperties.map((dp) => ({
+    item: dp,
+    source: propertySource(dp, externalOntologyReferences, mainBase),
+    deprecated: !!dp.deprecated,
+  }));
+  renderMenuGroups(dataPropsContent, groupMenuEntries(entries), ({ item: dp }) => {
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     const propDisplayName = formatPropName(dp);
     const rangeDisplay = describeRange(dp);
     const rangeStyle = rangeDisplay.source === 'asserted' ? 'color: #666;' : 'color: #999; font-style: italic;';
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(propDisplayName)}</span>
+      <span class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(propDisplayName)}</span>
       <span style="font-size: 11px; ${rangeStyle}" title="${escapeHtml(rangeDisplay.tooltipNote)}">${escapeHtml(rangeDisplay.menuLabel)}</span>
       ${dp.contextOnly ? '' : `<button type="button" class="data-prop-edit-btn" data-name="${escapeHtml(dp.name)}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
       <button type="button" class="data-prop-delete-btn" data-name="${escapeHtml(dp.name)}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`}
     `;
-    dataPropsContent.appendChild(row);
-  });
+    return row;
+  }, 'dataProps');
   dataPropsContent.querySelectorAll('.data-prop-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const name = (btn as HTMLElement).dataset.name!;
@@ -6800,6 +6827,7 @@ function refreshPropertyMenus(): void {
 function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
   beginImportsSettle();
   importedOntologies = [];
+  setImportedPrefixes({});
   importNewerVersions = new Map();
   importsBeingRead = true;
   void (async () => {
@@ -6810,6 +6838,8 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
       );
       if (store !== ttlStore || imported.length === 0) return;
       importedOntologies = imported;
+      // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
+      setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
       importedDeclarations = readImportedDeclarations(imported);
       const before = { objectProperties, dataProperties, annotationProperties };
       const merged = mergeImportedDeclarations(before, importedDeclarations);
