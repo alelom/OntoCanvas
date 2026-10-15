@@ -90,15 +90,12 @@ describe('the tooltip with example images', () => {
     expect(counter()).toBe('3/3');
   });
 
-  it('pauses while the cursor is over the image', () => {
+  it('keeps rotating while the cursor is over the image: only ‹ › stop it', () => {
     showCanvasTooltip({ text: '', images: IMAGES }, 100, 100);
     settle();
     const box = tooltip().querySelector('.canvas-tooltip-preview')!;
     box.dispatchEvent(new MouseEvent('mouseenter'));
-    vi.advanceTimersByTime(5000);
-    settle();
-    expect(counter()).toBe('1/3');
-    box.dispatchEvent(new MouseEvent('mouseleave'));
+    tooltip().dispatchEvent(new MouseEvent('mouseenter'));
     vi.advanceTimersByTime(2000);
     settle();
     expect(counter()).toBe('2/3');

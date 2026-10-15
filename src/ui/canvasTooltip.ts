@@ -83,7 +83,6 @@ function placeAt(el: HTMLElement, clientX: number, clientY: number): void {
 function renderImages(parent: HTMLElement, images: string[], box: { width: number; height: number }): () => void {
   let state: CarouselState = createCarousel(images.length, { reducedMotion: prefersReducedMotion() });
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let paused = false;
   let stopped = false;
 
   const link = document.createElement('a');
@@ -135,7 +134,7 @@ function renderImages(parent: HTMLElement, images: string[], box: { width: numbe
   };
   const scheduleNext = () => {
     clearTimer();
-    if (stopped || paused || !state.autoplay) return;
+    if (stopped || !state.autoplay) return;
     timer = setTimeout(() => {
       state = autoAdvance(state);
       show(state.index);
@@ -170,15 +169,6 @@ function renderImages(parent: HTMLElement, images: string[], box: { width: numbe
     img.onerror = () => done(false);
     img.src = url;
   };
-
-  link.addEventListener('mouseenter', () => {
-    paused = true;
-    clearTimer();
-  });
-  link.addEventListener('mouseleave', () => {
-    paused = false;
-    scheduleNext();
-  });
 
   if (counter) counter.textContent = carouselCounter(state);
   show(0);

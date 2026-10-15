@@ -8,8 +8,8 @@
 # Example images in the hover tooltip (issue #142). Open this file by URL: the images are written as relative IRIs and
 # load from the exampleImage folder next to it. Each synthetic image shows its number and its term. Hover:
 #   - Widget: its comment, then 3 images rotating every 2 s with a fade, and "‹ 1/3 ›" under them. They are declared
-#     out of order (03, 01, 02) and shown in order. Clicking ‹ or › stops the rotation; the cursor over the image
-#     pauses it; clicking the image opens it in a new tab. Image 3 is portrait: the box keeps its size.
+#     out of order (03, 01, 02) and shown in order. Only clicking ‹ or › stops the rotation (the cursor over the
+#     image does not); clicking the image opens it in a new tab. Image 3 is portrait: the box keeps its size.
 #   - Gadget: its comment and 1 image, no control.
 #   - Sprocket: no comment, 2 images.
 #   - Gizmo: its comment, and "Image not available" with the address (the file does not exist).
