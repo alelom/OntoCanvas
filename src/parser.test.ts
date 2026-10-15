@@ -18,7 +18,7 @@ import {
   removeNodeFromStore,
   addObjectPropertyToStore,
 } from './parser';
-import { setExampleImageUrisForClass, ensureExampleImageAnnotationProperty } from './lib/exampleImageStore';
+import { setExampleImageUrisForClass, ensureExampleImageAnnotationProperty, getExampleImageUrisForClass } from './lib/exampleImageStore';
 import type { GraphData } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -160,7 +160,7 @@ describe('parseTtlToGraph (load)', () => {
     }
   });
 
-  it('populates node.exampleImages from exampleImage annotation triples', async () => {
+  it("does not populate node.exampleImages from an exampleImage that is not ADIRO's (#142)", async () => {
     const ttl = `
 @prefix : <http://example.org/aec-drawing-ontology#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -175,10 +175,7 @@ describe('parseTtlToGraph (load)', () => {
     const { graphData } = await parseTtlToGraph(ttl);
     const node = graphData.nodes.find((n) => n.id === 'ImageTestClass');
     expect(node).toBeDefined();
-    expect(node!.exampleImages).toBeDefined();
-    expect(node!.exampleImages).toHaveLength(2);
-    expect(node!.exampleImages).toContain('img/one.png');
-    expect(node!.exampleImages).toContain('img/two.png');
+    expect(node!.exampleImages).toBeUndefined();
   });
 
   it('getClassNamespace returns class namespace (not ontology subject) so exampleImage associates with class', async () => {
@@ -211,9 +208,8 @@ describe('parseTtlToGraph (load)', () => {
                         out.match(/img:\w+dgu/);
     expect(uriInOutput).toBeTruthy();
     expect(out).toContain('exampleImage');
-    const { graphData } = await parseTtlToGraph(out);
-    const dgu = graphData.nodes.find((n) => n.id === 'DGU');
-    expect(dgu?.exampleImages).toEqual([dguImageUri]);
+    const { store: reloaded } = await parseTtlToGraph(out);
+    expect(getExampleImageUrisForClass(reloaded, 'DGU', classNs!)).toEqual([dguImageUri]);
   });
 });
 

@@ -76,3 +76,39 @@ describe('examples/display', () => {
     expect(used('http://www.w3.org/2004/02/skos/core#definition')).toBe(false);
   });
 });
+
+describe('examples/display/example-images.ttl (#142)', () => {
+  const OPENED_FROM = 'https://example.org/repo/examples/display/example-images.ttl';
+  const IMAGES = 'https://example.org/repo/examples/display/exampleImage/';
+  const opened = async () => {
+    const content = readFileSync(join(EXAMPLES, 'display/example-images.ttl'), 'utf-8');
+    return (await loadOntologyFromContent(content, OPENED_FROM)).parseResult;
+  };
+  const files = (images: string[] | undefined) => (images ?? []).map((u) => u.replace(IMAGES, ''));
+
+  it('opened by URL, its relative images resolve next to it, in order, on classes, the relationship and the data property', async () => {
+    const { graphData, objectProperties, dataProperties } = await opened();
+    const node = (id: string) => graphData.nodes.find((n) => n.id === id);
+    expect(files(node('Widget')?.exampleImages)).toEqual(['Widget_01.png', 'Widget_02.png', 'Widget_03.png']);
+    expect(files(node('Gadget')?.exampleImages)).toEqual(['Gadget_01.png']);
+    expect(node('Sprocket')?.comment).toBeUndefined();
+    expect(files(node('Sprocket')?.exampleImages)).toEqual(['Sprocket_01.png', 'Sprocket_02.png']);
+    expect(node('Plain')?.exampleImages).toBeUndefined();
+    expect(files(objectProperties.find((p) => p.name === 'hasPart')?.exampleImages)).toEqual(['hasPart_01.png', 'hasPart_02.png']);
+    expect(files(dataProperties.find((p) => p.name === 'weight')?.exampleImages)).toEqual(['weight_01.png']);
+  });
+
+  it('every image it names exists next to it, except the missing one it demonstrates', async () => {
+    const { graphData, objectProperties, dataProperties } = await opened();
+    const named = [...graphData.nodes, ...objectProperties, ...dataProperties].flatMap((t) => files(t.exampleImages));
+    const missing = named.filter((f) => {
+      try {
+        readFileSync(join(EXAMPLES, 'display/exampleImage', f));
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    expect(missing).toEqual(['Gizmo_01.png']);
+  });
+});

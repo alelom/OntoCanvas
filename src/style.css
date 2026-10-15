@@ -147,6 +147,77 @@ body.ontocanvas-embedded #edgeColorsLegend {
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
+/* A term's example images under its comment (#142): the tooltip can then be hovered and clicked. */
+.canvas-tooltip--rich {
+  pointer-events: auto;
+  max-width: none;
+  white-space: normal;
+}
+.canvas-tooltip-text {
+  white-space: pre-wrap;
+  margin-bottom: 6px;
+}
+.canvas-tooltip-preview {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #f4f6f8;
+}
+.canvas-tooltip-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.canvas-tooltip-image.is-shown {
+  opacity: 1;
+}
+.canvas-tooltip-image-missing {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+  font-size: 11px;
+  color: #7f8c8d;
+  word-break: break-all;
+}
+.canvas-tooltip-image-missing.is-shown {
+  display: flex;
+}
+.canvas-tooltip-carousel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #555;
+}
+.canvas-tooltip-carousel button {
+  padding: 0 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.canvas-tooltip-image-note {
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-tooltip-image {
+    transition: none;
+  }
+}
 #info {
   padding: 8px 16px;
   font-size: 12px;

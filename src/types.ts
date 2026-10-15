@@ -63,6 +63,8 @@ export interface AnnotationPropertyInfo {
 export interface ObjectPropertyInfo {
   /** Declared `owl:deprecated true` (#137). */
   deprecated?: boolean;
+  /** `exampleImage` values, in display order (#142). */
+  exampleImages?: string[];
   name: string;
   label: string;
   hasCardinality: boolean;
@@ -96,6 +98,8 @@ export interface ObjectPropertyInfo {
 export interface DataPropertyInfo {
   /** Declared `owl:deprecated true` (#137). */
   deprecated?: boolean;
+  /** `exampleImage` values, in display order (#142). */
+  exampleImages?: string[];
   name: string;
   label: string;
   /** rdfs:comment from the ontology */

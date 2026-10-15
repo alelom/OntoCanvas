@@ -79,6 +79,7 @@ import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
 import { edgeLock, type EdgeLock } from './lib/edgeEditability';
 import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
+import { resolveExampleImages } from './lib/exampleImages';
 import { withThingNode, OWL_THING_URI, splitThingBoxSelection, thingBoxId } from './graph/thingNode';
 import { getOrRequestOntologyDirectory, forgetOntologyDirectory } from './lib/ontologyDirectory';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
@@ -2878,6 +2879,9 @@ function buildNetworkData(
   },
   graphData?: GraphData
 ): { nodes: DataSet<any>; edges: DataSet<any> } {
+  // The example images a node or edge shows in its tooltip (#142), resolved against where the ontology was opened from.
+  const hoverImages = (values: string[] | undefined): { exampleImages?: string[] } =>
+    values?.length ? { exampleImages: resolveExampleImages(values, loadedFilePath) } : {};
   const data = graphData ?? rawData;
   let filteredNodes = data.nodes.filter((n) =>
     shouldShowNodeByAnnotations(n, filter.annotationStyleConfig)
@@ -3281,6 +3285,7 @@ function buildNetworkData(
           : n.comment ?? undefined;
         return title ? { title } : {};
       })(),
+      ...hoverImages(n.exampleImages),
     };
     
     // Apply opacity property if less than 1.0
@@ -3571,6 +3576,7 @@ function buildNetworkData(
         x: finalDataPropPos.x,
         y: finalDataPropPos.y,
         ...(tooltip && { title: tooltip }),
+        ...hoverImages(dp?.exampleImages),
       };
       
       // Apply opacity property if less than 1.0
@@ -3697,6 +3703,7 @@ function buildNetworkData(
         y: pos.y,
         ...(faded && { opacity: entry.opacity }),
         ...(entry.tooltip && { title: entry.tooltip }),
+        ...hoverImages(entry.dp.exampleImages),
       });
     });
   }
@@ -3778,6 +3785,7 @@ function buildNetworkData(
       dashes,
       width,
       ...(edgeComment && { title: edgeComment }),
+      ...hoverImages(objectProperties.find((p) => p.name === e.type)?.exampleImages),
     };
   });
   
@@ -4144,7 +4152,7 @@ function setupNetworkSelectionAndNavigation(
         animation: false,
       });
       rightPanStart = { ...rightPanStart, x: coords.x, y: coords.y, viewPos: newViewPos };
-      hideCanvasTooltip();
+      hideCanvasTooltip(true);
       return;
     }
 
@@ -4159,17 +4167,23 @@ function setupNetworkSelectionAndNavigation(
     const body = (net as unknown as { body?: { nodes?: Record<string, { options?: { title?: unknown } }>; edges?: Record<string, { options?: { title?: unknown } }> } }).body;
     const titleOf = (item: { options?: { title?: unknown } } | undefined) =>
       typeof item?.options?.title === 'string' ? item.options.title : null;
+    // The example images (#142) are kept on the data records, which vis-network does not copy into its options.
+    const records = (net as unknown as { body?: { data?: Record<'nodes' | 'edges', { get(id: string): { exampleImages?: string[] } | null }> } }).body?.data;
+    const contentOf = (kind: 'nodes' | 'edges', id: string) => ({
+      text: titleOf(body?.[kind]?.[id]) ?? '',
+      images: records?.[kind]?.get(id)?.exampleImages,
+    });
     const labelEdgeId = getEdgeIdAtLabelPoint(net, coords);
     const nodeId = net.getNodeAt(coords);
     const lineEdgeId = nodeId === undefined ? net.getEdgeAt(coords) : undefined;
-    const text = pickTooltip({
-      edgeLabel: labelEdgeId ? titleOf(body?.edges?.[labelEdgeId]) : null,
+    const content = pickTooltip({
+      edgeLabel: labelEdgeId ? contentOf('edges', labelEdgeId) : null,
       // A class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
       expressionMark: classExprMarks.tooltipAt(net.DOMtoCanvas(coords)),
-      node: nodeId !== undefined ? titleOf(body?.nodes?.[String(nodeId)]) : null,
-      edgeLine: lineEdgeId !== undefined ? titleOf(body?.edges?.[String(lineEdgeId)]) : null,
+      node: nodeId !== undefined ? contentOf('nodes', String(nodeId)) : null,
+      edgeLine: lineEdgeId !== undefined ? contentOf('edges', String(lineEdgeId)) : null,
     });
-    if (text) showCanvasTooltip(text, e.clientX, e.clientY);
+    if (content) showCanvasTooltip(content, e.clientX, e.clientY);
     else hideCanvasTooltip();
   };
 

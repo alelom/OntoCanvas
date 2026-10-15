@@ -1,6 +1,6 @@
 import { DataFactory, Store } from 'n3';
 import type { Quad as N3Quad } from 'n3';
-import { getExampleImageUrisForClass } from './lib/exampleImageStore';
+import { exampleImagesOf } from './lib/exampleImages';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
@@ -193,6 +193,7 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
       subPropertyOf: subPropertyOf ?? undefined,
+      ...withExampleImages(store, subjUri),
       ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }
@@ -200,6 +201,12 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
 }
 
 /** Whether `subject` is declared `owl:deprecated true` (#137): kept for data written against earlier releases. */
+/** `{ exampleImages }` when the term has example images (#142), else nothing. */
+function withExampleImages(store: Store, subjectUri: string): { exampleImages?: string[] } {
+  const exampleImages = exampleImagesOf(store, subjectUri);
+  return exampleImages.length > 0 ? { exampleImages } : {};
+}
+
 function isDeprecated(store: Store, subject: N3Quad['subject']): boolean {
   return store.getObjects(subject, DataFactory.namedNode(OWL + 'deprecated'), null).some((o) => o.termType === 'Literal' && (o.value === 'true' || o.value === '1'));
 }
@@ -337,7 +344,8 @@ function buildParseResultFromStore(
       }
     }
 
-    const exampleImages = getExampleImageUrisForClass(store, localName, getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI);
+    // Read by property IRI, not the class's namespace: ADIRO modules share one exampleImage (#142).
+    const exampleImages = exampleImagesOf(store, uri);
 
     nodes.push({
       id: localName,
@@ -1127,6 +1135,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       hasGlobalDomain,
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
+      ...withExampleImages(store, subjUri),
       ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }

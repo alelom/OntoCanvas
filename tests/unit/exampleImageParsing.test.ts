@@ -3,16 +3,16 @@ import { parseRdfToGraph, getMainOntologyBase, getClassNamespace, storeToTurtle 
 import { getExampleImageUrisForClass, setExampleImageUrisForClass } from '../../src/lib/exampleImageStore';
 import type { SerializerType } from '../../src/storage';
 
-// Mirrors the canonical ADIRO format: a "#" class namespace, a separate "@base" for relative
-// IRIs, and :exampleImage triples whose objects are (relative) IRIs.
-const TTL = `@prefix : <https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata#> .
+// Mirrors the ADIRO format: a "#" class namespace, a separate "@base" for relative IRIs, and :exampleImage triples
+// whose objects are (relative) IRIs. The namespace is ADIRO's, so :exampleImage is the property shown in tooltips (#142).
+const TTL = `@prefix : <https://w3id.org/adiro/aec_drawing_metadata#> .
 @base <https://burohappoldmachinelearning.github.io/ADIRO/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<https://burohappoldmachinelearning.github.io/ADIRO/aec_drawing_metadata> rdf:type owl:Ontology .
+<https://w3id.org/adiro/aec_drawing_metadata> rdf:type owl:Ontology .
 
 :exampleImage rdf:type owl:AnnotationProperty ;
     rdfs:label "example image"@en .
