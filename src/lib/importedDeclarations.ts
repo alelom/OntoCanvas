@@ -25,6 +25,8 @@ export interface ImportedOntology {
   iri: string | null;
   /** Its declarations, in a store of their own. */
   store: Store;
+  /** The prefixes it declares (prefix → namespace), e.g. `prov:` for a namespace it imports in turn (#137). */
+  prefixes?: Record<string, string>;
 }
 
 export interface PropertyLists {
@@ -146,8 +148,8 @@ async function readImport(
     budget.used += content.length;
     // The format is read from the content, not the URL: a server may answer an "Accept: text/turtle" request for
     // vocab.owl with Turtle, or one for a bare IRI with RDF/XML.
-    const { parseResult } = await loadOntologyFromContent(content, url, { contentType: sniffContentType(content) });
-    return { url, iri: getOntologyInfo(parseResult.store, {})?.iri ?? null, store: parseResult.store };
+    const { parseResult, prefixMap } = await loadOntologyFromContent(content, url, { contentType: sniffContentType(content) });
+    return { url, iri: getOntologyInfo(parseResult.store, {})?.iri ?? null, store: parseResult.store, prefixes: prefixMap };
   } catch {
     return null; // CORS, offline, not RDF: the import stays unread
   }

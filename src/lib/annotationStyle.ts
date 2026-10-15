@@ -127,6 +127,14 @@ export function resolveNodeAnnotationStyle(
 }
 
 /**
+ * The annotation properties that may style classes, in priority order: all but the deprecated ones (owl:deprecated),
+ * which never style anything, whatever a saved display config says (#137 follow-up).
+ */
+export function stylingOrder(props: readonly { name: string; deprecated?: boolean }[]): string[] {
+  return props.filter((p) => !p.deprecated).map((p) => p.name);
+}
+
+/**
  * Order annotation properties by a saved priority order.
  *
  * Properties whose names appear in `savedOrder` come first, in that order; any remaining
@@ -158,7 +166,9 @@ export function applyAnnotationPropertyOrder<T extends { name: string }>(
 export function reorderAnnotationProperty<T extends { name: string; isBoolean: boolean }>(
   props: T[],
   name: string,
-  direction: -1 | 1
+  direction: -1 | 1,
+  /** The menu group of a property (#137): it is never moved past its group's first or last. */
+  groupOf?: (p: T) => string
 ): T[] {
   const idx = props.findIndex((p) => p.name === name);
   if (idx < 0) return [...props];
@@ -166,6 +176,7 @@ export function reorderAnnotationProperty<T extends { name: string; isBoolean: b
   let j = idx + direction;
   while (j >= 0 && j < props.length && props[j].isBoolean !== kind) j += direction;
   if (j < 0 || j >= props.length) return [...props];
+  if (groupOf && groupOf(props[j]) !== groupOf(props[idx])) return [...props];
   const next = [...props];
   [next[idx], next[j]] = [next[j], next[idx]];
   return next;

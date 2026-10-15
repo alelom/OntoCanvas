@@ -60,6 +60,7 @@ import {
   searchExternalObjectProperties,
   preloadExternalOntologyClasses,
   fetchExternalOntologyTtl,
+  servedFrom,
   getReferencedExternalClassesFromStore,
   getStubExternalClassForUri,
   type ExternalClassInfo,
@@ -180,7 +181,14 @@ import { openOnStartup } from './ui/startupOpen';
 import { debounced } from './utils/debounced';
 import { beginViewSettle, viewSettled } from './ui/viewSettle';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust, convertOntologyUrlToHtmlUrl } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, withCacheBust, convertOntologyUrlToHtmlUrl, getAllDisplayFileUrls } from './utils/urlParams';
+import { latestDisplayConfigSource } from './lib/displayConfigFallback';
+import { showWarningBar, hideWarningBar } from './ui/warningBar';
+import { groupMenuEntries } from './ui/propertyMenuGroups';
+import { renderMenuGroups } from './ui/propertyMenuGroupsDom';
+import { propertySource, annotationUsedAnywhere, annotationDisplayName } from './ui/propertyMenuFacts';
+import { annotationUsages } from './lib/annotationUsages';
+import { fillUsagesSection } from './ui/annotationUsagesView';
 import { openExternalOntologyTab } from './lib/openExternalOntology';
 import {
   extractUsedNamespaceRefsFromStore,
@@ -189,6 +197,7 @@ import {
   renderExternalRefsList,
   refreshExternalRefsList,
   setImportVersionLookup,
+  setImportedPrefixes,
   showExternalRefsModal,
   hideExternalRefsModal,
   sortExternalRefsByUrl,
@@ -247,7 +256,7 @@ import {
   validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
-import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
+import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder, stylingOrder } from './lib/annotationStyle';
 import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, RELATIONSHIP_LABEL_BG_RGB, type AnnotationStyleConfig } from './ui/constants';
 import { readableTextColor } from './lib/textContrast';
 import {
@@ -613,7 +622,6 @@ function buildAnnotationPropsDeps(
   valuesMap: Record<string, string[]>
 ): nodeModalFormUi.AnnotationPropsListDeps {
   return {
-    isLocal: !!fileHandle,
     getInitialValues: (ap) => {
       if (!ttlStore || !nodeId) {
         valuesMap[ap.name] = [];
@@ -630,6 +638,13 @@ function buildAnnotationPropsDeps(
     onOpenLink: (value) => {
       window.open(value, '_blank', 'noopener,noreferrer');
     },
+    // Grouped as in the Annotation Properties menu (#141).
+    groupFacts: (ap) => ({
+      source: propertySource(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
+      unused: !!ttlStore && !!ap.uri && !annotationUsedAnywhere(ttlStore, ap.uri),
+      deprecated: !!ap.deprecated,
+    }),
+    displayName: (ap) => annotationDisplayName(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
   };
 }
 
@@ -1484,7 +1499,38 @@ function initEdgeStylesMenu(
   const types = getAllRelationshipTypes(rawData, objectProperties);
   // Get default colors for all types (distributed across spectrum)
   const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
-  types.forEach((type) => {
+  /** The object property a relationship type stands for: by name, URI, or local name of its URI. */
+  const findOp = (type: string): ObjectPropertyInfo | undefined => objectProperties.find((p) => {
+    // Direct match by name or URI
+    if (p.name === type || p.uri === type) return true;
+    
+    // If type is a full URI, check if it matches p.uri or p.name (both should be full URI for external)
+    if (type.startsWith('http://') || type.startsWith('https://')) {
+      if (p.uri === type || p.name === type) return true;
+      // Also check if p.uri or p.name contains the type (for partial matches)
+      if (p.uri && (type.includes(p.uri) || p.uri.includes(type))) return true;
+      if (p.name && p.name.startsWith('http') && (type.includes(p.name) || p.name.includes(type))) return true;
+    }
+    
+    // If type is a local name, extract local name from p.uri or p.name and compare
+    if (!type.startsWith('http://') && !type.startsWith('https://')) {
+      // Extract local name from URI
+      if (p.uri) {
+        const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
+        if (uriLocalName === type) return true;
+      }
+      // Extract local name from name (if name is a full URI)
+      if (p.name && (p.name.startsWith('http://') || p.name.startsWith('https://'))) {
+        const nameLocalName = p.name.includes('#') ? p.name.split('#').pop() : p.name.split('/').pop();
+        if (nameLocalName === type) return true;
+      }
+      // Direct match if p.name is the local name
+      if (p.name === type && !p.name.startsWith('http://') && !p.name.startsWith('https://')) return true;
+    }
+    
+    return false;
+  });
+  const rowFor = (type: string): HTMLElement => {
     // Get default color - use the generated color directly
     const color = defaultColors[type] || getDefaultColor();
     const isEditable = type !== 'subClassOf';
@@ -1503,36 +1549,7 @@ function initEdgeStylesMenu(
     const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
     // Find property by name, URI, or local name extracted from URI
     // For external properties, name should be full URI (after parser fix), and type might be full URI or local name
-    let op = objectProperties.find((p) => {
-      // Direct match by name or URI
-      if (p.name === type || p.uri === type) return true;
-      
-      // If type is a full URI, check if it matches p.uri or p.name (both should be full URI for external)
-      if (type.startsWith('http://') || type.startsWith('https://')) {
-        if (p.uri === type || p.name === type) return true;
-        // Also check if p.uri or p.name contains the type (for partial matches)
-        if (p.uri && (type.includes(p.uri) || p.uri.includes(type))) return true;
-        if (p.name && p.name.startsWith('http') && (type.includes(p.name) || p.name.includes(type))) return true;
-      }
-      
-      // If type is a local name, extract local name from p.uri or p.name and compare
-      if (!type.startsWith('http://') && !type.startsWith('https://')) {
-        // Extract local name from URI
-        if (p.uri) {
-          const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
-          if (uriLocalName === type) return true;
-        }
-        // Extract local name from name (if name is a full URI)
-        if (p.name && (p.name.startsWith('http://') || p.name.startsWith('https://'))) {
-          const nameLocalName = p.name.includes('#') ? p.name.split('#').pop() : p.name.split('/').pop();
-          if (nameLocalName === type) return true;
-        }
-        // Direct match if p.name is the local name
-        if (p.name === type && !p.name.startsWith('http://') && !p.name.startsWith('https://')) return true;
-      }
-      
-      return false;
-    });
+    const op = findOp(type);
     const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
     // Use op.uri or op.name (if full URI) for prefix detection, otherwise use type
     // This ensures imported properties get their prefix even if type is a local name
@@ -1554,7 +1571,7 @@ function initEdgeStylesMenu(
     
     const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, externalOntologyReferences, op, mainBase);
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
+      <span class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
         <input type="checkbox" class="edge-show-cb" data-type="${htmlEscapedType}" checked>
         <span>Show</span>
@@ -1578,8 +1595,20 @@ function initEdgeStylesMenu(
       (row.querySelector('.edge-label-cb') as HTMLInputElement).checked = before.showLabel;
       if (before.color) (row.querySelector('.edge-color-picker') as HTMLInputElement).value = before.color;
     }
-    edgeStylesContent.appendChild(row);
+    return row;
+  };
+  // The ontology's own properties first, the imported ones in a collapsed group below (#137); a group holding a
+  // hidden relationship type starts open, so what hides it is never hidden itself.
+  const mainBaseForGroups = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const entries = types.map((type) => {
+    const op = findOp(type);
+    return {
+      item: { type, comment: op?.comment },
+      source: propertySource(op ?? { uri: /^https?:\/\//.test(type) ? type : null }, externalOntologyReferences, mainBaseForGroups),
+      deprecated: !!op?.deprecated,
+    };
   });
+  renderMenuGroups(edgeStylesContent, groupMenuEntries(entries), ({ item }) => rowFor(item.type));
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
@@ -1726,19 +1755,25 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
     return prefix ? `${prefix}:${dp.label}` : dp.label;
   };
   
-  dataProperties.forEach((dp) => {
+  // The ontology's own properties first, the imported ones in a collapsed group below (#137).
+  const entries = dataProperties.map((dp) => ({
+    item: dp,
+    source: propertySource(dp, externalOntologyReferences, mainBase),
+    deprecated: !!dp.deprecated,
+  }));
+  renderMenuGroups(dataPropsContent, groupMenuEntries(entries), ({ item: dp }) => {
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     const propDisplayName = formatPropName(dp);
     const rangeDisplay = describeRange(dp);
     const rangeStyle = rangeDisplay.source === 'asserted' ? 'color: #666;' : 'color: #999; font-style: italic;';
     row.innerHTML = `
-      <span style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(propDisplayName)}</span>
+      <span class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(propDisplayName)}</span>
       <span style="font-size: 11px; ${rangeStyle}" title="${escapeHtml(rangeDisplay.tooltipNote)}">${escapeHtml(rangeDisplay.menuLabel)}</span>
       ${dp.contextOnly ? '' : `<button type="button" class="data-prop-edit-btn" data-name="${escapeHtml(dp.name)}" title="Edit data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #3498db; font-size: 14px; transform: scaleX(-1);">✎</button>
       <button type="button" class="data-prop-delete-btn" data-name="${escapeHtml(dp.name)}" title="Delete this data property" style="background: none; border: none; cursor: pointer; padding: 2px; color: #c0392b; font-size: 14px;">🗑</button>`}
     `;
-    dataPropsContent.appendChild(row);
+    return row;
   });
   dataPropsContent.querySelectorAll('.data-prop-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -2611,7 +2646,11 @@ function showEditAnnotationPropertyModal(name: string): void {
       rangeSel.innerHTML += `<option value="${currentRange}" selected>${rangeLabel}</option>`;
     }
   }
-  
+
+  // Where it is used (#139), collapsed.
+  const usagesSection = document.getElementById('editAnnotationPropUsages') as HTMLDetailsElement | null;
+  if (usagesSection) fillUsagesSection(usagesSection, ttlStore && ap?.uri ? annotationUsages(ttlStore, ap.uri) : []);
+
   modal.style.display = 'flex';
   labelInput?.focus();
 }
@@ -2754,8 +2793,9 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
 }
 
 /** Property local names in priority order (highest first) for annotation styling. */
+/** The annotation properties that style classes, in priority order: deprecated ones never do. */
 function annotationPriorityOrder(): string[] {
-  return annotationProperties.map((ap) => ap.name);
+  return stylingOrder(annotationProperties);
 }
 
 /** Build the dependency bundle the annotation-properties menu needs (injected, so the menu
@@ -6633,6 +6673,10 @@ function renderApp(): void {
             <option value="">No range (untyped)</option>
           </select>
         </label>
+        <details id="editAnnotationPropUsages" style="margin-top: 12px;">
+          <summary style="cursor: pointer; font-size: 11px; color: #555;">Where it is used</summary>
+          <div class="annotation-usages-list" style="margin-top: 6px; max-height: 200px; overflow-y: auto;"></div>
+        </details>
         <div class="modal-actions" style="margin-top: 16px;">
           <button type="button" id="editAnnotationPropCancel">Cancel</button>
           <button type="button" id="editAnnotationPropConfirm" class="primary">OK</button>
@@ -6797,6 +6841,7 @@ function refreshPropertyMenus(): void {
 function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
   beginImportsSettle();
   importedOntologies = [];
+  setImportedPrefixes({});
   importNewerVersions = new Map();
   importsBeingRead = true;
   void (async () => {
@@ -6807,6 +6852,8 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
       );
       if (store !== ttlStore || imported.length === 0) return;
       importedOntologies = imported;
+      // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
+      setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
       importedDeclarations = readImportedDeclarations(imported);
       const before = { objectProperties, dataProperties, annotationProperties };
       const merged = mergeImportedDeclarations(before, importedDeclarations);
@@ -7197,25 +7244,9 @@ hasUnsavedChanges = false;
     }
     
     if (graphData.nodes.length === 0 && graphData.edges.length === 0 && !hasObjectPropertiesWithDomainRange) {
-      const warningText = document.getElementById('warningMsgText') as HTMLElement;
-      if (warningText) {
-        warningText.textContent = 'The current file defines no classes, so the canvas is empty.';
-      }
-      warningMsg.style.display = 'flex';
-      
-      // Setup close button
-      const closeBtn = document.getElementById('warningMsgClose') as HTMLElement;
-      if (closeBtn) {
-        // Remove any existing listeners by cloning
-        const newCloseBtn = closeBtn.cloneNode(true) as HTMLElement;
-        closeBtn.parentNode?.replaceChild(newCloseBtn, closeBtn);
-        const currentCloseBtn = document.getElementById('warningMsgClose') as HTMLElement;
-        currentCloseBtn.addEventListener('click', () => {
-          warningMsg.style.display = 'none';
-        });
-      }
+      showWarningBar('The current file defines no classes, so the canvas is empty.');
     } else {
-      warningMsg.style.display = 'none';
+      hideWarningBar();
     }
 
     setTimeout(() => {
@@ -7934,6 +7965,15 @@ async function loadFromFile(): Promise<void> {
  * Attempt to load display config from a URL.
  * Returns the config if found, null otherwise (doesn't throw on 404).
  */
+/** The first display config found among `displayUrls`, tried in order; null when none is. */
+async function firstDisplayConfig(displayUrls: string[]): Promise<DisplayConfig | null> {
+  for (const displayUrl of displayUrls) {
+    const config = await loadDisplayConfigFromUrl(displayUrl);
+    if (config) return config;
+  }
+  return null;
+}
+
 async function loadDisplayConfigFromUrl(displayUrl: string): Promise<DisplayConfig | null> {
   try {
     // Cache-bust: the config may have just been re-published; GitHub Pages caches it for ~10 min.
@@ -8057,20 +8097,20 @@ async function loadFromUrl(url: string): Promise<void> {
     saveLastUrlToIndexedDB(url, fileName).catch(() => {});
     addRecentlyOpenedToIndexedDB({ kind: 'url', url, name: fileName, openedAt: Date.now() }).catch(() => {});
 
-    const { getAllDisplayFileUrls } = await import('./utils/urlParams');
-    const displayUrls = getAllDisplayFileUrls(url);
-    let urlDisplayConfig: DisplayConfig | null = null;
-    
-    // Try all possible display file URLs (primary first, then alternatives)
-    for (const displayUrl of displayUrls) {
-      urlDisplayConfig = await loadDisplayConfigFromUrl(displayUrl);
-      if (urlDisplayConfig) {
-        break; // Found it, stop trying alternatives
-      }
-    }
+    // Next to the file the URL was finally served from first: a version IRI redirects to its release (#136).
+    let urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(url, servedFrom(url)));
 
     await loadTtlAndRender(ttl, fileName, null, url);
     setOntologyUrlParamInAddressBar(url);
+
+    // A version opened without a config of its own borrows the latest version's, and says so (#136).
+    const latestSource = !urlDisplayConfig && ttlStore ? latestDisplayConfigSource(url, readOntologyVersion(ttlStore)) : null;
+    if (latestSource && (await fetchExternalOntologyTtl(latestSource, { timeoutMs: IMPORT_READ_TIMEOUT_MS }))) {
+      urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(latestSource, servedFrom(latestSource)));
+      if (urlDisplayConfig) {
+        showWarningBar('This version has no display settings of its own: the layout and colours of the latest version are used, so terms added or removed since may be placed oddly.');
+      }
+    }
 
     if (urlDisplayConfig) {
       loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;

@@ -16,12 +16,15 @@ const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 const BASE = 'http://example.org/o#';
 
-function makeStore(names: string[]): Store {
+/** Declares each property, and uses it on a class (so it can style something and gets its full row, #137). */
+function makeStore(names: string[], unusedNames: string[] = []): Store {
   const store = new Store();
-  for (const n of names) {
+  store.addQuad(namedNode(BASE + 'C'), namedNode(RDF + 'type'), namedNode(OWL + 'Class'));
+  for (const n of [...names, ...unusedNames]) {
     store.addQuad(namedNode(BASE + n), namedNode(RDF + 'type'), namedNode(OWL + 'AnnotationProperty'));
     store.addQuad(namedNode(BASE + n), namedNode(RDFS + 'label'), DataFactory.literal(n));
   }
+  for (const n of names) store.addQuad(namedNode(BASE + 'C'), namedNode(BASE + n), DataFactory.literal('v'));
   return store;
 }
 
@@ -287,5 +290,54 @@ describe('annotationPropertiesMenu - config read/write', () => {
     // a's custom fill must survive the re-render.
     const fillAAfter = container.querySelector('.ap-bool-fill[data-prop="a"][data-val="true"]') as HTMLInputElement;
     expect(fillAAfter.value).toBe('#abcdef');
+  });
+});
+
+describe('annotationPropertiesMenu - not used, used on no class, and usages (#137, #139)', () => {
+  it('puts the properties used nowhere, Boolean and text alike, in one "Not used" group at the end, with only show usages, edit and delete', () => {
+    const { deps } = makeDeps([boolProp('used'), boolProp('unusedFlag'), textProp('unusedText')], makeStore(['used'], ['unusedFlag', 'unusedText']));
+    initAnnotationPropsMenu(container, deps);
+    const unused = container.querySelectorAll('details[data-group="unused"]');
+    expect(unused).toHaveLength(1);
+    expect(container.lastElementChild).toBe(unused[0]);
+    expect(unused[0].querySelector('summary')!.textContent).toBe('Not used (2)');
+    expect(unused[0].querySelector('.ap-bool-show, .ap-bool-fill, .ap-add-rule, .ap-text-rules, .ap-move-up, .ap-move-down')).toBeNull();
+    expect(unused[0].querySelectorAll('.ap-usages-btn, .annotation-prop-edit-btn, .annotation-prop-delete-btn')).toHaveLength(6);
+    // The used one keeps its styling controls.
+    expect(container.querySelector('.ap-bool-show[data-prop="used"]')).not.toBeNull();
+  });
+
+  it('gives a property used only on things other than classes the same compact row, in its usual group: it cannot style a class', () => {
+    const store = makeStore(['styled']);
+    store.addQuad(namedNode('http://example.org/o'), namedNode(RDF + 'type'), namedNode(OWL + 'Ontology'));
+    store.addQuad(namedNode(BASE + 'headerNote'), namedNode(RDF + 'type'), namedNode(OWL + 'AnnotationProperty'));
+    store.addQuad(namedNode('http://example.org/o'), namedNode(BASE + 'headerNote'), DataFactory.literal('about'));
+    const { deps } = makeDeps([textProp('styled'), textProp('headerNote')], store);
+    initAnnotationPropsMenu(container, deps);
+    expect(container.querySelector('details[data-group="unused"]')).toBeNull();
+    const row = container.querySelector('.ap-usages-btn[data-name="headerNote"]')!.parentElement!;
+    expect(row.querySelector('.ap-add-rule, .ap-move-up')).toBeNull();
+    expect(container.querySelector('.ap-add-rule[data-prop="styled"]')).not.toBeNull();
+  });
+
+  it('shows where a property is used from its "show usages" button', () => {
+    const { deps } = makeDeps([textProp('note')], makeStore(['note']));
+    initAnnotationPropsMenu(container, deps);
+    (container.querySelector('.ap-usages-btn[data-name="note"]') as HTMLButtonElement).click();
+    const popover = document.getElementById('annotationUsagesPopover')!;
+    expect(popover.style.display).toBe('block');
+    expect([...popover.querySelectorAll('.annotation-usage')].map((li) => li.textContent)).toEqual(['C (class): v']);
+  });
+});
+
+describe('annotationPropertiesMenu - deprecated (#137 follow-up)', () => {
+  it('lists a deprecated property under "Deprecated", even when used on classes, with no styling controls and no style', () => {
+    const { deps } = makeDeps([boolProp('isLabel'), { ...boolProp('labellableRoot'), deprecated: true }], makeStore(['isLabel', 'labellableRoot']));
+    initAnnotationPropsMenu(container, deps);
+    const deprecated = container.querySelector('details[data-group="deprecated"]')!;
+    expect(deprecated.querySelector('summary')!.textContent).toBe('Deprecated (1)');
+    expect(deprecated.querySelector('.ap-usages-btn[data-name="labellableRoot"]')).not.toBeNull();
+    expect(container.querySelector('[data-prop="labellableRoot"]')).toBeNull();
+    expect(getAnnotationStyleConfig(container, deps.getAnnotationProperties()).booleanProps.labellableRoot).toBeUndefined();
   });
 });

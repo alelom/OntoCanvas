@@ -1,0 +1,18 @@
+@prefix : <http://example.org/examples/menu-groups-base#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Imported by menu-groups.ttl (issue #137): open that one, not this file. Its properties are listed in the
+# menus as context, under "From other ontologies", headed "base".
+
+<http://example.org/examples/menu-groups-base> rdf:type owl:Ontology ;
+    rdfs:label "Menu groups base" .
+
+:recordedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "recordedBy" .
+
+:recordedOn rdf:type owl:DatatypeProperty ;
+    rdfs:label "recordedOn" ;
+    rdfs:range xsd:date .

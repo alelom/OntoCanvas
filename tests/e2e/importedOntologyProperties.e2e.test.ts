@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
-import { loadTestFile, openEditorWithTtl, serveOntologies, waitForImportsSettled } from './testHelpers';
+import { loadTestFile, openEditorWithTtl, openMenuGroups, serveOntologies, waitForImportsSettled } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -57,6 +57,7 @@ async function openMenuAndReadText(page: Page, menuId: MenuId, expected: string)
     const actual = await page.evaluate((id) => document.getElementById(id)?.textContent ?? '', contentId);
     throw new Error(`The ${menuId} never showed "${expected}". It shows: ${actual.replace(/\s+/g, ' ').trim()}`);
   }
+  await openMenuGroups(page, contentId);
   return page.evaluate((id) => document.getElementById(id)?.textContent ?? '', contentId);
 }
 

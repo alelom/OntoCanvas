@@ -352,6 +352,18 @@ export function isUriFromExternalOntology(
 /**
  * Get prefix for a property/class URI if it's from an external ontology
  */
+/** Namespace → prefix, as the loaded ontology's imports declare them (#137). */
+let importedPrefixes = new Map<string, string>();
+
+/**
+ * Register the prefixes the loaded ontology's imports declare (prefix → namespace): a term of a namespace that
+ * only an import names (PROV, imported through another ontology) is shown with that prefix. The empty prefix
+ * names nothing.
+ */
+export function setImportedPrefixes(prefixes: Record<string, string>): void {
+  importedPrefixes = new Map(Object.entries(prefixes).filter(([prefix, ns]) => prefix !== '' && ns).map(([prefix, ns]) => [ns, prefix]));
+}
+
 export function getPrefixForUri(
   uri: string | null | undefined,
   isDefinedBy: string | null | undefined,
@@ -425,6 +437,14 @@ export function getPrefixForUri(
     }
   }
   
+  // A namespace an import brings in (PROV, through an ontology importing it) has the prefix that import declares
+  // for it (#137); never one of the open ontology's own terms.
+  const mainNs = mainOntologyBase?.replace(/[#/]$/, '');
+  if (!mainNs || !uri.startsWith(mainNs)) {
+    const declared = [...importedPrefixes].filter(([namespace]) => uri.startsWith(namespace)).sort((a, b) => b[0].length - a[0].length)[0];
+    if (declared) return declared[1];
+  }
+
   // Fallback: known namespaces when no ref (e.g. inlined without owl:imports)
   if (uri.includes('opengis.net/ont/geosparql')) return 'geo';
   if (uri.includes('w3.org/1999/02/22-rdf-syntax-ns#')) return 'rdf';

@@ -12,36 +12,43 @@ import {
 } from './nodeModalForm';
 import type { DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, GraphNode } from '../types';
 import { initAnnotationValuesSection } from './annotationValuesSection';
+import { groupMenuEntries } from './propertyMenuGroups';
+import { renderMenuGroups } from './propertyMenuGroupsDom';
 
 export { ADD_NODE_DUPLICATE_MESSAGE };
 
 /** Host hooks for rendering textual (multi-value) annotation properties in a node modal. */
 export interface AnnotationPropsListDeps {
-  /** Whether the ontology is editable locally (controls add/delete affordances). */
-  isLocal: boolean;
   /** Initial values for a textual annotation property (read from the store; [] for a new node). */
   getInitialValues: (ap: AnnotationPropertyInfo) => string[];
   /** Report a textual property's edited values so the host can persist them on confirm. */
   onTextualValuesChange: (propName: string, values: string[]) => void;
   /** Open a link value (e.g. in a new tab). */
   onOpenLink: (value: string) => void;
+  /** How the property is grouped, as in the Annotation Properties menu (#141, #137). */
+  groupFacts: (ap: AnnotationPropertyInfo) => { source: string | null; unused: boolean; deprecated: boolean };
+  /** The name shown, as in the menu (`skos:altLabel`); its local name when not given. */
+  displayName?: (ap: AnnotationPropertyInfo) => string;
 }
 
-/** Render one annotation property row: boolean -> checkbox; textual -> multi-value section. */
-function renderAnnotationPropItem(
-  listEl: HTMLElement,
+/** The list scrolls rather than pushing the rest of the dialog down (#141). */
+const LIST_MAX_HEIGHT = '260px';
+
+/** One annotation property row: boolean -> checkbox; textual -> multi-value section. */
+function createAnnotationPropItem(
   ap: AnnotationPropertyInfo,
   currentBooleanValue: boolean | string | null | undefined,
   idPrefix: string,
   deps: AnnotationPropsListDeps
-): void {
+): HTMLElement {
   const item = document.createElement('div');
 
   if (ap.isBoolean) {
     item.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px;';
     const label = document.createElement('span');
-    label.style.cssText = 'font-size: 11px; min-width: 120px;';
-    label.textContent = ap.name;
+    label.className = 'prop-name';
+    label.style.cssText = 'font-size: 11px; font-weight: bold; min-width: 120px;';
+    label.textContent = deps.displayName?.(ap) ?? ap.name;
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = `${idPrefix}${ap.name}`;
@@ -50,29 +57,46 @@ function renderAnnotationPropItem(
     checkbox.style.cssText = 'margin: 0; vertical-align: middle;';
     item.appendChild(label);
     item.appendChild(checkbox);
-    listEl.appendChild(item);
-    return;
+    return item;
   }
 
   item.style.cssText = 'margin-bottom: 10px; padding: 4px;';
   const label = document.createElement('div');
+  label.className = 'prop-name';
   label.style.cssText = 'font-size: 11px; font-weight: bold; margin-bottom: 4px;';
-  label.textContent = ap.name + ':';
+  label.textContent = (deps.displayName?.(ap) ?? ap.name) + ':';
   if (ap.comment) label.title = ap.comment;
   item.appendChild(label);
 
   const valuesContainer = document.createElement('div');
   item.appendChild(valuesContainer);
-  listEl.appendChild(item);
 
   initAnnotationValuesSection(valuesContainer, {
     propertyName: ap.name,
     comment: ap.comment,
-    isLocal: deps.isLocal,
     initialValues: deps.getInitialValues(ap),
     onChange: (values) => deps.onTextualValuesChange(ap.name, values),
     onOpen: deps.onOpenLink,
   });
+  return item;
+}
+
+/**
+ * Fill a "Set annotation properties" list (#141): scrollable, grouped like the Annotation Properties menu (own
+ * first, others by source, those used on no class last, deprecated ones marked); a group holding a value set on
+ * this class starts open.
+ */
+function renderAnnotationPropsGroups(
+  listEl: HTMLElement,
+  annotationProperties: AnnotationPropertyInfo[],
+  currentBooleanValue: (ap: AnnotationPropertyInfo) => boolean | string | null | undefined,
+  idPrefix: string,
+  deps: AnnotationPropsListDeps
+): void {
+  listEl.style.maxHeight = LIST_MAX_HEIGHT;
+  listEl.style.overflowY = 'auto';
+  const entries = annotationProperties.map((ap) => ({ item: ap, ...deps.groupFacts(ap) }));
+  renderMenuGroups(listEl, groupMenuEntries(entries), ({ item }) => createAnnotationPropItem(item, currentBooleanValue(item), idPrefix, deps));
 }
 
 export function updateRenameDataPropAddButtonState(): void {
@@ -144,9 +168,7 @@ export function renderRenameModalAnnotationPropsList(
     listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
     return;
   }
-  annotationProperties.forEach((ap) => {
-    renderAnnotationPropItem(listEl, ap, node?.annotations?.[ap.name], 'renameAnnotProp_', deps);
-  });
+  renderAnnotationPropsGroups(listEl, annotationProperties, (ap) => node?.annotations?.[ap.name], 'renameAnnotProp_', deps);
 }
 
 export function renderAddNodeAnnotationPropsList(
@@ -160,9 +182,7 @@ export function renderAddNodeAnnotationPropsList(
     listEl.innerHTML = '<div style="font-size: 11px; color: #666;">No annotation properties defined.</div>';
     return;
   }
-  annotationProperties.forEach((ap) => {
-    renderAnnotationPropItem(listEl, ap, null, 'addNodeAnnotProp_', deps);
-  });
+  renderAnnotationPropsGroups(listEl, annotationProperties, () => null, 'addNodeAnnotProp_', deps);
 }
 
 export function renderAddNodeDataPropsList(

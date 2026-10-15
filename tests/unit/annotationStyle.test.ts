@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveNodeAnnotationStyle,
+  stylingOrder,
   applyAnnotationPropertyOrder,
   reorderAnnotationProperty,
   defaultAnnotationFill,
@@ -294,6 +295,12 @@ describe('reorderAnnotationProperty', () => {
     expect(reorderAnnotationProperty(bools, 'c', 1).map((p) => p.name)).toEqual(['a', 'b', 'c']);
   });
 
+  it('does not move a property out of its menu group (#137)', () => {
+    const groupOf = (p: { name: string }) => (p.name === 'c' ? 'external' : 'own');
+    expect(reorderAnnotationProperty(bools, 'b', 1, groupOf).map((p) => p.name)).toEqual(['a', 'b', 'c']);
+    expect(reorderAnnotationProperty(bools, 'b', -1, groupOf).map((p) => p.name)).toEqual(['b', 'a', 'c']);
+  });
+
   it('skips over the other kind, swapping only with the nearest same-kind neighbour', () => {
     const mixed = [
       { name: 'boolA', isBoolean: true },
@@ -339,5 +346,24 @@ describe('defaultAnnotationFill', () => {
   it('handles negative and non-integer indices without throwing', () => {
     expect(typeof defaultAnnotationFill(-1)).toBe('string');
     expect(defaultAnnotationFill(2.7)).toBe(defaultAnnotationFill(2));
+  });
+});
+
+describe('stylingOrder: deprecated properties do not style classes (#137 follow-up)', () => {
+  const on = { fillColor: '#ff0000', borderColor: '#000000', borderLineType: 'solid' as BorderLineType, show: true, active: true };
+  const off = { ...on, active: false };
+  const config: AnnotationStyleConfig = {
+    booleanProps: { labellableRoot: { whenTrue: on, whenFalse: off, whenUndefined: off }, isLabel: { whenTrue: { ...on, fillColor: '#00ff00' }, whenFalse: off, whenUndefined: off } },
+    textProps: {},
+  };
+  const props = [{ name: 'labellableRoot', deprecated: true }, { name: 'isLabel' }];
+
+  it('is the priority order without the deprecated properties', () => {
+    expect(stylingOrder(props)).toEqual(['isLabel']);
+  });
+
+  it('so a saved style for a deprecated property has no effect on a class that carries it', () => {
+    expect(resolveNodeAnnotationStyle({ labellableRoot: true }, config, stylingOrder(props)).background).not.toBe('#ff0000');
+    expect(resolveNodeAnnotationStyle({ labellableRoot: true, isLabel: true }, config, stylingOrder(props)).background).toBe('#00ff00');
   });
 });

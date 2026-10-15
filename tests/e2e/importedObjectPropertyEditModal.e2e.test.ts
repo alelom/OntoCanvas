@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
-import { loadTestFile, openEditorWithTtl } from './testHelpers';
+import { loadTestFile, openEditorWithTtl, openMenuGroups } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -33,7 +33,8 @@ async function waitForDisplayed(page: Page, id: string, displayed: boolean): Pro
 
 /** Open the Object Properties menu and click the edit button of `type`, the way a user does, then wait for the modal. */
 async function openObjectPropertyEditor(page: Page, type: string): Promise<void> {
-  await page.locator('#edgeStylesMenu summary').click();
+  await page.locator('#edgeStylesMenu > summary').click();
+  await openMenuGroups(page, 'edgeStylesContent');
   await page.locator(`#edgeStylesContent .edge-edit-btn[data-type="${type}"]`).click();
   await waitForDisplayed(page, 'editRelationshipTypeModal', true);
 }

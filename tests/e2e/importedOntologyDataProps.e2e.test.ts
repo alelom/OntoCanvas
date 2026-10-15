@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
-import { loadTestFile, openEditorWithTtl } from './testHelpers';
+import { loadTestFile, openEditorWithTtl, openMenuGroups } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
@@ -20,7 +20,8 @@ const CHILD_FILE = join(TEST_FIXTURES_DIR, 'data-props-child.ttl');
 
 /** Open the Data Properties menu and click the edit button of `name`, the way a user does, then wait for the modal. */
 async function openDataPropertyEditor(page: Page, name: string): Promise<void> {
-  await page.locator('#dataPropsMenu summary').click();
+  await page.locator('#dataPropsMenu > summary').click();
+  await openMenuGroups(page, 'dataPropsContent');
   await page.locator(`#dataPropsContent .data-prop-edit-btn[data-name="${name}"]`).click();
   await page.waitForFunction(
     () => getComputedStyle(document.getElementById('editDataPropertyModal')!).display !== 'none',

@@ -192,10 +192,16 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
       hasGlobalRange,
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
-      subPropertyOf: subPropertyOf ?? undefined
+      subPropertyOf: subPropertyOf ?? undefined,
+      ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Whether `subject` is declared `owl:deprecated true` (#137): kept for data written against earlier releases. */
+function isDeprecated(store: Store, subject: N3Quad['subject']): boolean {
+  return store.getObjects(subject, DataFactory.namedNode(OWL + 'deprecated'), null).some((o) => o.termType === 'Literal' && (o.value === 'true' || o.value === '1'));
 }
 
 export function getAnnotationProperties(
@@ -243,7 +249,7 @@ export function getAnnotationProperties(
     const commentQuad = store.getQuads(subj, DataFactory.namedNode(RDFS + 'comment'), null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
 
-    result.push({ name, isBoolean, range, uri: subjUri, isDefinedBy: isDefinedBy ?? undefined, comment });
+    result.push({ name, isBoolean, range, uri: subjUri, isDefinedBy: isDefinedBy ?? undefined, comment, ...(isDeprecated(store, subj) ? { deprecated: true } : {}) });
   }
   return result;
 }
@@ -1120,7 +1126,8 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       domains,
       hasGlobalDomain,
       uri: subjUri,
-      isDefinedBy: isDefinedBy ?? undefined
+      isDefinedBy: isDefinedBy ?? undefined,
+      ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }
   return result.sort((a, b) => a.name.localeCompare(b.name));

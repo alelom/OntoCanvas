@@ -136,17 +136,8 @@ export function getDisplayFileUrl(ontologyUrl: string): string | null {
     const lastSlashIndex = cleanPath.lastIndexOf('/');
     const fileName = lastSlashIndex >= 0 ? cleanPath.slice(lastSlashIndex + 1) : cleanPath;
     
-    // Find the last dot to determine the extension
-    const lastDotIndex = fileName.lastIndexOf('.');
-    
-    let baseName: string;
-    if (lastDotIndex > 0) {
-      // Has an extension, remove it (works for both .html and .ttl)
-      baseName = fileName.slice(0, lastDotIndex);
-    } else {
-      // No extension, use the full filename
-      baseName = fileName;
-    }
+    // Remove an ontology file extension only: the dots of a version IRI's `4.0.0` are not one (#136).
+    const baseName = fileName.replace(ONTOLOGY_EXTENSION, '');
     
     // Construct the display file path
     const displayFileName = `${baseName}.display.json`;
@@ -167,10 +158,17 @@ export function getDisplayFileUrl(ontologyUrl: string): string | null {
  * Returns an array with the primary URL first, followed by alternatives.
  * For .html URLs, also includes the .ttl-based display file URL.
  * 
+ * When the ontology was served from another address (a version IRI redirecting to the release's file, #136), the
+ * addresses next to that file come first.
+ *
  * @param ontologyUrl - The ontology URL
+ * @param servedFrom - Where the ontology was finally served from, after redirects
  * @returns Array of display file URLs to try (primary first, then alternatives)
  */
-export function getAllDisplayFileUrls(ontologyUrl: string): string[] {
+export function getAllDisplayFileUrls(ontologyUrl: string, servedFrom?: string | null): string[] {
+  if (servedFrom && servedFrom !== ontologyUrl) {
+    return [...new Set([...getAllDisplayFileUrls(servedFrom), ...getAllDisplayFileUrls(ontologyUrl)])];
+  }
   const urls: string[] = [];
   
   // Primary URL (based on current extension)
