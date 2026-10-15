@@ -1,3 +1,15 @@
+# [1.32.0](https://github.com/alelom/OntoCanvas/compare/v1.31.0...v1.32.0) (2026-10-15)
+
+
+### Bug Fixes
+
+* **#142:** the cursor over the image no longer pauses the rotation; only ‹ › stop it ([fd281bb](https://github.com/alelom/OntoCanvas/commit/fd281bbf8844970b9345285dcbb2feccfbff41a5)), closes [#142](https://github.com/alelom/OntoCanvas/issues/142)
+
+
+### Features
+
+* **#142:** show a term's ADIRO example images in its hover tooltip, rotating ([d57d26b](https://github.com/alelom/OntoCanvas/commit/d57d26b311f3c605295be054df08209a5656cd80)), closes [#142](https://github.com/alelom/OntoCanvas/issues/142)
+
 # [1.31.0](https://github.com/alelom/OntoCanvas/compare/v1.30.0...v1.31.0) (2026-10-15)
 
 
