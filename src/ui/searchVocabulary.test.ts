@@ -67,3 +67,20 @@ describe('classes defined elsewhere with a local id (as in FOAF)', () => {
     expect(sets.directNodeMatchIds).toEqual(new Set(['Agent']));
   });
 });
+
+/** ADIRO declares img: for its example-image folder, under the ontology's own address (#147). */
+describe('search vocabulary: a local class is not suggested with a sub-folder prefix (#147)', () => {
+  it('suggests "Layout", not "img:Layout"', () => {
+    const vocab = buildSearchVocabulary({
+      nodes: [{ id: 'Layout', label: 'Layout', labellableRoot: null, uri: 'https://w3id.org/adiro/aec_drawing_metadata#Layout' }],
+      edgeTypes: [],
+      objectProperties: [],
+      dataProperties: [],
+      externalOntologyReferences: [
+        { url: 'https://w3id.org/adiro/aec_drawing_metadata/exampleImage/', usePrefix: true, prefix: 'img' },
+      ],
+      mainOntologyBase: 'https://w3id.org/adiro/aec_drawing_metadata#',
+    });
+    expect(buildSearchSuggestions('Layout', vocab.sources).map((s) => s.display)).toEqual(['Layout']);
+  });
+});
