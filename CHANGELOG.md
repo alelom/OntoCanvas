@@ -1,3 +1,19 @@
+# [1.31.0](https://github.com/alelom/OntoCanvas/compare/v1.30.0...v1.31.0) (2026-10-15)
+
+
+### Bug Fixes
+
+* **#136:** a version opened by its version IRI loads its display config, or the latest version's ([cca5fb4](https://github.com/alelom/OntoCanvas/commit/cca5fb4e30c1ebef6703de6e599b22935071c0a7)), closes [#136](https://github.com/alelom/OntoCanvas/issues/136)
+* **#137, #141:** "Not used" means used nowhere; menu and class dialog group alike; names bold and prefixed ([161f5e5](https://github.com/alelom/OntoCanvas/commit/161f5e53ecbe5ab936d201fcf6a4327b9645cc2a)), closes [#137](https://github.com/alelom/OntoCanvas/issues/137) [#141](https://github.com/alelom/OntoCanvas/issues/141)
+* **#137, #141:** property groups always start collapsed ([60cbf54](https://github.com/alelom/OntoCanvas/commit/60cbf54225f1385707ed23a2e3ad8f558243cb41)), closes [#137](https://github.com/alelom/OntoCanvas/issues/137) [#141](https://github.com/alelom/OntoCanvas/issues/141)
+
+
+### Features
+
+* **#137, #141:** deprecated properties grouped under "Deprecated", and never style classes ([d78fc87](https://github.com/alelom/OntoCanvas/commit/d78fc87a0ee1312ecb996de44b9cec78876b0037)), closes [#137](https://github.com/alelom/OntoCanvas/issues/137) [#141](https://github.com/alelom/OntoCanvas/issues/141)
+* **#137:** property menus list the ontology's own properties first, the others in collapsed groups ([c9940f9](https://github.com/alelom/OntoCanvas/commit/c9940f90d2747d80b59fc09b2f95bbed849516c4)), closes [#137](https://github.com/alelom/OntoCanvas/issues/137)
+* **#139, #140, #141:** annotation usages; text values settable; grouped annotation list in the class dialogs ([0467718](https://github.com/alelom/OntoCanvas/commit/04677186dc4e572c4d037b570b905c1d0297bf11)), closes [#139](https://github.com/alelom/OntoCanvas/issues/139) [#140](https://github.com/alelom/OntoCanvas/issues/140) [#141](https://github.com/alelom/OntoCanvas/issues/141) [#140](https://github.com/alelom/OntoCanvas/issues/140) [#137](https://github.com/alelom/OntoCanvas/issues/137)
+
 # [1.30.0](https://github.com/alelom/OntoCanvas/compare/v1.29.2...v1.30.0) (2026-10-13)
 
 
