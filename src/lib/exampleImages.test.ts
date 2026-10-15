@@ -142,3 +142,67 @@ describe('the parser carries example images on classes, relationships and data p
     expect(objectProperties.find((p) => p.name === 'hasWall')?.exampleImages).toBeUndefined();
   });
 });
+
+const STANDARD = `
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix schema: <https://schema.org/> .
+@prefix schemahttp: <http://schema.org/> .
+`;
+
+describe('standard image properties, read whenever used (#143)', () => {
+  it('foaf:depiction, with no declaration or import', () => {
+    const store = storeOf(`${PREFIXES} ${STANDARD}
+      :Gear a owl:Class ; foaf:depiction <https://example.org/gear_02.png> , <https://example.org/gear_01.png> .`);
+    expect(exampleImagesOf(store, 'https://example.org/other#Gear')).toEqual([
+      'https://example.org/gear_01.png',
+      'https://example.org/gear_02.png',
+    ]);
+  });
+
+  it('schema:image, https and http, as a URL or as a node with schema:contentUrl', () => {
+    const store = storeOf(`${PREFIXES} ${STANDARD}
+      :Bolt a owl:Class ; schema:image <https://example.org/bolt.png> .
+      :Nut a owl:Class ; schemahttp:image [ a schema:ImageObject ; schema:contentUrl <https://example.org/nut.png> ] .
+      :Pin a owl:Class ; schema:image "https://example.org/pin.png" .`);
+    expect(exampleImagesOf(store, 'https://example.org/other#Bolt')).toEqual(['https://example.org/bolt.png']);
+    expect(exampleImagesOf(store, 'https://example.org/other#Nut')).toEqual(['https://example.org/nut.png']);
+    expect(exampleImagesOf(store, 'https://example.org/other#Pin')).toEqual(['https://example.org/pin.png']);
+  });
+
+  it('a property declared a subproperty of an image property, also transitively', () => {
+    const store = storeOf(`${PREFIXES} ${STANDARD}
+      :photo a owl:AnnotationProperty ; rdfs:subPropertyOf foaf:depiction .
+      :closeUp a owl:AnnotationProperty ; rdfs:subPropertyOf :photo .
+      :Washer a owl:Class ; :photo <https://example.org/washer.png> ; :closeUp <https://example.org/washer_close.png> .`);
+    expect(exampleImagesOf(store, 'https://example.org/other#Washer').sort()).toEqual([
+      'https://example.org/washer.png',
+      'https://example.org/washer_close.png',
+    ]);
+  });
+
+  it('a subproperty of ADIRO exampleImage counts, and ADIRO linked to foaf:depiction needs nothing more', () => {
+    const store = storeOf(`${PREFIXES} ${STANDARD}
+      adiro:exampleImage rdfs:subPropertyOf foaf:depiction .
+      :Beam a owl:Class ; adiro:exampleImage img:Beam_01.png .`);
+    expect(exampleImagesOf(store, 'https://example.org/other#Beam')).toHaveLength(1);
+  });
+
+  it('one list for a term with several: ADIRO first, then foaf:depiction, then schema:image, without duplicates', () => {
+    const store = storeOf(`${PREFIXES} ${STANDARD} ${DECLARED}
+      :Spring a owl:Class ;
+        schema:image <https://example.org/a_schema.png> ;
+        foaf:depiction <https://example.org/b_foaf.png> , <https://example.org/a_schema.png> ;
+        adiro:exampleImage <https://example.org/z_adiro.png> .`);
+    expect(exampleImagesOf(store, 'https://example.org/other#Spring')).toEqual([
+      'https://example.org/z_adiro.png',
+      'https://example.org/a_schema.png',
+      'https://example.org/b_foaf.png',
+    ]);
+  });
+
+  it('other image-like properties are not read', () => {
+    const store = storeOf(`${PREFIXES} ${STANDARD}
+      :Cog a owl:Class ; foaf:img <https://example.org/cog.png> ; foaf:thumbnail <https://example.org/cog_t.png> .`);
+    expect(exampleImagesOf(store, 'https://example.org/other#Cog')).toEqual([]);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/parser';
@@ -110,5 +110,27 @@ describe('examples/display/example-images.ttl (#142)', () => {
       }
     });
     expect(missing).toEqual(['Gizmo_01.png']);
+  });
+});
+
+describe('examples/display/image-properties.ttl (#143)', () => {
+  const OPENED_FROM = 'https://example.org/repo/examples/display/image-properties.ttl';
+  const IMAGES = 'https://example.org/repo/examples/display/images/';
+  const files = (images: string[] | undefined) => (images ?? []).map((u) => u.replace(IMAGES, ''));
+
+  it('reads foaf:depiction, schema:image (URL or image node) and a subproperty, without declarations', async () => {
+    const content = readFileSync(join(EXAMPLES, 'display/image-properties.ttl'), 'utf-8');
+    const { graphData, objectProperties } = (await loadOntologyFromContent(content, OPENED_FROM)).parseResult;
+    const images = (id: string) => files(graphData.nodes.find((n) => n.id === id)?.exampleImages);
+    expect(images('Gear')).toEqual(['Gear_depiction_01.png', 'Gear_depiction_02.png']);
+    expect(images('Bolt')).toEqual(['Bolt_schema.png']);
+    expect(images('Nut')).toEqual(['Nut_schema_object.png']);
+    expect(images('Washer')).toEqual(['Washer_photo.png']);
+    expect(images('Spring')).toEqual(['Spring_depiction.png', 'Spring_schema.png']);
+    expect(images('Cog')).toEqual([]);
+    expect(files(objectProperties.find((p) => p.name === 'meshesWith')?.exampleImages)).toEqual(['meshesWith_depiction.png']);
+    // Every image it names exists next to it.
+    const named = [...graphData.nodes, ...objectProperties].flatMap((t) => files(t.exampleImages));
+    expect(named.filter((f) => !existsSync(join(EXAMPLES, 'display/images', f)))).toEqual([]);
   });
 });

@@ -16,7 +16,7 @@ import {
   getDataPropertyRestrictionsForClass,
 } from '../parser';
 import { setAnnotationValuesForClass } from '../lib/annotationValues';
-import { ADIRO_EXAMPLE_IMAGE, exampleImagesOf } from '../lib/exampleImages';
+import { exampleImagesOf } from '../lib/exampleImages';
 import type { GraphNode, DataPropertyRestriction, AnnotationPropertyInfo } from '../types';
 
 export const ADD_NODE_DUPLICATE_MESSAGE = 'A node with the same identifier already exists.';
@@ -128,8 +128,8 @@ export function applyNodeFormToStore(
       const propUri = ap.uri ?? baseIri.replace(/#?$/, '#') + ap.name;
       setAnnotationValuesForClass(store, nodeId, propUri, values);
       node.annotations[ap.name] = values[0] ?? null;
-      if (propUri === ADIRO_EXAMPLE_IMAGE && node.uri) {
-        // The tooltip's images (#142), read back by the same rule as on load.
+      if (node.uri) {
+        // The tooltip's images (#142, #143), read back by the same rule as on load: this property may be one of them.
         const images = exampleImagesOf(store, node.uri);
         node.exampleImages = images.length > 0 ? images : undefined;
       }

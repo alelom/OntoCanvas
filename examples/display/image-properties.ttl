@@ -1,0 +1,64 @@
+@prefix : <http://example.org/examples/image-properties#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+
+# Images in the hover tooltip from standard properties (issue #143). Open this file by URL: the images are relative
+# IRIs and load from the images folder next to it. Each synthetic image names its term and the property linking it.
+# foaf:depiction and schema:image are read whenever used: they are neither declared nor imported here. Hover:
+#   - Gear: 2 images from foaf:depiction, rotating, "‹ 1/2 ›".
+#   - Bolt: 1 image from schema:image, as a URL.
+#   - Nut: 1 image from schema:image, as an image node with schema:contentUrl.
+#   - Washer: 1 image from :photo, this ontology's own property, declared a subproperty of foaf:depiction.
+#   - Spring: one carousel with both, foaf:depiction first, then schema:image, "‹ 1/2 ›".
+#   - the relationship meshesWith: 1 image from foaf:depiction.
+#   - Cog: no image. foaf:img (meant for people) is not read.
+
+<http://example.org/examples/image-properties> rdf:type owl:Ontology ;
+    rdfs:label "Image properties" .
+
+:photo rdf:type owl:AnnotationProperty ;
+    rdfs:label "photo" ;
+    rdfs:comment "A photograph of the part." ;
+    rdfs:subPropertyOf foaf:depiction .
+
+:Gear rdf:type owl:Class ;
+    rdfs:label "Gear" ;
+    rdfs:comment "Two images, from foaf:depiction." ;
+    foaf:depiction <images/Gear_depiction_02.png> , <images/Gear_depiction_01.png> .
+
+:Bolt rdf:type owl:Class ;
+    rdfs:label "Bolt" ;
+    rdfs:comment "One image, from schema:image as a URL." ;
+    schema:image <images/Bolt_schema.png> .
+
+:Nut rdf:type owl:Class ;
+    rdfs:label "Nut" ;
+    rdfs:comment "One image, from schema:image as an image node." ;
+    schema:image [ rdf:type schema:ImageObject ;
+                   schema:contentUrl <images/Nut_schema_object.png> ] .
+
+:Washer rdf:type owl:Class ;
+    rdfs:label "Washer" ;
+    rdfs:comment "One image, from :photo, a subproperty of foaf:depiction." ;
+    :photo <images/Washer_photo.png> .
+
+:Spring rdf:type owl:Class ;
+    rdfs:label "Spring" ;
+    rdfs:comment "Images from foaf:depiction and schema:image, in one carousel." ;
+    schema:image <images/Spring_schema.png> ;
+    foaf:depiction <images/Spring_depiction.png> .
+
+:Cog rdf:type owl:Class ;
+    rdfs:label "Cog" ;
+    rdfs:comment "No image shown: foaf:img is meant for people." ;
+    foaf:img <images/Cog.png> .
+
+:meshesWith rdf:type owl:ObjectProperty ;
+    rdfs:label "meshes with" ;
+    rdfs:comment "A gear meshes with another gear." ;
+    rdfs:domain :Gear ;
+    rdfs:range :Spring ;
+    foaf:depiction <images/meshesWith_depiction.png> .
