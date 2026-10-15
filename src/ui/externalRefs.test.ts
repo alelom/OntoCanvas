@@ -375,6 +375,25 @@ describe('externalRefs', () => {
     });
   });
   
+  describe('getNodePrefix: a prefix declared for a folder under the ontology is not the ontology (#147)', () => {
+    // ADIRO declares img: for its example-image folder, under the ontology's own address.
+    const refs: ExternalOntologyReference[] = [
+      { url: 'https://w3id.org/adiro/aec_drawing_metadata/exampleImage/', usePrefix: true, prefix: 'img' },
+      { url: 'https://w3id.org/adiro/aec_geometry/1.0.0', usePrefix: true, prefix: 'geom' },
+    ];
+    const local: GraphNode = { labellableRoot: null, id: 'Layout', label: 'Layout', uri: 'https://w3id.org/adiro/aec_drawing_metadata#Layout' };
+
+    it('gives a class of the ontology itself no prefix', () => {
+      expect(getNodePrefix(local, refs)).toBeNull();
+      expect(formatNodeLabelWithPrefix(local, refs)).toBe('Layout');
+    });
+
+    it('still matches an import written as a version IRI under the ontology address', () => {
+      const geometry: GraphNode = { labellableRoot: null, id: 'Point', label: 'Point', uri: 'https://w3id.org/adiro/aec_geometry#Point' };
+      expect(getNodePrefix(geometry, refs)).toBe('geom');
+    });
+  });
+
   describe('getNodePrefix', () => {
     it('should return prefix for node from external ontology', () => {
       const node: GraphNode = {

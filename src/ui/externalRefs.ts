@@ -248,6 +248,12 @@ export function getNodeOntologyUrl(node: GraphNode): string | null {
 /**
  * Get prefix for a node if it's from an external ontology
  */
+/** True when `url` is a version IRI of the ontology `ontologyUrl`: one more path segment that is a version (1.0.0, v2). */
+function isVersionOf(url: string, ontologyUrl: string): boolean {
+  if (!url.startsWith(ontologyUrl + '/')) return false;
+  return /^v?\d+(\.\d+)*$/.test(url.slice(ontologyUrl.length + 1));
+}
+
 export function getNodePrefix(
   node: GraphNode,
   externalOntologyReferences: ExternalOntologyReference[]
@@ -277,8 +283,9 @@ export function getNodePrefix(
     if (nodeUrlNormalized.startsWith(refUrl + '/') || nodeUrlNormalized.startsWith(refUrl + '#')) {
       return ref?.usePrefix && ref.prefix ? ref.prefix : null;
     }
-    // Check if refUrl starts with nodeUrl (nodeUrl is a prefix of ref - less common)
-    if (refUrl.startsWith(nodeUrlNormalized + '/') || refUrl.startsWith(nodeUrlNormalized + '#')) {
+    // The reference is the node's ontology imported by a version IRI (…/onto/1.0.0). Any other address under the
+    // ontology's (e.g. ADIRO's img: image folder, …/aec_drawing_metadata/exampleImage/) is not that ontology (#147).
+    if (isVersionOf(refUrlNoSlash, nodeUrlNoSlash)) {
       return ref?.usePrefix && ref.prefix ? ref.prefix : null;
     }
   }
