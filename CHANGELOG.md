@@ -1,3 +1,10 @@
+# [1.33.0](https://github.com/alelom/OntoCanvas/compare/v1.32.0...v1.33.0) (2026-10-15)
+
+
+### Features
+
+* **#143:** images in the hover tooltip from foaf:depiction, schema:image and their subproperties ([22abfdf](https://github.com/alelom/OntoCanvas/commit/22abfdfb9fdf2cf21ac525ab0958d769120a3c37)), closes [#143](https://github.com/alelom/OntoCanvas/issues/143)
+
 # [1.32.0](https://github.com/alelom/OntoCanvas/compare/v1.31.0...v1.32.0) (2026-10-15)
 
 
