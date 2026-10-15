@@ -1,0 +1,66 @@
+@prefix : <http://example.org/examples/example-images#> .
+@prefix adiro: <https://w3id.org/adiro/aec_drawing_metadata#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Example images in the hover tooltip (issue #142). Open this file by URL: the images are written as relative IRIs and
+# load from the exampleImage folder next to it. Each synthetic image shows its number and its term. Hover:
+#   - Widget: its comment, then 3 images rotating every 2 s with a fade, and "‹ 1/3 ›" under them. They are declared
+#     out of order (03, 01, 02) and shown in order. Only clicking ‹ or › stops the rotation (the cursor over the
+#     image does not); clicking the image opens it in a new tab. Image 3 is portrait: the box keeps its size.
+#   - Gadget: its comment and 1 image, no control.
+#   - Sprocket: no comment, 2 images.
+#   - Gizmo: its comment, and "Image not available" with the address (the file does not exist).
+#   - Plain: a comment only, the usual text tooltip that follows the cursor.
+#   - the relationship hasPart (line or label): its comment and 2 images.
+#   - the data property weight: its comment and 1 image.
+# The images come from ADIRO's exampleImage annotation property (https://w3id.org/adiro/aec_drawing_metadata#exampleImage),
+# which OntoCanvas reads only when the ontology declares it, as here, or imports the ADIRO module that defines it
+# (owl:imports <https://w3id.org/adiro/aec_drawing_metadata>). It is declared here so the example needs no network.
+
+<http://example.org/examples/example-images> rdf:type owl:Ontology ;
+    rdfs:label "Example images" .
+
+adiro:exampleImage rdf:type owl:AnnotationProperty ;
+    rdfs:label "example image"@en ;
+    rdfs:range xsd:anyURI ;
+    rdfs:comment "Links a class or relationship to an image that shows it."@en .
+
+:Widget rdf:type owl:Class ;
+    rdfs:label "Widget" ;
+    rdfs:comment "A part with three example images." ;
+    adiro:exampleImage <exampleImage/Widget_03.png> , <exampleImage/Widget_01.png> , <exampleImage/Widget_02.png> .
+
+:Gadget rdf:type owl:Class ;
+    rdfs:label "Gadget" ;
+    rdfs:comment "A part with one example image." ;
+    adiro:exampleImage <exampleImage/Gadget_01.png> .
+
+:Sprocket rdf:type owl:Class ;
+    rdfs:label "Sprocket" ;
+    adiro:exampleImage <exampleImage/Sprocket_01.png> , <exampleImage/Sprocket_02.png> .
+
+:Gizmo rdf:type owl:Class ;
+    rdfs:label "Gizmo" ;
+    rdfs:comment "A part whose example image is missing." ;
+    adiro:exampleImage <exampleImage/Gizmo_01.png> .
+
+:Plain rdf:type owl:Class ;
+    rdfs:label "Plain" ;
+    rdfs:comment "A part with no example image." .
+
+:hasPart rdf:type owl:ObjectProperty ;
+    rdfs:label "has part" ;
+    rdfs:comment "A widget has gadgets as parts." ;
+    rdfs:domain :Widget ;
+    rdfs:range :Gadget ;
+    adiro:exampleImage <exampleImage/hasPart_01.png> , <exampleImage/hasPart_02.png> .
+
+:weight rdf:type owl:DatatypeProperty ;
+    rdfs:label "weight" ;
+    rdfs:comment "The weight of a widget, in kilograms." ;
+    rdfs:domain :Widget ;
+    rdfs:range xsd:decimal ;
+    adiro:exampleImage <exampleImage/weight_01.png> .

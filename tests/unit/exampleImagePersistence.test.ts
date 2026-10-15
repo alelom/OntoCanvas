@@ -146,7 +146,8 @@ describe('Example Image Persistence', () => {
     // Verify the images are in the store
     const uris = getExampleImageUrisForClass(store, nodeId, baseIri);
     expect(uris).toEqual([exampleImageUri1, exampleImageUri2]);
-    expect(myClassNode?.exampleImages).toEqual([exampleImageUri1, exampleImageUri2]);
+    // Saved, but not shown in the tooltip: only ADIRO's exampleImage is (#142).
+    expect(myClassNode?.exampleImages).toBeUndefined();
 
     // Serialize to TTL and verify persistence
     const serializedTtl = await storeToTurtle(store);
