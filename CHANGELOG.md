@@ -1,3 +1,10 @@
+## [1.33.1](https://github.com/alelom/OntoCanvas/compare/v1.33.0...v1.33.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **#147:** a local class no longer gets the prefix of a folder under its ontology (img:) ([33638d5](https://github.com/alelom/OntoCanvas/commit/33638d5e80169264caa7ca6c1094f3ad972e7901))
+
 # [1.33.0](https://github.com/alelom/OntoCanvas/compare/v1.32.0...v1.33.0) (2026-10-15)
 
 
