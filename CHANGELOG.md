@@ -1,3 +1,10 @@
+## [1.33.2](https://github.com/alelom/OntoCanvas/compare/v1.33.1...v1.33.2) (2026-10-16)
+
+
+### Bug Fixes
+
+* **#156:** Reset display config and a layout change also forget imported nodes' saved positions ([11641b7](https://github.com/alelom/OntoCanvas/commit/11641b78a32422dfc38fcad49071331c8d8f6b48)), closes [#156](https://github.com/alelom/OntoCanvas/issues/156)
+
 ## [1.33.1](https://github.com/alelom/OntoCanvas/compare/v1.33.0...v1.33.1) (2026-10-15)
 
 
