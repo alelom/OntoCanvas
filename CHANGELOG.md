@@ -1,3 +1,10 @@
+## [1.33.3](https://github.com/alelom/OntoCanvas/compare/v1.33.2...v1.33.3) (2026-10-16)
+
+
+### Bug Fixes
+
+* **#150:** Hierarchical DAG places each tier at the closest positions, not pushed right and shifted ([0b2f209](https://github.com/alelom/OntoCanvas/commit/0b2f20953b65d6b826444725a62b5f75f0e736c5)), closes [#150](https://github.com/alelom/OntoCanvas/issues/150)
+
 ## [1.33.2](https://github.com/alelom/OntoCanvas/compare/v1.33.1...v1.33.2) (2026-10-16)
 
 
