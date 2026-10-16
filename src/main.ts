@@ -7487,6 +7487,18 @@ function revealNodeInView(nodeId: string): void {
   });
 }
 
+/**
+ * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
+ * loaded config's, from which imported nodes take theirs (#156).
+ */
+function forgetNodePositions(): void {
+  rawData.nodes.forEach((node) => {
+    delete node.x;
+    delete node.y;
+  });
+  loadedNodePositions = null;
+}
+
 function applyFilter(preserveView = false): void {
   // Don't return early - we need to initialize the network even with no nodes
   // so that Add node/Add edge buttons and double-click work
@@ -7513,10 +7525,7 @@ function applyFilter(preserveView = false): void {
       if (isDebugMode()) {
         debugLog(`[DISPLAY CONFIG] Layout mode changed from ${lastLayoutMode} to ${layoutMode}, clearing node positions`);
       }
-      rawData.nodes.forEach((node) => {
-        delete node.x;
-        delete node.y;
-      });
+      forgetNodePositions();
     }
   }
   lastLayoutMode = layoutMode;
@@ -8854,11 +8863,7 @@ function setupEventListeners(): void {
   document.getElementById('resetDisplayConfig')?.addEventListener('click', async () => {
     if (rawData.nodes.length === 0) return;
     
-    // Clear all node positions
-    rawData.nodes.forEach((node) => {
-      delete node.x;
-      delete node.y;
-    });
+    forgetNodePositions();
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
