@@ -1,3 +1,16 @@
+# [1.35.0](https://github.com/alelom/OntoCanvas/compare/v1.34.0...v1.35.0) (2026-10-16)
+
+
+### Bug Fixes
+
+* **#159:** the browser's copy of the display config keeps positions only once the user arranged them ([045930a](https://github.com/alelom/OntoCanvas/commit/045930aefd2808c1cfb0442f1ca718efc2bb4a7b)), closes [#159](https://github.com/alelom/OntoCanvas/issues/159) [#152](https://github.com/alelom/OntoCanvas/issues/152)
+
+
+### Features
+
+* **#159:** stack many leaf children in a block under their parent, in every tiered layout ([599ea2f](https://github.com/alelom/OntoCanvas/commit/599ea2f8007fd454a8761efb025ef53495a21d29)), closes [#159](https://github.com/alelom/OntoCanvas/issues/159)
+* **#160:** rank a class defined by owl:equivalentClass below the named classes of its definition ([b426d31](https://github.com/alelom/OntoCanvas/commit/b426d311d3626e092fd9b05bcdb2e07b7eda204d)), closes [#160](https://github.com/alelom/OntoCanvas/issues/160)
+
 # [1.34.0](https://github.com/alelom/OntoCanvas/compare/v1.33.3...v1.34.0) (2026-10-16)
 
 
