@@ -129,6 +129,7 @@ import {
   SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
 import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
+import { placeUnsavedNodes } from './layouts/placeUnsaved';
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
@@ -345,6 +346,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
   // The layout made before the config arrived used the old tiers; the config's own positions are applied below.
   if (setHierarchyTypes(config.hierarchyRelationships)) forgetNodePositions();
+  clearPositionsBeforeLayout();
   loadedNodePositions = config.nodePositions ?? null;
   const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
@@ -403,6 +405,14 @@ function applyDisplayConfig(config: DisplayConfig): void {
   let matchedNodes = 0;
   let unmatchedNodes = 0;
   const nodePositions = config.nodePositions || {};
+  // A node the config doesn't place drops the position laid out before the config arrived, so it goes near its
+  // placed neighbours (#152).
+  if (Object.keys(nodePositions).length > 0) {
+    rawData.nodes.forEach((n) => {
+      delete n.x;
+      delete n.y;
+    });
+  }
   
   Object.entries(nodePositions).forEach(([id, pos]) => {
     // First try exact ID match
@@ -532,6 +542,8 @@ let displayConfigSaveTimer: number | null = null;
 let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }> | null = null;
 /** Node positions from display config (used when expanding external refs so external node positions are restored). */
 let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
+/** The positions shown before a layout change or a reset dropped them, until restored (#152). */
+let positionsBeforeLayout: Record<string, { x: number; y: number }> | null = null;
 /** Track the last layout mode to detect when it changes */
 let lastLayoutMode: string | null = null;
 /** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
@@ -3213,8 +3225,15 @@ function buildNetworkData(
             { minPadding: 8 }
           );
     
-    // Only use computed positions for nodes that don't already have positions
-    Object.entries(resolvedPositions).forEach(([id, pos]) => {
+    // Nodes without a position go near their placed neighbours, at the offset the layout gives them (#152).
+    const fallbackSize = { width: SPACING * 0.45, height: SPACING * 0.3 };
+    const unsavedPositions = placeUnsavedNodes(
+      nodePositions,
+      resolvedPositions,
+      filteredEdges,
+      (id) => nodeDimensions.get(id) ?? fallbackSize
+    );
+    Object.entries(unsavedPositions).forEach(([id, pos]) => {
       if (nodesToLayout.has(id) && !nodePositions[id]) {
         nodePositions[id] = pos;
         // Also update data (rawData or expanded) to keep it in sync
@@ -6315,6 +6334,7 @@ function renderApp(): void {
             <option value="hierarchical-force-downward">Hierarchical force-downward</option>
             <option value="force">Force-directed</option>
           </select>
+          <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; cursor: pointer; padding: 2px 8px; font-size: 12px; flex: none;">↶ Restore positions</button>
           <button type="button" id="layoutModeHintToggle" title="About the layout modes" aria-label="About the layout modes" style="cursor: pointer; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid #b0b8c0; background: #f4f6f8; color: #2c7be5; font-size: 12px; font-weight: bold; line-height: 1; flex: none;">i</button>
           <div id="layoutModeHintPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 10px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; width: 340px; max-height: 60vh; overflow-y: auto;"></div>
         </div>
@@ -7236,6 +7256,7 @@ async function loadTtlAndRender(
     }
 
     rawData = graphData;
+    clearPositionsBeforeLayout();
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
@@ -7525,11 +7546,50 @@ function setHierarchyTypes(types: string[] | undefined): boolean {
  * loaded config's, from which imported nodes take theirs (#156).
  */
 function forgetNodePositions(): void {
+  // What was shown before, for "Restore positions" (#152); the first copy is kept while trying several layouts.
+  if (!positionsBeforeLayout) {
+    const shown: Record<string, { x: number; y: number }> = network ? network.getPositions() : {};
+    rawData.nodes.forEach((n) => {
+      if (!shown[n.id] && n.x != null && n.y != null) shown[n.id] = { x: n.x, y: n.y };
+    });
+    if (Object.keys(shown).length > 0) positionsBeforeLayout = shown;
+  }
   rawData.nodes.forEach((node) => {
     delete node.x;
     delete node.y;
   });
   loadedNodePositions = null;
+  updateRestorePositionsButton();
+}
+
+/** Puts every node back where it was before the positions were dropped (#152). */
+function restoreNodePositions(): void {
+  const before = positionsBeforeLayout;
+  if (!before) return;
+  rawData.nodes.forEach((node) => {
+    if (before[node.id]) {
+      node.x = before[node.id].x;
+      node.y = before[node.id].y;
+    } else {
+      delete node.x;
+      delete node.y;
+    }
+  });
+  loadedNodePositions = { ...before };
+  positionsBeforeLayout = null;
+  updateRestorePositionsButton();
+  applyFilter(true);
+}
+
+/** Forgets the positions "Restore positions" would bring back: another ontology or config is shown. */
+function clearPositionsBeforeLayout(): void {
+  positionsBeforeLayout = null;
+  updateRestorePositionsButton();
+}
+
+function updateRestorePositionsButton(): void {
+  const btn = document.getElementById('restorePositions');
+  if (btn) btn.style.display = positionsBeforeLayout ? '' : 'none';
 }
 
 function applyFilter(preserveView = false): void {
@@ -8348,6 +8408,7 @@ function setupEventListeners(): void {
   });
 
   document.getElementById('layoutMode')?.addEventListener('change', () => applyFilter());
+  document.getElementById('restorePositions')?.addEventListener('click', restoreNodePositions);
 
   const externalRefsCallbacks: ExternalRefsModalCallbacks = {
     onUpdate: () => {
