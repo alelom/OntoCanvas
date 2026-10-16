@@ -130,6 +130,8 @@ import {
 } from './graph';
 import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
 import { placeUnsavedNodes } from './layouts/placeUnsaved';
+import type { LayeredModelOptions } from './layouts/layeredModel';
+import { definitionParents } from './lib/definitionParents';
 import { getAsyncLayoutAlgorithm, DEFAULT_LAYOUT_MODE, type AsyncLayoutAlgorithm } from './layouts';
 import {
   computeSearchSets,
@@ -3156,7 +3158,14 @@ function buildNetworkData(
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
-  const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges, hierarchyTypes);
+  // Classes defined by owl:equivalentClass rank below the named classes of their definition (#160), in the layout
+  // and in the depth that sets font sizes.
+  const definitions = ttlStore ? definitionParents(ttlStore, nodeIds) : [];
+  const layoutOptions = { hierarchyTypes, definitions };
+  const definitionEdges: GraphEdge[] = hierarchyTypes.has('subClassOf')
+    ? definitions.map(({ cls, parent }) => ({ from: cls, to: parent, type: 'subClassOf' }))
+    : [];
+  const { depth, maxDepth } = computeNodeDepths(nodeIds, [...filteredEdges, ...definitionEdges], hierarchyTypes);
   // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
   // as they are drawn (roots follow Max, the deepest nodes Min).
   const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
@@ -3216,7 +3225,7 @@ function buildNetworkData(
       filteredEdges,
       SPACING,
       nodeDimensions,
-      { hierarchyTypes }
+      layoutOptions
     );
     // The layered / relationship-aware modes produce an already-overlap-free (or
     // force-managed) layout; running resolveOverlaps would re-separate interleaved root
@@ -3242,7 +3251,7 @@ function buildNetworkData(
       Object.entries(unsavedPositions).forEach(([id, pos]) => {
         if (nodesToLayout.has(id)) nodePositions[id] = pos;
       });
-      runAsyncLayout(asyncLayout, layoutMode, nodeIds, filteredEdges, nodeDimensions, nodesToLayout, placedBefore, sizeOf, unsavedPositions);
+      runAsyncLayout(asyncLayout, layoutMode, nodeIds, filteredEdges, nodeDimensions, layoutOptions, nodesToLayout, placedBefore, sizeOf, unsavedPositions);
     }
     Object.entries(asyncLayout ? {} : unsavedPositions).forEach(([id, pos]) => {
       if (nodesToLayout.has(id) && !nodePositions[id]) {
@@ -7587,6 +7596,7 @@ function runAsyncLayout(
   nodeIds: Set<string>,
   edges: GraphEdge[],
   nodeDimensions: Map<string, { width: number; height: number }>,
+  layoutOptions: LayeredModelOptions,
   toPlace: Set<string>,
   placedBefore: Record<string, { x: number; y: number }>,
   sizeOf: (id: string) => { width: number; height: number },
@@ -7610,7 +7620,7 @@ function runAsyncLayout(
     }
     if (changed) applyFilter(true);
   };
-  layout(nodeIds, edges, SPACING, nodeDimensions, { hierarchyTypes })
+  layout(nodeIds, edges, SPACING, nodeDimensions, layoutOptions)
     .then((computed) => keep(placeUnsavedNodes(placedBefore, computed, edges, sizeOf)))
     .catch((err) => {
       debugError(`[LAYOUT] ${mode} failed; keeping the default layout`, err);
