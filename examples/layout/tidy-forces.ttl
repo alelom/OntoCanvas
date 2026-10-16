@@ -1,0 +1,32 @@
+# "Tidy with forces" (issue #162): a mild force relaxation on top of the chosen layout.
+#
+# Its display config (tidy-forces.display.json, loaded with it) ticks "Tidy with forces" (Display options).
+# Expected: the layout's arrangement is kept, but the long "refers to" line from Archive (under Library) to Map (the
+# far end of Museum's children) is shorter than without tidying: Archive and Map lean toward each other, and no
+# class overlaps another. Untick "Tidy with forces" to compare; "↶ Restore positions" undoes it.
+@prefix : <http://example.org/examples/tidy-forces#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/tidy-forces> rdf:type owl:Ontology ;
+    rdfs:label "Tidy with forces example" .
+
+:refersTo rdf:type owl:ObjectProperty ; rdfs:label "refers to" .
+
+:Collection rdf:type owl:Class ; rdfs:label "Collection" .
+:Library rdf:type owl:Class ; rdfs:label "Library" ; rdfs:subClassOf :Collection .
+:Museum rdf:type owl:Class ; rdfs:label "Museum" ; rdfs:subClassOf :Collection .
+
+:Archive rdf:type owl:Class ; rdfs:label "Archive" ;
+    rdfs:subClassOf :Library , [ rdf:type owl:Restriction ; owl:onProperty :refersTo ; owl:someValuesFrom :Map ] .
+:Book rdf:type owl:Class ; rdfs:label "Book" ; rdfs:subClassOf :Library .
+:Journal rdf:type owl:Class ; rdfs:label "Journal" ; rdfs:subClassOf :Library .
+:Manuscript rdf:type owl:Class ; rdfs:label "Manuscript" ; rdfs:subClassOf :Library .
+:Pamphlet rdf:type owl:Class ; rdfs:label "Pamphlet" ; rdfs:subClassOf :Library .
+
+:Painting rdf:type owl:Class ; rdfs:label "Painting" ; rdfs:subClassOf :Museum .
+:Sculpture rdf:type owl:Class ; rdfs:label "Sculpture" ; rdfs:subClassOf :Museum .
+:Coin rdf:type owl:Class ; rdfs:label "Coin" ; rdfs:subClassOf :Museum .
+:Fossil rdf:type owl:Class ; rdfs:label "Fossil" ; rdfs:subClassOf :Museum .
+:Map rdf:type owl:Class ; rdfs:label "Map" ; rdfs:subClassOf :Museum .

@@ -341,6 +341,7 @@ function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayCo
     displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
     clusterThingDataProperties,
     stackLeaves,
+    tidyForces,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
     hierarchyRelationships: [...hierarchyTypes],
   };
@@ -356,8 +357,9 @@ function applyDisplayConfig(config: DisplayConfig): void {
   // below. Loading a config is not undone with "Restore positions" (#152).
   const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
   const stackChanged = setStackLeaves(config.stackLeaves ?? true);
+  const tidyChanged = setTidyForces(config.tidyForces ?? false);
   const configLayoutMode = resolveLayoutMode(config.layoutMode);
-  if (tiersChanged || stackChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
+  if (tiersChanged || stackChanged || tidyChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
   lastLayoutMode = configLayoutMode;
   clearPositionsBeforeLayout();
   loadedNodePositions = config.nodePositions ?? null;
@@ -573,6 +575,8 @@ let displayExternalReferences = true;
 let clusterThingDataProperties = true;
 /** Stack many leaf children in a block under their parent in the tiered layouts (#159). */
 let stackLeaves = true;
+/** Tidy the computed layout with a mild force relaxation (#162). */
+let tidyForces = false;
 /** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
 let hierarchyTypes = new Set(DEFAULT_HIERARCHY_TYPES);
 /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
@@ -3177,7 +3181,7 @@ function buildNetworkData(
   // Classes defined by owl:equivalentClass rank below the named classes of their definition (#160), in the layout
   // and in the depth that sets font sizes.
   const definitions = ttlStore ? definitionParents(ttlStore, nodeIds) : [];
-  const layoutOptions = { hierarchyTypes, definitions, stackLeaves };
+  const layoutOptions = { hierarchyTypes, definitions, stackLeaves, tidyForces };
   const definitionEdges: GraphEdge[] = hierarchyTypes.has('subClassOf')
     ? definitions.map(({ cls, parent }) => ({ from: cls, to: parent, type: 'subClassOf' }))
     : [];
@@ -6382,6 +6386,10 @@ function renderApp(): void {
           <input type="checkbox" id="stackLeaves" checked />
           Stack many leaves under their parent
         </label>
+        <label id="tidyForcesWrap" title="After the layout, a short, mild force relaxation: classes too close are pushed apart, very long relationships pulled shorter, and every class held near where the layout put it. Changing it lays the graph out again." style="font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="tidyForces" />
+          Tidy with forces
+        </label>
         <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; align-self: flex-start; cursor: pointer; padding: 2px 8px; font-size: 12px;">↶ Restore positions</button>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
@@ -7592,6 +7600,22 @@ function setStackLeaves(value: boolean): boolean {
   return changed;
 }
 
+/** Sets whether the computed layout is tidied with forces (#162), and its checkbox. Returns whether it changed. */
+function setTidyForces(value: boolean): boolean {
+  const changed = value !== tidyForces;
+  tidyForces = value;
+  const el = document.getElementById('tidyForces') as HTMLInputElement | null;
+  if (el) el.checked = value;
+  return changed;
+}
+
+/** Force-directed is already a force simulation: tidying doesn't apply to it. */
+function updateTidyForcesAvailability(): void {
+  const el = document.getElementById('tidyForces') as HTMLInputElement | null;
+  const mode = (document.getElementById('layoutMode') as HTMLSelectElement | null)?.value;
+  if (el) el.disabled = mode === 'force';
+}
+
 /**
  * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
  * loaded config's, from which imported nodes take theirs (#156).
@@ -7706,6 +7730,7 @@ function applyFilter(preserveView = false): void {
 
   const layoutMode = (document.getElementById('layoutMode') as HTMLSelectElement)
     .value;
+  updateTidyForcesAvailability();
   
   // Clear stored node positions ONLY when switching to a different layout mode
   // This ensures the new layout algorithm's positions are used, but preserves
@@ -8549,6 +8574,12 @@ function setupEventListeners(): void {
     if (displayEl) displayEl.checked = displayExternalReferences;
     if (layoutEl) layoutEl.value = externalNodeLayout;
   });
+  document.getElementById('tidyForces')?.addEventListener('change', (e) => {
+    setTidyForces((e.target as HTMLInputElement).checked);
+    forgetNodePositions();
+    applyFilter(true);
+    scheduleDisplayConfigSave();
+  });
   document.getElementById('stackLeaves')?.addEventListener('change', (e) => {
     setStackLeaves((e.target as HTMLInputElement).checked);
     forgetNodePositions();
@@ -9071,6 +9102,7 @@ function setupEventListeners(): void {
     forgetNodePositions();
     setHierarchyTypes(undefined);
     setStackLeaves(true);
+    setTidyForces(false);
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';

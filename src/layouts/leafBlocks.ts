@@ -10,6 +10,8 @@ const GAP_Y = 30;
 export interface LayoutOptions extends LayeredModelOptions {
   /** Stack many leaf children in a block under their parent (#159). */
   stackLeaves?: boolean;
+  /** Tidy the layout with a mild force relaxation (#162). */
+  tidyForces?: boolean;
 }
 
 export interface LeafBlock {
