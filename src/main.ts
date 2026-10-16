@@ -287,7 +287,11 @@ import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
 
-function collectDisplayConfig(): DisplayConfig | null {
+/**
+ * `forBrowser`: the copy kept in the browser between visits, which holds positions only once the user has arranged
+ * the graph; a computed layout is laid out again next time, with the current layout and settings.
+ */
+function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayConfig | null {
   if (rawData.nodes.length === 0) return null;
   const edgeStylesContent = document.getElementById('edgeStylesContent');
   const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -317,7 +321,7 @@ function collectDisplayConfig(): DisplayConfig | null {
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
   return {
     version: DISPLAY_CONFIG_VERSION,
-    nodePositions,
+    nodePositions: options.forBrowser && !positionsArranged ? {} : nodePositions,
     edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences) : {},
     wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 12,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
@@ -422,6 +426,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
       delete n.y;
     });
   }
+  positionsArranged = Object.keys(nodePositions).length > 0;
   
   Object.entries(nodePositions).forEach(([id, pos]) => {
     // First try exact ID match
@@ -553,6 +558,13 @@ let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; c
 let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
 /** The positions shown before a layout change or a reset dropped them, until restored (#152). */
 let positionsBeforeLayout: Record<string, { x: number; y: number }> | null = null;
+/** Whether those positions had been arranged by the user, for the browser's copy of the config. */
+let arrangedBeforeLayout = false;
+/**
+ * Whether the user has arranged the positions shown: dragged a node, or loaded a config with positions. Until then
+ * they are a layout's, and the browser's copy of the config leaves them out.
+ */
+let positionsArranged = false;
 /** Track the last layout mode to detect when it changes */
 let lastLayoutMode: string | null = null;
 /** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
@@ -576,7 +588,7 @@ function scheduleDisplayConfigSave(): void {
 
 /** Run display config save immediately (e.g. after drag end so refresh preserves positions). */
 function flushDisplayConfigSave(): void {
-  const config = collectDisplayConfig();
+  const config = collectDisplayConfig({ forBrowser: true });
   if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
 }
 
@@ -7286,6 +7298,7 @@ async function loadTtlAndRender(
 
     rawData = graphData;
     clearPositionsBeforeLayout();
+    positionsArranged = false;
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
@@ -7590,8 +7603,12 @@ function forgetNodePositions(): void {
     rawData.nodes.forEach((n) => {
       if (!shown[n.id] && n.x != null && n.y != null) shown[n.id] = { x: n.x, y: n.y };
     });
-    if (Object.keys(shown).length > 0) positionsBeforeLayout = shown;
+    if (Object.keys(shown).length > 0) {
+      positionsBeforeLayout = shown;
+      arrangedBeforeLayout = positionsArranged;
+    }
   }
+  positionsArranged = false;
   rawData.nodes.forEach((node) => {
     delete node.x;
     delete node.y;
@@ -7660,6 +7677,7 @@ function restoreNodePositions(): void {
   });
   loadedNodePositions = { ...before };
   positionsBeforeLayout = null;
+  positionsArranged = arrangedBeforeLayout;
   updateRestorePositionsButton();
   applyFilter(true);
 }
@@ -8058,6 +8076,10 @@ function applyFilter(preserveView = false): void {
     
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
+    });
+    // Dragging a node arranges the graph: from then on the browser keeps its positions between visits.
+    network.on('dragEnd', (params?: { nodes?: unknown[] }) => {
+      if (params?.nodes?.length) positionsArranged = true;
     });
     setupDragCoupling(network as unknown as Parameters<typeof setupDragCoupling>[0], {
       onDragEnd: () => {
