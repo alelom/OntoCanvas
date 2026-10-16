@@ -6346,7 +6346,6 @@ function renderApp(): void {
             <option value="elk-layered">Layered (ELK)</option>
             <option value="force">Force-directed</option>
           </select>
-          <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; cursor: pointer; padding: 2px 8px; font-size: 12px; flex: none;">↶ Restore positions</button>
           <button type="button" id="layoutModeHintToggle" title="About the layout modes" aria-label="About the layout modes" style="cursor: pointer; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid #b0b8c0; background: #f4f6f8; color: #2c7be5; font-size: 12px; font-weight: bold; line-height: 1; flex: none;">i</button>
           <div id="layoutModeHintPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 10px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; width: 340px; max-height: 60vh; overflow-y: auto;"></div>
         </div>
@@ -6354,6 +6353,7 @@ function renderApp(): void {
           <input type="checkbox" id="clusterThingDataProps" checked />
           owl:Thing data properties once
         </label>
+        <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; align-self: flex-start; cursor: pointer; padding: 2px 8px; font-size: 12px;">↶ Restore positions</button>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
         <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
