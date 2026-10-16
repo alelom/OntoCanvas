@@ -8,6 +8,32 @@ const CONFIG = {
 };
 
 /**
+ * Places one tier: each node as close as possible to its desired x (least squares), keeping the
+ * order and at least `gaps[i]` between the centres of nodes i and i+1 (#150).
+ *
+ * Pool adjacent violators on x minus the cumulative gaps: a crowded group spreads evenly around
+ * the mean of what its nodes want, and nodes outside it don't move.
+ */
+export function placeTier(desired: number[], gaps: number[]): number[] {
+  const offset = [0];
+  for (const g of gaps) offset.push(offset[offset.length - 1] + g);
+  // Runs of consecutive nodes sharing one value of x - offset.
+  const blocks: { value: number; size: number }[] = [];
+  desired.forEach((d, i) => {
+    blocks.push({ value: d - offset[i], size: 1 });
+    while (blocks.length > 1 && blocks[blocks.length - 2].value > blocks[blocks.length - 1].value) {
+      const last = blocks.pop()!;
+      const prev = blocks[blocks.length - 1];
+      prev.value = (prev.value * prev.size + last.value * last.size) / (prev.size + last.size);
+      prev.size += last.size;
+    }
+  });
+  const out: number[] = [];
+  for (const b of blocks) for (let k = 0; k < b.size; k++) out.push(b.value + offset[out.length]);
+  return out;
+}
+
+/**
  * Hierarchical DAG — relationship-aware layered layout.
  *
  * Ranks nodes using the full structural graph (subClassOf/contains + object properties,
@@ -53,21 +79,10 @@ export function computeHierarchicalDag(
     return ns.reduce((a, m) => a + x[m], 0) / ns.length;
   };
 
-  // Place a tier honouring desired x where possible (left-to-right lower bound prevents
-  // overlap), then shift left to recentre on the desired centroid to avoid rightward drift.
   const placeLevel = (lvl: string[], desired: Record<string, number>) => {
-    if (!lvl.length) return;
-    let prevRight = -Infinity;
-    for (const id of lvl) {
-      const halfW = getWidth(id) / 2;
-      const minC = prevRight === -Infinity ? -Infinity : prevRight + CONFIG.minHorizontalGap + halfW;
-      x[id] = Math.max(desired[id] ?? x[id], minC);
-      prevRight = x[id] + halfW;
-    }
-    let wantSum = 0, haveSum = 0;
-    for (const id of lvl) { wantSum += desired[id] ?? x[id]; haveSum += x[id]; }
-    const shift = (wantSum - haveSum) / lvl.length;
-    if (shift < 0) for (const id of lvl) x[id] += shift;
+    const gaps = lvl.slice(1).map((id, i) => (getWidth(lvl[i]) + getWidth(id)) / 2 + CONFIG.minHorizontalGap);
+    const placed = placeTier(lvl.map((id) => desired[id] ?? x[id]), gaps);
+    lvl.forEach((id, i) => (x[id] = placed[i]));
   };
 
   for (let it = 0; it < CONFIG.iterations; it++) {
