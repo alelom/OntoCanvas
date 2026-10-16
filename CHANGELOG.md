@@ -1,3 +1,17 @@
+# [1.34.0](https://github.com/alelom/OntoCanvas/compare/v1.33.3...v1.34.0) (2026-10-16)
+
+
+### Bug Fixes
+
+* **#152:** Restore positions sits under the layout drop-down, above Text display options ([d9164cd](https://github.com/alelom/OntoCanvas/commit/d9164cd3af4e6bb712508ff084dc1c78baf95ea3)), closes [#152](https://github.com/alelom/OntoCanvas/issues/152)
+
+
+### Features
+
+* **#151:** choose the relationships that make the tiers, with superclass and fallback placement rules ([144636e](https://github.com/alelom/OntoCanvas/commit/144636e0275abae16cd8a01034c31bec0e52d6b7)), closes [#151](https://github.com/alelom/OntoCanvas/issues/151)
+* **#152:** layouts respect saved positions: unsaved nodes go near their neighbours, and trying a layout can be undone ([4cda94c](https://github.com/alelom/OntoCanvas/commit/4cda94ce517aa49cd8db5621ce2ac9fec101eab4)), closes [#152](https://github.com/alelom/OntoCanvas/issues/152)
+* **#153:** Layered (ELK) layout option, with the same tiers as the other hierarchical layouts ([e849feb](https://github.com/alelom/OntoCanvas/commit/e849febc2ecfee37b506630ede3b4e65850e9105)), closes [#153](https://github.com/alelom/OntoCanvas/issues/153) [#151](https://github.com/alelom/OntoCanvas/issues/151) [#152](https://github.com/alelom/OntoCanvas/issues/152)
+
 ## [1.33.3](https://github.com/alelom/OntoCanvas/compare/v1.33.2...v1.33.3) (2026-10-16)
 
 
