@@ -27,11 +27,10 @@ describe('the ELK graph built from the layered model', () => {
     expect(node('B').layoutOptions!['elk.layered.layering.layerChoiceConstraint']).toBe('2');
   });
 
-  it('has the ranking edges downward, and the other relationships between tiers with a lower priority', () => {
+  it('has the ranking edges only, downward: the other relationships would pull children from their parents (#159)', () => {
     const graph = buildElkGraph(ids, edges, 220, dims(ids), { hierarchyTypes: CONTAINS });
-    const pairs = graph.edges!.map((e) => `${e.sources[0]}>${e.targets[0]}:${e.layoutOptions?.['elk.layered.priority.straightness']}`);
-    // B mentions P: drawn from P's tier down to B's, as a relationship that makes no tier.
-    expect(pairs.sort()).toEqual(['A>B:10', 'P>A:10', 'P>B:1', 'P>B:10']);
+    // B mentions P: left out.
+    expect(graph.edges!.map((e) => `${e.sources[0]}>${e.targets[0]}`).sort()).toEqual(['A>B', 'P>A', 'P>B']);
   });
 });
 

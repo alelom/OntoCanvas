@@ -336,6 +336,7 @@ function collectDisplayConfig(): DisplayConfig | null {
       : undefined,
     displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
     clusterThingDataProperties,
+    stackLeaves,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
     hierarchyRelationships: [...hierarchyTypes],
   };
@@ -350,8 +351,9 @@ function applyDisplayConfig(config: DisplayConfig): void {
   // The layout made before the config arrived used the old tiers or layout; the config's own positions are applied
   // below. Loading a config is not undone with "Restore positions" (#152).
   const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
+  const stackChanged = setStackLeaves(config.stackLeaves ?? true);
   const configLayoutMode = resolveLayoutMode(config.layoutMode);
-  if (tiersChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
+  if (tiersChanged || stackChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
   lastLayoutMode = configLayoutMode;
   clearPositionsBeforeLayout();
   loadedNodePositions = config.nodePositions ?? null;
@@ -557,6 +559,8 @@ let lastLayoutMode: string | null = null;
 let displayExternalReferences = true;
 /** Draw data properties with domain owl:Thing once, under an owl:Thing node, rather than under every class (#80). */
 let clusterThingDataProperties = true;
+/** Stack many leaf children in a block under their parent in the tiered layouts (#159). */
+let stackLeaves = true;
 /** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
 let hierarchyTypes = new Set(DEFAULT_HIERARCHY_TYPES);
 /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
@@ -3161,7 +3165,7 @@ function buildNetworkData(
   // Classes defined by owl:equivalentClass rank below the named classes of their definition (#160), in the layout
   // and in the depth that sets font sizes.
   const definitions = ttlStore ? definitionParents(ttlStore, nodeIds) : [];
-  const layoutOptions = { hierarchyTypes, definitions };
+  const layoutOptions = { hierarchyTypes, definitions, stackLeaves };
   const definitionEdges: GraphEdge[] = hierarchyTypes.has('subClassOf')
     ? definitions.map(({ cls, parent }) => ({ from: cls, to: parent, type: 'subClassOf' }))
     : [];
@@ -6362,6 +6366,10 @@ function renderApp(): void {
           <input type="checkbox" id="clusterThingDataProps" checked />
           owl:Thing data properties once
         </label>
+        <label id="stackLeavesWrap" title="In the tiered layouts, a parent's children that have no children of their own are shown as a block of several columns under it, when there are 6 or more, instead of one long row. Changing it lays the graph out again." style="font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="stackLeaves" checked />
+          Stack many leaves under their parent
+        </label>
         <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; align-self: flex-start; cursor: pointer; padding: 2px 8px; font-size: 12px;">↶ Restore positions</button>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
@@ -7562,6 +7570,15 @@ function setHierarchyTypes(types: string[] | undefined): boolean {
   return changed;
 }
 
+/** Sets whether leaf children are stacked under their parent (#159), and its checkbox. Returns whether it changed. */
+function setStackLeaves(value: boolean): boolean {
+  const changed = value !== stackLeaves;
+  stackLeaves = value;
+  const el = document.getElementById('stackLeaves') as HTMLInputElement | null;
+  if (el) el.checked = value;
+  return changed;
+}
+
 /**
  * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
  * loaded config's, from which imported nodes take theirs (#156).
@@ -8510,6 +8527,12 @@ function setupEventListeners(): void {
     if (displayEl) displayEl.checked = displayExternalReferences;
     if (layoutEl) layoutEl.value = externalNodeLayout;
   });
+  document.getElementById('stackLeaves')?.addEventListener('change', (e) => {
+    setStackLeaves((e.target as HTMLInputElement).checked);
+    forgetNodePositions();
+    applyFilter(true);
+    scheduleDisplayConfigSave();
+  });
   document.getElementById('clusterThingDataProps')?.addEventListener('change', (e) => {
     clusterThingDataProperties = (e.target as HTMLInputElement).checked;
     applyFilter(true);
@@ -9025,6 +9048,7 @@ function setupEventListeners(): void {
     
     forgetNodePositions();
     setHierarchyTypes(undefined);
+    setStackLeaves(true);
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
