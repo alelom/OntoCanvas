@@ -2,9 +2,10 @@
  * Unit tests for the relationship-aware hierarchical layouts (Hierarchical DAG /
  * tiers+spring / force-downward) and their shared layered model.
  *
- * The key property these pin down: ranking uses the full structural graph (object
- * properties + subClassOf/contains), so entity classes form a deep top-to-bottom flow
- * instead of collapsing into one row the way hierarchical00 (taxonomy-only) does.
+ * The key property these pin down: entity classes form a deep top-to-bottom flow instead of
+ * collapsing into one row the way taxonomy-only levelling does. Object properties no longer
+ * rank unless ticked (#151), but a class the taxonomy leaves without a parent goes below the
+ * class pointing to it (rule 2), which keeps the flow deep.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -48,11 +49,11 @@ const MODES = [
 ] as const;
 
 describe('relationship-aware layered model', () => {
-  it('ranks using object properties, producing deeper tiers than taxonomy-only', async () => {
+  it('places classes without a parent below the classes pointing to them, producing deeper tiers than taxonomy-only', async () => {
     const { nodeIds, edges } = await load('uc01-merged-for-visualization.ttl');
     const { maxDepth: taxonomyDepth } = computeNodeDepths(nodeIds, edges);
     const model = buildLayeredModel(nodeIds, edges);
-    // Taxonomy-only leveling tops out at 3; relationship-aware ranking goes deeper.
+    // Taxonomy-only leveling tops out at 3; rule 2 (#151) goes deeper.
     expect(taxonomyDepth).toBeLessThanOrEqual(3);
     expect(model.maxLevel).toBeGreaterThan(taxonomyDepth);
   });

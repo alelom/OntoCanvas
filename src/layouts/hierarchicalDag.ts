@@ -1,5 +1,5 @@
 import type { GraphEdge, NodeDimensions } from '../types';
-import { buildLayeredModel, tierYs, placeParkedAside } from './layeredModel';
+import { buildLayeredModel, tierYs, placeParkedAside, type LayeredModelOptions } from './layeredModel';
 
 const CONFIG = {
   minHorizontalGap: 40,
@@ -46,9 +46,10 @@ export function computeHierarchicalDag(
   nodeIds: Set<string>,
   edges: GraphEdge[],
   spacing: number,
-  nodeDimensions?: Map<string, NodeDimensions>
+  nodeDimensions?: Map<string, NodeDimensions>,
+  options: LayeredModelOptions = {}
 ): Record<string, { x: number; y: number }> {
-  const model = buildLayeredModel(nodeIds, edges);
+  const model = buildLayeredModel(nodeIds, edges, options);
   const { levels, maxLevel, parents, children } = model;
   const getWidth = (id: string) => nodeDimensions?.get(id)?.width ?? spacing * 0.45;
   const getHeight = (id: string) => nodeDimensions?.get(id)?.height ?? spacing * 0.3;

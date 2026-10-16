@@ -128,6 +128,7 @@ import {
   resolveLayoutMode,
   SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
+import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
@@ -332,6 +333,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
     clusterThingDataProperties,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
+    hierarchyRelationships: [...hierarchyTypes],
   };
 }
 
@@ -341,6 +343,8 @@ function applyDisplayConfig(config: DisplayConfig): void {
   const clusterThingEl = document.getElementById('clusterThingDataProps') as HTMLInputElement | null;
   if (clusterThingEl) clusterThingEl.checked = clusterThingDataProperties;
   externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
+  // The layout made before the config arrived used the old tiers; the config's own positions are applied below.
+  if (setHierarchyTypes(config.hierarchyRelationships)) forgetNodePositions();
   loadedNodePositions = config.nodePositions ?? null;
   const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
@@ -534,6 +538,8 @@ let lastLayoutMode: string | null = null;
 let displayExternalReferences = true;
 /** Draw data properties with domain owl:Thing once, under an owl:Thing node, rather than under every class (#80). */
 let clusterThingDataProperties = true;
+/** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
+let hierarchyTypes = new Set(DEFAULT_HIERARCHY_TYPES);
 /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
 let externalNodeLayout: ExternalNodeLayout = 'auto';
 
@@ -1581,6 +1587,10 @@ function initEdgeStylesMenu(
         <input type="checkbox" class="edge-label-cb" data-type="${htmlEscapedType}" ${labelChecked}>
         <span>Label</span>
       </label>
+      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;" title="Makes the tiers of the hierarchical layouts: the source above the target (a superclass above its subclasses). Changing it lays the graph out again.">
+        <input type="checkbox" class="edge-tier-cb" data-type="${htmlEscapedType}" ${hierarchyTypes.has(type) ? 'checked' : ''}>
+        <span>Tiers</span>
+      </label>
       <label style="display: flex; align-items: center; gap: 4px;">
         <span style="font-size: 11px;">Color:</span>
         <input type="color" class="edge-color-picker" data-type="${htmlEscapedType}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
@@ -1613,6 +1623,14 @@ function initEdgeStylesMenu(
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
+  edgeStylesContent.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) =>
+    cb.addEventListener('change', () => {
+      if (cb.checked) hierarchyTypes.add(cb.dataset.type!);
+      else hierarchyTypes.delete(cb.dataset.type!);
+      forgetNodePositions();
+      onApply();
+    })
+  );
   edgeStylesContent.querySelectorAll('.edge-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
@@ -3121,7 +3139,7 @@ function buildNetworkData(
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
-  const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
+  const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges, hierarchyTypes);
   // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
   // as they are drawn (roots follow Max, the deepest nodes Min).
   const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
@@ -3178,7 +3196,8 @@ function buildNetworkData(
       nodeIds,
       filteredEdges,
       SPACING,
-      nodeDimensions
+      nodeDimensions,
+      { hierarchyTypes }
     );
     // The layered / relationship-aware modes produce an already-overlap-free (or
     // force-managed) layout; running resolveOverlaps would re-separate interleaved root
@@ -7488,6 +7507,20 @@ function revealNodeInView(nodeId: string): void {
 }
 
 /**
+ * Sets the relationships that make the tiers (#151), and ticks them in the Object Properties menu. Returns whether
+ * they changed: the positions laid out with the old ones are then wrong.
+ */
+function setHierarchyTypes(types: string[] | undefined): boolean {
+  const next = new Set(types ?? DEFAULT_HIERARCHY_TYPES);
+  const changed = next.size !== hierarchyTypes.size || [...next].some((t) => !hierarchyTypes.has(t));
+  hierarchyTypes = next;
+  document.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) => {
+    cb.checked = hierarchyTypes.has(cb.dataset.type!);
+  });
+  return changed;
+}
+
+/**
  * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
  * loaded config's, from which imported nodes take theirs (#156).
  */
@@ -8864,6 +8897,7 @@ function setupEventListeners(): void {
     if (rawData.nodes.length === 0) return;
     
     forgetNodePositions();
+    setHierarchyTypes(undefined);
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';

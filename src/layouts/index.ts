@@ -2,6 +2,7 @@ import type { GraphEdge, NodeDimensions } from '../types';
 import { computeHierarchicalDag } from './hierarchicalDag';
 import { computeHierarchicalTiersSpring } from './hierarchicalTiersSpring';
 import { computeHierarchicalForceDownward } from './hierarchicalForceDownward';
+import type { LayeredModelOptions } from './layeredModel';
 
 /**
  * Layout algorithm function signature
@@ -10,7 +11,8 @@ export type LayoutAlgorithm = (
   nodeIds: Set<string>,
   edges: GraphEdge[],
   spacing: number,
-  nodeDimensions?: Map<string, NodeDimensions>
+  nodeDimensions?: Map<string, NodeDimensions>,
+  options?: LayeredModelOptions
 ) => Record<string, { x: number; y: number }>;
 
 /**

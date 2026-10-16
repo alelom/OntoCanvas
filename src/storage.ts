@@ -41,6 +41,8 @@ export interface DisplayConfig {
   clusterThingDataProperties?: boolean;
   /** Layout of external nodes: auto (use main layout) or always place right/top/bottom/left of connected local node. */
   externalNodeLayout?: ExternalNodeLayout;
+  /** The relationships that make the tiers of the hierarchical layouts (#151); `["subClassOf"]` when absent. */
+  hierarchyRelationships?: string[];
 }
 
 export interface ExternalOntologyReference {
