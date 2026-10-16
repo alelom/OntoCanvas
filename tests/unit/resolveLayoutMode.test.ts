@@ -10,6 +10,8 @@ import {
   resolveLayoutMode,
   DEFAULT_LAYOUT_MODE,
   LAYOUT_ALGORITHMS,
+  ASYNC_LAYOUT_ALGORITHMS,
+  SELF_CONTAINED_LAYOUT_MODES,
 } from '../../src/layouts';
 
 describe('resolveLayoutMode', () => {
@@ -21,6 +23,12 @@ describe('resolveLayoutMode', () => {
     for (const key of Object.keys(LAYOUT_ALGORITHMS)) {
       expect(resolveLayoutMode(key)).toBe(key);
     }
+  });
+
+  it('keeps the asynchronous Layered (ELK) mode, which is laid out without resolveOverlaps (#153)', () => {
+    expect(Object.keys(ASYNC_LAYOUT_ALGORITHMS)).toEqual(['elk-layered']);
+    expect(resolveLayoutMode('elk-layered')).toBe('elk-layered');
+    expect(SELF_CONTAINED_LAYOUT_MODES.has('elk-layered')).toBe(true);
   });
 
   it("keeps the physics 'force' mode (not in the algorithm registry)", () => {

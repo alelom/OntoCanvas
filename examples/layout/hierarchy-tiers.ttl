@@ -1,0 +1,55 @@
+# The relationships that make the tiers of the hierarchical layouts, and the two placement rules (issue #151).
+#
+# Its display config (hierarchy-tiers.display.json, loaded with it) ticks "Tiers" for subClassOf and contains
+# (Object Properties menu). Expected tiers in Hierarchical DAG:
+#   0  Page
+#   1  Page element (rule 1), Author, Format (rule 2)
+#   2  Header, Footnote, Figure (inside Page and kinds of Page element), A4, Letter (kinds of Format)
+#   3  Logo (inside Header), Photo, Diagram (kinds of Figure)
+#
+# Rule 1: Page element is contained by nothing; its subclasses are inside Page and Header. Their nearest common
+# container is Page, so Page element goes one tier below Page, not on top beside it. Header is both a kind of
+# Page element and a container, which is why it is the *common* container that counts.
+# Rule 2: Author and Format are in no hierarchy; each goes below the class pointing to it (has author, has format).
+# Header "refers to" Page, but Page stays on top: a class never goes below one that is below it.
+#
+# Untick "Tiers" for contains to compare: Page element moves to the top and the contained classes beside Page.
+@prefix : <http://example.org/examples/hierarchy-tiers#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/hierarchy-tiers> rdf:type owl:Ontology ;
+    rdfs:label "Hierarchy tiers example" .
+
+:contains rdf:type owl:ObjectProperty ; rdfs:label "contains" .
+:hasAuthor rdf:type owl:ObjectProperty ; rdfs:label "has author" .
+:hasFormat rdf:type owl:ObjectProperty ; rdfs:label "has format" .
+:refersTo rdf:type owl:ObjectProperty ; rdfs:label "refers to" .
+
+:Page rdf:type owl:Class ; rdfs:label "Page" ;
+    rdfs:subClassOf
+        [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Header ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Footnote ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Figure ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :hasAuthor ; owl:someValuesFrom :Author ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :hasFormat ; owl:someValuesFrom :Format ] .
+
+:PageElement rdf:type owl:Class ; rdfs:label "Page element" .
+
+:Header rdf:type owl:Class ; rdfs:label "Header" ;
+    rdfs:subClassOf :PageElement ,
+        [ rdf:type owl:Restriction ; owl:onProperty :contains ; owl:someValuesFrom :Logo ] ,
+        [ rdf:type owl:Restriction ; owl:onProperty :refersTo ; owl:someValuesFrom :Page ] .
+
+:Footnote rdf:type owl:Class ; rdfs:label "Footnote" ; rdfs:subClassOf :PageElement .
+:Figure rdf:type owl:Class ; rdfs:label "Figure" ; rdfs:subClassOf :PageElement .
+:Logo rdf:type owl:Class ; rdfs:label "Logo" ; rdfs:subClassOf :PageElement .
+:Photo rdf:type owl:Class ; rdfs:label "Photo" ; rdfs:subClassOf :Figure .
+:Diagram rdf:type owl:Class ; rdfs:label "Diagram" ; rdfs:subClassOf :Figure .
+
+:Author rdf:type owl:Class ; rdfs:label "Author" .
+
+:Format rdf:type owl:Class ; rdfs:label "Format" .
+:A4 rdf:type owl:Class ; rdfs:label "A4" ; rdfs:subClassOf :Format .
+:Letter rdf:type owl:Class ; rdfs:label "Letter" ; rdfs:subClassOf :Format .

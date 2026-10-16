@@ -2,6 +2,8 @@ import type { GraphEdge, NodeDimensions } from '../types';
 import { computeHierarchicalDag } from './hierarchicalDag';
 import { computeHierarchicalTiersSpring } from './hierarchicalTiersSpring';
 import { computeHierarchicalForceDownward } from './hierarchicalForceDownward';
+import type { LayeredModelOptions } from './layeredModel';
+import { computeElkLayered } from './elkLayered';
 
 /**
  * Layout algorithm function signature
@@ -10,7 +12,8 @@ export type LayoutAlgorithm = (
   nodeIds: Set<string>,
   edges: GraphEdge[],
   spacing: number,
-  nodeDimensions?: Map<string, NodeDimensions>
+  nodeDimensions?: Map<string, NodeDimensions>,
+  options?: LayeredModelOptions
 ) => Record<string, { x: number; y: number }>;
 
 /**
@@ -22,6 +25,19 @@ export const LAYOUT_ALGORITHMS: Record<string, LayoutAlgorithm> = {
   'hierarchical-force-downward': computeHierarchicalForceDownward,
 };
 
+/** A layout computed asynchronously (#153): the app shows the default layout until it resolves. */
+export type AsyncLayoutAlgorithm = (
+  ...args: Parameters<LayoutAlgorithm>
+) => Promise<ReturnType<LayoutAlgorithm>>;
+
+export const ASYNC_LAYOUT_ALGORITHMS: Record<string, AsyncLayoutAlgorithm> = {
+  'elk-layered': computeElkLayered,
+};
+
+export function getAsyncLayoutAlgorithm(mode: string): AsyncLayoutAlgorithm | null {
+  return ASYNC_LAYOUT_ALGORITHMS[mode] || null;
+}
+
 /** Default layout mode, used when a requested mode does not exist (issue #19). */
 export const DEFAULT_LAYOUT_MODE = 'hierarchical-dag';
 
@@ -31,6 +47,7 @@ export const SELF_CONTAINED_LAYOUT_MODES = new Set([
   'hierarchical-dag',
   'hierarchical-tiers-spring',
   'hierarchical-force-downward',
+  'elk-layered',
 ]);
 
 /**
@@ -58,7 +75,7 @@ export function getAvailableLayoutModes(): string[] {
  * 'force' is a valid physics mode even though it is not in the algorithm registry.
  */
 export function resolveLayoutMode(mode: string | null | undefined): string {
-  if (mode && (mode in LAYOUT_ALGORITHMS || mode === 'force')) {
+  if (mode && (mode in LAYOUT_ALGORITHMS || mode in ASYNC_LAYOUT_ALGORITHMS || mode === 'force')) {
     return mode;
   }
   return DEFAULT_LAYOUT_MODE;

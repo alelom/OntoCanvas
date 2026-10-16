@@ -128,6 +128,9 @@ import {
   resolveLayoutMode,
   SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
+import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
+import { placeUnsavedNodes } from './layouts/placeUnsaved';
+import { getAsyncLayoutAlgorithm, DEFAULT_LAYOUT_MODE, type AsyncLayoutAlgorithm } from './layouts';
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
@@ -332,6 +335,7 @@ function collectDisplayConfig(): DisplayConfig | null {
     displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
     clusterThingDataProperties,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
+    hierarchyRelationships: [...hierarchyTypes],
   };
 }
 
@@ -341,6 +345,13 @@ function applyDisplayConfig(config: DisplayConfig): void {
   const clusterThingEl = document.getElementById('clusterThingDataProps') as HTMLInputElement | null;
   if (clusterThingEl) clusterThingEl.checked = clusterThingDataProperties;
   externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
+  // The layout made before the config arrived used the old tiers or layout; the config's own positions are applied
+  // below. Loading a config is not undone with "Restore positions" (#152).
+  const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
+  const configLayoutMode = resolveLayoutMode(config.layoutMode);
+  if (tiersChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
+  lastLayoutMode = configLayoutMode;
+  clearPositionsBeforeLayout();
   loadedNodePositions = config.nodePositions ?? null;
   const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
@@ -399,6 +410,14 @@ function applyDisplayConfig(config: DisplayConfig): void {
   let matchedNodes = 0;
   let unmatchedNodes = 0;
   const nodePositions = config.nodePositions || {};
+  // A node the config doesn't place drops the position laid out before the config arrived, so it goes near its
+  // placed neighbours (#152).
+  if (Object.keys(nodePositions).length > 0) {
+    rawData.nodes.forEach((n) => {
+      delete n.x;
+      delete n.y;
+    });
+  }
   
   Object.entries(nodePositions).forEach(([id, pos]) => {
     // First try exact ID match
@@ -528,12 +547,16 @@ let displayConfigSaveTimer: number | null = null;
 let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }> | null = null;
 /** Node positions from display config (used when expanding external refs so external node positions are restored). */
 let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
+/** The positions shown before a layout change or a reset dropped them, until restored (#152). */
+let positionsBeforeLayout: Record<string, { x: number; y: number }> | null = null;
 /** Track the last layout mode to detect when it changes */
 let lastLayoutMode: string | null = null;
 /** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
 let displayExternalReferences = true;
 /** Draw data properties with domain owl:Thing once, under an owl:Thing node, rather than under every class (#80). */
 let clusterThingDataProperties = true;
+/** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
+let hierarchyTypes = new Set(DEFAULT_HIERARCHY_TYPES);
 /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
 let externalNodeLayout: ExternalNodeLayout = 'auto';
 
@@ -1581,6 +1604,10 @@ function initEdgeStylesMenu(
         <input type="checkbox" class="edge-label-cb" data-type="${htmlEscapedType}" ${labelChecked}>
         <span>Label</span>
       </label>
+      <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;" title="Makes the tiers of the hierarchical layouts: the source above the target (a superclass above its subclasses). Changing it lays the graph out again.">
+        <input type="checkbox" class="edge-tier-cb" data-type="${htmlEscapedType}" ${hierarchyTypes.has(type) ? 'checked' : ''}>
+        <span>Tiers</span>
+      </label>
       <label style="display: flex; align-items: center; gap: 4px;">
         <span style="font-size: 11px;">Color:</span>
         <input type="color" class="edge-color-picker" data-type="${htmlEscapedType}" value="${color}" style="width: 28px; height: 22px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
@@ -1613,6 +1640,14 @@ function initEdgeStylesMenu(
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
     .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
+  edgeStylesContent.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) =>
+    cb.addEventListener('change', () => {
+      if (cb.checked) hierarchyTypes.add(cb.dataset.type!);
+      else hierarchyTypes.delete(cb.dataset.type!);
+      forgetNodePositions();
+      onApply();
+    })
+  );
   edgeStylesContent.querySelectorAll('.edge-edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
@@ -3121,7 +3156,7 @@ function buildNetworkData(
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
-  const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges);
+  const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges, hierarchyTypes);
   // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
   // as they are drawn (roots follow Max, the deepest nodes Min).
   const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
@@ -3151,7 +3186,9 @@ function buildNetworkData(
   
   // Use layout registry for hierarchical layouts
   // Only compute positions for nodes that don't already have positions
-  const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+  // An asynchronous layout (ELK, #153) shows the default layout until its own positions arrive.
+  const asyncLayout = getAsyncLayoutAlgorithm(layoutMode);
+  const layoutAlgorithm = getLayoutAlgorithm(layoutMode) ?? (asyncLayout ? getLayoutAlgorithm(DEFAULT_LAYOUT_MODE) : null);
   const nodesWithoutPositions = filteredNodes.filter((n) => !(n.x != null && n.y != null));
   
   if (layoutAlgorithm && nodesWithoutPositions.length > 0) {
@@ -3178,7 +3215,8 @@ function buildNetworkData(
       nodeIds,
       filteredEdges,
       SPACING,
-      nodeDimensions
+      nodeDimensions,
+      { hierarchyTypes }
     );
     // The layered / relationship-aware modes produce an already-overlap-free (or
     // force-managed) layout; running resolveOverlaps would re-separate interleaved root
@@ -3194,8 +3232,19 @@ function buildNetworkData(
             { minPadding: 8 }
           );
     
-    // Only use computed positions for nodes that don't already have positions
-    Object.entries(resolvedPositions).forEach(([id, pos]) => {
+    // Nodes without a position go near their placed neighbours, at the offset the layout gives them (#152).
+    const fallbackSize = { width: SPACING * 0.45, height: SPACING * 0.3 };
+    const sizeOf = (id: string) => nodeDimensions.get(id) ?? fallbackSize;
+    const placedBefore = { ...nodePositions };
+    const unsavedPositions = placeUnsavedNodes(placedBefore, resolvedPositions, filteredEdges, sizeOf);
+    if (asyncLayout) {
+      // Shown, not kept: the asynchronous layout's positions replace them when they arrive.
+      Object.entries(unsavedPositions).forEach(([id, pos]) => {
+        if (nodesToLayout.has(id)) nodePositions[id] = pos;
+      });
+      runAsyncLayout(asyncLayout, layoutMode, nodeIds, filteredEdges, nodeDimensions, nodesToLayout, placedBefore, sizeOf, unsavedPositions);
+    }
+    Object.entries(asyncLayout ? {} : unsavedPositions).forEach(([id, pos]) => {
       if (nodesToLayout.has(id) && !nodePositions[id]) {
         nodePositions[id] = pos;
         // Also update data (rawData or expanded) to keep it in sync
@@ -6294,6 +6343,7 @@ function renderApp(): void {
             <option value="hierarchical-dag">Hierarchical DAG</option>
             <option value="hierarchical-tiers-spring">Hierarchical tiers+spring</option>
             <option value="hierarchical-force-downward">Hierarchical force-downward</option>
+            <option value="elk-layered">Layered (ELK)</option>
             <option value="force">Force-directed</option>
           </select>
           <button type="button" id="layoutModeHintToggle" title="About the layout modes" aria-label="About the layout modes" style="cursor: pointer; width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid #b0b8c0; background: #f4f6f8; color: #2c7be5; font-size: 12px; font-weight: bold; line-height: 1; flex: none;">i</button>
@@ -6303,6 +6353,7 @@ function renderApp(): void {
           <input type="checkbox" id="clusterThingDataProps" checked />
           owl:Thing data properties once
         </label>
+        <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; align-self: flex-start; cursor: pointer; padding: 2px 8px; font-size: 12px;">↶ Restore positions</button>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
         <div id="textDisplayPopup" style="position: absolute; top: 100%; left: 0; margin-top: 4px; padding: 12px; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; display: none; min-width: 280px;">
@@ -7217,6 +7268,7 @@ async function loadTtlAndRender(
     }
 
     rawData = graphData;
+    clearPositionsBeforeLayout();
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
@@ -7488,15 +7540,112 @@ function revealNodeInView(nodeId: string): void {
 }
 
 /**
+ * Sets the relationships that make the tiers (#151), and ticks them in the Object Properties menu. Returns whether
+ * they changed: the positions laid out with the old ones are then wrong.
+ */
+function setHierarchyTypes(types: string[] | undefined): boolean {
+  const next = new Set(types ?? DEFAULT_HIERARCHY_TYPES);
+  const changed = next.size !== hierarchyTypes.size || [...next].some((t) => !hierarchyTypes.has(t));
+  hierarchyTypes = next;
+  document.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) => {
+    cb.checked = hierarchyTypes.has(cb.dataset.type!);
+  });
+  return changed;
+}
+
+/**
  * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
  * loaded config's, from which imported nodes take theirs (#156).
  */
 function forgetNodePositions(): void {
+  // What was shown before, for "Restore positions" (#152); the first copy is kept while trying several layouts.
+  if (!positionsBeforeLayout) {
+    const shown: Record<string, { x: number; y: number }> = network ? network.getPositions() : {};
+    rawData.nodes.forEach((n) => {
+      if (!shown[n.id] && n.x != null && n.y != null) shown[n.id] = { x: n.x, y: n.y };
+    });
+    if (Object.keys(shown).length > 0) positionsBeforeLayout = shown;
+  }
   rawData.nodes.forEach((node) => {
     delete node.x;
     delete node.y;
   });
   loadedNodePositions = null;
+  updateRestorePositionsButton();
+}
+
+let asyncLayoutRun = 0;
+
+/**
+ * Runs an asynchronous layout (ELK, #153) and keeps its positions for the nodes that had none, then redraws. Only
+ * the latest run counts, and only while its layout is still the chosen one. If it fails (e.g. elkjs can't be
+ * loaded), the positions shown meanwhile are kept.
+ */
+function runAsyncLayout(
+  layout: AsyncLayoutAlgorithm,
+  mode: string,
+  nodeIds: Set<string>,
+  edges: GraphEdge[],
+  nodeDimensions: Map<string, { width: number; height: number }>,
+  toPlace: Set<string>,
+  placedBefore: Record<string, { x: number; y: number }>,
+  sizeOf: (id: string) => { width: number; height: number },
+  shown: Record<string, { x: number; y: number }>
+): void {
+  const run = ++asyncLayoutRun;
+  const keep = (positions: Record<string, { x: number; y: number }>) => {
+    if (run !== asyncLayoutRun || (document.getElementById('layoutMode') as HTMLSelectElement).value !== mode) return;
+    let changed = false;
+    for (const [id, pos] of Object.entries(positions)) {
+      if (!toPlace.has(id)) continue;
+      const node = rawData.nodes.find((n) => n.id === id);
+      if (node && (node.x != null || node.y != null)) continue;
+      if (node) {
+        node.x = pos.x;
+        node.y = pos.y;
+      } else {
+        loadedNodePositions = { ...(loadedNodePositions ?? {}), [id]: pos };
+      }
+      changed = true;
+    }
+    if (changed) applyFilter(true);
+  };
+  layout(nodeIds, edges, SPACING, nodeDimensions, { hierarchyTypes })
+    .then((computed) => keep(placeUnsavedNodes(placedBefore, computed, edges, sizeOf)))
+    .catch((err) => {
+      debugError(`[LAYOUT] ${mode} failed; keeping the default layout`, err);
+      keep(shown);
+    });
+}
+
+/** Puts every node back where it was before the positions were dropped (#152). */
+function restoreNodePositions(): void {
+  const before = positionsBeforeLayout;
+  if (!before) return;
+  rawData.nodes.forEach((node) => {
+    if (before[node.id]) {
+      node.x = before[node.id].x;
+      node.y = before[node.id].y;
+    } else {
+      delete node.x;
+      delete node.y;
+    }
+  });
+  loadedNodePositions = { ...before };
+  positionsBeforeLayout = null;
+  updateRestorePositionsButton();
+  applyFilter(true);
+}
+
+/** Forgets the positions "Restore positions" would bring back: another ontology or config is shown. */
+function clearPositionsBeforeLayout(): void {
+  positionsBeforeLayout = null;
+  updateRestorePositionsButton();
+}
+
+function updateRestorePositionsButton(): void {
+  const btn = document.getElementById('restorePositions');
+  if (btn) btn.style.display = positionsBeforeLayout ? '' : 'none';
 }
 
 function applyFilter(preserveView = false): void {
@@ -7518,7 +7667,7 @@ function applyFilter(preserveView = false): void {
   // positions when just applying filters or reloading
   const layoutModeChanged = lastLayoutMode !== null && lastLayoutMode !== layoutMode;
   if (layoutModeChanged) {
-    const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+    const layoutAlgorithm = getLayoutAlgorithm(layoutMode) ?? getAsyncLayoutAlgorithm(layoutMode);
     if (layoutAlgorithm || layoutMode === 'force') {
       // Switching to a layout that computes positions - clear stored positions
       // Debug logging (only in debug mode)
@@ -8315,6 +8464,7 @@ function setupEventListeners(): void {
   });
 
   document.getElementById('layoutMode')?.addEventListener('change', () => applyFilter());
+  document.getElementById('restorePositions')?.addEventListener('click', restoreNodePositions);
 
   const externalRefsCallbacks: ExternalRefsModalCallbacks = {
     onUpdate: () => {
@@ -8864,6 +9014,7 @@ function setupEventListeners(): void {
     if (rawData.nodes.length === 0) return;
     
     forgetNodePositions();
+    setHierarchyTypes(undefined);
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';

@@ -1,5 +1,5 @@
 import type { GraphEdge, NodeDimensions } from '../types';
-import { buildLayeredModel, tierYs, placeParkedAside } from './layeredModel';
+import { buildLayeredModel, tierYs, placeParkedAside, type LayeredModelOptions } from './layeredModel';
 
 const CONFIG = {
   verticalGap: 150,
@@ -22,9 +22,10 @@ export function computeHierarchicalForceDownward(
   nodeIds: Set<string>,
   edges: GraphEdge[],
   spacing: number,
-  nodeDimensions?: Map<string, NodeDimensions>
+  nodeDimensions?: Map<string, NodeDimensions>,
+  options: LayeredModelOptions = {}
 ): Record<string, { x: number; y: number }> {
-  const model = buildLayeredModel(nodeIds, edges);
+  const model = buildLayeredModel(nodeIds, edges, options);
   const { levels, maxLevel, children, level, mainNodes } = model;
   const getWidth = (id: string) => nodeDimensions?.get(id)?.width ?? spacing * 0.45;
   const getHeight = (id: string) => nodeDimensions?.get(id)?.height ?? spacing * 0.3;
@@ -54,11 +55,17 @@ export function computeHierarchicalForceDownward(
   const avgDiag = mainNodes.length ? sumDiag / mainNodes.length : 100;
   const k = CONFIG.idealLengthFactor * avgDiag;
 
-  // Structural edges for attraction (dedup parent->child).
-  const springEdges: Array<[string, string]> = [];
-  for (const p of Object.keys(children)) {
-    for (const c of children[p]) springEdges.push([p, c]);
-  }
+  // Attraction along the ranking edges and every other relationship, once per pair: a relationship that makes no
+  // tier still holds its ends together (#151).
+  const main = new Set(mainNodes);
+  const springs = new Map<string, [string, string]>();
+  const spring = (a: string, b: string) => {
+    if (a === b || !main.has(a) || !main.has(b)) return;
+    springs.set(a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`, [a, b]);
+  };
+  for (const p of Object.keys(children)) for (const c of children[p]) spring(p, c);
+  for (const e of edges) spring(e.from, e.to);
+  const springEdges = [...springs.values()];
 
   let temp = k * 5;
   const cool = temp / (CONFIG.iterations + 1);

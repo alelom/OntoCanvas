@@ -1,5 +1,5 @@
 import type { GraphEdge, NodeDimensions } from '../types';
-import { buildLayeredModel, tierYs, placeParkedAside } from './layeredModel';
+import { buildLayeredModel, tierYs, placeParkedAside, type LayeredModelOptions } from './layeredModel';
 
 const CONFIG = {
   minHorizontalGap: 40,
@@ -22,9 +22,10 @@ export function computeHierarchicalTiersSpring(
   nodeIds: Set<string>,
   edges: GraphEdge[],
   spacing: number,
-  nodeDimensions?: Map<string, NodeDimensions>
+  nodeDimensions?: Map<string, NodeDimensions>,
+  options: LayeredModelOptions = {}
 ): Record<string, { x: number; y: number }> {
-  const model = buildLayeredModel(nodeIds, edges);
+  const model = buildLayeredModel(nodeIds, edges, options);
   const { levels, maxLevel, parents, children } = model;
   const getWidth = (id: string) => nodeDimensions?.get(id)?.width ?? spacing * 0.45;
   const getHeight = (id: string) => nodeDimensions?.get(id)?.height ?? spacing * 0.3;
@@ -46,10 +47,18 @@ export function computeHierarchicalTiersSpring(
     }
   }
 
-  const neighbours: Record<string, string[]> = {};
-  for (const id of model.mainNodes) {
-    neighbours[id] = [...(parents[id] || []), ...(children[id] || [])];
+  // Neighbours: the ranking edges and every other relationship, which pulls its ends together though it makes no
+  // tier (#151).
+  const main = new Set(model.mainNodes);
+  const neighbourSets: Record<string, Set<string>> = {};
+  for (const id of model.mainNodes) neighbourSets[id] = new Set([...(parents[id] || []), ...(children[id] || [])]);
+  for (const e of edges) {
+    if (e.from === e.to || !main.has(e.from) || !main.has(e.to)) continue;
+    neighbourSets[e.from].add(e.to);
+    neighbourSets[e.to].add(e.from);
   }
+  const neighbours: Record<string, string[]> = {};
+  for (const id of model.mainNodes) neighbours[id] = [...neighbourSets[id]];
 
   const deoverlapAndCentre = (lvl: string[]) => {
     if (!lvl.length) return;

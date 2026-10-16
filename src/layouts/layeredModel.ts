@@ -1,14 +1,13 @@
 import type { GraphEdge } from '../types';
+import { DEFAULT_HIERARCHY_TYPES, rankingGraph } from './hierarchyRules';
 
 /**
  * Shared layered model for the relationship-aware hierarchical layouts
  * (Hierarchical DAG / tiers+spring / force-downward).
  *
- * Rather than levelling nodes using only subClassOf/contains — which collapses every
- * "entity" class into one top row — this model ranks using the full structural
- * relationship graph:
- *   - subClassOf:  superclass (edge.to) is the parent, subclass (edge.from) the child;
- *   - everything else (contains + object properties): edge.from is the parent.
+ * Nodes are ranked by the relationships chosen to make the tiers (subClassOf by default),
+ * plus two placement rules for the classes those leave unplaced (#151, `hierarchyRules.ts`).
+ * Every relationship still counts for the connected components.
  *
  * Inverse object properties (e.g. hasRevision / isRevisionOf) and any other cycles are
  * broken by dropping DFS back-edges, yielding an acyclic ranking graph. Disconnected
@@ -32,33 +31,31 @@ export interface LayeredModel {
   parkedComponents: string[][];
 }
 
-function getParentChild(e: GraphEdge): { parent: string; child: string } {
-  if (e.type === 'subClassOf') {
-    return { parent: e.to, child: e.from };
-  }
-  return { parent: e.from, child: e.to };
-}
-
 function stableSortBy<T>(arr: T[], key: (x: T) => number): void {
   const decorated = arr.map((v, i) => ({ v, i, k: key(v) }));
   decorated.sort((a, b) => a.k - b.k || a.i - b.i);
   for (let i = 0; i < arr.length; i++) arr[i] = decorated[i].v;
 }
 
-export function buildLayeredModel(nodeIds: Set<string>, edges: GraphEdge[]): LayeredModel {
-  // 1. Build the directed ranking adjacency (parent -> child) plus an undirected view.
-  const adj: Record<string, Set<string>> = {};
+export interface LayeredModelOptions {
+  /** The relationships that make the tiers (#151); `subClassOf` only when not given. */
+  hierarchyTypes?: ReadonlySet<string>;
+}
+
+export function buildLayeredModel(
+  nodeIds: Set<string>,
+  edges: GraphEdge[],
+  options: LayeredModelOptions = {}
+): LayeredModel {
+  // 1. The directed ranking adjacency (parent -> child), plus an undirected view of every relationship.
+  const adj = rankingGraph(nodeIds, edges, options.hierarchyTypes ?? DEFAULT_HIERARCHY_TYPES);
   const undirected: Record<string, Set<string>> = {};
   const link = (a: string, b: string) => {
     (undirected[a] = undirected[a] || new Set()).add(b);
     (undirected[b] = undirected[b] || new Set()).add(a);
   };
   for (const e of edges) {
-    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
-    const { parent, child } = getParentChild(e);
-    if (parent === child) continue;
-    (adj[parent] = adj[parent] || new Set()).add(child);
-    link(parent, child);
+    if (nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to) link(e.from, e.to);
   }
 
   // 2. Connected components (undirected). Largest = main flow; the rest get parked.

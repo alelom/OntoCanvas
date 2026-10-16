@@ -1,6 +1,7 @@
 // import type { DataSet } from 'vis-network'; // Unused - kept for reference
 import { wrapNoteText } from './utils/noteWrap';
 import type { GraphEdge, GraphNode, NodeDimensions } from './types';
+import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
 import type { SearchScope } from './lib/searchHighlight';
 
 export const COLORS = {
@@ -167,15 +168,14 @@ function getParentChild(e: GraphEdge): { parent: string; child: string } {
   return { parent: e.from, child: e.to };
 }
 
+/** `hierarchyTypes`: the relationships that make the tiers (#151). */
 export function computeNodeDepths(
   nodeIds: Set<string>,
-  edges: GraphEdge[]
+  edges: GraphEdge[],
+  hierarchyTypes: ReadonlySet<string> = DEFAULT_HIERARCHY_TYPES
 ): DepthResult {
   const hierarchyEdges = edges.filter(
-    (e) =>
-      (e.type === 'subClassOf' || e.type === 'contains') &&
-      nodeIds.has(e.from) &&
-      nodeIds.has(e.to)
+    (e) => hierarchyTypes.has(e.type) && nodeIds.has(e.from) && nodeIds.has(e.to)
   );
   const children: Record<string, string[]> = {};
   const parents: Record<string, string[]> = {};

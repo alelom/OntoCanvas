@@ -20,19 +20,25 @@ export const LAYOUT_MODE_INFO: LayoutModeInfo[] = [
     id: 'hierarchical-dag',
     label: 'Hierarchical DAG',
     description:
-      'Ranks nodes by ALL relationships (object properties + subClassOf/contains), then places each parent centred over its children in tight tiers. Deterministic — the most compact and balanced hierarchical view. (Default.)',
+      'Tiers from the relationships ticked "Tiers" in Object Properties (subClassOf by default): a superclass above its subclasses, a container above what it contains. Each parent is centred over its children in tight tiers. Deterministic — the most compact hierarchical view. (Default.)',
   },
   {
     id: 'hierarchical-tiers-spring',
     label: 'Hierarchical tiers+spring',
     description:
-      'Same relationship-based tiers as DAG, but within each tier nodes slide horizontally via a spring relaxation so connected nodes cluster together. More organic than DAG, still tier-aligned.',
+      'Same tiers as DAG, but within each tier nodes slide horizontally via a spring relaxation so connected nodes cluster together, along every relationship. More organic than DAG, still tier-aligned.',
   },
   {
     id: 'hierarchical-force-downward',
     label: 'Hierarchical force-downward',
     description:
       'A force simulation (nodes repel, edges attract) with a per-step downward pull toward each node\'s tier. Organic 2-D clusters while keeping roots near the top and leaves near the bottom.',
+  },
+  {
+    id: 'elk-layered',
+    label: 'Layered (ELK)',
+    description:
+      'Same tiers as DAG, ordered and placed by ELK, the standard layered algorithm (fewer crossings, Brandes–Köpf placement). Loaded when first chosen; the DAG layout shows until it is ready.',
   },
   {
     id: 'force',
