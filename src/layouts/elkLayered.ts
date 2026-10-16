@@ -3,15 +3,13 @@ import type { GraphEdge, NodeDimensions } from '../types';
 import { buildLayeredModel, tierYs, type LayeredModelOptions } from './layeredModel';
 
 const VERTICAL_GAP = 150;
-/** ELK keeps an edge with a higher straightness priority shorter and straighter. */
-const RANKING_PRIORITY = '10';
-const OTHER_PRIORITY = '1';
 
 /**
  * The ELK input for "Layered (ELK)" (#153). The tiers come from the layered model, as in the other hierarchical
  * layouts (the Tiers setting and its rules, #151), and reach ELK as layer constraints; ELK orders the nodes of each
- * tier and places them (Brandes–Köpf). The ranking edges point down with a high priority; every other relationship
- * between two tiers points down from the upper one, with a low priority, so it still pulls its ends together.
+ * tier and places them (Brandes–Köpf), from the ranking edges only. The other relationships are left out: ELK's
+ * crossing reduction weighs them like the hierarchy, whatever their priority, and they pulled children far from
+ * their parents (on the pizza ontology, 2,417 px on average instead of 924; #159).
  */
 export function buildElkGraph(
   nodeIds: Set<string>,
@@ -23,19 +21,8 @@ export function buildElkGraph(
   const { level, children } = buildLayeredModel(nodeIds, edges, options);
   const size = (id: string) => nodeDimensions?.get(id) ?? { width: spacing * 0.45, height: spacing * 0.3 };
   const elkEdges: ElkExtendedEdge[] = [];
-  const edge = (from: string, to: string, priority: string) =>
-    elkEdges.push({
-      id: `e${elkEdges.length}`,
-      sources: [from],
-      targets: [to],
-      layoutOptions: { 'elk.layered.priority.straightness': priority },
-    });
-  for (const p of Object.keys(children).sort()) for (const c of children[p]) edge(p, c, RANKING_PRIORITY);
-  for (const e of edges) {
-    if (options.hierarchyTypes?.has(e.type) ?? e.type === 'subClassOf') continue;
-    if (!nodeIds.has(e.from) || !nodeIds.has(e.to) || level[e.from] === level[e.to]) continue;
-    const [upper, lower] = level[e.from] < level[e.to] ? [e.from, e.to] : [e.to, e.from];
-    edge(upper, lower, OTHER_PRIORITY);
+  for (const p of Object.keys(children).sort()) {
+    for (const c of children[p]) elkEdges.push({ id: `e${elkEdges.length}`, sources: [p], targets: [c] });
   }
   return {
     id: 'root',

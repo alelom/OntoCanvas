@@ -130,6 +130,8 @@ import {
 } from './graph';
 import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
 import { placeUnsavedNodes } from './layouts/placeUnsaved';
+import type { LayeredModelOptions } from './layouts/layeredModel';
+import { definitionParents } from './lib/definitionParents';
 import { getAsyncLayoutAlgorithm, DEFAULT_LAYOUT_MODE, type AsyncLayoutAlgorithm } from './layouts';
 import {
   computeSearchSets,
@@ -285,7 +287,11 @@ import './style.css';
 
 let externalOntologyReferences: ExternalOntologyReference[] = [];
 
-function collectDisplayConfig(): DisplayConfig | null {
+/**
+ * `forBrowser`: the copy kept in the browser between visits, which holds positions only once the user has arranged
+ * the graph; a computed layout is laid out again next time, with the current layout and settings.
+ */
+function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayConfig | null {
   if (rawData.nodes.length === 0) return null;
   const edgeStylesContent = document.getElementById('edgeStylesContent');
   const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -315,7 +321,7 @@ function collectDisplayConfig(): DisplayConfig | null {
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
   return {
     version: DISPLAY_CONFIG_VERSION,
-    nodePositions,
+    nodePositions: options.forBrowser && !positionsArranged ? {} : nodePositions,
     edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences) : {},
     wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 12,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
@@ -334,6 +340,7 @@ function collectDisplayConfig(): DisplayConfig | null {
       : undefined,
     displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
     clusterThingDataProperties,
+    stackLeaves,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
     hierarchyRelationships: [...hierarchyTypes],
   };
@@ -348,8 +355,9 @@ function applyDisplayConfig(config: DisplayConfig): void {
   // The layout made before the config arrived used the old tiers or layout; the config's own positions are applied
   // below. Loading a config is not undone with "Restore positions" (#152).
   const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
+  const stackChanged = setStackLeaves(config.stackLeaves ?? true);
   const configLayoutMode = resolveLayoutMode(config.layoutMode);
-  if (tiersChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
+  if (tiersChanged || stackChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
   lastLayoutMode = configLayoutMode;
   clearPositionsBeforeLayout();
   loadedNodePositions = config.nodePositions ?? null;
@@ -418,6 +426,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
       delete n.y;
     });
   }
+  positionsArranged = Object.keys(nodePositions).length > 0;
   
   Object.entries(nodePositions).forEach(([id, pos]) => {
     // First try exact ID match
@@ -549,12 +558,21 @@ let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; c
 let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
 /** The positions shown before a layout change or a reset dropped them, until restored (#152). */
 let positionsBeforeLayout: Record<string, { x: number; y: number }> | null = null;
+/** Whether those positions had been arranged by the user, for the browser's copy of the config. */
+let arrangedBeforeLayout = false;
+/**
+ * Whether the user has arranged the positions shown: dragged a node, or loaded a config with positions. Until then
+ * they are a layout's, and the browser's copy of the config leaves them out.
+ */
+let positionsArranged = false;
 /** Track the last layout mode to detect when it changes */
 let lastLayoutMode: string | null = null;
 /** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
 let displayExternalReferences = true;
 /** Draw data properties with domain owl:Thing once, under an owl:Thing node, rather than under every class (#80). */
 let clusterThingDataProperties = true;
+/** Stack many leaf children in a block under their parent in the tiered layouts (#159). */
+let stackLeaves = true;
 /** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
 let hierarchyTypes = new Set(DEFAULT_HIERARCHY_TYPES);
 /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
@@ -570,7 +588,7 @@ function scheduleDisplayConfigSave(): void {
 
 /** Run display config save immediately (e.g. after drag end so refresh preserves positions). */
 function flushDisplayConfigSave(): void {
-  const config = collectDisplayConfig();
+  const config = collectDisplayConfig({ forBrowser: true });
   if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
 }
 
@@ -3156,7 +3174,14 @@ function buildNetworkData(
   const maxFontSize = Math.max(minFontSize, Math.min(96, filter.maxFontSize ?? 70));
   const relationshipFontSize = Math.max(8, Math.min(48, filter.relationshipFontSize ?? 18));
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
-  const { depth, maxDepth } = computeNodeDepths(nodeIds, filteredEdges, hierarchyTypes);
+  // Classes defined by owl:equivalentClass rank below the named classes of their definition (#160), in the layout
+  // and in the depth that sets font sizes.
+  const definitions = ttlStore ? definitionParents(ttlStore, nodeIds) : [];
+  const layoutOptions = { hierarchyTypes, definitions, stackLeaves };
+  const definitionEdges: GraphEdge[] = hierarchyTypes.has('subClassOf')
+    ? definitions.map(({ cls, parent }) => ({ from: cls, to: parent, type: 'subClassOf' }))
+    : [];
+  const { depth, maxDepth } = computeNodeDepths(nodeIds, [...filteredEdges, ...definitionEdges], hierarchyTypes);
   // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
   // as they are drawn (roots follow Max, the deepest nodes Min).
   const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
@@ -3216,7 +3241,7 @@ function buildNetworkData(
       filteredEdges,
       SPACING,
       nodeDimensions,
-      { hierarchyTypes }
+      layoutOptions
     );
     // The layered / relationship-aware modes produce an already-overlap-free (or
     // force-managed) layout; running resolveOverlaps would re-separate interleaved root
@@ -3242,7 +3267,7 @@ function buildNetworkData(
       Object.entries(unsavedPositions).forEach(([id, pos]) => {
         if (nodesToLayout.has(id)) nodePositions[id] = pos;
       });
-      runAsyncLayout(asyncLayout, layoutMode, nodeIds, filteredEdges, nodeDimensions, nodesToLayout, placedBefore, sizeOf, unsavedPositions);
+      runAsyncLayout(asyncLayout, layoutMode, nodeIds, filteredEdges, nodeDimensions, layoutOptions, nodesToLayout, placedBefore, sizeOf, unsavedPositions);
     }
     Object.entries(asyncLayout ? {} : unsavedPositions).forEach(([id, pos]) => {
       if (nodesToLayout.has(id) && !nodePositions[id]) {
@@ -6353,6 +6378,10 @@ function renderApp(): void {
           <input type="checkbox" id="clusterThingDataProps" checked />
           owl:Thing data properties once
         </label>
+        <label id="stackLeavesWrap" title="In the tiered layouts, a parent's children that have no children of their own are shown as a block of several columns under it, when there are 6 or more, instead of one long row. Changing it lays the graph out again." style="font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="stackLeaves" checked />
+          Stack many leaves under their parent
+        </label>
         <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; align-self: flex-start; cursor: pointer; padding: 2px 8px; font-size: 12px;">↶ Restore positions</button>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>
@@ -7269,6 +7298,7 @@ async function loadTtlAndRender(
 
     rawData = graphData;
     clearPositionsBeforeLayout();
+    positionsArranged = false;
     annotationProperties = annotationProps;
     objectProperties = objectProps;
     dataProperties = dataProps;
@@ -7553,6 +7583,15 @@ function setHierarchyTypes(types: string[] | undefined): boolean {
   return changed;
 }
 
+/** Sets whether leaf children are stacked under their parent (#159), and its checkbox. Returns whether it changed. */
+function setStackLeaves(value: boolean): boolean {
+  const changed = value !== stackLeaves;
+  stackLeaves = value;
+  const el = document.getElementById('stackLeaves') as HTMLInputElement | null;
+  if (el) el.checked = value;
+  return changed;
+}
+
 /**
  * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
  * loaded config's, from which imported nodes take theirs (#156).
@@ -7564,8 +7603,12 @@ function forgetNodePositions(): void {
     rawData.nodes.forEach((n) => {
       if (!shown[n.id] && n.x != null && n.y != null) shown[n.id] = { x: n.x, y: n.y };
     });
-    if (Object.keys(shown).length > 0) positionsBeforeLayout = shown;
+    if (Object.keys(shown).length > 0) {
+      positionsBeforeLayout = shown;
+      arrangedBeforeLayout = positionsArranged;
+    }
   }
+  positionsArranged = false;
   rawData.nodes.forEach((node) => {
     delete node.x;
     delete node.y;
@@ -7587,6 +7630,7 @@ function runAsyncLayout(
   nodeIds: Set<string>,
   edges: GraphEdge[],
   nodeDimensions: Map<string, { width: number; height: number }>,
+  layoutOptions: LayeredModelOptions,
   toPlace: Set<string>,
   placedBefore: Record<string, { x: number; y: number }>,
   sizeOf: (id: string) => { width: number; height: number },
@@ -7610,7 +7654,7 @@ function runAsyncLayout(
     }
     if (changed) applyFilter(true);
   };
-  layout(nodeIds, edges, SPACING, nodeDimensions, { hierarchyTypes })
+  layout(nodeIds, edges, SPACING, nodeDimensions, layoutOptions)
     .then((computed) => keep(placeUnsavedNodes(placedBefore, computed, edges, sizeOf)))
     .catch((err) => {
       debugError(`[LAYOUT] ${mode} failed; keeping the default layout`, err);
@@ -7633,6 +7677,7 @@ function restoreNodePositions(): void {
   });
   loadedNodePositions = { ...before };
   positionsBeforeLayout = null;
+  positionsArranged = arrangedBeforeLayout;
   updateRestorePositionsButton();
   applyFilter(true);
 }
@@ -8031,6 +8076,10 @@ function applyFilter(preserveView = false): void {
     
     network.on('click', () => {
       if (network) updateSelectionInfoDisplay(network);
+    });
+    // Dragging a node arranges the graph: from then on the browser keeps its positions between visits.
+    network.on('dragEnd', (params?: { nodes?: unknown[] }) => {
+      if (params?.nodes?.length) positionsArranged = true;
     });
     setupDragCoupling(network as unknown as Parameters<typeof setupDragCoupling>[0], {
       onDragEnd: () => {
@@ -8499,6 +8548,12 @@ function setupEventListeners(): void {
     const layoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
     if (displayEl) displayEl.checked = displayExternalReferences;
     if (layoutEl) layoutEl.value = externalNodeLayout;
+  });
+  document.getElementById('stackLeaves')?.addEventListener('change', (e) => {
+    setStackLeaves((e.target as HTMLInputElement).checked);
+    forgetNodePositions();
+    applyFilter(true);
+    scheduleDisplayConfigSave();
   });
   document.getElementById('clusterThingDataProps')?.addEventListener('change', (e) => {
     clusterThingDataProperties = (e.target as HTMLInputElement).checked;
@@ -9015,6 +9070,7 @@ function setupEventListeners(): void {
     
     forgetNodePositions();
     setHierarchyTypes(undefined);
+    setStackLeaves(true);
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';

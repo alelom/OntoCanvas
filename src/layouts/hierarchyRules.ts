@@ -1,4 +1,5 @@
 import type { GraphEdge } from '../types';
+import type { DefinitionParent } from '../lib/definitionParents';
 
 /** The relationships that make the tiers when the display config doesn't say (#151). */
 export const DEFAULT_HIERARCHY_TYPES: ReadonlySet<string> = new Set(['subClassOf']);
@@ -44,6 +45,8 @@ function tiersOf(nodeIds: Set<string>, adj: Adjacency): Record<string, number> {
  *
  * - The relationships in `hierarchyTypes` rank: a superclass above its subclasses (`subClassOf`), the source of any
  *   other ticked relationship above its target ("contains").
+ * - Definitions (#160): with `subClassOf` ticked, a class defined by `owl:equivalentClass` ranks below the named
+ *   classes of its definition, as their subclass, unless that would put a class below itself.
  * - Rule 1: a superclass S that nothing contains goes below the nearest common container of the classes containing
  *   its subclasses (direct or not). A container that is S or one of its subclasses doesn't count; with no common
  *   container left, the rule doesn't apply.
@@ -51,7 +54,12 @@ function tiersOf(nodeIds: Set<string>, adj: Adjacency): Record<string, number> {
  *   it points to as well doesn't count (a mutual reference says nothing about which is above), nor one that would
  *   put it below one of its own descendants.
  */
-export function rankingGraph(nodeIds: Set<string>, edges: GraphEdge[], hierarchyTypes: ReadonlySet<string>): Adjacency {
+export function rankingGraph(
+  nodeIds: Set<string>,
+  edges: GraphEdge[],
+  hierarchyTypes: ReadonlySet<string>,
+  definitions: DefinitionParent[] = []
+): Adjacency {
   const adj: Adjacency = {};
   const subclasses: Adjacency = {};
   const containers: Adjacency = {};
@@ -61,6 +69,15 @@ export function rankingGraph(nodeIds: Set<string>, edges: GraphEdge[], hierarchy
     if (!hierarchyTypes.has(e.type)) addTo(referrers, e.to, e.from);
     else if (e.type === 'subClassOf') { addTo(adj, e.to, e.from); addTo(subclasses, e.to, e.from); }
     else { addTo(adj, e.from, e.to); addTo(containers, e.to, e.from); }
+  }
+
+  // Definitions.
+  if (hierarchyTypes.has('subClassOf')) {
+    for (const { cls, parent } of definitions) {
+      if (!nodeIds.has(cls) || !nodeIds.has(parent) || reach(adj, cls).has(parent)) continue;
+      addTo(adj, parent, cls);
+      addTo(subclasses, parent, cls);
+    }
   }
 
   // Rule 1.

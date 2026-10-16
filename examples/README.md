@@ -44,6 +44,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
 | [hierarchy-tiers.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Flayout%2Fhierarchy-tiers.ttl) | With its display config ticking **Tiers** for `subClassOf` and `contains` (Object Properties): *Page element* goes one tier below *Page*, the common container of its subclasses; *Author* and *Format* go below *Page*, which points to them. Untick `contains` to compare; **↶ Restore positions** undoes a layout change; **Layered (ELK)** lays out the same tiers with ELK | #151, #152, #153 | [TTL](layout/hierarchy-tiers.ttl) |
+| [broad-menu.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Flayout%2Fbroad-menu.ttl) | A broad, shallow hierarchy like the pizza ontology. *Dish* (17 children), *Vegetable* (8) and *Cheese* (6) show their leaves as a block of several columns, not one row; untick **Stack many leaves under their parent** to compare. *Cheesy dish* and the other classes defined by `owl:equivalentClass` sit one tier below *Dish* or *Ingredient*, not apart | #159, #160 | [TTL](layout/broad-menu.ttl) |
 
 ## Relationships
 

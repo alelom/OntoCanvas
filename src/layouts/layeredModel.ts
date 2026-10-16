@@ -1,5 +1,6 @@
 import type { GraphEdge } from '../types';
 import { DEFAULT_HIERARCHY_TYPES, rankingGraph } from './hierarchyRules';
+import type { DefinitionParent } from '../lib/definitionParents';
 
 /**
  * Shared layered model for the relationship-aware hierarchical layouts
@@ -40,6 +41,8 @@ function stableSortBy<T>(arr: T[], key: (x: T) => number): void {
 export interface LayeredModelOptions {
   /** The relationships that make the tiers (#151); `subClassOf` only when not given. */
   hierarchyTypes?: ReadonlySet<string>;
+  /** Classes defined by owl:equivalentClass, and the named classes they are kinds of (#160). */
+  definitions?: DefinitionParent[];
 }
 
 export function buildLayeredModel(
@@ -48,7 +51,8 @@ export function buildLayeredModel(
   options: LayeredModelOptions = {}
 ): LayeredModel {
   // 1. The directed ranking adjacency (parent -> child), plus an undirected view of every relationship.
-  const adj = rankingGraph(nodeIds, edges, options.hierarchyTypes ?? DEFAULT_HIERARCHY_TYPES);
+  const hierarchyTypes = options.hierarchyTypes ?? DEFAULT_HIERARCHY_TYPES;
+  const adj = rankingGraph(nodeIds, edges, hierarchyTypes, options.definitions);
   const undirected: Record<string, Set<string>> = {};
   const link = (a: string, b: string) => {
     (undirected[a] = undirected[a] || new Set()).add(b);
@@ -57,6 +61,8 @@ export function buildLayeredModel(
   for (const e of edges) {
     if (nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to) link(e.from, e.to);
   }
+  // A ranked definition connects its class to the graph, as a drawn subClassOf would.
+  for (const p of Object.keys(adj)) for (const c of adj[p]) link(p, c);
 
   // 2. Connected components (undirected). Largest = main flow; the rest get parked.
   const comp: Record<string, number> = {};

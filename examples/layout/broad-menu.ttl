@@ -1,0 +1,83 @@
+# A broad, shallow hierarchy with defined classes, like the pizza ontology (issues #159 and #160).
+#
+# Defined classes (#160): Cheesy dish, Meaty dish, Vegetarian dish and Spicy ingredient have no rdfs:subClassOf,
+# only an owl:equivalentClass definition (e.g. Cheesy dish ≡ Dish ⊓ ∃has ingredient.Cheese). They rank one tier
+# below the named class of their definition: the three dishes below Dish, Spicy ingredient below Ingredient.
+# Before #160 they had no line to anything and were set apart from the graph.
+#
+# Stacked leaves (#159): Dish has 17 children without children of their own, Vegetable 8 and Cheese 6. Each family
+# shows as a block of several columns under its parent, instead of one long row. Meat (3) and Spice (2) are below
+# the threshold and stay in a row. Untick "Stack many leaves under their parent" (Display options) to compare.
+@prefix : <http://example.org/examples/broad-menu#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/broad-menu> rdf:type owl:Ontology ;
+    rdfs:label "Broad menu example" .
+
+:hasIngredient rdf:type owl:ObjectProperty ; rdfs:label "has ingredient" .
+
+:Food rdf:type owl:Class ; rdfs:label "Food" .
+:Dish rdf:type owl:Class ; rdfs:label "Dish" ; rdfs:subClassOf :Food .
+:Ingredient rdf:type owl:Class ; rdfs:label "Ingredient" ; rdfs:subClassOf :Food .
+
+:Soup rdf:type owl:Class ; rdfs:label "Soup" ; rdfs:subClassOf :Dish .
+:Salad rdf:type owl:Class ; rdfs:label "Salad" ; rdfs:subClassOf :Dish .
+:Stew rdf:type owl:Class ; rdfs:label "Stew" ; rdfs:subClassOf :Dish .
+:Curry rdf:type owl:Class ; rdfs:label "Curry" ;
+    rdfs:subClassOf :Dish , [ rdf:type owl:Restriction ; owl:onProperty :hasIngredient ; owl:someValuesFrom :Chicken ] .
+:Risotto rdf:type owl:Class ; rdfs:label "Risotto" ; rdfs:subClassOf :Dish .
+:Lasagne rdf:type owl:Class ; rdfs:label "Lasagne" ;
+    rdfs:subClassOf :Dish , [ rdf:type owl:Restriction ; owl:onProperty :hasIngredient ; owl:someValuesFrom :Beef ] .
+:Omelette rdf:type owl:Class ; rdfs:label "Omelette" ; rdfs:subClassOf :Dish .
+:Pancake rdf:type owl:Class ; rdfs:label "Pancake" ; rdfs:subClassOf :Dish .
+:Burrito rdf:type owl:Class ; rdfs:label "Burrito" ; rdfs:subClassOf :Dish .
+:Taco rdf:type owl:Class ; rdfs:label "Taco" ; rdfs:subClassOf :Dish .
+:Sushi rdf:type owl:Class ; rdfs:label "Sushi" ; rdfs:subClassOf :Dish .
+:Ramen rdf:type owl:Class ; rdfs:label "Ramen" ; rdfs:subClassOf :Dish .
+:Paella rdf:type owl:Class ; rdfs:label "Paella" ; rdfs:subClassOf :Dish .
+:Goulash rdf:type owl:Class ; rdfs:label "Goulash" ; rdfs:subClassOf :Dish .
+
+:Vegetable rdf:type owl:Class ; rdfs:label "Vegetable" ; rdfs:subClassOf :Ingredient .
+:Cheese rdf:type owl:Class ; rdfs:label "Cheese" ; rdfs:subClassOf :Ingredient .
+:Meat rdf:type owl:Class ; rdfs:label "Meat" ; rdfs:subClassOf :Ingredient .
+:Spice rdf:type owl:Class ; rdfs:label "Spice" ; rdfs:subClassOf :Ingredient .
+
+:Carrot rdf:type owl:Class ; rdfs:label "Carrot" ; rdfs:subClassOf :Vegetable .
+:Onion rdf:type owl:Class ; rdfs:label "Onion" ; rdfs:subClassOf :Vegetable .
+:Pepper rdf:type owl:Class ; rdfs:label "Pepper" ; rdfs:subClassOf :Vegetable .
+:Spinach rdf:type owl:Class ; rdfs:label "Spinach" ; rdfs:subClassOf :Vegetable .
+:Tomato rdf:type owl:Class ; rdfs:label "Tomato" ; rdfs:subClassOf :Vegetable .
+:Mushroom rdf:type owl:Class ; rdfs:label "Mushroom" ; rdfs:subClassOf :Vegetable .
+:Leek rdf:type owl:Class ; rdfs:label "Leek" ; rdfs:subClassOf :Vegetable .
+:Pea rdf:type owl:Class ; rdfs:label "Pea" ; rdfs:subClassOf :Vegetable .
+
+:Cheddar rdf:type owl:Class ; rdfs:label "Cheddar" ; rdfs:subClassOf :Cheese .
+:Feta rdf:type owl:Class ; rdfs:label "Feta" ; rdfs:subClassOf :Cheese .
+:Brie rdf:type owl:Class ; rdfs:label "Brie" ; rdfs:subClassOf :Cheese .
+:Gouda rdf:type owl:Class ; rdfs:label "Gouda" ; rdfs:subClassOf :Cheese .
+:Parmesan rdf:type owl:Class ; rdfs:label "Parmesan" ; rdfs:subClassOf :Cheese .
+:Mozzarella rdf:type owl:Class ; rdfs:label "Mozzarella" ; rdfs:subClassOf :Cheese .
+
+:Beef rdf:type owl:Class ; rdfs:label "Beef" ; rdfs:subClassOf :Meat .
+:Pork rdf:type owl:Class ; rdfs:label "Pork" ; rdfs:subClassOf :Meat .
+:Chicken rdf:type owl:Class ; rdfs:label "Chicken" ; rdfs:subClassOf :Meat .
+
+:Chilli rdf:type owl:Class ; rdfs:label "Chilli" ; rdfs:subClassOf :Spice .
+:Cumin rdf:type owl:Class ; rdfs:label "Cumin" ; rdfs:subClassOf :Spice .
+
+# Defined classes: an owl:equivalentClass definition, no rdfs:subClassOf.
+:CheesyDish rdf:type owl:Class ; rdfs:label "Cheesy dish" ;
+    owl:equivalentClass [ rdf:type owl:Class ; owl:intersectionOf ( :Dish
+        [ rdf:type owl:Restriction ; owl:onProperty :hasIngredient ; owl:someValuesFrom :Cheese ] ) ] .
+:MeatyDish rdf:type owl:Class ; rdfs:label "Meaty dish" ;
+    owl:equivalentClass [ rdf:type owl:Class ; owl:intersectionOf ( :Dish
+        [ rdf:type owl:Restriction ; owl:onProperty :hasIngredient ; owl:someValuesFrom :Meat ] ) ] .
+:VegetarianDish rdf:type owl:Class ; rdfs:label "Vegetarian dish" ;
+    owl:equivalentClass [ rdf:type owl:Class ; owl:intersectionOf ( :Dish
+        [ rdf:type owl:Class ; owl:complementOf
+            [ rdf:type owl:Restriction ; owl:onProperty :hasIngredient ; owl:someValuesFrom :Meat ] ] ) ] .
+:SpicyIngredient rdf:type owl:Class ; rdfs:label "Spicy ingredient" ;
+    owl:equivalentClass [ rdf:type owl:Class ; owl:intersectionOf ( :Ingredient
+        [ rdf:type owl:Class ; owl:unionOf ( :Spice :Pepper ) ] ) ] .

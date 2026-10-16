@@ -43,6 +43,8 @@ export interface DisplayConfig {
   externalNodeLayout?: ExternalNodeLayout;
   /** The relationships that make the tiers of the hierarchical layouts (#151); `["subClassOf"]` when absent. */
   hierarchyRelationships?: string[];
+  /** Stack many leaf children in a block under their parent in the tiered layouts (#159); true when absent. */
+  stackLeaves?: boolean;
 }
 
 export interface ExternalOntologyReference {

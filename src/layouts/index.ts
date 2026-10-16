@@ -2,7 +2,7 @@ import type { GraphEdge, NodeDimensions } from '../types';
 import { computeHierarchicalDag } from './hierarchicalDag';
 import { computeHierarchicalTiersSpring } from './hierarchicalTiersSpring';
 import { computeHierarchicalForceDownward } from './hierarchicalForceDownward';
-import type { LayeredModelOptions } from './layeredModel';
+import { withLeafBlocks, withLeafBlocksAsync, type LayoutOptions } from './leafBlocks';
 import { computeElkLayered } from './elkLayered';
 
 /**
@@ -13,16 +13,17 @@ export type LayoutAlgorithm = (
   edges: GraphEdge[],
   spacing: number,
   nodeDimensions?: Map<string, NodeDimensions>,
-  options?: LayeredModelOptions
+  options?: LayoutOptions
 ) => Record<string, { x: number; y: number }>;
 
 /**
  * Registry of all available layout algorithms
  */
 export const LAYOUT_ALGORITHMS: Record<string, LayoutAlgorithm> = {
-  'hierarchical-dag': computeHierarchicalDag,
-  'hierarchical-tiers-spring': computeHierarchicalTiersSpring,
-  'hierarchical-force-downward': computeHierarchicalForceDownward,
+  // Every tiered layout can stack many leaf children under their parent (#159).
+  'hierarchical-dag': withLeafBlocks(computeHierarchicalDag),
+  'hierarchical-tiers-spring': withLeafBlocks(computeHierarchicalTiersSpring),
+  'hierarchical-force-downward': withLeafBlocks(computeHierarchicalForceDownward),
 };
 
 /** A layout computed asynchronously (#153): the app shows the default layout until it resolves. */
@@ -31,7 +32,7 @@ export type AsyncLayoutAlgorithm = (
 ) => Promise<ReturnType<LayoutAlgorithm>>;
 
 export const ASYNC_LAYOUT_ALGORITHMS: Record<string, AsyncLayoutAlgorithm> = {
-  'elk-layered': computeElkLayered,
+  'elk-layered': withLeafBlocksAsync(computeElkLayered),
 };
 
 export function getAsyncLayoutAlgorithm(mode: string): AsyncLayoutAlgorithm | null {
