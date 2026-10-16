@@ -39,6 +39,12 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | [imported-terms.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Fimported-terms.ttl) | Terms used from an imported ontology: a restriction edge to an imported class (read-only), a data property listed once, prefixed identifiers | #99–#101 | [TTL](imports/imported-terms.ttl) |
 | [fetchable-child.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fimports%2Ffetchable-child.ttl) | An import that can be fetched: it is read from next to the file, and what its parent declares (an object property, two data properties) is listed in the menus as read-only context, never drawn. Needs `fetchable-parent.ttl` beside it | #104 | [TTL](imports/fetchable-child.ttl), [parent](imports/fetchable-parent.ttl) |
 
+## Layout
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [hierarchy-tiers.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Flayout%2Fhierarchy-tiers.ttl) | With its display config ticking **Tiers** for `subClassOf` and `contains` (Object Properties): *Page element* goes one tier below *Page*, the common container of its subclasses; *Author* and *Format* go below *Page*, which points to them. Untick `contains` to compare; **↶ Restore positions** undoes a layout change; **Layered (ELK)** lays out the same tiers with ELK | #151, #152, #153 | [TTL](layout/hierarchy-tiers.ttl) |
+
 ## Relationships
 
 | Example (opens in OntoCanvas) | Shows | Issue | Source |

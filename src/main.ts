@@ -130,6 +130,7 @@ import {
 } from './graph';
 import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
 import { placeUnsavedNodes } from './layouts/placeUnsaved';
+import { getAsyncLayoutAlgorithm, DEFAULT_LAYOUT_MODE, type AsyncLayoutAlgorithm } from './layouts';
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
@@ -344,8 +345,12 @@ function applyDisplayConfig(config: DisplayConfig): void {
   const clusterThingEl = document.getElementById('clusterThingDataProps') as HTMLInputElement | null;
   if (clusterThingEl) clusterThingEl.checked = clusterThingDataProperties;
   externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
-  // The layout made before the config arrived used the old tiers; the config's own positions are applied below.
-  if (setHierarchyTypes(config.hierarchyRelationships)) forgetNodePositions();
+  // The layout made before the config arrived used the old tiers or layout; the config's own positions are applied
+  // below. Loading a config is not undone with "Restore positions" (#152).
+  const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
+  const configLayoutMode = resolveLayoutMode(config.layoutMode);
+  if (tiersChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
+  lastLayoutMode = configLayoutMode;
   clearPositionsBeforeLayout();
   loadedNodePositions = config.nodePositions ?? null;
   const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
@@ -3181,7 +3186,9 @@ function buildNetworkData(
   
   // Use layout registry for hierarchical layouts
   // Only compute positions for nodes that don't already have positions
-  const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+  // An asynchronous layout (ELK, #153) shows the default layout until its own positions arrive.
+  const asyncLayout = getAsyncLayoutAlgorithm(layoutMode);
+  const layoutAlgorithm = getLayoutAlgorithm(layoutMode) ?? (asyncLayout ? getLayoutAlgorithm(DEFAULT_LAYOUT_MODE) : null);
   const nodesWithoutPositions = filteredNodes.filter((n) => !(n.x != null && n.y != null));
   
   if (layoutAlgorithm && nodesWithoutPositions.length > 0) {
@@ -3227,13 +3234,17 @@ function buildNetworkData(
     
     // Nodes without a position go near their placed neighbours, at the offset the layout gives them (#152).
     const fallbackSize = { width: SPACING * 0.45, height: SPACING * 0.3 };
-    const unsavedPositions = placeUnsavedNodes(
-      nodePositions,
-      resolvedPositions,
-      filteredEdges,
-      (id) => nodeDimensions.get(id) ?? fallbackSize
-    );
-    Object.entries(unsavedPositions).forEach(([id, pos]) => {
+    const sizeOf = (id: string) => nodeDimensions.get(id) ?? fallbackSize;
+    const placedBefore = { ...nodePositions };
+    const unsavedPositions = placeUnsavedNodes(placedBefore, resolvedPositions, filteredEdges, sizeOf);
+    if (asyncLayout) {
+      // Shown, not kept: the asynchronous layout's positions replace them when they arrive.
+      Object.entries(unsavedPositions).forEach(([id, pos]) => {
+        if (nodesToLayout.has(id)) nodePositions[id] = pos;
+      });
+      runAsyncLayout(asyncLayout, layoutMode, nodeIds, filteredEdges, nodeDimensions, nodesToLayout, placedBefore, sizeOf, unsavedPositions);
+    }
+    Object.entries(asyncLayout ? {} : unsavedPositions).forEach(([id, pos]) => {
       if (nodesToLayout.has(id) && !nodePositions[id]) {
         nodePositions[id] = pos;
         // Also update data (rawData or expanded) to keep it in sync
@@ -6332,6 +6343,7 @@ function renderApp(): void {
             <option value="hierarchical-dag">Hierarchical DAG</option>
             <option value="hierarchical-tiers-spring">Hierarchical tiers+spring</option>
             <option value="hierarchical-force-downward">Hierarchical force-downward</option>
+            <option value="elk-layered">Layered (ELK)</option>
             <option value="force">Force-directed</option>
           </select>
           <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; cursor: pointer; padding: 2px 8px; font-size: 12px; flex: none;">↶ Restore positions</button>
@@ -7562,6 +7574,50 @@ function forgetNodePositions(): void {
   updateRestorePositionsButton();
 }
 
+let asyncLayoutRun = 0;
+
+/**
+ * Runs an asynchronous layout (ELK, #153) and keeps its positions for the nodes that had none, then redraws. Only
+ * the latest run counts, and only while its layout is still the chosen one. If it fails (e.g. elkjs can't be
+ * loaded), the positions shown meanwhile are kept.
+ */
+function runAsyncLayout(
+  layout: AsyncLayoutAlgorithm,
+  mode: string,
+  nodeIds: Set<string>,
+  edges: GraphEdge[],
+  nodeDimensions: Map<string, { width: number; height: number }>,
+  toPlace: Set<string>,
+  placedBefore: Record<string, { x: number; y: number }>,
+  sizeOf: (id: string) => { width: number; height: number },
+  shown: Record<string, { x: number; y: number }>
+): void {
+  const run = ++asyncLayoutRun;
+  const keep = (positions: Record<string, { x: number; y: number }>) => {
+    if (run !== asyncLayoutRun || (document.getElementById('layoutMode') as HTMLSelectElement).value !== mode) return;
+    let changed = false;
+    for (const [id, pos] of Object.entries(positions)) {
+      if (!toPlace.has(id)) continue;
+      const node = rawData.nodes.find((n) => n.id === id);
+      if (node && (node.x != null || node.y != null)) continue;
+      if (node) {
+        node.x = pos.x;
+        node.y = pos.y;
+      } else {
+        loadedNodePositions = { ...(loadedNodePositions ?? {}), [id]: pos };
+      }
+      changed = true;
+    }
+    if (changed) applyFilter(true);
+  };
+  layout(nodeIds, edges, SPACING, nodeDimensions, { hierarchyTypes })
+    .then((computed) => keep(placeUnsavedNodes(placedBefore, computed, edges, sizeOf)))
+    .catch((err) => {
+      debugError(`[LAYOUT] ${mode} failed; keeping the default layout`, err);
+      keep(shown);
+    });
+}
+
 /** Puts every node back where it was before the positions were dropped (#152). */
 function restoreNodePositions(): void {
   const before = positionsBeforeLayout;
@@ -7611,7 +7667,7 @@ function applyFilter(preserveView = false): void {
   // positions when just applying filters or reloading
   const layoutModeChanged = lastLayoutMode !== null && lastLayoutMode !== layoutMode;
   if (layoutModeChanged) {
-    const layoutAlgorithm = getLayoutAlgorithm(layoutMode);
+    const layoutAlgorithm = getLayoutAlgorithm(layoutMode) ?? getAsyncLayoutAlgorithm(layoutMode);
     if (layoutAlgorithm || layoutMode === 'force') {
       // Switching to a layout that computes positions - clear stored positions
       // Debug logging (only in debug mode)

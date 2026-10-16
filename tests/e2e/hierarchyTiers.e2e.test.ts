@@ -82,9 +82,11 @@ describe('the Tiers tick of a relationship (#151)', () => {
   });
 
   it('is read from the display config, and saved back into it', async () => {
-    await open({ version: 1, hierarchyRelationships: ['subClassOf', 'contains'] });
+    await open({ version: 1, layoutMode: 'hierarchical-tiers-spring', hierarchyRelationships: ['subClassOf', 'contains'] });
     expect(await tierBox('contains').isChecked()).toBe(true);
     expect(await bBelowA()).toBeGreaterThan(0);
+    // Loading a config is not a layout change to undo (#152).
+    expect(await page.locator('#restorePositions').isVisible()).toBe(false);
     const download = page.waitForEvent('download');
     await page.click('#saveDisplayConfig');
     const saved = JSON.parse(readFileSync((await (await download).path())!, 'utf-8'));
