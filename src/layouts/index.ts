@@ -3,6 +3,7 @@ import { computeHierarchicalDag } from './hierarchicalDag';
 import { computeHierarchicalTiersSpring } from './hierarchicalTiersSpring';
 import { computeHierarchicalForceDownward } from './hierarchicalForceDownward';
 import { withLeafBlocks, withLeafBlocksAsync, type LayoutOptions } from './leafBlocks';
+import { withForceTidy, withForceTidyAsync } from './forceTidy';
 import { computeElkLayered } from './elkLayered';
 
 /**
@@ -20,10 +21,10 @@ export type LayoutAlgorithm = (
  * Registry of all available layout algorithms
  */
 export const LAYOUT_ALGORITHMS: Record<string, LayoutAlgorithm> = {
-  // Every tiered layout can stack many leaf children under their parent (#159).
-  'hierarchical-dag': withLeafBlocks(computeHierarchicalDag),
-  'hierarchical-tiers-spring': withLeafBlocks(computeHierarchicalTiersSpring),
-  'hierarchical-force-downward': withLeafBlocks(computeHierarchicalForceDownward),
+  // Every tiered layout can stack many leaf children under their parent (#159), then be tidied with forces (#162).
+  'hierarchical-dag': withForceTidy(withLeafBlocks(computeHierarchicalDag)),
+  'hierarchical-tiers-spring': withForceTidy(withLeafBlocks(computeHierarchicalTiersSpring)),
+  'hierarchical-force-downward': withForceTidy(withLeafBlocks(computeHierarchicalForceDownward)),
 };
 
 /** A layout computed asynchronously (#153): the app shows the default layout until it resolves. */
@@ -32,7 +33,7 @@ export type AsyncLayoutAlgorithm = (
 ) => Promise<ReturnType<LayoutAlgorithm>>;
 
 export const ASYNC_LAYOUT_ALGORITHMS: Record<string, AsyncLayoutAlgorithm> = {
-  'elk-layered': withLeafBlocksAsync(computeElkLayered),
+  'elk-layered': withForceTidyAsync(withLeafBlocksAsync(computeElkLayered)),
 };
 
 export function getAsyncLayoutAlgorithm(mode: string): AsyncLayoutAlgorithm | null {

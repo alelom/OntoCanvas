@@ -45,6 +45,8 @@ export interface DisplayConfig {
   hierarchyRelationships?: string[];
   /** Stack many leaf children in a block under their parent in the tiered layouts (#159); true when absent. */
   stackLeaves?: boolean;
+  /** Tidy the computed layout with a mild force relaxation (#162); false when absent. */
+  tidyForces?: boolean;
 }
 
 export interface ExternalOntologyReference {
