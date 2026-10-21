@@ -8,6 +8,7 @@
 import { DataFactory, type Store } from 'n3';
 import type { ClassExpressionGroup, ClassExpressionOperator } from '../types';
 import { extractLocalName } from '../utils/localName';
+import { isNodeOf } from '../graph/classNodeIds';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -194,12 +195,12 @@ export function resolveExpressionClassUris(store: Store, obj: RdfTerm): string[]
 }
 
 /** Local names of the in-graph classes a domain/range side resolves to (all its rdfs:domain/range triples). */
-function sideClasses(store: Store, subj: RdfTerm, side: 'domain' | 'range', seenClasses: Set<string>): string[] {
+function sideClasses(store: Store, subj: RdfTerm, side: 'domain' | 'range', classUriByName: ReadonlyMap<string, string>): string[] {
   const names: string[] = [];
   for (const q of store.getQuads(subj as never, DataFactory.namedNode(RDFS + side), null, null)) {
     for (const uri of resolveExpressionClassUris(store, q.object as RdfTerm)) {
       const name = extractLocalName(uri);
-      if (seenClasses.has(name) && !names.includes(name)) names.push(name);
+      if (isNodeOf(classUriByName, uri) && !names.includes(name)) names.push(name);
     }
   }
   return names;
@@ -233,7 +234,7 @@ function isDrawable(
  * with no class on the graph has no members; it is anchored on the opposite end instead (the
  * counterpart classes for an object property, the domain classes' stubs for a data property).
  */
-export function extractClassExpressionGroups(store: Store, seenClasses: Set<string>): ClassExpressionGroup[] {
+export function extractClassExpressionGroups(store: Store, classUriByName: ReadonlyMap<string, string>): ClassExpressionGroup[] {
   const groups: ClassExpressionGroup[] = [];
   const kinds: Array<['object' | 'data', string]> = [
     ['object', OWL + 'ObjectProperty'],
@@ -256,11 +257,11 @@ export function extractClassExpressionGroups(store: Store, seenClasses: Set<stri
           const members: string[] = [];
           for (const uri of expr.classUris) {
             const name = extractLocalName(uri);
-            if (seenClasses.has(name) && !members.includes(name)) members.push(name);
+            if (isNodeOf(classUriByName, uri) && !members.includes(name)) members.push(name); // by IRI (#164)
           }
           // The classes on the other end (edge targets), resolved through an expression there too. A data
           // property's stubs hang off its domain classes, so for a range expression these carry the mark.
-          const counterparts = sideClasses(store, subj, otherSide, seenClasses);
+          const counterparts = sideClasses(store, subj, otherSide, classUriByName);
           const stubOwners = exprSide === 'domain' ? members : counterparts;
           const anchorAvailable = propertyKind === 'data' ? stubOwners.length > 0 : counterparts.length > 0;
           if (!isDrawable(expr.operator, members, expr.values, anchorAvailable, expr.nested)) continue;

@@ -106,6 +106,18 @@ export function expandWithExternalRefs(
 
   const mainBase = getMainOntologyBase(store);
   const localNodeIds = new Set(rawData.nodes.map((n) => n.id));
+  // The class IRI each local node stands for: a class is local when its local name's node is that IRI (#164), so a
+  // stub of an external class with the same name as a local one (std:Party next to :Party) is drawn here as its own
+  // node; a class no node is named after is local when it is in this ontology's namespace.
+  const nodeUriById = new Map(rawData.nodes.map((n) => [n.id, n.uri]));
+  const isLocalClass = (uri: string): boolean => {
+    const name = extractLocalName(uri);
+    if (nodeUriById.has(name)) {
+      const owner = nodeUriById.get(name);
+      return !owner || owner === uri;
+    }
+    return isLocalUri(uri, mainBase);
+  };
   const objectProps = getObjectProperties(store);
   
   // Build a comprehensive set of edge keys that handles both URI and local name formats
@@ -197,8 +209,8 @@ export function expandWithExternalRefs(
 
         const domainLocal = extractLocalName(domainUri);
         const rangeLocal = extractLocalName(rangeUri);
-        const domainIsLocal = localNodeIds.has(domainLocal) || isLocalUri(domainUri, mainBase);
-        const rangeIsLocal = localNodeIds.has(rangeLocal) || isLocalUri(rangeUri, mainBase);
+        const domainIsLocal = isLocalClass(domainUri);
+        const rangeIsLocal = isLocalClass(rangeUri);
 
         const fromId = domainIsLocal ? domainLocal : domainUri;
         const toId = rangeIsLocal ? rangeLocal : rangeUri;
@@ -299,14 +311,14 @@ export function expandWithExternalRefs(
     // already created a local node for it (keyed by local name), so treat it as local
     // here too — otherwise we mint a second node keyed by the full URI and the subClassOf
     // line attaches only to the local one, leaving the external-looking node orphaned.
-    // Mirrors the domain/range branch above (localNodeIds check || isLocalUri).
-    const superClassIsLocal =
-      localNodeIds.has(extractLocalName(superClassUri)) || isLocalUri(superClassUri, mainBase);
+    // Mirrors the domain/range branch above. The match is by IRI: a local class with the stub's local name is not the
+    // stub (#164).
+    const superClassIsLocal = isLocalClass(superClassUri);
     if (!superClassIsLocal) {
       addExternalClassNode(superClassUri);
       // Also create the subClassOf edge if the subclass is local
       const subClassUri = (q.subject as { value: string }).value;
-      const subClassIsLocal = isLocalUri(subClassUri, mainBase);
+      const subClassIsLocal = isLocalClass(subClassUri);
       if (subClassIsLocal) {
         const subClassLocalName = extractLocalName(subClassUri);
         const edgeKey = `${subClassLocalName}->${superClassUri}:subClassOf`;

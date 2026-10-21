@@ -13,6 +13,7 @@ import { blankNodeClosureQuads, blockStructurallyChanged } from './rdf/blankNode
 import { currentSplitShares } from './rdf/splitSubjects';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
+import { isNodeOf, orderClassUris } from './graph/classNodeIds';
 import {
   findRestrictionBlanks,
   mergeRestrictionKinds,
@@ -299,12 +300,17 @@ function buildParseResultFromStore(
     'http://www.w3.org/2000/01/rdf-schema#',
   ];
 
-  // Get all OWL classes
-  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
-  for (const q of classQuads) {
-    const subj = q.subject;
-    if (subj.termType !== 'NamedNode') continue;
-    const uri = subj.value;
+  // Get all OWL classes. The ontology's own classes claim their local names first (#164): a stub of an external
+  // class with the same name (std:Party next to :Party) is then drawn by the external expansion, under its full IRI.
+  const classUris = orderClassUris(
+    store
+      .getQuads(null, RDF + 'type', OWL + 'Class', null)
+      .filter((q) => q.subject.termType === 'NamedNode')
+      .map((q) => q.subject.value),
+    getMainOntologyBase(store)
+  );
+  for (const uri of classUris) {
+    const subj = DataFactory.namedNode(uri);
     if (excludeNamespaces.some((ns) => uri.startsWith(ns))) continue;
     const localName = extractLocalName(uri);
     if (seenClasses.has(localName)) continue;
@@ -388,11 +394,12 @@ function buildParseResultFromStore(
 
     const subjUri = subj.value;
     const subjName = extractLocalName(subjUri);
-    if (!seenClasses.has(subjName)) continue;
+    if (!isNodeOf(classUriByName, subjUri)) continue;
 
     if (obj.termType === 'NamedNode') {
       const objName = extractLocalName(obj.value);
-      if (!seenClasses.has(objName)) continue;
+      // By IRI, not local name: std:Party is not the local Party (#164)
+      if (!isNodeOf(classUriByName, obj.value)) continue;
       const key = `${subjName}->${objName}`;
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
@@ -766,7 +773,7 @@ function buildParseResultFromStore(
           break;
         }
         const domainName = extractLocalName(domainUri);
-        if (seenClasses.has(domainName)) {
+        if (isNodeOf(classUriByName, domainUri)) {
           validDomains.push(domainName);
         }
       } else if (domObj.termType === 'BlankNode') {
@@ -775,7 +782,7 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, domObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (!seenClasses.has(name)) continue;
+          if (!isNodeOf(classUriByName, uri)) continue;
           expressionDomains.add(name);
           if (!validDomains.includes(name)) validDomains.push(name);
         }
@@ -797,7 +804,7 @@ function buildParseResultFromStore(
           break;
         }
         const rangeName = extractLocalName(rangeUri);
-        if (seenClasses.has(rangeName)) {
+        if (isNodeOf(classUriByName, rangeUri)) {
           validRanges.push(rangeName);
         }
       } else if (rangeObj.termType === 'BlankNode') {
@@ -806,7 +813,7 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, rangeObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (!seenClasses.has(name)) continue;
+          if (!isNodeOf(classUriByName, uri)) continue;
           expressionRanges.add(name);
           if (!validRanges.includes(name)) validRanges.push(name);
         }
@@ -961,7 +968,7 @@ function buildParseResultFromStore(
     }
   }
 
-  const classExpressions = extractClassExpressionGroups(store, seenClasses);
+  const classExpressions = extractClassExpressionGroups(store, classUriByName);
 
   return {
     graphData: { nodes, edges, classExpressions },
