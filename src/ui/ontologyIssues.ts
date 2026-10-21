@@ -1,6 +1,6 @@
 import { Store, DataFactory } from 'n3';
 import { getAnnotationProperties, extractLocalName, getMainOntologyBase, getClassNamespace } from '../parser';
-import { getExampleImageUrisForClass } from '../lib/exampleImageStore';
+import { getExampleImageUrisForClassUri } from '../lib/exampleImageStore';
 import { resolveImageUrl, isImageUrlReachable } from '../lib/exampleImageUrlValidation';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
@@ -128,8 +128,9 @@ async function detectUnreachableExampleImages(
     const classUri = (classQuad.subject as { value: string }).value;
     const classLocalName = extractLocalName(classUri);
     
-    // Get example images for this class
-    const imageUris = getExampleImageUrisForClass(store, classLocalName, baseIri);
+    // Get example images for this class, by its IRI: a lookup by local name costs a pass over the classes per class and
+    // would give a stub the images of the local class with the same name (#164)
+    const imageUris = getExampleImageUrisForClassUri(store, classUri, baseIri);
     
     // Check each image URL
     for (const imageUri of imageUris) {

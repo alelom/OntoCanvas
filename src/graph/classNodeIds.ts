@@ -43,10 +43,8 @@ function rank(store: Store, uri: string, own: string[]): number {
   return definedElsewhere ? 2 : 1;
 }
 
-/** Every named owl:Class, once, in the order it claims its local name (see the module comment). */
-export function rankedClassUris(store: Store): string[] {
-  const own = ownNamespaces(store);
-  const uris = [
+function classIris(store: Store): string[] {
+  return [
     ...new Set(
       store
         .getQuads(null, DataFactory.namedNode(RDF_TYPE), DataFactory.namedNode(OWL_CLASS), null)
@@ -54,13 +52,28 @@ export function rankedClassUris(store: Store): string[] {
         .map((q) => q.subject.value)
     ),
   ];
+}
+
+/** `uris` in ranking order (stable: file order within a rank). */
+function byRank(store: Store, uris: string[]): string[] {
+  if (uris.length < 2) return uris;
+  const own = ownNamespaces(store);
   const ranks = new Map(uris.map((u) => [u, rank(store, u, own)]));
   return uris.map((u, i) => ({ u, i })).sort((a, b) => ranks.get(a.u)! - ranks.get(b.u)! || a.i - b.i).map((x) => x.u);
 }
 
-/** The IRI of the class that the local name `name` stands for, or null when no owl:Class has it. */
+/** Every named owl:Class, once, in the order it claims its local name (see the module comment). */
+export function rankedClassUris(store: Store): string[] {
+  return byRank(store, classIris(store));
+}
+
+/**
+ * The IRI of the class that the local name `name` stands for, or null when no owl:Class has it. Only the classes with
+ * that name are ranked (almost always one), so a lookup costs a pass over the class IRIs, like the lookup it replaces;
+ * a caller that resolves many names still loops once per name, so resolve once and reuse the IRI.
+ */
 export function classUriForName(store: Store, name: string): string | null {
-  return rankedClassUris(store).find((u) => extractLocalName(u) === name) ?? null;
+  return byRank(store, classIris(store).filter((u) => extractLocalName(u) === name))[0] ?? null;
 }
 
 /** True when the node named after `uri`'s local name is that class (`classUriByName`: node id → class IRI). */

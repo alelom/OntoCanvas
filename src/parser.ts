@@ -1181,11 +1181,12 @@ export function updateLabelInStore(
   localName: string,
   newLabel: string
 ): boolean {
+  const target = classUriForName(store, localName); // resolved once, not per class (#164)
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (subj.value !== classUriForName(store, localName)) continue; // only the class the name stands for (#164)
+    if (subj.value !== target) continue; // only the class the name stands for (#164)
 
     const labelQuads = store.getQuads(subj, RDFS + 'label', null, null);
     const graph = labelQuads[0]?.graph ?? DataFactory.defaultGraph();
@@ -1220,12 +1221,13 @@ export function updateCommentInStore(
   localName: string,
   comment: string | null
 ): boolean {
+  const target = classUriForName(store, localName); // resolved once, not per class (#164)
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   const commentPred = DataFactory.namedNode(RDFS + 'comment');
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (subj.value !== classUriForName(store, localName)) continue; // only the class the name stands for (#164)
+    if (subj.value !== target) continue; // only the class the name stands for (#164)
 
     const commentQuads = store.getQuads(subj, commentPred, null, null);
     const graph = commentQuads[0]?.graph ?? store.getQuads(subj, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
@@ -1246,6 +1248,7 @@ export function updateLabellableInStore(
   localName: string,
   labellable: boolean
 ): boolean {
+  const target = classUriForName(store, localName); // resolved once, not per class (#164)
   const XSD = 'http://www.w3.org/2001/XMLSchema#';
   const predUri = findLabellablePredicate(store);
   const labellablePredicate = predUri
@@ -1256,7 +1259,7 @@ export function updateLabellableInStore(
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (subj.value !== classUriForName(store, localName)) continue; // only the class the name stands for (#164)
+    if (subj.value !== target) continue; // only the class the name stands for (#164)
 
     const outQuads = store.getQuads(subj, null, null, null);
     for (const oq of outQuads) {
@@ -1288,13 +1291,14 @@ export function updateAnnotationPropertyValueInStore(
   value: boolean | string | null,
   isBoolean: boolean
 ): boolean {
+  const target = classUriForName(store, classLocalName); // resolved once, not per class (#164)
   // Find the class subject
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   let classSubject: import('n3').NamedNode | null = null;
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (subj.value !== classUriForName(store, classLocalName)) continue; // the class the name stands for (#164)
+    if (subj.value !== target) continue; // the class the name stands for (#164)
     classSubject = subj as import('n3').NamedNode;
     break;
   }

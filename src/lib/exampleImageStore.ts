@@ -46,7 +46,12 @@ export function ensureExampleImageAnnotationProperty(store: Store, baseIri: stri
  */
 export function getExampleImageUrisForClass(store: Store, classLocalName: string, baseIri: string): string[] {
   const subject = findClassSubjectByLocalName(store, classLocalName);
-  if (!subject) return [];
+  return subject ? getExampleImageUrisForClassUri(store, subject.value, baseIri) : [];
+}
+
+/** The example images of the class `classUri` (for a caller that already has the IRI, e.g. one looping over classes). */
+export function getExampleImageUrisForClassUri(store: Store, classUri: string, baseIri: string): string[] {
+  const subject = DataFactory.namedNode(classUri);
   const predUri = getExampleImagePredicateUri(baseIri);
   const pred = DataFactory.namedNode(predUri);
   const quads = store.getQuads(subject, pred, null, null);
