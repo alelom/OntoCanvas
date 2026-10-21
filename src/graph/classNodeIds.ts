@@ -1,27 +1,66 @@
 /**
- * Which class a node stands for (#164).
+ * Which class a local name stands for (#164).
  *
- * A class is drawn under its local name, and a local name stands for one class. When two classes share it (this
- * ontology's :Party and an external stub std:Party it subclasses), the ontology's own class keeps the name, whatever
+ * A class is drawn and edited under its local name, and a local name stands for one class. When two classes share it
+ * (this ontology's :Party and an external stub std:Party it subclasses), the ontology's own class has it, whatever
  * order they are declared in; the other one is drawn by the external expansion under its full IRI, as an imported
- * class of the same name already is (lib:Book next to :Book). So a class matches a node only when the node is that
- * IRI, never by local name alone: matching by name turned `:Party rdfs:subClassOf std:Party` into the cycle
- * Party → Party, and the ontology could not be opened.
+ * class of the same name already is (lib:Book next to :Book). Every place that turns a class into a node, or a node
+ * back into a class IRI (to draw, edit, save), follows this one ranking, so what is drawn under `Party` is what an
+ * edit to `Party` changes:
+ *
+ *   1. a class in the ontology's own namespace: its IRI followed by `#` or `/`;
+ *   2. any other class that is not a stub;
+ *   3. a stub: a class whose rdfs:isDefinedBy names another ontology.
+ *
+ * File order decides only within a rank. A class matches a node only when the node is that IRI, never by local name
+ * alone: matching by name turned `:Party rdfs:subClassOf std:Party` into the cycle Party → Party, and the ontology
+ * could not be opened.
  */
+import { DataFactory, type Store } from 'n3';
 import { extractLocalName } from '../utils/localName';
 
-/** True when `uri` is in the ontology's own namespace (`mainBase` is its IRI with a trailing `#`). */
-export function isInNamespace(uri: string, mainBase: string | null): boolean {
-  if (!mainBase) return false;
-  return uri.startsWith(mainBase) || uri === mainBase.slice(0, -1);
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class';
+const OWL_ONTOLOGY = 'http://www.w3.org/2002/07/owl#Ontology';
+const RDFS_IS_DEFINED_BY = 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy';
+
+/** The two forms of the ontology's own namespace (its IRI followed by `#` or `/`); none when it declares no ontology. */
+export function ownNamespaces(store: Store): string[] {
+  const ontology = store
+    .getQuads(null, DataFactory.namedNode(RDF_TYPE), DataFactory.namedNode(OWL_ONTOLOGY), null)
+    .find((q) => q.subject.termType === 'NamedNode');
+  if (!ontology) return [];
+  const iri = ontology.subject.value.replace(/[#/]$/, '');
+  return [`${iri}#`, `${iri}/`];
 }
 
-/**
- * The class IRIs in the order they claim local names: the ontology's own first, then the rest, each group in the
- * order given. The first class with a local name gets it.
- */
-export function orderClassUris(uris: readonly string[], mainBase: string | null): string[] {
-  return [...uris.filter((u) => isInNamespace(u, mainBase)), ...uris.filter((u) => !isInNamespace(u, mainBase))];
+function rank(store: Store, uri: string, own: string[]): number {
+  if (own.some((ns) => uri.startsWith(ns))) return 0;
+  const ontologyIri = own[0]?.slice(0, -1);
+  const definedElsewhere = store
+    .getQuads(DataFactory.namedNode(uri), DataFactory.namedNode(RDFS_IS_DEFINED_BY), null, null)
+    .some((q) => q.object.value !== ontologyIri && !own.some((ns) => q.object.value.startsWith(ns)));
+  return definedElsewhere ? 2 : 1;
+}
+
+/** Every named owl:Class, once, in the order it claims its local name (see the module comment). */
+export function rankedClassUris(store: Store): string[] {
+  const own = ownNamespaces(store);
+  const uris = [
+    ...new Set(
+      store
+        .getQuads(null, DataFactory.namedNode(RDF_TYPE), DataFactory.namedNode(OWL_CLASS), null)
+        .filter((q) => q.subject.termType === 'NamedNode')
+        .map((q) => q.subject.value)
+    ),
+  ];
+  const ranks = new Map(uris.map((u) => [u, rank(store, u, own)]));
+  return uris.map((u, i) => ({ u, i })).sort((a, b) => ranks.get(a.u)! - ranks.get(b.u)! || a.i - b.i).map((x) => x.u);
+}
+
+/** The IRI of the class that the local name `name` stands for, or null when no owl:Class has it. */
+export function classUriForName(store: Store, name: string): string | null {
+  return rankedClassUris(store).find((u) => extractLocalName(u) === name) ?? null;
 }
 
 /** True when the node named after `uri`'s local name is that class (`classUriByName`: node id → class IRI). */

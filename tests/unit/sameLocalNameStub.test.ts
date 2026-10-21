@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph } from '../../src/parser';
+import { DataFactory } from 'n3';
+import {
+  parseRdfToGraph,
+  addDataPropertyRestrictionToClass,
+  addObjectPropertyToStore,
+  getClassNamespace,
+  removeNodeFromStore,
+  updateLabelInStore,
+} from '../../src/parser';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import { validateOntologyStructure } from '../../src/lib/ontologyValidation';
 import type { ExternalOntologyReference } from '../../src/storage';
+
+const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
 
 /**
  * Regression (#164): a class with the same local name as an external stub it subclasses (:Party and std:Party).
@@ -68,5 +78,62 @@ describe('a local class with the same local name as an external stub', () => {
       ])
     );
     expect(expanded.edges.filter((e) => e.from === e.to)).toEqual([]);
+  });
+});
+
+/**
+ * Review of #164: what is drawn under a name is what an edit to that name changes, and the ranking does not depend on
+ * the namespace form (`#` or `/`) or on the stubs coming first in the file.
+ */
+describe('editing a class that shares its local name with an external stub', () => {
+  const LOCAL = 'http://example.org/examples/same-local-name-stub#';
+  const STD = 'http://example.org/examples/standard#';
+  const TTL = readFileSync(join(__dirname, '../../examples/imports/same-local-name-stub.ttl'), 'utf-8');
+
+  const quadsOf = (store: any, subject: string) =>
+    store.getQuads(DataFactory.namedNode(subject), null, null, null).map((q: any) => `${q.predicate.value} ${q.object.value}`);
+
+  it('writes a data property restriction on the local class, not the stub', async () => {
+    const { store } = await parseRdfToGraph(TTL, { path: 'same-local-name-stub.ttl' });
+    addDataPropertyRestrictionToClass(store, 'Party', 'age');
+    const restrictionsOn = (uri: string) =>
+      store.getQuads(DataFactory.namedNode(uri), DataFactory.namedNode(RDFS + 'subClassOf'), null, null).filter((q) => q.object.termType === 'BlankNode').length;
+    expect(restrictionsOn(LOCAL + 'Party')).toBe(1);
+    expect(restrictionsOn(STD + 'Party')).toBe(0);
+  });
+
+  it('gives a new object property the local class as its domain, and mints it in the local namespace', async () => {
+    const { store } = await parseRdfToGraph(TTL, { path: 'same-local-name-stub.ttl' });
+    expect(getClassNamespace(store)).toBe(LOCAL);
+    addObjectPropertyToStore(store, 'employs', false, 'employs', { domain: 'Party', range: 'Person' });
+    expect(quadsOf(store, LOCAL + 'employs')).toEqual(
+      expect.arrayContaining([`${RDFS}domain ${LOCAL}Party`, `${RDFS}range ${LOCAL}Person`])
+    );
+    expect(quadsOf(store, STD + 'employs')).toEqual([]);
+  });
+
+  it('relabels only the local class, and deletes a local node from the store', async () => {
+    const { store } = await parseRdfToGraph(TTL, { path: 'same-local-name-stub.ttl' });
+    updateLabelInStore(store, 'Party', 'Contracting party');
+    expect(quadsOf(store, LOCAL + 'Party')).toContain(`${RDFS}label Contracting party`);
+    expect(quadsOf(store, STD + 'Party')).toContain(`${RDFS}label Party (standard)`);
+    expect(removeNodeFromStore(store, 'Agreement')).toBe(true);
+    expect(quadsOf(store, LOCAL + 'Agreement')).toEqual([]);
+  });
+
+  it('gives the name to the local class in a slash namespace too', async () => {
+    const SLASH = 'http://example.org/examples/same-local-name-stub/';
+    const ttl = TTL.replace('@prefix : <http://example.org/examples/same-local-name-stub#> .', `@prefix : <${SLASH}> .`);
+    expect(ttl).not.toBe(TTL);
+    const { graphData } = await parseRdfToGraph(ttl, { path: 'same-local-name-stub-slash.ttl' });
+    const byId = new Map(graphData.nodes.map((n) => [n.id, n.uri]));
+    expect(byId.get('Party')).toBe(SLASH + 'Party');
+    expect(byId.get('Person')).toBe(SLASH + 'Person');
+    expect(graphData.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'Person', to: 'Party', type: 'subClassOf' }),
+        expect.objectContaining({ from: 'Agreement', to: 'Party', type: 'signedBy' }),
+      ])
+    );
   });
 });

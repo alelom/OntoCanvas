@@ -7,9 +7,8 @@
  * helpers so every textual annotation property gets the same list + add + delete UI.
  */
 import { DataFactory, Store } from 'n3';
+import { classUriForName } from '../graph/classNodeIds';
 
-const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
-const OWL = 'http://www.w3.org/2002/07/owl#';
 
 /**
  * Whether a value should be treated as a link/IRI (clickable, stored as a NamedNode) rather than
@@ -25,20 +24,9 @@ export function isUrlLikeValue(value: string): boolean {
   return v.includes('/') || /\.[a-z0-9]{1,8}$/i.test(v);
 }
 
-function extractLocalName(uri: string): string {
-  if (uri.includes('#')) return uri.split('#').pop()!;
-  if (uri.includes('/')) return uri.split('/').pop()!;
-  return uri;
-}
-
 function findClassSubject(store: Store, classLocalName: string): { value: string } | null {
-  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
-  for (const q of classQuads) {
-    const subj = q.subject as { termType: string; value: string };
-    if (subj.termType !== 'NamedNode') continue;
-    if (extractLocalName(subj.value) === classLocalName) return subj;
-  }
-  return null;
+  const uri = classUriForName(store, classLocalName); // the class the name stands for (#164)
+  return uri ? { value: uri } : null;
 }
 
 /** All object values (IRI or literal) for a textual annotation property on a class, in document order. */
