@@ -40,7 +40,7 @@ async function waitForErrorOrGraph(page: Page, timeout = 5000): Promise<'error' 
 /**
  * Choose `filePath` after clearing the previous test's outcome. The tests share one page, so a leftover
  * error from the previous file (e.g. "circular reference") would otherwise satisfy waitForErrorOrGraph
- * before this load reports anything (#93).
+ * before this load reports anything (#93), and so would the graph controls of a previous file that loaded (#164).
  */
 async function loadAfterClearing(page: Page, filePath: string): Promise<void> {
   await page.evaluate(() => {
@@ -50,6 +50,8 @@ async function loadAfterClearing(page: Page, filePath: string): Promise<void> {
       errorMsg.style.display = 'none';
     }
     document.getElementById('validationErrorModal')?.remove();
+    const vizControls = document.getElementById('vizControls');
+    if (vizControls) vizControls.style.display = 'none';
   });
   await chooseFile(page, filePath);
 }
@@ -78,22 +80,21 @@ describe('Corrupt ontology handling E2E', () => {
     if (browser) await browser.close();
   });
 
-  it('shows meaningful error for potentially-corrupt-ontology-01.ttl', async () => {
+  // This file was refused for two "cycles" that are not cycles: :LinearStructuralComponent rdfs:subClassOf
+  // dcommon:LinearStructuralComponent relates two classes with the same local name in different namespaces, which the
+  // parser used to fold into one node (#164). It is a valid ontology and opens.
+  it('opens potentially-corrupt-ontology-01.ttl: a subclass of a same-named class elsewhere is not a cycle', async () => {
     const testFile = join(TEST_FIXTURES_DIR, 'potentially-corrupt-ontology-01.ttl');
     expect(existsSync(testFile)).toBe(true);
 
     await loadAfterClearing(page, testFile);
-    
-    expect(await waitForErrorOrGraph(page, 5000)).toBe('error');
 
-    // Should show a validation error, and no graph
-    const errorText = await page.evaluate(() => document.getElementById('errorMsg')?.textContent?.trim() ?? '');
-    expect(errorText).not.toBe('');
-    const vizControlsVisible = await page.evaluate(() => {
-      const el = document.getElementById('vizControls');
-      return el && el.style.display !== 'none';
+    expect(await waitForErrorOrGraph(page, 5000)).toBe('graph');
+    const errorText = await page.evaluate(() => {
+      const el = document.getElementById('errorMsg');
+      return el && el.style.display !== 'none' ? (el.textContent?.trim() ?? '') : '';
     });
-    expect(vizControlsVisible).toBe(false);
+    expect(errorText.toLowerCase()).not.toMatch(/circular/);
   }, 10000);
 
   it('shows meaningful error for circular reference (A->B->C->A)', async () => {

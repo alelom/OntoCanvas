@@ -1,0 +1,47 @@
+# A class with the same local name as an external class it specialises (issue #164).
+#
+# std:Party and std:Person belong to an external standard and are declared here as typing stubs
+# (owl:Class with rdfs:isDefinedBy, as in #35). This ontology's own :Party and :Person subclass them,
+# so each local name is used by two different classes. The stubs come first in the file on purpose:
+# the ontology's own class keeps the local name whatever the order.
+#
+# What you should see:
+#   - the ontology opens (no "Circular reference" error);
+#   - Party and Person, this ontology's classes, as normal nodes, Person under Party;
+#   - std:Party and std:Person as two separate external nodes, each with a subClassOf line from the local class
+#     of the same name;
+#   - Agreement --signedBy--> Party (the local one).
+@prefix : <http://example.org/examples/same-local-name-stub#> .
+@prefix std: <http://example.org/examples/standard#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/same-local-name-stub> rdf:type owl:Ontology ;
+    rdfs:label "Same local name as an external stub" .
+
+# External classes, declared locally as stubs, before the local classes of the same name.
+std:Party rdf:type owl:Class ;
+    rdfs:label "Party (standard)" ;
+    rdfs:isDefinedBy <http://example.org/examples/standard> .
+
+std:Person rdf:type owl:Class ;
+    rdfs:label "Person (standard)" ;
+    rdfs:isDefinedBy <http://example.org/examples/standard> .
+
+# This ontology's own classes.
+:Party rdf:type owl:Class ;
+    rdfs:label "Party" ;
+    rdfs:subClassOf std:Party .
+
+:Person rdf:type owl:Class ;
+    rdfs:label "Person" ;
+    rdfs:subClassOf :Party , std:Person .
+
+:Agreement rdf:type owl:Class ;
+    rdfs:label "Agreement" .
+
+:signedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "signedBy" ;
+    rdfs:domain :Agreement ;
+    rdfs:range :Party .

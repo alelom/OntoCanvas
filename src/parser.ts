@@ -13,6 +13,7 @@ import { blankNodeClosureQuads, blockStructurallyChanged } from './rdf/blankNode
 import { currentSplitShares } from './rdf/splitSubjects';
 import { extractLocalName } from './utils/localName';
 import { extractClassExpressionGroups, resolveExpressionClassUris, type RdfTerm } from './rdf/classExpressions';
+import { classUriForName, isNodeOf, rankedClassUris } from './graph/classNodeIds';
 import {
   findRestrictionBlanks,
   mergeRestrictionKinds,
@@ -113,10 +114,9 @@ export function getMainOntologyBase(store: Store): string | null {
  * Used for exampleImage so the predicate lives in the same namespace as classes (e.g. :exampleImage not :Ontology#exampleImage).
  */
 export function getClassNamespace(store: Store): string | null {
-  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
-  for (const q of classQuads) {
-    if (q.subject.termType !== 'NamedNode') continue;
-    const uri = (q.subject as { value: string }).value;
+  // The ontology's own classes first (#164): a stub of an external class declared first must not make new terms land in
+  // the external namespace
+  for (const uri of rankedClassUris(store)) {
     const localName = extractLocalName(uri);
     if (!localName) continue;
     if (uri.includes('#')) return uri.slice(0, uri.lastIndexOf('#') + 1);
@@ -299,12 +299,11 @@ function buildParseResultFromStore(
     'http://www.w3.org/2000/01/rdf-schema#',
   ];
 
-  // Get all OWL classes
-  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
-  for (const q of classQuads) {
-    const subj = q.subject;
-    if (subj.termType !== 'NamedNode') continue;
-    const uri = subj.value;
+  // Get all OWL classes. The ontology's own classes claim their local names first (#164): a stub of an external
+  // class with the same name (std:Party next to :Party) is then drawn by the external expansion, under its full IRI.
+  const classUris = rankedClassUris(store);
+  for (const uri of classUris) {
+    const subj = DataFactory.namedNode(uri);
     if (excludeNamespaces.some((ns) => uri.startsWith(ns))) continue;
     const localName = extractLocalName(uri);
     if (seenClasses.has(localName)) continue;
@@ -388,11 +387,12 @@ function buildParseResultFromStore(
 
     const subjUri = subj.value;
     const subjName = extractLocalName(subjUri);
-    if (!seenClasses.has(subjName)) continue;
+    if (!isNodeOf(classUriByName, subjUri)) continue;
 
     if (obj.termType === 'NamedNode') {
       const objName = extractLocalName(obj.value);
-      if (!seenClasses.has(objName)) continue;
+      // By IRI, not local name: std:Party is not the local Party (#164)
+      if (!isNodeOf(classUriByName, obj.value)) continue;
       const key = `${subjName}->${objName}`;
       if (seenPairs.has(key)) continue;
       seenPairs.add(key);
@@ -766,7 +766,7 @@ function buildParseResultFromStore(
           break;
         }
         const domainName = extractLocalName(domainUri);
-        if (seenClasses.has(domainName)) {
+        if (isNodeOf(classUriByName, domainUri)) {
           validDomains.push(domainName);
         }
       } else if (domObj.termType === 'BlankNode') {
@@ -775,7 +775,7 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, domObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (!seenClasses.has(name)) continue;
+          if (!isNodeOf(classUriByName, uri)) continue;
           expressionDomains.add(name);
           if (!validDomains.includes(name)) validDomains.push(name);
         }
@@ -797,7 +797,7 @@ function buildParseResultFromStore(
           break;
         }
         const rangeName = extractLocalName(rangeUri);
-        if (seenClasses.has(rangeName)) {
+        if (isNodeOf(classUriByName, rangeUri)) {
           validRanges.push(rangeName);
         }
       } else if (rangeObj.termType === 'BlankNode') {
@@ -806,7 +806,7 @@ function buildParseResultFromStore(
         // shown by the overlay mark (issues #59-#62).
         for (const uri of resolveExpressionClassUris(store, rangeObj as RdfTerm)) {
           const name = extractLocalName(uri);
-          if (!seenClasses.has(name)) continue;
+          if (!isNodeOf(classUriByName, uri)) continue;
           expressionRanges.add(name);
           if (!validRanges.includes(name)) validRanges.push(name);
         }
@@ -961,7 +961,7 @@ function buildParseResultFromStore(
     }
   }
 
-  const classExpressions = extractClassExpressionGroups(store, seenClasses);
+  const classExpressions = extractClassExpressionGroups(store, classUriByName);
 
   return {
     graphData: { nodes, edges, classExpressions },
@@ -1181,11 +1181,12 @@ export function updateLabelInStore(
   localName: string,
   newLabel: string
 ): boolean {
+  const target = classUriForName(store, localName); // resolved once, not per class (#164)
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (extractLocalName(subj.value) !== localName) continue;
+    if (subj.value !== target) continue; // only the class the name stands for (#164)
 
     const labelQuads = store.getQuads(subj, RDFS + 'label', null, null);
     const graph = labelQuads[0]?.graph ?? DataFactory.defaultGraph();
@@ -1220,12 +1221,13 @@ export function updateCommentInStore(
   localName: string,
   comment: string | null
 ): boolean {
+  const target = classUriForName(store, localName); // resolved once, not per class (#164)
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   const commentPred = DataFactory.namedNode(RDFS + 'comment');
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (extractLocalName(subj.value) !== localName) continue;
+    if (subj.value !== target) continue; // only the class the name stands for (#164)
 
     const commentQuads = store.getQuads(subj, commentPred, null, null);
     const graph = commentQuads[0]?.graph ?? store.getQuads(subj, null, null, null)[0]?.graph ?? DataFactory.defaultGraph();
@@ -1246,6 +1248,7 @@ export function updateLabellableInStore(
   localName: string,
   labellable: boolean
 ): boolean {
+  const target = classUriForName(store, localName); // resolved once, not per class (#164)
   const XSD = 'http://www.w3.org/2001/XMLSchema#';
   const predUri = findLabellablePredicate(store);
   const labellablePredicate = predUri
@@ -1256,7 +1259,7 @@ export function updateLabellableInStore(
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (extractLocalName(subj.value) !== localName) continue;
+    if (subj.value !== target) continue; // only the class the name stands for (#164)
 
     const outQuads = store.getQuads(subj, null, null, null);
     for (const oq of outQuads) {
@@ -1288,13 +1291,14 @@ export function updateAnnotationPropertyValueInStore(
   value: boolean | string | null,
   isBoolean: boolean
 ): boolean {
+  const target = classUriForName(store, classLocalName); // resolved once, not per class (#164)
   // Find the class subject
   const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
   let classSubject: import('n3').NamedNode | null = null;
   for (const q of classQuads) {
     const subj = q.subject;
     if (subj.termType !== 'NamedNode') continue;
-    if (extractLocalName(subj.value) !== classLocalName) continue;
+    if (subj.value !== target) continue; // the class the name stands for (#164)
     classSubject = subj as import('n3').NamedNode;
     break;
   }
@@ -1507,7 +1511,7 @@ export function addNodeToStore(
  * Also removes any domain/range quads that reference this node.
  */
 export function removeNodeFromStore(store: Store, localName: string): boolean {
-  const subjUri = resolveClassBase(store) + localName;
+  const subjUri = classUriForName(store, localName) ?? resolveClassBase(store) + localName; // the class the name stands for (#164)
   const subject = DataFactory.namedNode(subjUri);
   
   // Remove all quads where this node is the subject
@@ -1647,14 +1651,7 @@ const OWL_THING_URI = OWL + 'Thing';
  */
 function resolveClassUri(store: Store, localName: string): string {
   if (!localName || localName.trim() === '') return OWL_THING_URI;
-  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
-  for (const cq of classQuads) {
-    if (cq.subject.termType === 'NamedNode') {
-      const currentUri = (cq.subject as { value: string }).value;
-      if (extractLocalName(currentUri) === localName.trim()) return currentUri;
-    }
-  }
-  return BASE_IRI + localName.trim();
+  return classUriForName(store, localName.trim()) ?? BASE_IRI + localName.trim();
 }
 
 /**
@@ -2108,17 +2105,7 @@ export function updateDataPropertyDomainsInStore(
     // Add each domain
     for (const domainName of domains) {
       // Try to find the domain URI (could be base IRI or external)
-      let domainUri: string | null = null;
-      const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
-      for (const cq of classQuads) {
-        if (cq.subject.termType === 'NamedNode') {
-          const currentUri = (cq.subject as { value: string }).value;
-          if (extractLocalName(currentUri) === domainName) {
-            domainUri = currentUri;
-            break;
-          }
-        }
-      }
+      let domainUri: string | null = classUriForName(store, domainName);
       
       // If not found, assume it's from base IRI
       if (!domainUri) {
@@ -2166,13 +2153,7 @@ const OWL_ON_DATA_RANGE = OWL + 'onDataRange';
 
 /** Resolve class URI from store by local name (use actual subject from loaded ontology). */
 function getClassUriFromStore(store: Store, classLocalName: string): string {
-  const classQuads = store.getQuads(null, RDF + 'type', OWL + 'Class', null);
-  for (const q of classQuads) {
-    if (q.subject.termType !== 'NamedNode') continue;
-    const uri = (q.subject as { value: string }).value;
-    if (extractLocalName(uri) === classLocalName) return uri;
-  }
-  return toClassUri(classLocalName);
+  return classUriForName(store, classLocalName) ?? toClassUri(classLocalName);
 }
 
 function findDataRestrictionBlank(
@@ -2518,13 +2499,8 @@ export function removeRestrictionFromStore(
 export function removeRestrictionEdgeFromStore(store: Store, from: string, to: string, edgeType: string): number {
   // Restriction edges name both ends by local name; a class may be declared outside the main namespace.
   const base = resolveClassBase(store);
-  const declared = store
-    .getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null)
-    .map((q) => q.subject)
-    .filter((s) => s.termType === 'NamedNode')
-    .map((s) => s.value);
   const uriOf = (name: string) =>
-    /^https?:\/\//.test(name) ? name : declared.find((uri) => extractLocalName(uri) === name) ?? base + name;
+    /^https?:\/\//.test(name) ? name : classUriForName(store, name) ?? base + name;
   const propUri = getObjectPropertyUriFromStore(store, edgeType);
   if (!propUri) return 0;
   const subjectUri = uriOf(from);

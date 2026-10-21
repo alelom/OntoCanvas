@@ -1,5 +1,6 @@
 import { DataFactory, Store } from 'n3';
 import type { NamedNode } from 'n3';
+import { classUriForName } from '../graph/classNodeIds';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
@@ -15,20 +16,9 @@ function getExampleImagePredicateUri(baseIri: string): string {
   return normalizeBaseIri(baseIri) + EXAMPLE_IMAGE_LOCAL;
 }
 
-function extractLocalName(uri: string): string {
-  if (uri.includes('#')) return uri.split('#').pop()!;
-  if (uri.includes('/')) return uri.split('/').pop()!;
-  return uri;
-}
-
 function findClassSubjectByLocalName(store: Store, classLocalName: string): NamedNode | null {
-  const classQuads = store.getQuads(null, DataFactory.namedNode(RDF + 'type'), DataFactory.namedNode(OWL + 'Class'), null);
-  for (const q of classQuads) {
-    if (q.subject.termType !== 'NamedNode') continue;
-    const uri = q.subject.value;
-    if (extractLocalName(uri) === classLocalName) return q.subject as NamedNode;
-  }
-  return null;
+  const uri = classUriForName(store, classLocalName); // the class the name stands for (#164)
+  return uri ? DataFactory.namedNode(uri) : null;
 }
 
 /**
@@ -56,7 +46,12 @@ export function ensureExampleImageAnnotationProperty(store: Store, baseIri: stri
  */
 export function getExampleImageUrisForClass(store: Store, classLocalName: string, baseIri: string): string[] {
   const subject = findClassSubjectByLocalName(store, classLocalName);
-  if (!subject) return [];
+  return subject ? getExampleImageUrisForClassUri(store, subject.value, baseIri) : [];
+}
+
+/** The example images of the class `classUri` (for a caller that already has the IRI, e.g. one looping over classes). */
+export function getExampleImageUrisForClassUri(store: Store, classUri: string, baseIri: string): string[] {
+  const subject = DataFactory.namedNode(classUri);
   const predUri = getExampleImagePredicateUri(baseIri);
   const pred = DataFactory.namedNode(predUri);
   const quads = store.getQuads(subject, pred, null, null);
