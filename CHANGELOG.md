@@ -1,3 +1,16 @@
+## [1.35.1](https://github.com/alelom/OntoCanvas/compare/v1.35.0...v1.35.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* a class with the same local name as an external stub no longer blocks opening the ontology ([#164](https://github.com/alelom/OntoCanvas/issues/164)) ([6bb1c8d](https://github.com/alelom/OntoCanvas/commit/6bb1c8db6345279f6f9f8738288d720ae83434ff))
+* every class lookup by name follows the same ranking as the graph ([#164](https://github.com/alelom/OntoCanvas/issues/164)) ([b40bfba](https://github.com/alelom/OntoCanvas/commit/b40bfba12ef29095438544afef31f56d68502227))
+
+
+### Performance Improvements
+
+* a class lookup by name ranks only the classes with that name ([#164](https://github.com/alelom/OntoCanvas/issues/164)) ([1849f34](https://github.com/alelom/OntoCanvas/commit/1849f3437886de8bb652ca5b37181396f65a80e9))
+
 # [1.35.0](https://github.com/alelom/OntoCanvas/compare/v1.34.0...v1.35.0) (2026-10-16)
 
 
