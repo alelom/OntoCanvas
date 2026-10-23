@@ -57,3 +57,67 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # Pushes the same build to the gh-pages branch of a second Pages repo (a deploy target only).
+  # Skipped with a notice until the MIRROR_DEPLOY_KEY secret exists, so it never blocks the job above.
+  mirror:
+    if: github.event_name == 'release' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: "pages-mirror"
+      cancel-in-progress: false
+    env:
+      MIRROR_REPO: BuroHappoldMachineLearning/OntoCanvas
+      MIRROR_DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
+    steps:
+      - name: Check deploy key
+        id: key
+        run: |
+          if [ -z "$MIRROR_DEPLOY_KEY" ]; then
+            echo "::notice::MIRROR_DEPLOY_KEY is not set; skipping the mirror deploy."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || 'main' }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        if: steps.key.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: npm ci
+
+      - name: Build
+        if: steps.key.outputs.present == 'true'
+        run: npm run build
+        env:
+          VITE_BASE_PATH: /OntoCanvas/
+
+      - name: Push dist to the mirror repo
+        if: steps.key.outputs.present == 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$MIRROR_DEPLOY_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/mirror_key -o IdentitiesOnly=yes"
+          SRC_SHA=$(git rev-parse --short HEAD)
+          cd dist
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "deploy: alelom/OntoCanvas@${SRC_SHA}"
+          git push --force "git@github.com:${MIRROR_REPO}.git" gh-pages
