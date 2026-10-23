@@ -61,7 +61,7 @@ jobs:
   # Pushes the same build to the gh-pages branch of a second Pages repo (a deploy target only).
   # Skipped with a notice until the MIRROR_DEPLOY_KEY secret exists, so it never blocks the job above.
   mirror:
-    if: github.event_name == 'release' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     concurrency:
       group: "pages-mirror"
