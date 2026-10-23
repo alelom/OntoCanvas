@@ -239,6 +239,13 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         ttlStoreExists: store !== null,
       };
     },
+    /** Run a read-only SPARQL query over the loaded ontology's store. Comunica loads lazily on the first call. */
+    runSparql: async (query: string) => {
+      const store = getTtlStore();
+      if (!store) throw new Error('No ontology loaded');
+      const { runQuery } = await import('../sparql/runQuery');
+      return runQuery([store], query);
+    },
     clearTestLogs: (): void => {
       const logs = getTestLogs();
       logs.length = 0;
