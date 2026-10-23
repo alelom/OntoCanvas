@@ -14,7 +14,7 @@ const TTL = `
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 <http://example.org/o> a owl:Ontology .
 :Person a owl:Class ; rdfs:label "Person" .
-:Student a owl:Class ; rdfs:label "Student" ; rdfs:subClassOf :Person .
+:Student a owl:Class ; rdfs:label "Student"@en ; rdfs:subClassOf :Person, [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :Person ] .
 `;
 
 describe('SPARQL in the browser', () => {
@@ -35,17 +35,47 @@ describe('SPARQL in the browser', () => {
   });
 
   it('loads the query engine only when the first query runs, then answers from the store', async () => {
-    const loadedBefore = requested.filter((u) => /runQuery|comunica/i.test(u));
-    expect(loadedBefore).toEqual([]);
+    // The built app names the engine chunk index-browser-<hash>.js; the dev server names it after the package.
+    const isEngineChunk = (u: string) => /index-browser|comunica/i.test(u);
+    expect(requested.filter((u) => isEngineChunk(u) || /runQuery/i.test(u))).toEqual([]);
 
     const result = await page.evaluate(() =>
       (window as any).__EDITOR_TEST__.runSparql(
-        'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT ?s ?p WHERE { ?s rdfs:subClassOf ?p }'
+        'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT ?s ?p WHERE { ?s rdfs:subClassOf ?p FILTER(isIRI(?p)) }'
       )
     );
 
     expect(result.kind).toBe('bindings');
-    expect(result.rows).toEqual([{ s: 'http://example.org/o#Student', p: 'http://example.org/o#Person' }]);
-    expect(requested.some((u) => /runQuery|comunica/i.test(u))).toBe(true);
+    expect(result.rows).toEqual([
+      {
+        s: { termType: 'NamedNode', value: 'http://example.org/o#Student' },
+        p: { termType: 'NamedNode', value: 'http://example.org/o#Person' },
+      },
+    ]);
+    expect(requested.some(isEngineChunk)).toBe(true);
+  });
+
+  it('returns a blank node under the label the store uses, and a literal with its language', async () => {
+    const result = await page.evaluate(() =>
+      (window as any).__EDITOR_TEST__.runSparql(
+        'PREFIX : <http://example.org/o#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> ' +
+          'SELECT ?r ?l WHERE { :Student rdfs:subClassOf ?r . ?r a <http://www.w3.org/2002/07/owl#Restriction> . :Student rdfs:label ?l }'
+      )
+    );
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].r.termType).toBe('BlankNode');
+    expect(result.rows[0].r.value).not.toMatch(/^bc_\d+_/);
+    expect(result.rows[0].l).toMatchObject({ termType: 'Literal', value: 'Student', language: 'en' });
+  });
+
+  it('refuses an update query', async () => {
+    const message = await page.evaluate(() =>
+      (window as any).__EDITOR_TEST__.runSparql('DELETE WHERE { ?s ?p ?o }').then(
+        () => 'resolved',
+        (e: Error) => e.message
+      )
+    );
+    expect(message).toMatch(/read-only/i);
   });
 });

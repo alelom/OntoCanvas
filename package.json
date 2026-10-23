@@ -18,7 +18,8 @@
     "check:internal-names": "node scripts/ci/check-internal-names.mjs"
   },
   "dependencies": {
-    "@comunica/query-sparql-rdfjs": "^5.4.1",
+    "@comunica/query-sparql-rdfjs-lite": "^5.4.1",
+    "@traqula/parser-sparql-1-2": "^1.4.0",
     "elkjs": "^0.11.1",
     "n3": "^1.17.0",
     "rdf-parse": "^5.0.0",
