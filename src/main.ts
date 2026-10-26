@@ -112,6 +112,7 @@ import { beginImportsSettle, importsSettled } from './ui/importsSettle';
 import { escapeHtml } from './utils/escapeHtml';
 import { getOntologyInfo } from './ui/ontologyInfo';
 import { REPO_URL } from './utils/siteInfo';
+import { installTestLogCapture } from './e2e/testLogCapture';
 import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, importedNoteWrapChars, labelWithImportedNote } from './ui/importedNote';
 import { findEdgeIdAtLabelPoint, type EdgeLabelBox } from './graph/edgeLabelHit';
 import { removeExternalClassReferencesFromStore } from './graph/removeExternalReferences';
@@ -9507,114 +9508,8 @@ setTimeout(() => {
   });
 }, 100);
 
-// Internal log collection for testing
-const testLogs: string[] = [];
-const MAX_TEST_LOGS = 1000;
-
-function addTestLog(message: string): void {
-  testLogs.push(`[${new Date().toISOString()}] ${message}`);
-  if (testLogs.length > MAX_TEST_LOGS) {
-    testLogs.shift(); // Remove oldest log
-  }
-  // Don't log to console here - let the console override handle it based on debug mode
-}
-
-/**
- * Safely stringify a value, handling circular structures and other edge cases.
- * Falls back to String() if JSON.stringify fails.
- */
-function safeStringify(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-  try {
-    return JSON.stringify(value);
-  } catch {
-    // Handle circular structures, DOM elements, vis-network objects, etc.
-    try {
-      return String(value);
-    } catch {
-      return '[Unable to stringify]';
-    }
-  }
-}
-
-/**
- * Check if a message string contains any test log tags.
- */
-function hasTestLogTag(message: string): boolean {
-  return message.includes('[DELETE]') || 
-         message.includes('[GET EDGE DATA]') || 
-         message.includes('[DELETE KEY]') || 
-         message.includes('[DEBUG]') || 
-         message.includes('[TEST]');
-}
-
-/**
- * Build message string from args only when needed (lazy evaluation).
- * This avoids overhead when debug mode is off and no tags are present.
- * First checks all string arguments for tags before doing expensive stringification.
- */
-function buildMessageIfNeeded(args: unknown[]): string | null {
-  // Quick check: scan all string args first (cheap operation)
-  for (const arg of args) {
-    if (typeof arg === 'string' && hasTestLogTag(arg)) {
-      // Found a tag in a string arg, build full message
-      return args.map(safeStringify).join(' ');
-    }
-  }
-  
-  // No tags found in string args, but might be in stringified non-string args
-  // Only do expensive stringification if we have non-string args
-  if (args.some(arg => typeof arg !== 'string')) {
-    const message = args.map(safeStringify).join(' ');
-    if (hasTestLogTag(message)) {
-      return message;
-    }
-  }
-  
-  return null;
-}
-
-// Override console methods to capture test logs (always) but only log to console if debug mode is enabled
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
-const originalConsoleWarn = console.warn;
-console.log = (...args: unknown[]) => {
-  // Only build message string if we might need it (lazy evaluation)
-  const message = buildMessageIfNeeded(args);
-  // Always capture test logs for E2E testing
-  if (message) {
-    addTestLog(message);
-  }
-  // Only log to console if debug mode is enabled (for production performance)
-  if (isDebugMode() || message) {
-    originalConsoleLog.apply(console, args);
-  }
-};
-
-console.error = (...args: unknown[]) => {
-  // Only build message string if we might need it (lazy evaluation)
-  const message = buildMessageIfNeeded(args);
-  // Always capture test logs for E2E testing
-  if (message) {
-    addTestLog(message);
-  }
-  // Always log errors to console (even without debug mode)
-  originalConsoleError.apply(console, args);
-};
-
-console.warn = (...args: unknown[]) => {
-  // Only build message string if we might need it (lazy evaluation)
-  const message = buildMessageIfNeeded(args);
-  // Always capture test logs for E2E testing
-  if (message) {
-    addTestLog(message);
-  }
-  // Always log warnings to console (warnings are important user feedback)
-  // This includes the display.json 404 warning which should always be visible
-  originalConsoleWarn.apply(console, args);
-};
+// Capture tagged console output for the E2E tests (see src/e2e/testLogCapture.ts).
+const { addTestLog, getTestLogs } = installTestLogCapture(isDebugMode);
 
 // E2E test hook: attach programmatic control for browser automation (e.g. Playwright).
 attachEditorTestHook({
@@ -9643,7 +9538,7 @@ attachEditorTestHook({
   showEditRelationshipTypeModal,
   debugLog,
   addTestLog,
-  getTestLogs: () => testLogs,
+  getTestLogs,
   isDebugMode,
   saveTtl,
   setHasUnsavedChanges: (value: boolean) => { hasUnsavedChanges = value; },
