@@ -494,3 +494,165 @@ body.embed-no-menu #ontologyIssuesPopup {
   background: #95a5a6;
   border-color: #7f8c8d;
 }
+/* Side panel (#171): a second column of the page grid, so it takes no width while closed and the graph and bars
+ * keep their own elements. Not used in the embedded layout (flex), where the panel stays hidden. */
+#app {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+#app > #controls,
+#app > #info {
+  grid-column: 1 / -1;
+}
+#app > #networkWrapper {
+  grid-column: 1;
+}
+#sidePanel {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 45vw);
+  min-height: 0;
+  background: #fff;
+  border-left: 1px solid #ddd;
+  font-size: 12px;
+}
+#sidePanel[hidden] {
+  display: none;
+}
+.side-panel-header {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+.side-panel-tabs {
+  display: flex;
+}
+.side-panel-tab {
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.side-panel-tab[aria-selected='true'] {
+  border-bottom-color: #3498db;
+  font-weight: bold;
+}
+.side-panel-close {
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+.side-panel-bodies {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.side-panel-body[hidden] {
+  display: none;
+}
+#queryPanelBtn[aria-pressed='true'] {
+  background: #d6eaf8;
+}
+.query-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.query-note {
+  margin: 0;
+  color: #666;
+  font-size: 11px;
+}
+.query-editor {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.query-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.query-status {
+  color: #666;
+  font-size: 11px;
+}
+.query-error {
+  padding: 8px;
+  background: #fdecea;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  color: #a71d2a;
+  white-space: pre-wrap;
+}
+.query-boolean {
+  margin: 0;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  font-weight: bold;
+}
+.query-turtle {
+  margin: 0;
+  padding: 8px;
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: auto;
+  font-size: 11px;
+}
+.query-result {
+  overflow: auto;
+}
+.query-results {
+  border-collapse: collapse;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+.query-results th {
+  position: sticky;
+  top: 0;
+  padding: 4px 8px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+.query-results td {
+  max-width: 220px;
+  padding: 3px 8px;
+  border-bottom: 1px solid #eee;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.query-results td.term-literal {
+  color: #1a6b2f;
+}
+.query-results td.term-blank {
+  color: #888;
+}
+/* An IRI shown in full wraps, so its local name at the end stays visible; long literals keep the ellipsis and tooltip. */
+.query-results td.term-iri-full {
+  white-space: normal;
+  word-break: break-all;
+}
+/* The way into the side panel sits in the bottom bar: the toolbar is full, and one more button there wraps it
+ * (at 1200px it grew from 137px to 244px and pushed the graph down). */
+#info #queryPanelBtn {
+  float: right;
+  padding: 1px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}

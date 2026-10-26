@@ -70,6 +70,12 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | [keeps-source-layout.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fkeeps-source-layout.ttl) | Saving changes only the lines an edit touches, in a file with class expressions, a class described in two statements, list values, an object list over several lines and a predicate on two lines | #65, #118–#121, #123 | [TTL](saving/keeps-source-layout.ttl) |
 | [base-relative-iris.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsaving%2Fbase-relative-iris.ttl) | Terms written as `<#Term>` under `@base` are saved in place, not appended again | #122 | [TTL](saving/base-relative-iris.ttl) |
 
+## SPARQL queries
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [query-panel.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsparql%2Fquery-panel.ttl) | A small ontology with queries to try in the SPARQL side panel: a property path, a language tag, a blank node, an aggregate, ASK, CONSTRUCT, and a refused update | #171 | [TTL](sparql/query-panel.ttl) |
+
 ## Term URIs
 
 | Example (opens in OntoCanvas) | Shows | Issue | Source |

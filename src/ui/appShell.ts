@@ -125,12 +125,14 @@ export function renderApp(): void {
         <button type="button" id="resetView">Reset view</button>
       </div>
     </div>
+    <aside id="sidePanel" aria-label="Side panel"></aside>
     <div id="info">
       <span id="versionDisplay" style="font-size: 11px; color: #666;"></span>
       <span id="ontologyInfoDisplay" class="info-seg" style="font-size: 11px; display: none;"></span>
       <span id="graphCounts" class="info-seg">Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>
+      <button type="button" id="queryPanelBtn" aria-pressed="false" title="Query the open ontology with SPARQL (read-only)">SPARQL query</button>
     </div>
     <div id="renameModal" class="modal" style="display: none;">
       <div class="modal-content">
