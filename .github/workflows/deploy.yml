@@ -103,6 +103,8 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /OntoCanvas/
+          # The version link in the bottom bar names the repository this copy is served from.
+          VITE_REPO_URL: https://github.com/${{ env.MIRROR_REPO }}
 
       - name: Push dist to the mirror repo
         if: steps.key.outputs.present == 'true'
