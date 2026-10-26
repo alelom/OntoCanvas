@@ -5,6 +5,7 @@
  */
 import type { Network } from 'vis-network/esnext';
 import type { Store } from 'n3';
+import type { StoreTerm } from '../sparql/runQuery';
 import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo, AnnotationPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import { parseEdgeId } from '../utils/edgeId';
@@ -238,6 +239,27 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
         hasUnsavedChanges: getHasUnsavedChanges(),
         ttlStoreExists: store !== null,
       };
+    },
+    /**
+     * Run a read-only SPARQL query over the loaded ontology's store. Comunica loads lazily on the first call.
+     * Terms come back as plain `{ termType, value, language?, datatype? }` objects so they cross the page boundary.
+     */
+    runSparql: async (query: string) => {
+      const store = getTtlStore();
+      if (!store) throw new Error('No ontology loaded');
+      const { runQuery } = await import('../sparql/runQuery');
+      const plain = (t: StoreTerm) =>
+        t.termType === 'Literal'
+          ? { termType: t.termType, value: t.value, language: t.language, datatype: t.datatype.value }
+          : { termType: t.termType, value: t.value };
+      const result = await runQuery([store], query);
+      if (result.kind === 'bindings') {
+        return { ...result, rows: result.rows.map((row) => Object.fromEntries(Object.entries(row).map(([k, t]) => [k, plain(t)]))) };
+      }
+      if (result.kind === 'quads') {
+        return { kind: result.kind, quads: result.quads.map((q) => [q.subject, q.predicate, q.object].map(plain)) };
+      }
+      return result;
     },
     clearTestLogs: (): void => {
       const logs = getTestLogs();
