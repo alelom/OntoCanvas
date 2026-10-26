@@ -8,7 +8,7 @@
 </div>
 
 
-_**OntoCanvas**_ is an intuitive ontology editor and visualizer that runs [directly in your browser](alelom.github.io/OntoCanvas/).
+_**OntoCanvas**_ is an intuitive ontology editor and visualizer that runs [directly in your browser](https://alelom.github.io/OntoCanvas/).
 
 <img width="1343" height="923" alt="image" src="https://github.com/user-attachments/assets/d0846c70-d06a-4959-8423-4b7d153e03c7" />
 
