@@ -1,3 +1,15 @@
+# [1.36.0](https://github.com/alelom/OntoCanvas/compare/v1.35.1...v1.36.0) (2026-10-26)
+
+
+### Bug Fixes
+
+* SPARQL results keep their RDF kind and the store's blank nodes ([#169](https://github.com/alelom/OntoCanvas/issues/169)) ([a52eb87](https://github.com/alelom/OntoCanvas/commit/a52eb877770fbe02c698c3576251827fb11103f7))
+
+
+### Features
+
+* run read-only SPARQL over the store with a lazily loaded Comunica ([#169](https://github.com/alelom/OntoCanvas/issues/169)) ([26cf83f](https://github.com/alelom/OntoCanvas/commit/26cf83f38d7dde966bcd441c636b7708d8302e5b))
+
 ## [1.35.1](https://github.com/alelom/OntoCanvas/compare/v1.35.0...v1.35.1) (2026-10-21)
 
 
