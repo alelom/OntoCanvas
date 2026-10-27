@@ -648,11 +648,11 @@ body.embed-no-menu #ontologyIssuesPopup {
   white-space: normal;
   word-break: break-all;
 }
-/* The way into the side panel sits in the bottom bar: the toolbar is full, and one more button there wraps it
- * (at 1200px it grew from 137px to 244px and pushed the graph down). */
-#info #queryPanelBtn {
-  float: right;
-  padding: 1px 10px;
-  font-size: 11px;
-  cursor: pointer;
+/* The way into the side panel joins the graph's own toolbar (Add Node, Add Edge), which vis-network draws: it has the
+ * room, and the page toolbar does not. It has no icon, so the label's room for one is removed. */
+div.vis-network div.vis-manipulation button.vis-button.vis-query {
+  padding: 0 10px;
+}
+div.vis-network div.vis-manipulation button.vis-button.vis-query div.vis-label {
+  margin-left: 0;
 }

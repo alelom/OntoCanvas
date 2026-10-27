@@ -11,13 +11,23 @@ const deps = (embedded = false) => ({ getStore: () => new Store(), getPrefixes: 
 const panel = () => document.getElementById('sidePanel') as HTMLElement;
 const button = () => document.getElementById('queryPanelBtn') as HTMLButtonElement;
 
+/** vis-network's toolbar, which the query button joins (it is built after the page, hence the wait). */
+async function renderToolbar(): Promise<void> {
+  const bar = document.createElement('div');
+  bar.className = 'vis-manipulation';
+  bar.innerHTML = '<button class="vis-button vis-add"></button><button class="vis-button vis-connect"></button>';
+  document.getElementById('networkWrapper')!.appendChild(bar);
+  await new Promise((r) => setTimeout(r, 0));
+}
+
 beforeEach(() => {
-  document.body.innerHTML = '<button id="queryPanelBtn" aria-pressed="false">Query</button><aside id="sidePanel"></aside>';
+  document.body.innerHTML = '<div id="networkWrapper"></div><aside id="sidePanel"></aside>';
 });
 
 describe('initSidePanel', () => {
-  it('opens the query tab from the toolbar button and closes it with a second click', () => {
+  it('opens the query tab from the toolbar button and closes it with a second click', async () => {
     initSidePanel(deps());
+    await renderToolbar();
 
     button().click();
     expect(panel().hidden).toBe(false);
@@ -35,8 +45,9 @@ describe('initSidePanel', () => {
     expect(panel().querySelector('[data-query-editor]')).toBeNull();
   });
 
-  it('closes with the panel\'s own close button and releases the toolbar button', () => {
+  it('closes with the panel\'s own close button and releases the toolbar button', async () => {
     initSidePanel(deps());
+    await renderToolbar();
     button().click();
 
     panel().querySelector<HTMLButtonElement>('[data-side-panel-close]')!.click();
@@ -45,11 +56,11 @@ describe('initSidePanel', () => {
     expect(button().getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('shows no panel and no button when the app is embedded', () => {
+  it('shows no panel and no button when the app is embedded', async () => {
     initSidePanel(deps(true));
+    await renderToolbar();
 
-    expect(button().hidden).toBe(true);
-    button().click();
+    expect(button()).toBeNull();
     expect(panel().hidden).toBe(true);
     expect(panel().querySelector('[data-query-editor]')).toBeNull();
   });

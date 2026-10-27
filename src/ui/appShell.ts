@@ -132,7 +132,6 @@ export function renderApp(): void {
       <span id="graphCounts" class="info-seg">Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
       <span id="selectionInfo"></span>
-      <button type="button" id="queryPanelBtn" aria-pressed="false" title="Query the open ontology with SPARQL (read-only)">SPARQL query</button>
     </div>
     <div id="renameModal" class="modal" style="display: none;">
       <div class="modal-content">

@@ -39,8 +39,9 @@ describe('SPARQL side panel', () => {
 
   it('is closed at first, and opening it takes room from the graph without loading the engine', async () => {
     expect(await page.locator('#sidePanel').isHidden()).toBe(true);
-    // The toolbar is full: one more button there wraps it (at 1200px it grew by over 100px and pushed the graph down).
-    expect(await page.locator('#controls #queryPanelBtn').count()).toBe(0);
+    // The button is in the graph's own toolbar, right after Add Edge, and not in the page toolbar or the bottom bar.
+    expect(await page.locator('.vis-manipulation > .vis-connect + .vis-separator-line + #queryPanelBtn').count()).toBe(1);
+    expect(await page.locator('#controls #queryPanelBtn, #info #queryPanelBtn').count()).toBe(0);
     const before = await networkWidth();
 
     await page.click('#queryPanelBtn');

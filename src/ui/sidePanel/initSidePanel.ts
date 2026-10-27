@@ -6,6 +6,7 @@
 import type { Store } from 'n3';
 import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
+import { mountQueryButton } from './queryButton';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -17,12 +18,11 @@ export interface SidePanelDeps {
 
 export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
   const root = document.getElementById('sidePanel');
-  const queryButton = document.getElementById('queryPanelBtn');
-  if (!root || !queryButton) return { refresh: () => {} };
+  const wrapper = document.getElementById('networkWrapper');
+  if (!root || !wrapper) return { refresh: () => {} };
 
   if (deps.embedded) {
     root.hidden = true;
-    queryButton.hidden = true;
     return { refresh: () => {} };
   }
 
@@ -30,8 +30,8 @@ export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
   const queryTab = createQueryTab({ getStore: deps.getStore, getPrefixes: deps.getPrefixes });
   host.registerTab(queryTab);
 
-  queryButton.addEventListener('click', () => host.toggle(queryTab.id));
-  host.onChange((activeId) => queryButton.setAttribute('aria-pressed', String(activeId === queryTab.id)));
+  const button = mountQueryButton(wrapper, () => host.toggle(queryTab.id));
+  host.onChange((activeId) => button.setPressed(activeId === queryTab.id));
 
   return { refresh: () => queryTab.refresh() };
 }
