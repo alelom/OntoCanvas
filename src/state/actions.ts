@@ -6,7 +6,7 @@
  */
 
 export interface Actions {
-  applyFilter: typeof import('../main').applyFilter;
+  applyFilter: typeof import('../graph/applyFilter').applyFilter;
   initDataPropsMenu: typeof import('../ui/dataPropertyModals').initDataPropsMenu;
   deleteDataPropertyWithConfirm: typeof import('../ui/dataPropertyModals').deleteDataPropertyWithConfirm;
   // @interface-members
