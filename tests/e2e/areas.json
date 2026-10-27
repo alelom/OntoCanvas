@@ -1,0 +1,168 @@
+{
+  "_about": "Which E2E tests cover which code (#174, #175). `tests` are file names under tests/e2e (without .e2e.test.ts); `sources` are repo paths (a trailing / is a directory). A changed file selects the areas that list it; a file that is in `everything`, or that no area lists and `ignore` does not cover, selects every area. Every E2E test file belongs to exactly one area (a unit test checks it).",
+  "everything": [
+    "src/main.ts",
+    "src/state/",
+    "src/state.ts",
+    "src/types.ts",
+    "src/parser.ts",
+    "src/storage.ts",
+    "src/style.css",
+    "src/ui/appShell.ts",
+    "src/ui/eventListeners.ts",
+    "src/graph/buildNetworkData.ts",
+    "src/graph/applyFilter.ts",
+    "src/graph/networkSelection.ts",
+    "src/graph/canvasHelpers.ts",
+    "src/e2e/",
+    "index.html",
+    "public/",
+    "package.json",
+    "package-lock.json",
+    "vite.config.ts",
+    "tsconfig.json",
+    "vitest.e2e.config.ts",
+    "tests/e2e/browser.ts",
+    "tests/e2e/testHelpers.ts",
+    "tests/e2e/globalSetup.ts"
+  ],
+  "ignore": [
+    "**/*.md",
+    "docs/",
+    "tests/unit/",
+    "tests/fixtures/",
+    "scripts/",
+    ".github/",
+    ".claude/",
+    ".cursor/",
+    "examples/",
+    "release.config.cjs",
+    "pyproject.toml",
+    "uv.lock",
+    "vitest.config.ts",
+    "tests/unitSetup.ts",
+    "tests/unitGlobalSetup.ts",
+    "tests/storageShim.ts",
+    "tests/e2e/areas.json",
+    "tests/e2e/README.md"
+  ],
+  "areas": {
+    "loading": {
+      "description": "Opening an ontology: from a file, a URL, a folder or the start-up dialog, and the failures.",
+      "tests": ["00_urlLoadFailureCors", "corruptOntology", "localFileOpening", "networkIsolation", "noClassesOntology", "openExternalFromFolder", "owlUrlLoad", "publicOntologyUrlLoad"],
+      "sources": [
+        "src/workflows/loadOntologyFlow.ts", "src/workflows/openExternalTab.ts",
+        "src/lib/loadOntology.ts", "src/lib/ontologyUrlLoader.ts", "src/lib/urlParamLoader.ts", "src/lib/urlLoadFailureHandler.ts",
+        "src/lib/localFileOpener.ts", "src/lib/localFileTokenStorage.ts", "src/lib/ontologyDirectory.ts", "src/lib/indexedDb.ts",
+        "src/lib/ontologyValidation.ts", "src/lib/ontologyValidator.ts",
+        "src/ui/openOntologyModal.ts", "src/ui/startupOpen.ts", "src/ui/urlLoadFailureModals.ts", "src/ui/exampleOntologies.ts",
+        "src/utils/deriveTtlFileNameFromUrl.ts", "src/utils/urlParams.ts",
+        "src/rdf/"
+      ]
+    },
+    "saving": {
+      "description": "Saving to Turtle, and what the saved file keeps of the original.",
+      "tests": ["roundTrip", "saveChanges", "saveNonTurtle"],
+      "sources": ["src/workflows/saveTtlFlow.ts", "src/workflows/saveOntology.ts", "src/ui/fileBar.ts", "src/turtlePostProcess.ts", "src/rdf/"]
+    },
+    "layout": {
+      "description": "Layouts, saved positions and the free-standing data property band.",
+      "tests": ["elkLayout", "hierarchyTiers", "stackLeaves", "unattachedBandLayout", "autosavedPositions", "restorePositions", "resetImportedNodePosition"],
+      "sources": [
+        "src/layouts/", "src/graph.ts", "src/graph/asyncLayout.ts", "src/graph/persistNodePositions.ts", "src/graph/nodeClip.ts",
+        "src/graph/unattachedDataPropertyLayout.ts", "src/graph/visibleSpan.ts",
+        "src/workflows/nodePositions.ts", "src/workflows/layoutOptions.ts", "src/ui/layoutModeHint.ts", "src/ui/edgeNodeClipping.ts"
+      ]
+    },
+    "display-config": {
+      "description": "The display config: options, edge styles, and loading one with an ontology.",
+      "tests": ["displayConfig", "displayConfigAutoLoad", "versionDisplayConfig", "edgeStyleCheckboxes"],
+      "sources": [
+        "src/workflows/displayConfigApply.ts", "src/workflows/displayConfigFiles.ts", "src/workflows/displayConfigSave.ts",
+        "src/lib/displayConfigFallback.ts", "src/lib/displayBase.ts", "src/ui/edgeStyleUtils.ts", "src/ui/networkConfig.ts", "src/ui/fontSizeDefaults.ts"
+      ]
+    },
+    "data-properties": {
+      "description": "Data properties: display on nodes, editing, dragging, owl:Thing and the unattached ones.",
+      "tests": ["dataPropertyDisplay", "dataPropertyDragCoupling", "dataPropertyEdit", "dataPropertyNodeDisplay", "newDataPropertyInView", "thingDataProperties", "unattachedDataPropertyOpacity"],
+      "sources": [
+        "src/ui/dataPropertyModals.ts", "src/ui/dataPropertyForm.ts", "src/ui/dataPropertyEditable.ts", "src/ui/dataPropertyModal.ts",
+        "src/ui/addDataPropertyHandlers.ts", "src/ui/dataRangeNotice.ts",
+        "src/graph/dataPropertyDragCoupling.ts", "src/graph/dataPropertyRows.ts", "src/graph/thingNode.ts", "src/graph/unattachedDataPropertyLayout.ts",
+        "src/lib/dataPropertyDisplay.ts", "src/rdf/dataRanges.ts"
+      ]
+    },
+    "relationships": {
+      "description": "Relationships between classes: object properties, restrictions, class expressions, editing and deleting edges.",
+      "tests": ["objectPropertyAddEdit", "editEdgeModal", "editEdgeConfirmClick", "editPropertyNoSpuriousRename", "importedObjectPropertyEditModal", "edgeLabelSelect", "restrictionReadOnly", "classExpressionReadOnly", "deleteUndoRelationshipCount", "propertyMenuGroups", "owlThingDomainSpelling", "unassertedRangeDomain"],
+      "sources": [
+        "src/ui/relationshipTypeModal.ts", "src/ui/relationshipTypeForm.ts", "src/ui/editModals.ts", "src/ui/editEdgeConfirm.ts", "src/ui/editEdgeTypeSearch.ts",
+        "src/ui/addEdgeModal.ts", "src/ui/edgeModalHelpers.ts", "src/ui/objectPropertyModal.ts", "src/ui/relationshipUtils.ts",
+        "src/ui/editEdgeClassExpressionNotice.ts", "src/ui/editEdgeRestrictionNotice.ts",
+        "src/ui/propertyMenuFacts.ts", "src/ui/propertyMenuGroups.ts", "src/ui/propertyMenuGroupsDom.ts",
+        "src/ui/classExpressionCanvas.ts", "src/ui/classExpressionInteraction.ts", "src/ui/classExpressionModal.ts", "src/ui/classExpressionOverlayRenderer.ts",
+        "src/graph/classExpressionOverlay.ts", "src/graph/classNodeIds.ts", "src/graph/edgeLabelHit.ts",
+        "src/lib/edgeEditability.ts", "src/lib/relationshipClipboard.ts", "src/rdf/"
+      ]
+    },
+    "nodes": {
+      "description": "Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu.",
+      "tests": ["addNodeMode", "undoDeleteClass", "canvasTooltip", "exampleImageTooltip", "nodeLabelContrast", "contextMenuSelectChildrenParents"],
+      "sources": [
+        "src/ui/addNodeModal.ts", "src/ui/renameModal.ts", "src/ui/nodeConfirms.ts", "src/ui/nodeModalHelpers.ts", "src/ui/nodeModalForm.ts", "src/ui/nodeModalFormUi.ts",
+        "src/ui/renameModalHeaderIcons.ts", "src/ui/canvasTooltip.ts", "src/ui/contextMenu.ts",
+        "src/workflows/deleteSelection.ts", "src/workflows/undoRedo.ts", "src/workflows/editNodeProperties.ts",
+        "src/lib/undo.ts", "src/lib/exampleImageFiles.ts", "src/lib/exampleImageStore.ts", "src/lib/exampleImageUrlValidation.ts", "src/lib/exampleImages.ts",
+        "src/lib/imageCarousel.ts", "src/lib/tooltipLayout.ts", "src/lib/textContrast.ts", "src/lib/identifierFromLabel.ts", "src/lib/termUri.ts"
+      ]
+    },
+    "annotations": {
+      "description": "Annotation properties: the menu, the modals, their values, and styling nodes by annotation.",
+      "tests": ["annotationEditing", "annotationPropertiesMenu", "annotationPropertyPrefix", "annotationPropertyRange", "annotationPropertyWarning"],
+      "sources": [
+        "src/ui/annotationPropertyModal.ts", "src/ui/annotationPropertiesMenu.ts", "src/ui/annotationUsagesView.ts", "src/ui/annotationValuesSection.ts",
+        "src/lib/annotationStyle.ts", "src/lib/annotationUsages.ts", "src/lib/annotationValues.ts", "src/lib/annotationNodeStyle.ts"
+      ]
+    },
+    "external-refs": {
+      "description": "References to other ontologies: the references modal, prefixes, and the external nodes drawn at half opacity.",
+      "tests": ["externalNodeUrl", "externalOntologyUrlConversion", "externalRefPrefixUpdate", "externalRefsModal", "externalRefsVisualization"],
+      "sources": [
+        "src/ui/externalRefs.ts", "src/graph/externalExpansion.ts", "src/graph/removeExternalReferences.ts", "src/graph/definedElsewhere.ts",
+        "src/externalOntologySearch.ts", "src/lib/openExternalOntology.ts"
+      ]
+    },
+    "imports": {
+      "description": "owl:imports: reading imported ontologies, their properties and versions.",
+      "tests": ["importExamples", "importedOntologyDataProps", "importedOntologyObjectPropsEdges", "importedOntologyProperties", "importedPropertyPrefixes", "ontologyVersions"],
+      "sources": [
+        "src/lib/importedDeclarations.ts", "src/lib/ontologyVersion.ts", "src/lib/ontologyVersions.ts", "src/lib/seenVersions.ts", "src/lib/versionSources.ts", "src/lib/versionPinnedUri.ts",
+        "src/rdf/ontologyImports.ts", "src/ui/importedNote.ts", "src/ui/importVersionNote.ts", "src/ui/importsSettle.ts", "src/ui/ontologyInfo.ts", "src/ui/ontologyIssues.ts",
+        "src/workflows/propertyLists.ts"
+      ]
+    },
+    "search": {
+      "description": "The search box: suggestions, scope and the outline around the matches.",
+      "tests": ["searchOutline", "searchScope", "searchSuggestions"],
+      "sources": [
+        "src/ui/searchOptions.ts", "src/ui/searchOutlineOverlay.ts", "src/ui/searchVocabulary.ts", "src/ui/searchAutocomplete.ts",
+        "src/graph/searchOutline.ts", "src/lib/searchHighlight.ts", "src/lib/searchSuggestions.ts"
+      ]
+    },
+    "embed": {
+      "description": "The app embedded in an iframe: the compact, read-only view.",
+      "tests": ["embedIframe", "embedMode"],
+      "sources": ["src/utils/embedMode.ts"]
+    },
+    "shell": {
+      "description": "The bottom bar and what it shows about the selection.",
+      "tests": ["statusBar"],
+      "sources": ["src/ui/statusBar.ts", "src/ui/selectionInfo.ts"]
+    },
+    "sparql": {
+      "description": "SPARQL queries over the loaded ontology.",
+      "tests": ["sparqlQuery"],
+      "sources": ["src/sparql/"]
+    }
+  }
+}
