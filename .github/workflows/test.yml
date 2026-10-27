@@ -1,9 +1,9 @@
 name: Tests
 
 # A pull request runs the type-check, the unit tests that import or read what changed, and the E2E areas the changed files
-# touch (#174, #175). When they pass the check "Ready to merge" is green, and the pull request can merge by itself
-# (auto-merge). The WHOLE unit and E2E suites run after the merge, on main (main-verify.yml), and gate the release
-# and the deployment. workflow_dispatch runs everything, against any ref.
+# touch (#174, #175). When they pass the check "Ready to merge" is green, which the ruleset on main requires for a
+# merge. The WHOLE unit and E2E suites run after the merge, on main (main-verify.yml), and gate the release and the
+# deployment. workflow_dispatch runs everything, against any ref.
 on:
   pull_request:
   workflow_dispatch:

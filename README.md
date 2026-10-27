@@ -160,8 +160,8 @@ built app in Chromium (Playwright).
   Vitest's import graph, plus the few that read files from disk, see [`tests/unitSelect.json`](tests/unitSelect.json)) and
   `test:e2e:affected` (the E2E areas the changed files touch, see below).
 - **On a pull request** CI runs the type-check, those same unit tests and those same E2E areas. When they pass, the check
-  **Ready to merge** is green, and a ruleset on `main` requires that check for a merge. `gh pr merge <number> --auto --merge`
-  makes GitHub merge the pull request the moment it is green. The owner can still push to `main` directly.
+  **Ready to merge** is green, and the pull request can be merged: a ruleset on `main` requires that check for a merge. The
+  owner can still push to `main` directly.
 - **After the merge** the **whole** unit suite and the **whole** E2E suite run on `main` ([`main-verify.yml`](.github/workflows/main-verify.yml)).
   Green releases and deploys. Red **opens an issue automatically** (label `main-red`) and nothing is released or deployed
   until `main` is fixed. A direct push to `main`, which the owner may do, goes through the same verification.
