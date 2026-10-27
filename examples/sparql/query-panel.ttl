@@ -1,6 +1,6 @@
 # A small ontology to try the SPARQL query panel on (issue #171).
 #
-# Open it, press "SPARQL query" in the bottom bar, and run these (the panel already declares the prefixes below).
+# Open it, press "SPARQL query" next to "Add Edge" in the graph toolbar, and run these (the panel already declares the prefixes below).
 # The editor starts with a query that lists every class with its label.
 #
 #   SELECT ?c WHERE { ?c rdfs:subClassOf+ :Space }

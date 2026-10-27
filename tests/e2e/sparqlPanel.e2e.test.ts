@@ -17,6 +17,8 @@ const TTL = `
 :Student a owl:Class ; rdfs:label "Student"@en ; rdfs:subClassOf :Person .
 `;
 const isEngineRequest = (u: string) => /index-browser|comunica|runQuery/i.test(u);
+const isEditorRequest = (u: string) => /codeMirrorEditor/i.test(u);
+const EDITOR = '[data-query-editor][data-editor="codemirror"] .cm-content';
 
 describe('SPARQL side panel', () => {
   let browser: Browser;
@@ -42,6 +44,7 @@ describe('SPARQL side panel', () => {
     // The button is in the graph's own toolbar, right after Add Edge, and not in the page toolbar or the bottom bar.
     expect(await page.locator('.vis-manipulation > .vis-connect + .vis-separator-line + #queryPanelBtn').count()).toBe(1);
     expect(await page.locator('#controls #queryPanelBtn, #info #queryPanelBtn').count()).toBe(0);
+    expect(requested.filter(isEditorRequest)).toEqual([]);
     const before = await networkWidth();
 
     await page.click('#queryPanelBtn');
@@ -51,10 +54,20 @@ describe('SPARQL side panel', () => {
     expect(requested.filter(isEngineRequest)).toEqual([]);
   });
 
+  it('swaps the plain textarea for a SPARQL editor that colours the query', async () => {
+    await page.locator(EDITOR).waitFor();
+
+    expect(await page.locator('[data-query-editor] textarea').count()).toBe(0);
+    const colours = await page.evaluate(() => {
+      const spans = [...document.querySelectorAll('.cm-content .cm-line span')] as HTMLElement[];
+      return new Set(spans.map((s) => getComputedStyle(s).color)).size;
+    });
+    expect(colours).toBeGreaterThan(1);
+  });
+
   it('starts with the file\'s prefixes, runs the query and shows the classes as prefixed names', async () => {
-    expect(await page.inputValue('[data-query-editor]')).toContain('PREFIX : <http://example.org/o#>');
-    await page.fill(
-      '[data-query-editor]',
+    expect(await page.locator(EDITOR).innerText()).toContain('PREFIX : <http://example.org/o#>');
+    await page.locator(EDITOR).fill(
       'PREFIX : <http://example.org/o#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> ' +
         'SELECT ?c ?l WHERE { ?c rdfs:label ?l } ORDER BY ?c'
     );
@@ -69,7 +82,7 @@ describe('SPARQL side panel', () => {
   });
 
   it('shows the error of an update query instead of running it', async () => {
-    await page.fill('[data-query-editor]', 'DELETE WHERE { ?s ?p ?o }');
+    await page.locator(EDITOR).fill('DELETE WHERE { ?s ?p ?o }');
     await page.click('[data-query-run]');
 
     expect(await page.locator('[data-query-error]').textContent()).toMatch(/read-only/i);

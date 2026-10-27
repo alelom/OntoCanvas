@@ -18,12 +18,14 @@ let store: Store | null;
 let currentPrefixes: Record<string, string>;
 let run: ReturnType<typeof vi.fn>;
 
+/** The CodeMirror chunk never arrives here, so the plain textarea is what is tested (the swap: queryTabEditorSwap.test.ts). */
+const neverLoads = () => new Promise<never>(() => {});
 const mount = () => {
-  const tab = createQueryTab({ getStore: () => store, getPrefixes: () => currentPrefixes, run: (...args) => run(...args) });
+  const tab = createQueryTab({ getStore: () => store, getPrefixes: () => currentPrefixes, run: (...args) => run(...args), loadEditor: neverLoads });
   tab.render(container);
   return tab;
 };
-const editor = () => container.querySelector<HTMLTextAreaElement>('[data-query-editor]')!;
+const editor = () => container.querySelector<HTMLTextAreaElement>('[data-query-editor] textarea')!;
 const runButton = () => container.querySelector<HTMLButtonElement>('[data-query-run]')!;
 const status = () => container.querySelector<HTMLElement>('[data-query-status]')!;
 const error = () => container.querySelector<HTMLElement>('[data-query-error]');

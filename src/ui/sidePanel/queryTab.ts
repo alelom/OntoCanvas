@@ -8,6 +8,7 @@ import type { QueryResult } from '../../sparql/runQuery';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
 import type { SidePanelTab } from './sidePanelHost';
+import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
 
 export type RunQuery = (stores: Store[], query: string) => Promise<QueryResult>;
 
@@ -17,6 +18,8 @@ export interface QueryTabDeps {
   getPrefixes: () => Record<string, string>;
   /** Defaults to the lazily loaded engine. */
   run?: RunQuery;
+  /** Fetches the CodeMirror editor that replaces the plain textarea. Defaults to the lazily loaded one. */
+  loadEditor?: LoadEditor;
 }
 
 export interface QueryTab extends SidePanelTab {
@@ -68,7 +71,7 @@ function renderTable(view: Extract<ResultView, { kind: 'table' }>): HTMLElement 
 
 export function createQueryTab(deps: QueryTabDeps): QueryTab {
   const run = deps.run ?? lazyRun;
-  let editor: HTMLTextAreaElement | null = null;
+  let editor: QueryEditor | null = null;
   let edited = false;
 
   const starterText = () => `${prefixHeader(deps.getPrefixes())}\n\n${STARTER_QUERY}`;
@@ -81,14 +84,28 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       "Queries are read-only and run over the open ontology's own triples. Classes shown from external ontologies (faded stubs) are not part of that data. Ctrl+Enter runs the query."
     );
 
-    editor = element('textarea', 'query-editor');
-    editor.setAttribute('data-query-editor', '');
-    editor.spellcheck = false;
-    editor.rows = 12;
-    editor.value = starterText();
-    editor.addEventListener('input', () => {
-      edited = true;
-    });
+    const editorHost = element('div', 'query-editor');
+    editorHost.setAttribute('data-query-editor', '');
+    const hooks = {
+      onChange: () => {
+        edited = true;
+      },
+      onRun: () => void execute(),
+    };
+    editor = mountTextarea(editorHost, starterText(), hooks);
+
+    // The textarea is usable at once. CodeMirror replaces it when its chunk arrives, with whatever was typed meanwhile;
+    // if it cannot be fetched the textarea simply stays.
+    void (deps.loadEditor ?? loadCodeMirrorEditor)()
+      .then((mount) => {
+        const text = editor!.getText();
+        const hadFocus = editorHost.contains(document.activeElement);
+        editorHost.replaceChildren();
+        editor = mount(editorHost, text, hooks);
+        editorHost.setAttribute('data-editor', 'codemirror');
+        if (hadFocus) editor.focus();
+      })
+      .catch(() => editorHost.setAttribute('data-editor', 'textarea'));
 
     const runButton = element('button', 'primary', 'Run');
     runButton.type = 'button';
@@ -124,7 +141,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       const started = performance.now();
       try {
         const prefixes = withStandardPrefixes(deps.getPrefixes());
-        const view = await describeResult(await run([store], editor!.value), prefixes);
+        const view = await describeResult(await run([store], editor!.getText()), prefixes);
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
@@ -147,14 +164,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     }
 
     runButton.addEventListener('click', () => void execute());
-    editor.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        void execute();
-      }
-    });
-
-    container.append(note, editor, actions, result);
+    container.append(note, editorHost, actions, result);
   }
 
   return {
@@ -162,7 +172,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     title: 'Query',
     render,
     refresh() {
-      if (editor && !edited) editor.value = starterText();
+      if (editor && !edited) editor.setText(starterText());
     },
   };
 }
