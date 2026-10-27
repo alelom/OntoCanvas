@@ -108,6 +108,12 @@ describe('the verification of main (main-verify.yml)', () => {
     expect(runs(wf.jobs['still-current'])).toContain('gh run cancel');
   });
 
+  it('sets the commit author inside the repository it creates for the badges branch', () => {
+    const script = runs(wf.jobs.publish);
+    expect(script.indexOf('git init')).toBeGreaterThan(-1);
+    expect(script.indexOf('git config user.name')).toBeGreaterThan(script.indexOf('git init'));
+  });
+
   it('does not let a badge problem stop a release', () => {
     expect(wf.jobs.publish['continue-on-error']).toBe(true);
   });
