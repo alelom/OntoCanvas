@@ -8,6 +8,7 @@ import { applyAnnotationPropertyOrder } from '../lib/annotationStyle';
 import { latestDisplayConfigSource } from '../lib/displayConfigFallback';
 import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn } from '../lib/importedDeclarations';
 import { loadOntologyFromContent } from '../lib/loadOntology';
+import { declaredPrefixes } from '../sparql/declaredPrefixes';
 import { forgetOntologyDirectory } from '../lib/ontologyDirectory';
 import { fetchOntologyFromUrl } from '../lib/ontologyUrlLoader';
 import { validateOntologyStructure, formatValidationErrors } from '../lib/ontologyValidation';
@@ -142,6 +143,8 @@ export async function loadTtlAndRender(
     
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
+    session.currentPrefixMap = declaredPrefixes(ttlString);
+    session.sidePanel?.refresh();
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps, originalFileCache: cache } = parseResult;
     
     // Store the store early so tests can detect when parsing is complete

@@ -125,6 +125,7 @@ export function renderApp(): void {
         <button type="button" id="resetView">Reset view</button>
       </div>
     </div>
+    <aside id="sidePanel" aria-label="Side panel"></aside>
     <div id="info">
       <span id="versionDisplay" style="font-size: 11px; color: #666;"></span>
       <span id="ontologyInfoDisplay" class="info-seg" style="font-size: 11px; display: none;"></span>

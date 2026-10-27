@@ -30,6 +30,9 @@ export const session = {
   objectProperties: [] as ObjectPropertyInfo[],
   dataProperties: [] as DataPropertyInfo[],
   ttlStore: null as import('n3').Store | null,
+  /** The prefixes the open file declares (for the query panel). */
+  currentPrefixMap: {} as Record<string, string>,
+  sidePanel: null as { refresh(): void } | null,
   /** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
    * after some edits; this is merged back in each time. */
   importedDeclarations: null as PropertyLists | null,

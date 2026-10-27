@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
  * own, with the machine to themselves. A new test that builds the real engine (it calls runQuery without stubbing
  * the engine) goes in this list.
  */
-const ENGINE_TESTS = ['tests/unit/sparqlRunQuery.test.ts'];
+const ENGINE_TESTS = ['tests/unit/sparqlRunQuery.test.ts', 'tests/unit/sparqlExamples.test.ts'];
 
 export default defineConfig({
   test: {

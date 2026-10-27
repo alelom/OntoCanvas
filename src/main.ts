@@ -6,6 +6,7 @@ import {
 import { session, fileState, canvasState, editState } from './state/appState';
 import { installTestLogCapture } from './e2e/testLogCapture';
 import { renderApp } from './ui/appShell';
+import { initSidePanel } from './ui/sidePanel/initSidePanel';
 
 import { isDebugMode, debugLog } from './utils/debug';
 import {
@@ -109,6 +110,7 @@ document.addEventListener('click', (e) => {
 
 registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm });
 renderApp();
+session.sidePanel = initSidePanel({ getStore: () => session.ttlStore, getPrefixes: () => session.currentPrefixMap, embedded: isEmbedded() });
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {
   appEl.classList.add('embed-no-menu');

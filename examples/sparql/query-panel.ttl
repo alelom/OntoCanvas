@@ -1,0 +1,42 @@
+# A small ontology to try the SPARQL query panel on (issue #171).
+#
+# Open it, press "SPARQL query" in the bottom bar, and run these (the panel already declares the prefixes below).
+# The editor starts with a query that lists every class with its label.
+#
+#   SELECT ?c WHERE { ?c rdfs:subClassOf+ :Space }
+#     -> :Bedroom and :Room (a property path: all subclasses, at any depth)
+#
+#   SELECT ?l WHERE { :Room rdfs:label ?l }
+#     -> "Room"@en and "Raum"@de (a language tag stays visible)
+#
+#   SELECT ?r WHERE { :Room rdfs:subClassOf ?r FILTER(isBlank(?r)) }
+#     -> one row, _:<label> (the restriction on :Room is a blank node; it is the same node the store holds)
+#
+#   SELECT (COUNT(?c) AS ?n) WHERE { ?c a owl:Class }
+#     -> "5"^^xsd:integer
+#
+#   ASK { :Door a owl:Class }
+#     -> true
+#
+#   CONSTRUCT { ?c rdfs:subClassOf ?p } WHERE { ?c rdfs:subClassOf ?p . ?p a owl:Class }
+#     -> Turtle text with the two subclass triples
+#
+#   DELETE WHERE { ?s ?p ?o }
+#     -> an error: queries are read-only
+@prefix : <http://example.org/examples/sparql-queries#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/sparql-queries> a owl:Ontology ;
+    rdfs:label "SPARQL query panel example" .
+
+:Space a owl:Class ; rdfs:label "Space" .
+:Room a owl:Class ;
+    rdfs:label "Room"@en , "Raum"@de ;
+    rdfs:subClassOf :Space ,
+        [ a owl:Restriction ; owl:onProperty :hasPart ; owl:someValuesFrom :Wall ] .
+:Bedroom a owl:Class ; rdfs:label "Bedroom" ; rdfs:subClassOf :Room .
+:Wall a owl:Class ; rdfs:label "Wall" .
+:Door a owl:Class ; rdfs:label "Door" .
+
+:hasPart a owl:ObjectProperty ; rdfs:label "has part" .

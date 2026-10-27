@@ -160,8 +160,8 @@
     },
     "sparql": {
       "description": "SPARQL queries over the loaded ontology.",
-      "tests": ["sparqlQuery"],
-      "sources": ["src/sparql/"]
+      "tests": ["sparqlQuery", "sparqlPanel"],
+      "sources": ["src/sparql/", "src/ui/sidePanel/"]
     }
   }
 }
