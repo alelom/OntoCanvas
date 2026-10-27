@@ -1,3 +1,11 @@
+# [1.37.0](https://github.com/alelom/OntoCanvas/compare/v1.36.1...v1.37.0) (2026-10-27)
+
+
+### Features
+
+* a read-only SPARQL query panel in a side panel ([#171](https://github.com/alelom/OntoCanvas/issues/171)) ([674d6ee](https://github.com/alelom/OntoCanvas/commit/674d6ee767b60ba003b8e73c8d9707109db1fe30))
+* the SPARQL button joins the graph toolbar, right after Add Edge ([#171](https://github.com/alelom/OntoCanvas/issues/171)) ([9928771](https://github.com/alelom/OntoCanvas/commit/99287710736e3cb8dd3242de2c87c378620c75a0))
+
 ## [1.36.1](https://github.com/alelom/OntoCanvas/compare/v1.36.0...v1.36.1) (2026-10-27)
 
 
