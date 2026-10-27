@@ -35,9 +35,8 @@ import {
 } from './graph';
 
 import { placeUnsavedNodes } from './layouts/placeUnsaved';
-import type { LayeredModelOptions } from './layouts/layeredModel';
 import { definitionParents } from './lib/definitionParents';
-import { getAsyncLayoutAlgorithm, DEFAULT_LAYOUT_MODE, type AsyncLayoutAlgorithm } from './layouts';
+import { getAsyncLayoutAlgorithm, DEFAULT_LAYOUT_MODE } from './layouts';
 import {
   computeSearchSets,
   getNodeSearchOpacity as getSearchOpacity,
@@ -50,7 +49,7 @@ import {
 import { getSearchScope } from './ui/searchOptions';
 import { setupDragCoupling } from './graph/dataPropertyDragCoupling';
 import { persistNodePositionsFromNetwork } from './graph/persistNodePositions';
-import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
+import { isDebugMode, debugLog, debugWarn } from './utils/debug';
 import {
   updateNodeEdgeCounts,
 } from './ui/statusBar';
@@ -137,6 +136,7 @@ import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyM
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { setupNetworkSelectionAndNavigation } from './graph/networkSelection';
 import { SPACING } from './ui/constants';
+import { runAsyncLayout } from './graph/asyncLayout';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 
@@ -1337,49 +1337,6 @@ setImportVersionLookup((url) => {
 });
 
 
-
-/**
- * Runs an asynchronous layout (ELK, #153) and keeps its positions for the nodes that had none, then redraws. Only
- * the latest run counts, and only while its layout is still the chosen one. If it fails (e.g. elkjs can't be
- * loaded), the positions shown meanwhile are kept.
- */
-function runAsyncLayout(
-  layout: AsyncLayoutAlgorithm,
-  mode: string,
-  nodeIds: Set<string>,
-  edges: GraphEdge[],
-  nodeDimensions: Map<string, { width: number; height: number }>,
-  layoutOptions: LayeredModelOptions,
-  toPlace: Set<string>,
-  placedBefore: Record<string, { x: number; y: number }>,
-  sizeOf: (id: string) => { width: number; height: number },
-  shown: Record<string, { x: number; y: number }>
-): void {
-  const run = ++canvasState.asyncLayoutRun;
-  const keep = (positions: Record<string, { x: number; y: number }>) => {
-    if (run !== canvasState.asyncLayoutRun || (document.getElementById('layoutMode') as HTMLSelectElement).value !== mode) return;
-    let changed = false;
-    for (const [id, pos] of Object.entries(positions)) {
-      if (!toPlace.has(id)) continue;
-      const node = session.rawData.nodes.find((n) => n.id === id);
-      if (node && (node.x != null || node.y != null)) continue;
-      if (node) {
-        node.x = pos.x;
-        node.y = pos.y;
-      } else {
-        canvasState.loadedNodePositions = { ...(canvasState.loadedNodePositions ?? {}), [id]: pos };
-      }
-      changed = true;
-    }
-    if (changed) applyFilter(true);
-  };
-  layout(nodeIds, edges, SPACING, nodeDimensions, layoutOptions)
-    .then((computed) => keep(placeUnsavedNodes(placedBefore, computed, edges, sizeOf)))
-    .catch((err) => {
-      debugError(`[LAYOUT] ${mode} failed; keeping the default layout`, err);
-      keep(shown);
-    });
-}
 
 export function applyFilter(preserveView = false): void {
   // Don't return early - we need to initialize the network even with no nodes
