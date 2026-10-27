@@ -161,7 +161,7 @@
     "sparql": {
       "description": "SPARQL queries over the loaded ontology.",
       "tests": ["sparqlQuery", "sparqlPanel"],
-      "sources": ["src/sparql/", "src/ui/sidePanel/"]
+      "sources": ["src/sparql/", "src/ui/sidePanel/", "src/ui/historyShortcuts.ts", "src/utils/textEditing.ts"]
     }
   }
 }

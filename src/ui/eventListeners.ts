@@ -21,6 +21,7 @@ import { loadFromFile, loadFromUrl, loadLastOpenedFile, loadLastOpenedUrl, loadF
 import { restoreNodePositions, forgetNodePositions } from '../workflows/nodePositions';
 import { saveTtl } from '../workflows/saveTtlFlow';
 import { performUndo, performRedo } from '../workflows/undoRedo';
+import { handleHistoryShortcut } from './historyShortcuts';
 import { handleExternalClassSearch } from './addNodeModal';
 import { initAnnotationPropsMenu } from './annotationPropertiesMenu';
 import { getAnnotationPropsMenuDeps } from './annotationPropertyModal';
@@ -855,15 +856,7 @@ export function setupEventListeners(): void {
         const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
         searchInput?.focus();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) performRedo();
-        else performUndo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault();
-        performRedo();
-      }
+      handleHistoryShortcut(e);
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // Run in capture phase so we handle Delete before search input (which would delete a character)
         const activeEl = document.activeElement as HTMLElement;
