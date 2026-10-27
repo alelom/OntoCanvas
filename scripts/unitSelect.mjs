@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Selects which unit tests to run for a change (#175).
  *

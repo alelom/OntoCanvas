@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Selects which E2E tests to run (#174, #175).
  *

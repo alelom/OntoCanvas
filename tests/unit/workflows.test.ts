@@ -87,11 +87,19 @@ describe('the verification of main (main-verify.yml)', () => {
     expect((wf.on.push as { branches: string[] }).branches).toEqual(['main']);
   });
 
-  it('runs the WHOLE unit suite and every E2E area, never the affected subset', () => {
+  it('runs the whole unit suite once and the whole E2E suite once, never the affected subset', () => {
     expect(runs(wf.jobs.unit)).toMatch(/npm test\b/);
-    expect(runs(wf.jobs.areas)).toContain('--all');
-    expect(Object.values(wf.jobs).map(runs).join('\n')).not.toMatch(/test:affected|--changed/);
-    expect(wf.jobs.e2e.needs).toEqual(['areas']);
+    expect(runs(wf.jobs.e2e)).toContain('test:e2e:full');
+    expect(Object.values(wf.jobs).map(runs).join('\n')).not.toMatch(/test:affected|test:e2e:affected|test:e2e:area|--changed/);
+  });
+
+  it('is one job per suite, not one per area or per test group', () => {
+    expect(Object.keys(wf.jobs).sort()).toEqual(['e2e', 'publish', 'report', 'still-current', 'unit']);
+    expect(Object.values(wf.jobs).some((j) => j.strategy !== undefined)).toBe(false);
+  });
+
+  it('says in the issue that deployment is blocked', () => {
+    expect(readFileSync(join(ROOT, 'scripts/ci/reportMainFailure.mjs'), 'utf8')).toContain('deployment stays blocked');
   });
 
   it('opens an issue when a job failed, and cancels itself when main has moved on', () => {

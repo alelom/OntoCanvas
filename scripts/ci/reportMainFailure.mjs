@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Raises (or updates) the GitHub issue for a failed "Main verification" run (#174, #175).
  *
@@ -28,7 +27,7 @@ export function buildReport({ sha, runUrl, event, failed, pr = null, author = nu
   const what = names.length === 0 ? 'the verification' : names.length <= 3 ? names.join(', ') : `${names.length} jobs`;
   const title = `Main is red: ${what} failed at ${short}`;
   const lines = [
-    'The post-merge verification of `main` failed, so this commit was **not released or deployed**.',
+    'The post-merge verification of `main` failed, so this commit was **not released or deployed**, and **deployment stays blocked until `main` is green again**. Please fix it.',
     '',
     `- Commit: \`${short}\`${author ? ` by @${author}` : ''}`,
     ...(pr ? [`- Merged by: #${pr.number}, ${pr.title}`] : []),

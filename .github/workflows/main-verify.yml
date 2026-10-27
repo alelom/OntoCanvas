@@ -1,9 +1,10 @@
 name: Main verification
 
-# After a merge (or any push) to main: the WHOLE unit suite and the WHOLE E2E suite (#174, #175).
+# After a merge (or any push) to main: ONE run of the whole unit suite and ONE run of the whole E2E suite (#174, #175).
 #
 #   green  -> the Release workflow runs, and Deploy follows it;
-#   red    -> an issue is opened (label main-red) and nothing is released or deployed until main is fixed.
+#   red    -> an issue is opened (label main-red) saying deployment is blocked, and nothing is released or deployed
+#             until main is fixed.
 #
 # Pull requests run only what their changes touch (test.yml); this is the net behind that selection. It also runs every
 # night, to catch what drifts under a green main (a runner image, a dependency), and on demand. It writes the two
@@ -25,21 +26,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  areas:
-    name: List the E2E areas
-    runs-on: ubuntu-latest
-    outputs:
-      areas: ${{ steps.list.outputs.areas }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - id: list
-        run: echo "areas=$(node scripts/e2eSelect.mjs --all --json | node -p "JSON.stringify(JSON.parse(require('fs').readFileSync(0,'utf8')).areas)")" >> "$GITHUB_OUTPUT"
-
   unit:
-    name: Unit tests (all)
+    name: Unit tests (the whole suite)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,14 +51,9 @@ jobs:
           path: result/
 
   e2e:
-    name: "E2E: ${{ matrix.area }}"
-    needs: [areas]
+    name: E2E tests (the whole suite)
     # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        area: ${{ fromJSON(needs.areas.outputs.areas) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -79,18 +62,18 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e:area -- ${{ matrix.area }}
+      - run: npm run test:e2e:full
         env:
           EDITOR_E2E_URL: http://localhost:5173/
       - name: Record the result
         if: always()
         run: |
           mkdir -p result
-          echo '{"name":"e2e-${{ matrix.area }}","label":"E2E ${{ matrix.area }}","status":"${{ job.status }}"}' > result/e2e-${{ matrix.area }}.json
+          echo '{"name":"e2e","label":"E2E tests","status":"${{ job.status }}"}' > result/e2e.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: result-e2e-${{ matrix.area }}
+          name: result-e2e
           path: result/
 
   # Release runs when this workflow ends green. If main has moved on since this commit, releasing now would release a
@@ -117,8 +100,8 @@ jobs:
 
   publish:
     name: Update the README badges
-    needs: [areas, unit, e2e]
-    if: always() && needs.areas.result != 'skipped' && github.ref == 'refs/heads/main'
+    needs: [unit, e2e]
+    if: always() && github.ref == 'refs/heads/main'
     # A badge that cannot be written must not stop a release.
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -153,8 +136,8 @@ jobs:
 
   report:
     name: Open an issue for the failure
-    needs: [areas, unit, e2e]
-    if: always() && (needs.areas.result == 'failure' || needs.unit.result == 'failure' || needs.e2e.result == 'failure')
+    needs: [unit, e2e]
+    if: always() && (needs.unit.result == 'failure' || needs.e2e.result == 'failure')
     runs-on: ubuntu-latest
     permissions:
       contents: read
