@@ -8,7 +8,6 @@ import { session, fileState, canvasState, editState } from './state/appState';
 import { installTestLogCapture } from './e2e/testLogCapture';
 import { renderApp } from './ui/appShell';
 
-
 import { isDebugMode, debugLog } from './utils/debug';
 import {
   showContextMenu,
@@ -34,18 +33,13 @@ import {
   getRelationshipLabel,
 } from './ui/relationshipUtils';
 
-
-
 import './style.css';
-
 
 import { updateSaveButtonVisibility, updateSerializerDropdown } from './ui/fileBar';
 
 import { registerActions } from './state/actions';
 import { performRedo, performUndo } from './workflows/undoRedo';
 import { saveTtl } from './workflows/saveTtlFlow';
-
-
 
 import { showAddNodeModal } from './ui/addNodeModal';
 import { showAddEdgeModal } from './ui/addEdgeModal';
@@ -57,35 +51,11 @@ import { setupEventListeners } from './ui/eventListeners';
 import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyModal } from './ui/dataPropertyModals';
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { applyFilter } from './graph/applyFilter';
-// Removed updateLoadLastOpenedButton - now handled by openOntologyModal
-
-
-
-// Relationship utility functions moved to ui/relationshipUtils.ts
-
-
-
-
-
-
-
 
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setVersionPinnedUriResolver((kind, id) =>
   versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, session.ttlStore ? readOntologyVersion(session.ttlStore) : null)
 );
-
-
-// hideRenameModal moved to ui/modals.ts
-
-
-
-// Relationship utility functions moved to ui/relationshipUtils.ts
-
-
-// getCardinalityFromEditModal moved to ui/modals.ts
-
-
 
 /** What the imports dialog shows of an import's version (#131); null for a reference that is not an import. */
 setImportVersionLookup((url) => {
@@ -96,10 +66,6 @@ setImportVersionLookup((url) => {
   if (imported) return { state: 'read', version: readOntologyVersion(imported.store), newer: session.importNewerVersions.get(imported.url) };
   return session.importsBeingRead ? { state: 'reading' } : { state: 'unread' };
 });
-
-
-
-// External refs functions moved to ui/externalRefs.ts
 
 document.addEventListener('keydown', (e) => {
   const list = document.getElementById('searchAutocomplete');
