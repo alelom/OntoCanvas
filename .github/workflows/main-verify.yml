@@ -124,12 +124,12 @@ jobs:
         run: node scripts/writeBadges.mjs results badges-out
       - name: Push them to the badges branch
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           url="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           rm -rf publish && mkdir publish
           cd publish
           git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cp ../badges-out/*.json .
           git add -A
           git commit -q -m "badges: ${{ github.run_id }}"
