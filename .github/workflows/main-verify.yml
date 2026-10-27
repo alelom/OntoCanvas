@@ -22,7 +22,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: main-verify
+  # Pushes queue among themselves; a nightly or manual run has its own group, so it cannot displace a push's pending run.
+  group: main-verify-${{ github.event_name == 'push' && 'push' || format('{0}-{1}', github.event_name, github.run_id) }}
   cancel-in-progress: false
 
 jobs:
