@@ -148,8 +148,6 @@ import {
   updateOntologyInfoDisplay,
   updateOntologyVersionDisplay,
   updateAvailableVersions,
-  updateSelectionInfo as updateStatusBarSelection,
-  updateSelectedTerm as updateStatusBarSelectedTerm,
 } from './ui/statusBar';
 import {
   initContextMenu,
@@ -163,11 +161,7 @@ import { readOntologyVersion, bareIri } from './lib/ontologyVersion';
 import { findVersions } from './lib/ontologyVersions';
 import { browserVersionSources } from './lib/versionSources';
 import { recallSeenVersions, rememberSeenVersions } from './lib/seenVersions';
-import {
-  resolveNodeTerm,
-  resolveEdgeTerm,
-  type ResolvedTerm,
-} from './lib/termUri';
+
 import { attachEditorTestHook } from './e2e/editorTestHook';
 import {
   initOpenOntologyModal,
@@ -271,7 +265,7 @@ import './style.css';
 import { updateFilePathDisplay, updateSaveButtonVisibility, updateSerializerDropdown } from './ui/fileBar';
 
 import { collectDisplayConfig, loadDisplayConfigFromLocalFile } from './workflows/displayConfigFiles';
-import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, getTermLink, getTermLookup, revealNodeInView } from './graph/canvasHelpers';
+import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, revealNodeInView } from './graph/canvasHelpers';
 import { setHierarchyTypes, setStackLeaves } from './workflows/layoutOptions';
 import { currentDataProperties, currentObjectProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
 import { setupClassSelector, setupPropertySelector, updateAddRelTypeIdentifierAndValidation, updateEditRelTypeIdentifierAndValidation } from './ui/relationshipTypeForm';
@@ -294,6 +288,7 @@ import { handleExternalClassSearch, showAddNodeModal } from './ui/addNodeModal';
 import { showRenameModal } from './ui/renameModal';
 import { showAddEdgeModal } from './ui/addEdgeModal';
 import { updateEditEdgeTypeSearch, updateEditEdgeTypeSections } from './ui/editEdgeTypeSearch';
+import { resolveTerm, updateSelectionInfoDisplay } from './ui/selectionInfo';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 
@@ -3095,35 +3090,6 @@ setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setVersionPinnedUriResolver((kind, id) =>
   versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, session.ttlStore ? readOntologyVersion(session.ttlStore) : null)
 );
-
-function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
-  return kind === 'node' ? resolveNodeTerm(id, getTermLookup()) : resolveEdgeTerm(id, getTermLookup());
-}
-
-function updateSelectionInfoDisplay(net: Network): void {
-  const nodeIds = net.getSelectedNodes().map(String);
-  if (nodeIds.length === 0) {
-    const edgeIds = net.getSelectedEdges().map(String);
-    if (edgeIds.length === 1) {
-      const term = resolveTerm('edge', edgeIds[0]);
-      updateStatusBarSelectedTerm(term?.label ?? edgeIds[0], getTermLink(term?.uri ?? null));
-    } else if (edgeIds.length > 1) {
-      updateStatusBarSelection(` | Selected: ${edgeIds.length} relationships`);
-    } else {
-      updateStatusBarSelection('');
-    }
-  } else if (nodeIds.length === 1) {
-    const node = session.rawData.nodes.find((n) => n.id === nodeIds[0]);
-    const term = resolveTerm('node', nodeIds[0]);
-    updateStatusBarSelectedTerm(
-      node?.label ?? term?.label ?? nodeIds[0],
-      getTermLink(term?.uri ?? null),
-      ` | Labellable: ${node?.labellableRoot ?? 'N/A'}`
-    );
-  } else {
-    updateStatusBarSelection(` | Selected: ${nodeIds.length} nodes`);
-  }
-}
 
 function setupNetworkSelectionAndNavigation(
   net: Network,
