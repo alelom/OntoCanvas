@@ -7,8 +7,8 @@
 
 export interface Actions {
   applyFilter: typeof import('../main').applyFilter;
-  initDataPropsMenu: typeof import('../main').initDataPropsMenu;
-  deleteDataPropertyWithConfirm: typeof import('../main').deleteDataPropertyWithConfirm;
+  initDataPropsMenu: typeof import('../ui/dataPropertyModals').initDataPropsMenu;
+  deleteDataPropertyWithConfirm: typeof import('../ui/dataPropertyModals').deleteDataPropertyWithConfirm;
   // @interface-members
 }
 
