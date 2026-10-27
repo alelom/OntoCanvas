@@ -109,3 +109,5 @@ export type AnnotationStyleConfig = {
   textProps: Record<string, { rules: { regex: string; fillColor: string; borderColor: string; borderLineType: BorderLineType }[] }>;
   defaultStyle?: AnnotationDefaultStyle;
 };
+
+export const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';

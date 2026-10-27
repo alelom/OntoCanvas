@@ -280,6 +280,7 @@ import { showAddEdgeModal } from './ui/addEdgeModal';
 import { updateEditEdgeTypeSearch, updateEditEdgeTypeSections } from './ui/editEdgeTypeSearch';
 import { resolveTerm, updateSelectionInfoDisplay } from './ui/selectionInfo';
 import { initAddRelationshipTypeHandlers, initEdgeStylesMenu, showEditRelationshipTypeModal } from './ui/relationshipTypeModal';
+import { XSD_NS } from './ui/constants';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 
@@ -547,8 +548,6 @@ const SPACING = getSpacing();
 
 
 
-
-const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 
 function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
