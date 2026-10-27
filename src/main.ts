@@ -31,7 +31,6 @@ import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
 import { buildSearchVocabulary } from './ui/searchVocabulary';
-import { buildSearchSuggestions } from './lib/searchSuggestions';
 import { outlineTargets } from './graph/searchOutline';
 import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
@@ -252,6 +251,7 @@ import { initAddDataPropertyHandlers } from './ui/addDataPropertyHandlers';
 import { confirmAddNode, confirmRename } from './ui/nodeConfirms';
 import { confirmEditEdge } from './ui/editEdgeConfirm';
 import { performDeleteSelection } from './workflows/deleteSelection';
+import { refreshPropertyMenus, updateSearchAutocomplete } from './ui/searchAutocomplete';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 
@@ -2517,17 +2517,6 @@ setImportVersionLookup((url) => {
 const IMPORT_READ_TIMEOUT_MS = 8000;
 const IMPORT_READ_MAX_BYTES = 5_000_000;
 
-/** Re-render the property menus after the declarations of the imports were merged in (#104). The edge
- * styles already set are kept; the annotation menu keeps its own. */
-function refreshPropertyMenus(): void {
-  const edgeStylesContent = document.getElementById('edgeStylesContent');
-  if (edgeStylesContent) initEdgeStylesMenu(edgeStylesContent, applyFilter, { preserveStyles: true });
-  const dataPropsContent = document.getElementById('dataPropsContent');
-  if (dataPropsContent) initDataPropsMenu(dataPropsContent);
-  const annotationPropsContent = document.getElementById('annotationPropsContent');
-  if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
-}
-
 /**
  * Read what the loaded ontology's imports declare, in the background, and merge it into the property lists
  * and menus as read-only context (#104). Best effort: an import that can't be fetched (CORS, offline) is
@@ -4758,43 +4747,6 @@ function setupEventListeners(): void {
     // Initial check
     updateSearchBarStyle();
   }
-}
-
-function updateSearchAutocomplete(): void {
-  const input = document.getElementById('searchQuery') as HTMLInputElement;
-  const list = document.getElementById('searchAutocomplete')!;
-  const query = (input?.value || '').trim();
-  const q = query.toLowerCase();
-  if (q.length < 1) {
-    list.innerHTML = '';
-    list.classList.remove('visible');
-    return;
-  }
-  // Relationships, classes and data properties as drawn by the last render, shown by prefixed name
-  // (foaf:member) with the full IRI as a tooltip (#81).
-  const suggestions = buildSearchSuggestions(query, canvasState.searchSuggestionSources);
-  list.innerHTML = '';
-  list.classList.remove('visible');
-  list.dataset.highlight = '-1';
-  suggestions.forEach((s) => {
-    const div = document.createElement('div');
-    div.className = 'suggestion';
-    div.dataset.value = s.value;
-    div.title = s.title;
-    // Built with textContent: labels come from the loaded ontology and must not be read as HTML.
-    div.textContent = s.display;
-    const hint = document.createElement('span');
-    hint.className = 'hint';
-    hint.textContent = `(${s.hint})`;
-    div.appendChild(hint);
-    div.addEventListener('click', () => {
-      input.value = s.value;
-      list.classList.remove('visible');
-      applyFilter();
-    });
-    list.appendChild(div);
-  });
-  list.classList.add('visible');
 }
 
 document.addEventListener('keydown', (e) => {
