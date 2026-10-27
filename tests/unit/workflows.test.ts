@@ -137,4 +137,17 @@ describe('the release and the deployment', () => {
     expect((deploy.on.workflow_run as { workflows: string[] }).workflows).toEqual(['Release']);
     expect(deploy.jobs.deploy.if).toMatch(/conclusion == 'success'/);
   });
+
+  it('deploy and mirror wait for a gate that fails when main is not the released commit', () => {
+    const deploy = workflows['deploy.yml'];
+    expect(needsOf(deploy.jobs.deploy)).toContain('gate');
+    expect(needsOf(deploy.jobs.mirror)).toContain('gate');
+    expect(JSON.stringify(deploy.jobs.gate)).toContain('github.event.workflow_run.head_sha');
+    expect(runs(deploy.jobs.gate)).toContain('exit 1');
+  });
+
+  it('the verification of main queues a push behind the one running, whatever else is running', () => {
+    const group = (workflows['main-verify.yml'].concurrency as { group: string }).group;
+    expect(group).toContain("github.event_name == 'push'");
+  });
 });
