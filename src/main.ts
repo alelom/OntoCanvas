@@ -130,7 +130,7 @@ import {
   resolveLayoutMode,
   SELF_CONTAINED_LAYOUT_MODES,
 } from './graph';
-import { DEFAULT_HIERARCHY_TYPES } from './layouts/hierarchyRules';
+
 import { placeUnsavedNodes } from './layouts/placeUnsaved';
 import type { LayeredModelOptions } from './layouts/layeredModel';
 import { definitionParents } from './lib/definitionParents';
@@ -288,6 +288,7 @@ import { updateFilePathDisplay, updateSaveButtonVisibility, updateSerializerDrop
 
 import { collectDisplayConfig, loadDisplayConfigFromLocalFile, loadDisplayConfigFromUrl } from './workflows/displayConfigFiles';
 import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, getTermLink, getTermLookup, revealNodeInView } from './graph/canvasHelpers';
+import { setHierarchyTypes, setStackLeaves, updateRestorePositionsButton } from './workflows/layoutOptions';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -6784,29 +6785,6 @@ fileState.hasUnsavedChanges = false;
 }
 
 /**
- * Sets the relationships that make the tiers (#151), and ticks them in the Object Properties menu. Returns whether
- * they changed: the positions laid out with the old ones are then wrong.
- */
-function setHierarchyTypes(types: string[] | undefined): boolean {
-  const next = new Set(types ?? DEFAULT_HIERARCHY_TYPES);
-  const changed = next.size !== canvasState.hierarchyTypes.size || [...next].some((t) => !canvasState.hierarchyTypes.has(t));
-  canvasState.hierarchyTypes = next;
-  document.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) => {
-    cb.checked = canvasState.hierarchyTypes.has(cb.dataset.type!);
-  });
-  return changed;
-}
-
-/** Sets whether leaf children are stacked under their parent (#159), and its checkbox. Returns whether it changed. */
-function setStackLeaves(value: boolean): boolean {
-  const changed = value !== canvasState.stackLeaves;
-  canvasState.stackLeaves = value;
-  const el = document.getElementById('stackLeaves') as HTMLInputElement | null;
-  if (el) el.checked = value;
-  return changed;
-}
-
-/**
  * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
  * loaded config's, from which imported nodes take theirs (#156).
  */
@@ -6899,11 +6877,6 @@ function restoreNodePositions(): void {
 function clearPositionsBeforeLayout(): void {
   canvasState.positionsBeforeLayout = null;
   updateRestorePositionsButton();
-}
-
-function updateRestorePositionsButton(): void {
-  const btn = document.getElementById('restorePositions');
-  if (btn) btn.style.display = canvasState.positionsBeforeLayout ? '' : 'none';
 }
 
 function applyFilter(preserveView = false): void {
