@@ -18,7 +18,7 @@ describe('resolveRepoUrl', () => {
   });
 
   it('accepts http as well as https', () => {
-    expect(resolveRepoUrl('http://git.internal/team/OntoCanvas')).toBe('http://git.internal/team/OntoCanvas');
+    expect(resolveRepoUrl('http://git.example.org/team/OntoCanvas')).toBe('http://git.example.org/team/OntoCanvas');
   });
 
   it('refuses anything that is not an http(s) address, and falls back', () => {
