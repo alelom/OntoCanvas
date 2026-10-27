@@ -28,7 +28,6 @@
   ],
   "ignore": [
     "**/*.md",
-    "docs/",
     "tests/unit/",
     "tests/fixtures/",
     "scripts/",

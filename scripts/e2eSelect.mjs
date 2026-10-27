@@ -87,15 +87,15 @@ export function testFilesFor(areaNames, config) {
   return areaNames.flatMap((a) => config.areas[a].tests.map((t) => `tests/e2e/${t}.e2e.test.ts`));
 }
 
-/** The README's table of areas, with each area's badge (the badge files are written by the badges workflow). */
+/** The README badges show the state of main, from the full unit and E2E suites run after each merge (main-verify.yml). */
 export const BADGE_BASE = 'https://img.shields.io/endpoint?url=' + encodeURIComponent('https://raw.githubusercontent.com/alelom/OntoCanvas/badges/');
-export const BADGES_WORKFLOW = 'https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml';
+export const BADGES_WORKFLOW = 'https://github.com/alelom/OntoCanvas/actions/workflows/main-verify.yml';
 export const badgeMarkdown = (file, alt) => `[![${alt}](${BADGE_BASE}${encodeURIComponent(file)})](${BADGES_WORKFLOW})`;
+
+/** The README's table of E2E areas. */
 export function readmeTable(config) {
-  const rows = Object.entries(config.areas).map(
-    ([name, a]) => `| \`${name}\` | ${a.description} | ${a.tests.length} | ${badgeMarkdown(`e2e-${name}.json`, `E2E ${name}`)} |`
-  );
-  return ['| Area | Covers | Tests | State of main |', '|---|---|---|---|', ...rows].join('\n');
+  const rows = Object.entries(config.areas).map(([name, a]) => `| \`${name}\` | ${a.description} | ${a.tests.length} |`);
+  return ['| Area | Covers | Tests |', '|---|---|---|', ...rows].join('\n');
 }
 
 // ---- command line

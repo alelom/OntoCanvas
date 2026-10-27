@@ -21,8 +21,9 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
   run starts in seconds instead of after a 40 to 50 s build. `EDITOR_E2E_REBUILD=1` forces a build. A `dist/` that
   the setup did not build is never trusted.
 - **Two runs cannot overlap** on one machine: the tests use port 5173.
-- **Before a merge the whole suite is run by hand**: `gh workflow run e2e-full.yml -f pr=<number>`. It records the commit
-  status `e2e-full`, which `main` requires for a merge through a pull request. Pull requests run only the selected areas.
+- **Pull requests run only the selected areas**, and when they pass (with the unit tests they select) the pull request can
+  merge. **The whole suite runs after the merge**, on `main`; green releases and deploys, red opens an issue
+  automatically. See `.github/workflows/test.yml` and `main-verify.yml`.
 - `npm run test:e2e:flake` measures how flaky the suite is.
 
 ## The areas
