@@ -27,7 +27,6 @@ import {
   wrapText,
   getEdgeTypes,
   getDefaultColor,
-  getSpacing,
   computeNodeDepths,
   estimateNodeDimensions,
   resolveOverlaps,
@@ -137,11 +136,10 @@ import { setupEventListeners } from './ui/eventListeners';
 import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyModal } from './ui/dataPropertyModals';
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { setupNetworkSelectionAndNavigation } from './graph/networkSelection';
+import { SPACING } from './ui/constants';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 
-
-const SPACING = getSpacing();
 
 // Relationship utility functions moved to ui/relationshipUtils.ts
 

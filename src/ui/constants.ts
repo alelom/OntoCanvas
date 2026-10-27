@@ -1,6 +1,8 @@
 /**
  * UI constants.
  */
+import { getSpacing } from '../graph';
+
 export const EDGE_TYPES = ['subClassOf', 'contains'];
 
 export const COLORS = {
@@ -111,3 +113,5 @@ export type AnnotationStyleConfig = {
 };
 
 export const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
+
+export const SPACING = getSpacing();
