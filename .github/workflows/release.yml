@@ -1,17 +1,20 @@
 name: Release
 
-# Tests run on the PR, so a merge/push to main is assumed green: release directly
-# instead of waiting for a Tests workflow run (which no longer runs on main).
+# Runs when "Main verification" (the whole unit suite and the whole E2E suite on main) has passed, so a red main is
+# never released, and Deploy, which follows this workflow, never ships it either (#174, #175).
+# A nightly or manual verification does not release: only a push to main does. workflow_dispatch is kept for a
+# manual release.
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Main verification"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -19,24 +22,45 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
+      # Release the commit that was verified, and only that one. If main has moved on, the newer commit's own
+      # verification will release it (with this one in its history); this run ends cancelled so Deploy does not run.
+      - name: Is main still the verified commit?
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(git rev-parse HEAD)" = "$VERIFIED" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "main has moved on from $VERIFIED; the newer commit will be verified and released."
+            gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+            sleep 90
+          fi
+
       - name: Setup Node.js
+        if: steps.current.outputs.current == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: steps.current.outputs.current == 'true'
         run: npm ci
 
       - name: Semantic Release
+        if: steps.current.outputs.current == 'true'
         uses: cycjimmy/semantic-release-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

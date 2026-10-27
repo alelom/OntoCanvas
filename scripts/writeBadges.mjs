@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Writes the README badge files (#174, #175) from the results the badges workflow collected.
+ * Writes the two README badge files (#174, #175) from the results the verification of main collected.
  *
  *   node scripts/writeBadges.mjs <results-dir> <output-dir>
  *
- * Each result is `{ name, label, status }` (`status` is a job status: success, failure, cancelled). The output is a
- * shields.io endpoint file per unit/area (`unit.json`, `e2e-<area>.json`) and an overall `e2e.json`. An area with no
- * result shows as unknown, so a skipped job never reads as passing.
+ * Each result is `{ name, label, status }` (`status` is a job status: success, failure, cancelled). The output is two
+ * shields.io endpoint files: `unit.json` (the whole unit suite) and `e2e.json` (the whole E2E suite, one result per
+ * area). An area with no result counts as unknown, so a skipped job never reads as passing.
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -23,28 +23,20 @@ export function badge(label, status) {
 
 /**
  * @param {{ name: string, label: string, status: string }[]} results what the jobs recorded
- * @param {string[]} areaNames every area, so one without a result is shown as unknown
- * @returns {Record<string, object>} file name -> badge
+ * @param {string[]} areaNames every E2E area, so one without a result counts as unknown
+ * @returns {{ 'unit.json': object, 'e2e.json': object }}
  */
 export function buildBadges(results, areaNames) {
   const byName = new Map(results.map((r) => [r.name, r]));
-  const files = {};
-  const unit = byName.get('unit');
-  files['unit.json'] = badge('unit tests', unit?.status);
-  const statuses = [];
-  for (const area of areaNames) {
-    const r = byName.get(`e2e-${area}`);
-    files[`e2e-${area}.json`] = badge(`E2E ${area}`, r?.status);
-    statuses.push(r?.status);
-  }
+  const statuses = areaNames.map((area) => byName.get(`e2e-${area}`)?.status);
   const failing = statuses.filter((s) => s === 'failure').length;
   const unknown = statuses.filter((s) => s !== 'success' && s !== 'failure').length;
-  files['e2e.json'] = failing
-    ? { schemaVersion: 1, label: 'E2E', message: `${failing} of ${areaNames.length} failing`, color: 'red' }
+  const e2e = failing
+    ? { schemaVersion: 1, label: 'E2E tests', message: `${failing} of ${areaNames.length} areas failing`, color: 'red' }
     : unknown
-      ? { schemaVersion: 1, label: 'E2E', message: `${unknown} of ${areaNames.length} unknown`, color: 'lightgrey' }
-      : { schemaVersion: 1, label: 'E2E', message: 'passing', color: 'brightgreen' };
-  return files;
+      ? { schemaVersion: 1, label: 'E2E tests', message: `${unknown} of ${areaNames.length} areas unknown`, color: 'lightgrey' }
+      : { schemaVersion: 1, label: 'E2E tests', message: 'passing', color: 'brightgreen' };
+  return { 'unit.json': badge('unit tests', byName.get('unit')?.status), 'e2e.json': e2e };
 }
 
 function main(argv) {

@@ -1,0 +1,181 @@
+name: Main verification
+
+# After a merge (or any push) to main: the WHOLE unit suite and the WHOLE E2E suite (#174, #175).
+#
+#   green  -> the Release workflow runs, and Deploy follows it;
+#   red    -> an issue is opened (label main-red) and nothing is released or deployed until main is fixed.
+#
+# Pull requests run only what their changes touch (test.yml); this is the net behind that selection. It also runs every
+# night, to catch what drifts under a green main (a runner image, a dependency), and on demand. It writes the two
+# README badges.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-verify
+  cancel-in-progress: false
+
+jobs:
+  areas:
+    name: List the E2E areas
+    runs-on: ubuntu-latest
+    outputs:
+      areas: ${{ steps.list.outputs.areas }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - id: list
+        run: echo "areas=$(node scripts/e2eSelect.mjs --all --json | node -p "JSON.stringify(JSON.parse(require('fs').readFileSync(0,'utf8')).areas)")" >> "$GITHUB_OUTPUT"
+
+  unit:
+    name: Unit tests (all)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # `npm run build` (Vite) does not type-check, so without this a type error reaches main (#126).
+      - run: npm run typecheck
+      - run: npm test
+      - name: Record the result
+        if: always()
+        run: |
+          mkdir -p result
+          echo '{"name":"unit","label":"unit tests","status":"${{ job.status }}"}' > result/unit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-unit
+          path: result/
+
+  e2e:
+    name: "E2E: ${{ matrix.area }}"
+    needs: [areas]
+    # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        area: ${{ fromJSON(needs.areas.outputs.areas) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:area -- ${{ matrix.area }}
+        env:
+          EDITOR_E2E_URL: http://localhost:5173/
+      - name: Record the result
+        if: always()
+        run: |
+          mkdir -p result
+          echo '{"name":"e2e-${{ matrix.area }}","label":"E2E ${{ matrix.area }}","status":"${{ job.status }}"}' > result/e2e-${{ matrix.area }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-e2e-${{ matrix.area }}
+          path: result/
+
+  # Release runs when this workflow ends green. If main has moved on since this commit, releasing now would release a
+  # commit that has not been verified, so this run ends cancelled instead and the newer commit's run takes over.
+  still-current:
+    name: Is this still the tip of main?
+    needs: [unit, e2e]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Cancel this run if main has moved on
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY" refs/heads/main | cut -f1)
+          if [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "main has moved on to $tip; its own verification will release it."
+            gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+            sleep 90
+          fi
+
+  publish:
+    name: Update the README badges
+    needs: [areas, unit, e2e]
+    if: always() && needs.areas.result != 'skipped' && github.ref == 'refs/heads/main'
+    # A badge that cannot be written must not stop a release.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: mkdir -p results
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: result-*
+          path: results
+          merge-multiple: true
+      - name: Write the badge files
+        run: node scripts/writeBadges.mjs results badges-out
+      - name: Push them to the badges branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          url="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          rm -rf publish && mkdir publish
+          cd publish
+          git init -q -b badges
+          cp ../badges-out/*.json .
+          git add -A
+          git commit -q -m "badges: ${{ github.run_id }}"
+          git push --force "$url" badges
+
+  report:
+    name: Open an issue for the failure
+    needs: [areas, unit, e2e]
+    if: always() && (needs.areas.result == 'failure' || needs.unit.result == 'failure' || needs.e2e.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: mkdir -p results
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: result-*
+          path: results
+          merge-multiple: true
+      - name: Raise or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/ci/reportMainFailure.mjs results
