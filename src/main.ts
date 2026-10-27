@@ -39,7 +39,7 @@ import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
 import { showDataRangeNotice } from './ui/dataRangeNotice';
-import { edgeLock, type EdgeLock } from './lib/edgeEditability';
+import { edgeLock } from './lib/edgeEditability';
 import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
 import { resolveExampleImages } from './lib/exampleImages';
 import { withThingNode, OWL_THING_URI, splitThingBoxSelection, thingBoxId } from './graph/thingNode';
@@ -256,15 +256,9 @@ import { getAnnotationPropsMenuDeps, initAddAnnotationPropertyHandlers } from '.
 import { initAddDataPropertyHandlers } from './ui/addDataPropertyHandlers';
 import { confirmAddNode, confirmRename } from './ui/nodeConfirms';
 import { confirmEditEdge } from './ui/editEdgeConfirm';
+import { EDGE_LOCK_REASON } from './lib/edgeEditability';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
-
-/** Why a locked edge can't be deleted, for the alert listing them. */
-const EDGE_LOCK_REASON: Record<EdgeLock, string> = {
-  restriction: 'an OWL restriction',
-  classExpression: 'drawn from a class expression',
-  externalTarget: 'a restriction on an imported class',
-};
 
 
 function performDeleteSelection(): boolean {

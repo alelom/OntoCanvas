@@ -23,3 +23,10 @@ export function edgeLock(edge: Pick<GraphEdge, 'restrictionKinds' | 'fromClassEx
   if (edge.externalTarget) return 'externalTarget';
   return null;
 }
+
+/** Why a locked edge can't be deleted, for the alert listing them. */
+export const EDGE_LOCK_REASON: Record<EdgeLock, string> = {
+  restriction: 'an OWL restriction',
+  classExpression: 'drawn from a class expression',
+  externalTarget: 'a restriction on an imported class',
+};
