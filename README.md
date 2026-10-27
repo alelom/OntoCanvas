@@ -2,9 +2,9 @@
   <img src="OntoCanvas.png" alt="OntoCanvas" width="200"/>
   <h1>OntoCanvas</h1>
   
-  <!-- Test Status Badges (shields.io) -->
-  ![Unit Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=Unit%20Tests&branch=main)
-  ![E2E Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=E2E%20Tests&branch=main)
+  <!-- The whole unit suite and the whole E2E suite on main, run after each merge by .github/workflows/main-verify.yml -->
+  [![Unit tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Funit.json)](https://github.com/alelom/OntoCanvas/actions/workflows/main-verify.yml)
+  [![E2E tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e.json)](https://github.com/alelom/OntoCanvas/actions/workflows/main-verify.yml)
 </div>
 
 
@@ -142,12 +142,54 @@ Output is in `dist/`. Deploy the contents to any static host (e.g. GitHub Pages)
 ## Testing
 
 ```bash
-npm run test        # Run tests once
-npm run test:watch  # Run tests in watch mode
+npm run test                        # the whole unit suite
+npm run test:affected               # the unit tests for what you changed against origin/main
+npm run test:watch                  # unit tests in watch mode
+npm run test:e2e:affected           # the E2E tests for what you changed against origin/main
+npm run test:e2e:area -- search     # the E2E tests of one or more areas (comma separated)
+npm run test:e2e:areas              # list the E2E areas
+npm run test:e2e:full               # the whole E2E suite
 ```
 
-Tests cover load (parse), edit (label update), save (serialize), and round-trip consistency with E2E tests.
+Unit tests cover load (parse), edit (label update), save (serialize) and round-trip consistency. The E2E tests drive the
+built app in Chromium (Playwright).
 
+**What runs where**
+
+- **Locally** you run only what your change touches: `test:affected` (the unit tests that import a changed file, chosen with
+  Vitest's import graph, plus the few that read files from disk, see [`tests/unitSelect.json`](tests/unitSelect.json)) and
+  `test:e2e:affected` (the E2E areas the changed files touch, see below).
+- **On a pull request** CI runs the type-check, those same unit tests and those same E2E areas. When they pass, the check
+  **Ready to merge** is green, and the pull request can be merged: a ruleset on `main` requires that check for a merge. The
+  owner can still push to `main` directly.
+- **After the merge** the **whole** unit suite and the **whole** E2E suite run on `main` ([`main-verify.yml`](.github/workflows/main-verify.yml)).
+  Green releases and deploys. Red **opens an issue automatically** (label `main-red`) and nothing is released or deployed
+  until `main` is fixed. A direct push to `main`, which the owner may do, goes through the same verification.
+- **The badges above** are the state of `main` from those two full runs.
+
+The E2E tests are grouped into **areas**, one per feature: [`tests/e2e/areas.json`](tests/e2e/areas.json) lists, for each area, its test
+files and the source modules that implement it. A change selects the areas that list the changed file **and the areas of the code that
+imports it**; a file nothing places selects every area, and docs select none. The E2E setup builds the app only when a source is newer than its last build
+(`EDITOR_E2E_REBUILD=1` forces a build), so a run of one area starts in seconds.
+
+<!-- e2e-areas:start (generated: node scripts/e2eSelect.mjs --readme) -->
+| Area | Covers | Tests |
+|---|---|---|
+| `loading` | Opening an ontology: from a file, a URL, a folder or the start-up dialog, and the failures. | 8 |
+| `saving` | Saving to Turtle, and what the saved file keeps of the original. | 3 |
+| `layout` | Layouts, saved positions and the free-standing data property band. | 7 |
+| `display-config` | The display config: options, edge styles, and loading one with an ontology. | 4 |
+| `data-properties` | Data properties: display on nodes, editing, dragging, owl:Thing and the unattached ones. | 7 |
+| `relationships` | Relationships between classes: object properties, restrictions, class expressions, editing and deleting edges. | 12 |
+| `nodes` | Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu. | 6 |
+| `annotations` | Annotation properties: the menu, the modals, their values, and styling nodes by annotation. | 5 |
+| `external-refs` | References to other ontologies: the references modal, prefixes, and the external nodes drawn at half opacity. | 5 |
+| `imports` | owl:imports: reading imported ontologies, their properties and versions. | 6 |
+| `search` | The search box: suggestions, scope and the outline around the matches. | 3 |
+| `embed` | The app embedded in an iframe: the compact, read-only view. | 2 |
+| `shell` | The bottom bar and what it shows about the selection. | 1 |
+| `sparql` | SPARQL queries over the loaded ontology. | 1 |
+<!-- e2e-areas:end -->
 ## Repository hygiene
 
 This is a public repository. A guard fails CI if internal-only names (private infrastructure, feeds, trackers, emails) are committed. Run it locally before pushing:

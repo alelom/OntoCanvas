@@ -19,7 +19,39 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Only the commit that was verified and released is deployed. The Release run's head is the verified commit; main's tip
+  # must be that commit or the version commit semantic-release put right on top of it. If main has moved on, the newer
+  # commit's own verification, release and deploy will ship it, and this run fails rather than deploying something else.
+  gate:
+    if: github.event_name == 'release' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Is main the released commit?
+        if: github.event_name == 'workflow_run'
+        env:
+          RELEASED: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          tip=$(git rev-parse HEAD)
+          parent=$(git rev-parse HEAD^ 2>/dev/null || true)
+          subject=$(git log -1 --format=%s)
+          if [ "$tip" = "$RELEASED" ] || { [ "$parent" = "$RELEASED" ] && [[ "$subject" == chore\(release\)* ]]; }; then
+            echo "main is at $tip, the released commit $RELEASED (or its version commit)."
+          else
+            echo "::error::main is at $tip, not the released commit $RELEASED; the newer commit will be deployed by its own run."
+            exit 1
+          fi
+
   deploy:
+    needs: gate
     if: github.event_name == 'release' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     environment:
       name: github-pages
@@ -61,6 +93,7 @@ jobs:
   # Pushes the same build to the gh-pages branch of a second Pages repo (a deploy target only).
   # Skipped with a notice until the MIRROR_DEPLOY_KEY secret exists, so it never blocks the job above.
   mirror:
+    needs: gate
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     concurrency:
@@ -103,6 +136,8 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /OntoCanvas/
+          # The version link in the bottom bar names the repository this copy is served from.
+          VITE_REPO_URL: https://github.com/${{ env.MIRROR_REPO }}
 
       - name: Push dist to the mirror repo
         if: steps.key.outputs.present == 'true'

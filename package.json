@@ -9,9 +9,14 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
+    "test:affected": "node scripts/unitSelect.mjs --changed --run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "vitest run -c vitest.e2e.config.ts",
+    "test:e2e:full": "vitest run -c vitest.e2e.config.ts",
+    "test:e2e:areas": "node scripts/e2eSelect.mjs --list",
+    "test:e2e:area": "node scripts/e2eSelect.mjs --run --area",
+    "test:e2e:affected": "node scripts/e2eSelect.mjs --changed --run",
     "test:e2e:watch": "vitest -c vitest.e2e.config.ts",
     "test:e2e:flake": "node scripts/e2eFlakeReport.mjs",
     "experiment:rdflib": "tsx scripts/rdflibexperiments/main.ts",
@@ -44,6 +49,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.6.0",
     "vite": "^6.0.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "yaml": "^2.9.1"
   }
 }

@@ -1,8 +1,9 @@
 name: Tests
 
-# Tests (unit + E2E) run only on pull requests. Direct pushes to main assume the
-# PR already passed and skip straight to Release (see release.yml). workflow_dispatch
-# is kept so the full suite can still be run manually against any ref.
+# A pull request runs the type-check, the unit tests that import or read what changed, and the E2E areas the changed files
+# touch (#174, #175). When they pass the check "Ready to merge" is green, which the ruleset on main requires for a
+# merge. The WHOLE unit and E2E suites run after the merge, on main (main-verify.yml), and gate the release and the
+# deployment. workflow_dispatch runs everything, against any ref.
 on:
   pull_request:
   workflow_dispatch:
@@ -33,44 +34,14 @@ jobs:
         env:
           INTERNAL_NAME_PATTERNS: ${{ secrets.INTERNAL_NAME_PATTERNS }}
 
-  changes:
-    name: Detect changes
-    runs-on: ubuntu-latest
-    outputs:
-      unit: ${{ steps.filter.outputs.unit }}
-      e2e: ${{ steps.filter.outputs.e2e }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            unit:
-              - 'src/**'
-              - 'tests/unit/**'
-              - 'vitest.config.ts'
-              - 'tests/unitSetup.ts'
-              - 'package.json'
-              - 'package-lock.json'
-            e2e:
-              - 'src/**'
-              - 'tests/e2e/**'
-              - 'tests/fixtures/**'
-              - 'vitest.e2e.config.ts'
-              - 'tests/e2e/globalSetup.ts'
-              - 'package.json'
-              - 'package-lock.json'
-
   unit-tests:
     name: Unit Tests
-    needs: [changes]
-    if: needs.changes.outputs.unit == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -85,25 +56,57 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
-      - name: Run unit tests with coverage
-        run: npm test -- --coverage
+      # The tests that import a changed file (Vitest's import graph), plus the few that read files from disk
+      # (tests/unitSelect.json). The whole suite runs after the merge.
+      - name: Run the unit tests this change touches
+        if: github.event_name == 'pull_request'
+        run: npm run test:affected -- --base "${{ github.event.pull_request.base.sha }}" --no-worktree
 
-      - name: Get commit SHA
-        id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Run all unit tests
+        if: github.event_name != 'pull_request'
+        run: npm test
 
-      - name: Upload unit test coverage data
-        uses: actions/upload-artifact@v4
+  # Pull requests run only the E2E areas the changed files touch (tests/e2e/areas.json, scripts/e2eSelect.mjs); a file
+  # the map does not place selects every area. The whole suite runs after the merge (main-verify.yml).
+  e2e-select:
+    name: Select E2E areas
+    runs-on: ubuntu-latest
+    outputs:
+      areas: ${{ steps.pick.outputs.areas }}
+      any: ${{ steps.pick.outputs.any }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          name: coverage-unit-${{ steps.sha.outputs.sha }}
-          path: coverage/
-          retention-days: 90
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pick the areas
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node scripts/e2eSelect.mjs --changed --base "${{ github.event.pull_request.base.sha }}" --no-worktree --json > selection.json
+          else
+            node scripts/e2eSelect.mjs --all --json > selection.json
+          fi
+          cat selection.json
+          echo "areas=$(node -p "JSON.stringify(JSON.parse(require('fs').readFileSync('selection.json','utf8')).areas)")" >> "$GITHUB_OUTPUT"
+          echo "any=$(node -p "JSON.parse(require('fs').readFileSync('selection.json','utf8')).areas.length > 0")" >> "$GITHUB_OUTPUT"
 
   e2e-tests:
-    name: E2E Tests
-    needs: [changes]
-    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    name: "E2E: ${{ matrix.area }}"
+    needs: [e2e-select]
+    if: needs.e2e-select.outputs.any == 'true'
+    # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        area: ${{ fromJSON(needs.e2e-select.outputs.areas) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,7 +125,26 @@ jobs:
 
       # No --coverage: Vitest's v8 coverage instruments only the Node process running the test files, while
       # the app under test runs in Chromium, so it measured a few imported modules, not the app (#96).
-      - name: Run E2E tests
-        run: npm run test:e2e
+      - name: Run the E2E tests of this area
+        run: npm run test:e2e:area -- ${{ matrix.area }}
         env:
           EDITOR_E2E_URL: http://localhost:5173/
+
+  # The one check the ruleset on main requires. The E2E matrix has a different set of jobs on every pull request, so
+  # none of them can be required by name; this job is green when every job that ran passed (a skipped one, an area
+  # nothing touched, counts as passed), and red if any failed or was cancelled.
+  ready-to-merge:
+    name: Ready to merge
+    needs: [hygiene, unit-tests, e2e-select, e2e-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job that ran passed
+        run: |
+          for result in "${{ needs.hygiene.result }}" "${{ needs.unit-tests.result }}" "${{ needs.e2e-select.result }}" "${{ needs.e2e-tests.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "A job did not pass ($result)."
+              exit 1
+            fi
+          done
+          echo "All the jobs that ran passed."

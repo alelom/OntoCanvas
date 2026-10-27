@@ -46,8 +46,11 @@ async function bindingsOf(stores: Store[], query: string) {
 describe('runQuery', () => {
   // The first query loads the engine (hundreds of modules) and sets up its actors, and the first parse loads
   // rdf-parse: keep those one-off costs out of the tests, which then measure the logic only.
+  // Two hooks, so each job has its own deadline and a slow machine has to be twice as slow to fail the file.
   beforeAll(async () => {
     await runQuery([new Store()], 'ASK { ?s ?p ?o }');
+  });
+  beforeAll(async () => {
     await parseRdfToGraph(TTL_PREFIXES + ':A a owl:Class .', { contentType: 'text/turtle' });
   });
 

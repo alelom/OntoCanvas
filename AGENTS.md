@@ -37,6 +37,9 @@ OntoCanvas is a **personal open-source project on GitHub** ([alelom/OntoCanvas](
 - **Open a PR that closes its issue.** Put a closing keyword on its **own line** in the PR
   **body** — `Closes #123` (one keyword, one issue, one line). A list after a single
   keyword (`Closes #1, #2`) only closes the first.
+- **A PR is mergeable when `Ready to merge` is green.** A ruleset on `main` requires that check (the type-check, the
+  unit tests and the E2E areas the change touches). After the merge the whole unit and E2E suites run on `main` and
+  gate the release and the deployment; a red `main` opens an issue labelled `main-red` (see `README.md`, Testing).
 - **Feature PRs ship example ontologies.** A PR that adds a user-visible feature or fixes an
   important user-visible bug adds a small TTL under `examples/`, pins it with a unit test,
   indexes it in `examples/README.md`, and puts a "Try it" table of

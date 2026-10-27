@@ -1,6 +1,8 @@
 /**
  * UI constants.
  */
+import { getSpacing } from '../graph';
+
 export const EDGE_TYPES = ['subClassOf', 'contains'];
 
 export const COLORS = {
@@ -109,3 +111,7 @@ export type AnnotationStyleConfig = {
   textProps: Record<string, { rules: { regex: string; fillColor: string; borderColor: string; borderLineType: BorderLineType }[] }>;
   defaultStyle?: AnnotationDefaultStyle;
 };
+
+export const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
+
+export const SPACING = getSpacing();

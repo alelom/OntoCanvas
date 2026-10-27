@@ -5,17 +5,19 @@
  * started here and stopped when the run is over, and by default it serves the production build, not Vite's dev server:
  * every test opens its own page, and with up to 8 browsers at once the dev server's hundreds of unbundled
  * module requests per page load made loads take about 2.5 s (worst 2.9 s) where the bundle takes about 1.0 s
- * (worst 1.6 s); page loads timing out was the commonest flake (#116). The bundle is built fresh each time, so it
- * can't be stale. EDITOR_E2E_SERVER=dev starts the dev server instead (then warmed up, to pre-populate Vite's
+ * (worst 1.6 s); page loads timing out was the commonest flake (#116). The bundle is built when a source is newer
+ * than the last build this setup made (a run of one area then starts in seconds, not after a 40 s build), and
+ * EDITOR_E2E_REBUILD=1 forces a build; see buildFreshness.ts. EDITOR_E2E_SERVER=dev starts the dev server instead (then warmed up, to pre-populate Vite's
  * module cache and avoid cold-start timeouts in the tests' beforeAll hooks).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { isDistFresh, writeStamp } from './buildFreshness';
 
 const EDITOR_URL = process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 const POLL_MS = 500;
 const STARTUP_TIMEOUT_MS = 10000; // server startup; max 10s per project rule
-// Building the bundle is a one-off step before any test runs, not a test or a wait: it takes about 15 s.
+// Building the bundle is a one-off step before any test runs, not a test or a wait: it takes 15 to 50 s.
 const BUILD_TIMEOUT_MS = 120000;
 const SERVER_KIND = process.env.EDITOR_E2E_SERVER === 'dev' ? 'dev' : 'preview';
 const WARMUP_TIMEOUT_MS = 8000;   // Vite module cache warmup via headless browser
@@ -80,10 +82,18 @@ export default async function globalSetup(): Promise<(() => void) | void> {
   const isWindows = process.platform === 'win32';
   const npm = isWindows ? 'npm.cmd' : 'npm';
   if (SERVER_KIND === 'preview') {
-    // Always build: serving an old bundle would test code that is no longer there.
-    const build = spawnSync(npm, ['run', 'build'], { cwd: root, stdio: 'ignore', shell: isWindows, timeout: BUILD_TIMEOUT_MS });
-    if (build.status !== 0) {
-      throw new Error(`E2E globalSetup: "npm run build" failed (exit ${build.status}); the tests need the built app`);
+    // Build unless the bundle is current: serving an old bundle would test code that is no longer there.
+    const { fresh, reason } = process.env.EDITOR_E2E_REBUILD ? { fresh: false, reason: 'EDITOR_E2E_REBUILD is set' } : isDistFresh(root);
+    if (fresh) {
+      console.log(`E2E globalSetup: reusing dist/ (${reason}); set EDITOR_E2E_REBUILD=1 to build anyway`);
+    } else {
+      console.log(`E2E globalSetup: building (${reason})`);
+      const startedAt = Date.now(); // before the build reads any source, so an edit during it is not missed
+      const build = spawnSync(npm, ['run', 'build'], { cwd: root, stdio: 'ignore', shell: isWindows, timeout: BUILD_TIMEOUT_MS });
+      if (build.status !== 0) {
+        throw new Error(`E2E globalSetup: "npm run build" failed (exit ${build.status}); the tests need the built app`);
+      }
+      writeStamp(root, startedAt);
     }
   }
   const port = new URL(EDITOR_URL).port || '80';
