@@ -237,7 +237,6 @@ import {
 } from './ui/modals';
 import {
   BORDER_LINE_OPTIONS,
-  borderLineTypeToVis,
   renderLineTypeSvg,
   getEdgeStyleConfig,
   updateEdgeColorsLegend,
@@ -254,7 +253,7 @@ import {
   validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
-import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
+import { applyAnnotationPropertyOrder } from './lib/annotationStyle';
 import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, RELATIONSHIP_LABEL_BG_RGB, type AnnotationStyleConfig } from './ui/constants';
 import { readableTextColor } from './lib/textContrast';
 import {
@@ -283,7 +282,7 @@ import { updateFilePathDisplay, updateSaveButtonVisibility, updateSerializerDrop
 import { collectDisplayConfig, loadDisplayConfigFromLocalFile } from './workflows/displayConfigFiles';
 import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, getTermLink, getTermLookup, revealNodeInView } from './graph/canvasHelpers';
 import { setHierarchyTypes, setStackLeaves } from './workflows/layoutOptions';
-import { annotationPriorityOrder, buildAnnotationPropsDeps, currentDataProperties, currentObjectProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
+import { buildAnnotationPropsDeps, currentDataProperties, currentObjectProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
 import { setupClassSelector, setupPropertySelector, updateAddRelTypeIdentifierAndValidation, updateEditRelTypeIdentifierAndValidation } from './ui/relationshipTypeForm';
 import { renderDomainsList, showWarningIconPopover, updateAddDataPropIdentifierAndValidation, updateEditDataPropIdentifierAndValidation } from './ui/dataPropertyForm';
 import { hideAddNodeModalWithCleanup, onRemoveAddNodeDataProp, onRemoveRenameDataProp, refreshAddNodeOkButton, refreshRenameModalFromInput, showMultiEditModal } from './ui/nodeModalHelpers';
@@ -292,6 +291,7 @@ import { firstDisplayConfig, flushDisplayConfigSave, scheduleDisplayConfigSave }
 import { clearPositionsBeforeLayout, forgetNodePositions, restoreNodePositions } from './workflows/nodePositions';
 import { registerActions } from './state/actions';
 import { clearUndoRedo, performRedo, performUndo, pushUndoable } from './workflows/undoRedo';
+import { getNodeStyleFromAnnotations, shouldShowNodeByAnnotations } from './lib/annotationNodeStyle';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -2226,26 +2226,6 @@ function getAnnotationPropsMenuDeps(): AnnotationPropsMenuDeps {
     },
     scheduleSave: () => scheduleDisplayConfigSave(),
     pushUndoable: (undo, redo) => pushUndoable(undo, redo),
-  };
-}
-
-function shouldShowNodeByAnnotations(
-  node: GraphNode,
-  config: AnnotationStyleConfig
-): boolean {
-  return resolveNodeAnnotationStyle(node.annotations, config, annotationPriorityOrder()).show;
-}
-
-function getNodeStyleFromAnnotations(
-  node: GraphNode,
-  config: AnnotationStyleConfig
-): { background: string; border: string; shapeProperties?: { borderDashes: false | true | number[] } } {
-  const resolved = resolveNodeAnnotationStyle(node.annotations, config, annotationPriorityOrder());
-  const dashes = borderLineTypeToVis(resolved.borderLineType);
-  return {
-    background: resolved.background,
-    border: resolved.border,
-    shapeProperties: dashes !== false ? { borderDashes: dashes } : undefined,
   };
 }
 
