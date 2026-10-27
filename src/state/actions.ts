@@ -8,6 +8,7 @@
 export interface Actions {
   applyFilter: typeof import('../main').applyFilter;
   initDataPropsMenu: typeof import('../main').initDataPropsMenu;
+  deleteDataPropertyWithConfirm: typeof import('../main').deleteDataPropertyWithConfirm;
   // @interface-members
 }
 
@@ -18,6 +19,7 @@ const notRegistered = (name: string) => () => {
 export const actions: Actions = {
   applyFilter: notRegistered('applyFilter'),
   initDataPropsMenu: notRegistered('initDataPropsMenu'),
+  deleteDataPropertyWithConfirm: notRegistered('deleteDataPropertyWithConfirm'),
   // @default-members
 };
 
