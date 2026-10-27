@@ -188,7 +188,7 @@ imports it**; a file nothing places selects every area, and docs select none. Th
 | `search` | The search box: suggestions, scope and the outline around the matches. | 3 |
 | `embed` | The app embedded in an iframe: the compact, read-only view. | 2 |
 | `shell` | The bottom bar and what it shows about the selection. | 1 |
-| `sparql` | SPARQL queries over the loaded ontology. | 1 |
+| `sparql` | SPARQL queries over the loaded ontology. | 2 |
 <!-- e2e-areas:end -->
 ## Repository hygiene
 
