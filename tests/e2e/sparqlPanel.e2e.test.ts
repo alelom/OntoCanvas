@@ -65,6 +65,32 @@ describe('SPARQL side panel', () => {
     expect(colours).toBeGreaterThan(1);
   });
 
+  it('keeps Ctrl+Z for the query editor: it undoes the typing, not an edit of the ontology (#180)', async () => {
+    // An undoable edit of the ontology, as the app records one.
+    await page.evaluate(() => {
+      (window as any).__undone = false;
+      (window as any).__EDITOR_TEST__.pushUndoable(() => ((window as any).__undone = true), () => {});
+    });
+    const stack = () => page.evaluate(() => (window as any).__EDITOR_TEST__.getUndoStackLength());
+    const before = await stack();
+
+    await page.locator(EDITOR).click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type('# typed marker');
+    expect(await page.locator(EDITOR).innerText()).toContain('# typed marker');
+    await page.keyboard.press('Control+z');
+
+    expect(await page.locator(EDITOR).innerText()).not.toContain('# typed marker');
+    expect(await stack()).toBe(before);
+    expect(await page.evaluate(() => (window as any).__undone)).toBe(false);
+
+    // With the focus outside any field, Ctrl+Z still undoes the ontology.
+    await page.locator('.query-note').first().click();
+    await page.keyboard.press('Control+z');
+    await page.waitForFunction(() => (window as any).__undone === true);
+    expect(await stack()).toBe(before - 1);
+  });
+
   it('starts with the file\'s prefixes, runs the query and shows the classes as prefixed names', async () => {
     expect(await page.locator(EDITOR).innerText()).toContain('PREFIX : <http://example.org/o#>');
     await page.locator(EDITOR).fill(

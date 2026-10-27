@@ -4,13 +4,14 @@
  */
 
 import type { Store } from 'n3';
-import type { QueryResult } from '../../sparql/runQuery';
+import type { QueryResult, RunOptions } from '../../sparql/runQuery';
+import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
 
-export type RunQuery = (stores: Store[], query: string) => Promise<QueryResult>;
+export type RunQuery = (stores: Store[], query: string, options?: RunOptions) => Promise<QueryResult>;
 
 export interface QueryTabDeps {
   getStore: () => Store | null;
@@ -27,7 +28,7 @@ export interface QueryTab extends SidePanelTab {
   refresh(): void;
 }
 
-const lazyRun: RunQuery = (stores, query) => import('../../sparql/runQuery').then((m) => m.runQuery(stores, query));
+const lazyRun: RunQuery = (stores, query, options) => import('../../sparql/runQuery').then((m) => m.runQuery(stores, query, options));
 
 const STARTER_QUERY = `SELECT ?class ?label
 WHERE {
@@ -73,8 +74,15 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   const run = deps.run ?? lazyRun;
   let editor: QueryEditor | null = null;
   let edited = false;
+  let prefixNote: HTMLElement | null = null;
+  let stop: (() => void) | null = null;
+  /** The prefixes the query's text was written with (the starter's header); the note compares the open file's to them. */
+  let headerPrefixes = JSON.stringify(deps.getPrefixes());
 
-  const starterText = () => `${prefixHeader(deps.getPrefixes())}\n\n${STARTER_QUERY}`;
+  const starterText = () => {
+    headerPrefixes = JSON.stringify(deps.getPrefixes());
+    return `${prefixHeader(deps.getPrefixes())}\n\n${STARTER_QUERY}`;
+  };
 
   function render(container: HTMLElement): void {
     container.classList.add('query-tab');
@@ -83,6 +91,14 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       'query-note',
       "Queries are read-only and run over the open ontology's own triples. Classes shown from external ontologies (faded stubs) are not part of that data. Ctrl+Enter runs the query."
     );
+
+    prefixNote = element(
+      'p',
+      'query-note query-prefix-note',
+      'The file you opened declares other prefixes than the ones in your query, so a name like :Room may not match. Edit the PREFIX lines to match.'
+    );
+    prefixNote.setAttribute('data-prefix-note', '');
+    prefixNote.hidden = true;
 
     const editorHost = element('div', 'query-editor');
     editorHost.setAttribute('data-query-editor', '');
@@ -110,11 +126,15 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     const runButton = element('button', 'primary', 'Run');
     runButton.type = 'button';
     runButton.setAttribute('data-query-run', '');
+    const stopButton = element('button', undefined, 'Stop');
+    stopButton.type = 'button';
+    stopButton.hidden = true;
+    stopButton.setAttribute('data-query-stop', '');
     const status = element('span', 'query-status');
     status.setAttribute('data-query-status', '');
     status.setAttribute('aria-live', 'polite');
     const actions = element('div', 'query-actions');
-    actions.append(runButton, status);
+    actions.append(runButton, stopButton, status);
 
     const result = element('div', 'query-result');
     result.setAttribute('data-query-result', '');
@@ -137,34 +157,49 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       }
 
       runButton.disabled = true;
+      stopButton.hidden = false;
       status.textContent = 'Running…';
+      const stopper = new AbortController();
+      stop = () => stopper.abort();
       const started = performance.now();
       try {
-        const prefixes = withStandardPrefixes(deps.getPrefixes());
-        const view = await describeResult(await run([store], editor!.getText()), prefixes);
+        // Only the rows shown are read from the engine (one more, to know there are more): a forgotten join must not
+        // build hundreds of thousands of rows in memory.
+        const rows = await run([store], editor!.getText(), { limit: MAX_ROWS_SHOWN, signal: stopper.signal });
+        if (deps.getStore() !== store) {
+          status.textContent = 'Another ontology was opened while the query ran, so its result was dropped. Run it again.';
+          return;
+        }
+        const view = await describeResult(rows, withStandardPrefixes(deps.getPrefixes()));
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
           result.replaceChildren(renderTable(view));
           status.textContent = view.truncated
-            ? `${plural(view.total, 'row', 'rows')} in ${took}; showing the first ${MAX_ROWS_SHOWN}`
-            : `${plural(view.total, 'row', 'rows')} in ${took}`;
+            ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
+            : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;
         } else if (view.kind === 'boolean') {
           result.replaceChildren(element('p', 'query-boolean', String(view.value)));
           status.textContent = `Answered in ${took}`;
         } else {
           result.replaceChildren(element('pre', 'query-turtle', view.text));
-          status.textContent = `${plural(view.count, 'triple', 'triples')} in ${took}`;
+          status.textContent = view.truncated
+            ? `The first ${plural(view.count, 'triple', 'triples')} in ${took}; there are more`
+            : `${plural(view.count, 'triple', 'triples')} in ${took}`;
         }
       } catch (error) {
-        showError(error instanceof Error ? error.message : String(error));
+        if (error instanceof QueryStopped) status.textContent = 'Stopped.';
+        else showError(error instanceof Error ? error.message : String(error));
       } finally {
+        stop = null;
+        stopButton.hidden = true;
         runButton.disabled = false;
       }
     }
 
     runButton.addEventListener('click', () => void execute());
-    container.append(note, editorHost, actions, result);
+    stopButton.addEventListener('click', () => stop?.());
+    container.append(note, prefixNote, editorHost, actions, result);
   }
 
   return {
@@ -172,7 +207,10 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     title: 'Query',
     render,
     refresh() {
-      if (editor && !edited) editor.setText(starterText());
+      if (!editor) return;
+      if (!edited) editor.setText(starterText());
+      // An edited query keeps its own PREFIX lines; say so when the new file's differ from them.
+      if (prefixNote) prefixNote.hidden = !edited || JSON.stringify(deps.getPrefixes()) === headerPrefixes;
     },
   };
 }

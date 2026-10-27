@@ -11,6 +11,7 @@
 
 import { DataFactory, type Store, type Quad, type Term } from 'n3';
 import type * as RDF from '@rdfjs/types';
+import { readCapped, whenStopped } from './readCapped';
 
 /** A term, or a quoted triple (RDF-star). */
 export type StoreTerm = Term | Quad;
@@ -18,9 +19,16 @@ export type StoreTerm = Term | Quad;
 export type QueryRow = Record<string, StoreTerm>;
 
 export type QueryResult =
-  | { kind: 'bindings'; variables: string[]; rows: QueryRow[] }
+  | { kind: 'bindings'; variables: string[]; rows: QueryRow[]; truncated: boolean }
   | { kind: 'boolean'; value: boolean }
-  | { kind: 'quads'; quads: Quad[] };
+  | { kind: 'quads'; quads: Quad[]; truncated: boolean };
+
+export interface RunOptions {
+  /** Read at most this many rows (or triples) of the result; `truncated` says whether there were more. Without it, all. */
+  limit?: number;
+  /** Stops the query: the promise rejects with QueryStopped and the result stream is destroyed. */
+  signal?: AbortSignal;
+}
 
 type Engine = InstanceType<typeof import('@comunica/query-sparql-rdfjs-lite').QueryEngine>;
 
@@ -75,7 +83,12 @@ async function assertReadOnly(query: string): Promise<void> {
   }
 }
 
-export async function runQuery(stores: Store[], query: string): Promise<QueryResult> {
+export async function runQuery(stores: Store[], query: string, options: RunOptions = {}): Promise<QueryResult> {
+  const { limit = Infinity, signal } = options;
+  return Promise.race([execute(stores, query, limit, signal), whenStopped(signal)]);
+}
+
+async function execute(stores: Store[], query: string, limit: number, signal: AbortSignal | undefined): Promise<QueryResult> {
   await assertReadOnly(query);
   const engine = await getEngine();
   const result = await engine.query(query, { sources: stores as [Store, ...Store[]] });
@@ -84,8 +97,8 @@ export async function runQuery(stores: Store[], query: string): Promise<QueryRes
     case 'bindings': {
       const { variables } = await result.metadata();
       const names = variables.map((v) => v.value);
-      const bindings = await (await result.execute()).toArray();
-      const rows = bindings.map((binding) => {
+      const { items, truncated } = await readCapped(await result.execute(), limit, signal);
+      const rows = items.map((binding) => {
         const row: QueryRow = {};
         for (const name of names) {
           const term = binding.get(name);
@@ -93,13 +106,13 @@ export async function runQuery(stores: Store[], query: string): Promise<QueryRes
         }
         return row;
       });
-      return { kind: 'bindings', variables: names, rows };
+      return { kind: 'bindings', variables: names, rows, truncated };
     }
     case 'boolean':
       return { kind: 'boolean', value: await result.execute() };
     case 'quads': {
-      const quads = await (await result.execute()).toArray();
-      return { kind: 'quads', quads: quads.map((quad) => toStoreQuad(quad, stores.length)) };
+      const { items, truncated } = await readCapped(await result.execute(), limit, signal);
+      return { kind: 'quads', quads: items.map((quad) => toStoreQuad(quad, stores.length)), truncated };
     }
     default:
       throw new Error(`Unsupported SPARQL result type: ${result.resultType}`);

@@ -9,6 +9,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/parser';
 import { runQuery } from '../../src/sparql/runQuery';
+import { QueryStopped } from '../../src/sparql/readCapped';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class';
@@ -225,6 +226,48 @@ describe('runQuery', () => {
 
     it('rejects a malformed query with a readable error', async () => {
       await expect(runQuery([new Store()], 'SELECT WHERE {')).rejects.toThrow(/parse/i);
+    });
+  });
+
+  describe('a result bigger than the cap (#180)', () => {
+    // 794 triples joined with themselves: 630,436 rows. Read whole, that took 18 s and 744 MB.
+    const CROSS_JOIN = "SELECT * WHERE { ?a ?b ?c . ?d ?e ?f }";
+
+    it("reads only the cap, so a forgotten join returns quickly and says there are more", async () => {
+      const store = await loadFixtureStore("aec_drawing_ontology.ttl");
+      const started = performance.now();
+
+      const result = await runQuery([store], CROSS_JOIN, { limit: 500 });
+
+      expect(result.kind).toBe("bindings");
+      if (result.kind !== "bindings") return;
+      expect(result.rows).toHaveLength(500);
+      expect(result.truncated).toBe(true);
+      expect(performance.now() - started).toBeLessThan(4000);
+    });
+
+    it("is not truncated when the result fits the cap", async () => {
+      const store = storeFromTurtle(":A a owl:Class . :B a owl:Class .");
+      const result = await runQuery([store], PREFIXES + "SELECT ?c WHERE { ?c a owl:Class }", { limit: 500 });
+      expect(result).toMatchObject({ kind: "bindings", truncated: false });
+      if (result.kind === "bindings") expect(result.rows).toHaveLength(2);
+    });
+
+    it("caps the triples of a CONSTRUCT too", async () => {
+      const store = await loadFixtureStore("aec_drawing_ontology.ttl");
+      const result = await runQuery([store], "CONSTRUCT { ?a ?b ?f } WHERE { ?a ?b ?c . ?d ?e ?f }", { limit: 100 });
+      expect(result).toMatchObject({ kind: "quads", truncated: true });
+      if (result.kind === "quads") expect(result.quads).toHaveLength(100);
+    });
+
+    it("can be stopped while it runs", async () => {
+      const store = await loadFixtureStore("aec_drawing_ontology.ttl");
+      const controller = new AbortController();
+      const running = runQuery([store], CROSS_JOIN, { signal: controller.signal }); // no cap: it would take 18 s
+
+      setTimeout(() => controller.abort(), 50);
+
+      await expect(running).rejects.toBeInstanceOf(QueryStopped);
     });
   });
 });

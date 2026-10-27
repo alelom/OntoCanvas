@@ -69,7 +69,7 @@ describe('query tab', () => {
 
     await clickRun();
 
-    expect(run).toHaveBeenCalledWith([store], 'SELECT ?c ?l WHERE { ?c ?p ?l }');
+    expect(run).toHaveBeenCalledWith([store], 'SELECT ?c ?l WHERE { ?c ?p ?l }', expect.objectContaining({ limit: MAX_ROWS_SHOWN }));
     expect([...container.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['?c', '?l']);
     const cells = [...container.querySelectorAll('tbody td')].map((td) => td.textContent);
     expect(cells).toEqual([':A', '"Alpha"@en', ':B', '']);
@@ -111,16 +111,16 @@ describe('query tab', () => {
     expect(full.classList.contains('term-iri-full')).toBe(true);
   });
 
-  it('draws only the first rows of a big result and says so', async () => {
-    const rows = Array.from({ length: MAX_ROWS_SHOWN + 100 }, (_, i) => ({ c: iri(`C${i}`) }));
-    run.mockResolvedValue({ kind: 'bindings', variables: ['c'], rows } satisfies QueryResult);
+  it('draws the first rows of a big result and says there are more', async () => {
+    const rows = Array.from({ length: MAX_ROWS_SHOWN }, (_, i) => ({ c: iri(`C${i}`) }));
+    run.mockResolvedValue({ kind: 'bindings', variables: ['c'], rows, truncated: true } satisfies QueryResult);
     mount();
 
     await clickRun();
 
     expect(container.querySelectorAll('tbody tr')).toHaveLength(MAX_ROWS_SHOWN);
-    expect(status().textContent).toContain(String(MAX_ROWS_SHOWN + 100));
-    expect(status().textContent).toContain(String(MAX_ROWS_SHOWN));
+    expect(status().textContent).toContain(`first ${MAX_ROWS_SHOWN}`);
+    expect(status().textContent).toMatch(/more/);
   });
 
   it('shows the answer to an ASK query', async () => {
