@@ -7,6 +7,10 @@ import { Store } from 'n3';
 
 describe('runQuery engine loading', () => {
   // Warm the real module once, so the retry below measures the retry and not the cold import.
+  // Two hooks, so each job has its own deadline.
+  beforeAll(async () => {
+    await import('@comunica/query-sparql-rdfjs-lite');
+  });
   beforeAll(async () => {
     const { QueryEngine } = await import('@comunica/query-sparql-rdfjs-lite');
     await new QueryEngine().queryBoolean('ASK { ?s ?p ?o }', { sources: [new Store()] });
