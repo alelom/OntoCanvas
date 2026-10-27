@@ -43,7 +43,6 @@ import {
   storeToTurtle,
   extractLocalName,
 } from './parser';
-import type { OriginalFileCache } from './rdf/sourcePreservation';
 import { getAnnotationValuesForClass } from './lib/annotationValues';
 import {
   isDuplicateIdentifierForRename,
@@ -66,13 +65,13 @@ import {
   type ExternalClassInfo,
   type ExternalObjectPropertyInfo,
 } from './externalOntologySearch';
-import type { GraphData, GraphEdge, GraphNode, DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
+import type { GraphData, GraphEdge, GraphNode, DataPropertyInfo, ObjectPropertyInfo, BorderLineType } from './types';
 import { attachClassExpressionMarks } from './ui/classExpressionInteraction';
 import { hideEdgeLinesUnderNodes } from './ui/edgeNodeClipping';
 import { firstDataPropertyRowOffset } from './graph/dataPropertyRows';
 import { buildSearchVocabulary } from './ui/searchVocabulary';
-import { buildSearchSuggestions, type SuggestionSource } from './lib/searchSuggestions';
-import { outlineTargets, type OutlineTargets } from './graph/searchOutline';
+import { buildSearchSuggestions } from './lib/searchSuggestions';
+import { outlineTargets } from './graph/searchOutline';
 import { attachSearchOutline } from './ui/searchOutlineOverlay';
 import { findClassExpressionGroupForEdge, showEditEdgeClassExpressionNotice } from './ui/editEdgeClassExpressionNotice';
 import { showEditEdgeRestrictionNotice } from './ui/editEdgeRestrictionNotice';
@@ -107,11 +106,12 @@ import {
 } from './storage';
 import { expandWithExternalRefs } from './graph/externalExpansion';
 import { isDefinedElsewhere } from './graph/definedElsewhere';
-import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type PropertyLists, type ImportedOntology } from './lib/importedDeclarations';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn } from './lib/importedDeclarations';
 import { beginImportsSettle, importsSettled } from './ui/importsSettle';
 import { escapeHtml } from './utils/escapeHtml';
 import { getOntologyInfo } from './ui/ontologyInfo';
 import { REPO_URL } from './utils/siteInfo';
+import { session, fileState, canvasState, editState, initFlags } from './state/appState';
 import { installTestLogCapture } from './e2e/testLogCapture';
 import { renderApp } from './ui/appShell';
 import { importedNoteForNode, importedNoteForRelationship, importedNoteForDataProperty, importedNoteFont, importedNoteFontSize, importedNoteWrapChars, labelWithImportedNote } from './ui/importedNote';
@@ -224,7 +224,6 @@ import {
 import { getAppVersion } from './utils/version';
 import { getShouldShowTopMenu, isEmbedded } from './utils/embedMode';
 import { defaultMaxFontSize, fontSettingRatios, nodeFontRatio } from './ui/fontSizeDefaults';
-import type { BadgeFontRatios } from './graph/classExpressionOverlay';
 import {
   getAllRelationshipTypes,
   colourableRelationshipTypes,
@@ -288,26 +287,25 @@ import { updateAddRelTypeIdentifierAndValidation as updateAddRelTypeIdentifierAn
 import { updateAddDataPropIdentifierAndValidation as updateAddDataPropIdentifierAndValidationFromModal } from './ui/dataPropertyModal';
 import './style.css';
 
-let externalOntologyReferences: ExternalOntologyReference[] = [];
 
 /**
  * `forBrowser`: the copy kept in the browser between visits, which holds positions only once the user has arranged
  * the graph; a computed layout is laid out again next time, with the current layout and settings.
  */
 function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayConfig | null {
-  if (rawData.nodes.length === 0) return null;
+  if (session.rawData.nodes.length === 0) return null;
   const edgeStylesContent = document.getElementById('edgeStylesContent');
   const annotationPropsContent = document.getElementById('annotationPropsContent');
   const nodePositions: Record<string, { x: number; y: number }> = {};
   
   // Get positions from network if available (most up-to-date), otherwise from rawData
-  if (network) {
-    const networkPositions = network.getPositions();
+  if (canvasState.network) {
+    const networkPositions = canvasState.network.getPositions();
     Object.entries(networkPositions).forEach(([id, pos]) => {
       if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
         nodePositions[id] = { x: pos.x, y: pos.y };
         // Also update rawData to keep it in sync
-        const node = rawData.nodes.find((n) => n.id === id);
+        const node = session.rawData.nodes.find((n) => n.id === id);
         if (node) {
           node.x = pos.x;
           node.y = pos.y;
@@ -316,7 +314,7 @@ function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayCo
     });
   } else {
     // Fallback to rawData positions if network not available
-    rawData.nodes.forEach((n) => {
+    session.rawData.nodes.forEach((n) => {
       if (n.x != null && n.y != null) nodePositions[n.id] = { x: n.x, y: n.y };
     });
   }
@@ -324,8 +322,8 @@ function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayCo
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
   return {
     version: DISPLAY_CONFIG_VERSION,
-    nodePositions: options.forBrowser && !positionsArranged ? {} : nodePositions,
-    edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences) : {},
+    nodePositions: options.forBrowser && !canvasState.positionsArranged ? {} : nodePositions,
+    edgeStyleConfig: edgeStylesContent ? getEdgeStyleConfig(edgeStylesContent, session.rawData, session.objectProperties, session.externalOntologyReferences) : {},
     wrapChars: parseInt((document.getElementById('wrapChars') as HTMLInputElement)?.value, 10) || 12,
     minFontSize: parseInt((document.getElementById('minFontSize') as HTMLInputElement)?.value, 10) || 20,
     maxFontSize: parseInt((document.getElementById('maxFontSize') as HTMLInputElement)?.value, 10) || 70,
@@ -336,38 +334,38 @@ function collectDisplayConfig(options: { forBrowser?: boolean } = {}): DisplayCo
     searchScope: getSearchScope(),
     includeNeighbors: getSearchScope() === 'neighbours', // read by builds from before #85
     exactMatch: (document.getElementById('searchExactMatch') as HTMLInputElement)?.checked ?? true,
-    annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, annotationProperties) : undefined,
-    annotationPropertyOrder: annotationProperties.map((ap) => ap.name),
-    viewState: network
-      ? { scale: network.getScale(), position: network.getViewPosition() }
+    annotationStyleConfig: annotationPropsContent ? getAnnotationStyleConfig(annotationPropsContent, session.annotationProperties) : undefined,
+    annotationPropertyOrder: session.annotationProperties.map((ap) => ap.name),
+    viewState: canvasState.network
+      ? { scale: canvasState.network.getScale(), position: canvasState.network.getViewPosition() }
       : undefined,
-    displayExternalReferences: displayExternalRefEl?.checked ?? displayExternalReferences,
-    clusterThingDataProperties,
-    stackLeaves,
-    externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? externalNodeLayout,
-    hierarchyRelationships: [...hierarchyTypes],
+    displayExternalReferences: displayExternalRefEl?.checked ?? canvasState.displayExternalReferences,
+    clusterThingDataProperties: canvasState.clusterThingDataProperties,
+    stackLeaves: canvasState.stackLeaves,
+    externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? canvasState.externalNodeLayout,
+    hierarchyRelationships: [...canvasState.hierarchyTypes],
   };
 }
 
 function applyDisplayConfig(config: DisplayConfig): void {
-  displayExternalReferences = config.displayExternalReferences ?? true;
-  clusterThingDataProperties = config.clusterThingDataProperties ?? true;
+  canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
+  canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
   const clusterThingEl = document.getElementById('clusterThingDataProps') as HTMLInputElement | null;
-  if (clusterThingEl) clusterThingEl.checked = clusterThingDataProperties;
-  externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
+  if (clusterThingEl) clusterThingEl.checked = canvasState.clusterThingDataProperties;
+  canvasState.externalNodeLayout = (config.externalNodeLayout as ExternalNodeLayout) ?? 'auto';
   // The layout made before the config arrived used the old tiers or layout; the config's own positions are applied
   // below. Loading a config is not undone with "Restore positions" (#152).
   const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
   const stackChanged = setStackLeaves(config.stackLeaves ?? true);
   const configLayoutMode = resolveLayoutMode(config.layoutMode);
-  if (tiersChanged || stackChanged || (lastLayoutMode !== null && lastLayoutMode !== configLayoutMode)) forgetNodePositions();
-  lastLayoutMode = configLayoutMode;
+  if (tiersChanged || stackChanged || (canvasState.lastLayoutMode !== null && canvasState.lastLayoutMode !== configLayoutMode)) forgetNodePositions();
+  canvasState.lastLayoutMode = configLayoutMode;
   clearPositionsBeforeLayout();
-  loadedNodePositions = config.nodePositions ?? null;
+  canvasState.loadedNodePositions = config.nodePositions ?? null;
   const displayExternalRefEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
   const externalNodeLayoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
-  if (displayExternalRefEl) displayExternalRefEl.checked = displayExternalReferences;
-  if (externalNodeLayoutEl) externalNodeLayoutEl.value = externalNodeLayout;
+  if (displayExternalRefEl) displayExternalRefEl.checked = canvasState.displayExternalReferences;
+  if (externalNodeLayoutEl) externalNodeLayoutEl.value = canvasState.externalNodeLayout;
 
   // Define edgeStyleConfig first before using it
   const edgeStyleConfig = config.edgeStyleConfig || {};
@@ -377,12 +375,12 @@ function applyDisplayConfig(config: DisplayConfig): void {
   debugLog('[DISPLAY CONFIG] Edge style config:', edgeStyleConfig);
   
   // Log all edge types in rawData
-  const allEdgeTypesInData = getEdgeTypes(rawData.edges);
+  const allEdgeTypesInData = getEdgeTypes(session.rawData.edges);
   debugLog('[DISPLAY CONFIG] All edge types in rawData.edges:', allEdgeTypesInData);
-  debugLog('[DISPLAY CONFIG] Total edges in rawData.edges:', rawData.edges.length);
+  debugLog('[DISPLAY CONFIG] Total edges in rawData.edges:', session.rawData.edges.length);
   
   // Check for describes edges specifically
-  const describesEdgesInData = rawData.edges.filter((e) => 
+  const describesEdgesInData = session.rawData.edges.filter((e) => 
     e.type === 'https://w3id.org/dano#describes' || 
     e.type.includes('describes') ||
     e.type.toLowerCase().includes('describes')
@@ -424,22 +422,22 @@ function applyDisplayConfig(config: DisplayConfig): void {
   // A node the config doesn't place drops the position laid out before the config arrived, so it goes near its
   // placed neighbours (#152).
   if (Object.keys(nodePositions).length > 0) {
-    rawData.nodes.forEach((n) => {
+    session.rawData.nodes.forEach((n) => {
       delete n.x;
       delete n.y;
     });
   }
-  positionsArranged = Object.keys(nodePositions).length > 0;
+  canvasState.positionsArranged = Object.keys(nodePositions).length > 0;
   
   Object.entries(nodePositions).forEach(([id, pos]) => {
     // First try exact ID match
-    let node = rawData.nodes.find((n) => n.id === id);
+    let node = session.rawData.nodes.find((n) => n.id === id);
     
     // If not found, try matching by label (for upgraded ontologies where IDs might have changed)
     if (!node) {
       // Try to find by label - useful when ontology structure changed but labels are similar
       const configLabel = id; // In old configs, ID might actually be a label
-      node = rawData.nodes.find((n) => 
+      node = session.rawData.nodes.find((n) => 
         n.label === configLabel || 
         n.id === configLabel ||
         (n.label && n.label.toLowerCase() === configLabel.toLowerCase())
@@ -464,7 +462,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
   (document.getElementById('minFontSize') as HTMLInputElement).value = String(config.minFontSize ?? 20);
   // Default the "Max" font size to a value scaled to the ontology size (fewer nodes → smaller Max,
   // gentler root→leaf gap). An explicit saved value always wins. See issue #44.
-  const adaptiveMaxFont = defaultMaxFontSize(rawData?.nodes?.length ?? 0);
+  const adaptiveMaxFont = defaultMaxFontSize(session.rawData?.nodes?.length ?? 0);
   (document.getElementById('maxFontSize') as HTMLInputElement).value = String(config.maxFontSize ?? adaptiveMaxFont);
   (document.getElementById('relationshipFontSize') as HTMLInputElement).value = String(config.relationshipFontSize ?? 18);
   (document.getElementById('dataPropertyFontSize') as HTMLInputElement).value = String(config.dataPropertyFontSize ?? 12);
@@ -499,7 +497,7 @@ function applyDisplayConfig(config: DisplayConfig): void {
       };
     }
   });
-  loadedEdgeStyleConfig = upgradedEdgeStyleConfig;
+  canvasState.loadedEdgeStyleConfig = upgradedEdgeStyleConfig;
   
   // Debug logging (only in debug mode)
   if (isDebugMode()) {
@@ -508,8 +506,8 @@ function applyDisplayConfig(config: DisplayConfig): void {
   
   if (document.getElementById('edgeStylesContent')) {
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
-    const types = getAllRelationshipTypes(rawData, objectProperties);
-    const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
+    const types = getAllRelationshipTypes(session.rawData, session.objectProperties);
+    const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, session.objectProperties));
     let appliedToCheckboxes = 0;
     Object.keys(upgradedEdgeStyleConfig).forEach((type) => {
       const c = upgradedEdgeStyleConfig[type];
@@ -549,42 +547,16 @@ function applyDisplayConfig(config: DisplayConfig): void {
         }
       }
     });
-    updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+    updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences);
   }
   // Annotation style config is stored but restoration is deferred (complex DOM structure)
 }
 
-let displayConfigSaveTimer: number | null = null;
-/** Edge style config loaded from display config file (takes precedence over DOM checkboxes) */
-let loadedEdgeStyleConfig: Record<string, { show: boolean; showLabel: boolean; color: string; lineType?: BorderLineType }> | null = null;
-/** Node positions from display config (used when expanding external refs so external node positions are restored). */
-let loadedNodePositions: Record<string, { x: number; y: number }> | null = null;
-/** The positions shown before a layout change or a reset dropped them, until restored (#152). */
-let positionsBeforeLayout: Record<string, { x: number; y: number }> | null = null;
-/** Whether those positions had been arranged by the user, for the browser's copy of the config. */
-let arrangedBeforeLayout = false;
-/**
- * Whether the user has arranged the positions shown: dragged a node, or loaded a config with positions. Until then
- * they are a layout's, and the browser's copy of the config leaves them out.
- */
-let positionsArranged = false;
-/** Track the last layout mode to detect when it changes */
-let lastLayoutMode: string | null = null;
-/** Whether to display nodes from external ontologies (object property domain/range). Default ON. */
-let displayExternalReferences = true;
-/** Draw data properties with domain owl:Thing once, under an owl:Thing node, rather than under every class (#80). */
-let clusterThingDataProperties = true;
-/** Stack many leaf children in a block under their parent in the tiered layouts (#159). */
-let stackLeaves = true;
-/** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
-let hierarchyTypes = new Set(DEFAULT_HIERARCHY_TYPES);
-/** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
-let externalNodeLayout: ExternalNodeLayout = 'auto';
 
 function scheduleDisplayConfigSave(): void {
-  if (displayConfigSaveTimer != null) window.clearTimeout(displayConfigSaveTimer);
-  displayConfigSaveTimer = window.setTimeout(() => {
-    displayConfigSaveTimer = null;
+  if (canvasState.displayConfigSaveTimer != null) window.clearTimeout(canvasState.displayConfigSaveTimer);
+  canvasState.displayConfigSaveTimer = window.setTimeout(() => {
+    canvasState.displayConfigSaveTimer = null;
     flushDisplayConfigSave();
   }, 500);
 }
@@ -592,27 +564,18 @@ function scheduleDisplayConfigSave(): void {
 /** Run display config save immediately (e.g. after drag end so refresh preserves positions). */
 function flushDisplayConfigSave(): void {
   const config = collectDisplayConfig({ forBrowser: true });
-  if (config) saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
+  if (config) saveDisplayConfigToIndexedDB(config, fileState.loadedFilePath, fileState.loadedFileName).catch(() => {});
 }
 
 
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
-let rawData: GraphData = { nodes: [], edges: [] };
-/** What the search bar can suggest: the terms the last render drew (set in buildNetworkData, #81). */
-let searchSuggestionSources: SuggestionSource[] = [];
-/** What the search outline surrounds after the last render (set in buildNetworkData, #84). */
-let searchOutlineTargets: OutlineTargets = { nodeIds: [], dataPropertyNames: [], edgeIds: [] };
-/** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
-let classExpressionFontRatios: BadgeFontRatios = { node: 1, relationship: 1, dataProperty: 1 };
-/** Last expanded graph data (local + external nodes) used to build the network. Used by Edit Edge modal for From/To dropdowns. */
-let currentGraphDataForBuild: GraphData | null = null;
 
 /** The edge as drawn: from rawData, or else one only the external expansion draws (e.g. a restriction on an
  * imported class, #99), so its read-only lock still applies. */
 function findShownEdge(from: string, to: string, type: string): GraphEdge | undefined {
   const match = (e: GraphEdge) => e.from === from && e.to === to && e.type === type;
-  return rawData.edges.find(match) ?? currentGraphDataForBuild?.edges.find(match);
+  return session.rawData.edges.find(match) ?? session.currentGraphDataForBuild?.edges.find(match);
 }
 
 /** Why a locked edge can't be deleted, for the alert listing them. */
@@ -621,41 +584,6 @@ const EDGE_LOCK_REASON: Record<EdgeLock, string> = {
   classExpression: 'drawn from a class expression',
   externalTarget: 'a restriction on an imported class',
 };
-/** External class URIs we have seen in this session (from store or added by user). Not removed when user deletes an external node, so "Add from referenced ontology" still finds them. Cleared on load. */
-let knownExternalClassUris: Set<string> = new Set();
-/** External nodes the user added via "Add from referenced ontology" (not from domain/range). Kept so they get correct external styling (opacity, tooltip). Cleared on load; removed when user deletes that node. */
-let userAddedExternalNodes: GraphNode[] = [];
-let annotationProperties: AnnotationPropertyInfo[] = [];
-let objectProperties: ObjectPropertyInfo[] = [];
-let dataProperties: DataPropertyInfo[] = [];
-let network: Network | null = null;
-let addNodeMode = false;
-let pendingAddNodePosition: { x: number; y: number } | null = null;
-/** Must be reset to false when add-node modal closes (OK/Cancel/backdrop) so toolbar→canvas click can open modal again. */
-let addNodeModalShowing = false;
-let ttlStore: import('n3').Store | null = null;
-let loadedFileName: string | null = null;
-let loadedFilePath: string | null = null;
-// Flag to skip slow operations (IndexedDB, rendering delays) when loading via test hook
-let skipSlowOperationsForTests = false;
-let fileHandle: FileSystemFileHandle | null = null;
-let hasUnsavedChanges = false;
-let originalTtlString: string | null = null; // Store original TTL to preserve format
-let originalFileCache: OriginalFileCache | null = null; // Store original file cache for source preservation
-let currentSerializerType: SerializerType = 'custom'; // Default to custom for TTL files
-let isTtlFile: boolean = false; // Track if current file is TTL
-let pendingEditEdgeCallback: ((data: { from: string; to: string } | null) => void) | null = null;
-let pendingAddEdgeData: { from: string; to: string; callback: (data: { from: string; to: string; id?: string } | null) => void } | null = null;
-/** Initial data property restrictions when rename modal was opened (single-node mode). */
-let renameModalInitialDataProps: DataPropertyRestriction[] | null = null;
-/** Current data property restrictions while editing in rename modal (single-node mode). */
-let renameModalDataPropertyRestrictions: DataPropertyRestriction[] = [];
-/** Textual annotation property values (by property name) while editing in the rename modal. */
-let renameModalAnnotationValues: Record<string, string[]> = {};
-/** Textual annotation property values (by property name) while adding a new node (custom tab). */
-let addNodeAnnotationValues: Record<string, string[]> = {};
-/** Data property restrictions while adding a new node (custom tab). */
-let addNodeDataPropertyRestrictions: DataPropertyRestriction[] = [];
 
 /**
  * Build the dependency bundle the annotation-properties list needs to render textual properties
@@ -668,12 +596,12 @@ function buildAnnotationPropsDeps(
 ): nodeModalFormUi.AnnotationPropsListDeps {
   return {
     getInitialValues: (ap) => {
-      if (!ttlStore || !nodeId) {
+      if (!session.ttlStore || !nodeId) {
         valuesMap[ap.name] = [];
         return [];
       }
       const propUri = ap.uri ?? BASE_IRI.replace(/#?$/, '#') + ap.name;
-      const values = getAnnotationValuesForClass(ttlStore, nodeId, propUri);
+      const values = getAnnotationValuesForClass(session.ttlStore, nodeId, propUri);
       valuesMap[ap.name] = [...values];
       return values;
     },
@@ -685,45 +613,41 @@ function buildAnnotationPropsDeps(
     },
     // Grouped as in the Annotation Properties menu (#141).
     groupFacts: (ap) => ({
-      source: propertySource(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
-      unused: !!ttlStore && !!ap.uri && !annotationUsedAnywhere(ttlStore, ap.uri),
+      source: propertySource(ap, session.externalOntologyReferences, session.ttlStore ? getMainOntologyBase(session.ttlStore) : null),
+      unused: !!session.ttlStore && !!ap.uri && !annotationUsedAnywhere(session.ttlStore, ap.uri),
       deprecated: !!ap.deprecated,
     }),
-    displayName: (ap) => annotationDisplayName(ap, externalOntologyReferences, ttlStore ? getMainOntologyBase(ttlStore) : null),
+    displayName: (ap) => annotationDisplayName(ap, session.externalOntologyReferences, session.ttlStore ? getMainOntologyBase(session.ttlStore) : null),
   };
 }
 
-type UndoableAction = { undo: () => void; redo: () => void };
-let undoStack: UndoableAction[] = [];
-let redoStack: UndoableAction[] = [];
-
 function pushUndoable(undo: () => void, redo: () => void): void {
-  redoStack = [];
-  undoStack.push({ undo, redo });
+  editState.redoStack = [];
+  editState.undoStack.push({ undo, redo });
   updateUndoRedoButtons();
 }
 
 function performUndo(): void {
-  const action = undoStack.pop();
+  const action = editState.undoStack.pop();
   if (!action) return;
   action.undo();
-  redoStack.push(action);
+  editState.redoStack.push(action);
   updateUndoRedoButtons();
-  hasUnsavedChanges = true;
+  fileState.hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   
   // CRITICAL FIX: Deduplicate rawData.edges after undo to prevent duplicates
   // This ensures that when expandWithExternalRefs runs, it doesn't create edges that already exist
-  const deduplicatedEdges: typeof rawData.edges = [];
+  const deduplicatedEdges: typeof session.rawData.edges = [];
   const seenEdgeKeys = new Set<string>();
   
-  for (const edge of rawData.edges) {
+  for (const edge of session.rawData.edges) {
     // Build all possible keys for this edge (accounting for URI/local name variations)
     const keys = new Set<string>();
     keys.add(`${edge.from}||${edge.to}||${edge.type}`);
     
     // Add variations with op.uri and op.name
-    const op = objectProperties.find((p) => p.name === edge.type || p.uri === edge.type);
+    const op = session.objectProperties.find((p) => p.name === edge.type || p.uri === edge.type);
     if (op) {
       if (op.name) keys.add(`${edge.from}||${edge.to}||${op.name}`);
       if (op.uri) keys.add(`${edge.from}||${edge.to}||${op.uri}`);
@@ -772,25 +696,25 @@ function performUndo(): void {
     }
   }
   
-  rawData.edges = deduplicatedEdges;
+  session.rawData.edges = deduplicatedEdges;
   
   applyFilter(true);
 }
 
 function performRedo(): void {
-  const action = redoStack.pop();
+  const action = editState.redoStack.pop();
   if (!action) return;
   action.redo();
-  undoStack.push(action);
+  editState.undoStack.push(action);
   updateUndoRedoButtons();
-  hasUnsavedChanges = true;
+  fileState.hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   applyFilter(true);
 }
 
 function clearUndoRedo(): void {
-  undoStack = [];
-  redoStack = [];
+  editState.undoStack = [];
+  editState.redoStack = [];
   updateUndoRedoButtons();
 }
 
@@ -798,13 +722,13 @@ function clearUndoRedo(): void {
 function updateUndoRedoButtons(): void {
   const undoBtn = document.getElementById('undoBtn') as HTMLButtonElement | null;
   const redoBtn = document.getElementById('redoBtn') as HTMLButtonElement | null;
-  if (undoBtn) undoBtn.disabled = undoStack.length === 0;
-  if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+  if (undoBtn) undoBtn.disabled = editState.undoStack.length === 0;
+  if (redoBtn) redoBtn.disabled = editState.redoStack.length === 0;
 }
 
 function performDeleteSelection(): boolean {
   debugLog(`[DELETE] performDeleteSelection called`);
-  if (!network || !ttlStore) {
+  if (!canvasState.network || !session.ttlStore) {
     debugLog(`[DELETE] Early return: network or ttlStore not available`);
     return false;
   }
@@ -815,8 +739,8 @@ function performDeleteSelection(): boolean {
     debugLog(`[DELETE] Early return: active element is input/textarea/contentEditable:`, activeEl.tagName);
     return false;
   }
-  const selectedNodeIds = network.getSelectedNodes().map(String);
-  const selectedEdgeIds = network.getSelectedEdges().map(String);
+  const selectedNodeIds = canvasState.network.getSelectedNodes().map(String);
+  const selectedEdgeIds = canvasState.network.getSelectedEdges().map(String);
   debugLog(`[DELETE] Selected nodes: ${selectedNodeIds.length}, Selected edges: ${selectedEdgeIds.length}`);
   debugLog(`[DELETE] Selected edge IDs:`, selectedEdgeIds);
   if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {
@@ -856,7 +780,7 @@ function performDeleteSelection(): boolean {
       }
       if (dpMatch) {
         const [, classId, propertyName] = dpMatch;
-        const classNode = rawData.nodes.find((n) => n.id === classId);
+        const classNode = session.rawData.nodes.find((n) => n.id === classId);
         if (classNode?.dataPropertyRestrictions?.some((r) => r.propertyName === propertyName)) {
           dataPropertyRestrictionsToRemove.push({ classId, propertyName });
         }
@@ -866,23 +790,23 @@ function performDeleteSelection(): boolean {
     }
   }
 
-  const nodesToRemove = selectedNodeIds.filter((id) => rawData.nodes.some((n) => n.id === id));
+  const nodesToRemove = selectedNodeIds.filter((id) => session.rawData.nodes.some((n) => n.id === id));
   // owl:Thing, drawn for the data properties of every class (#80), is not an imported class to remove.
   const externalNodeIdsToRemove = selectedNodeIds.filter(
-    (id) => id !== OWL_THING_URI && (id.startsWith('http://') || id.startsWith('https://')) && !rawData.nodes.some((n) => n.id === id)
+    (id) => id !== OWL_THING_URI && (id.startsWith('http://') || id.startsWith('https://')) && !session.rawData.nodes.some((n) => n.id === id)
   );
-  const connectedEdges = rawData.edges.filter(
+  const connectedEdges = session.rawData.edges.filter(
     (e) => nodesToRemove.includes(e.from) || nodesToRemove.includes(e.to)
   );
-  const edgesConnectedToExternal = rawData.edges.filter(
+  const edgesConnectedToExternal = session.rawData.edges.filter(
     (e) => externalNodeIdsToRemove.includes(e.from) || externalNodeIdsToRemove.includes(e.to)
   );
 
   // Undo puts back exactly what this delete changes in the store and the graph (#77). Rebuilding through the
   // writers restored only part of a class (its label) and would turn read-only restriction kinds into ∃.
-  const storeBefore = snapshotStore(ttlStore);
-  const graphBefore = snapshotGraph(rawData);
-  const userAddedBefore = [...userAddedExternalNodes];
+  const storeBefore = snapshotStore(session.ttlStore);
+  const graphBefore = snapshotGraph(session.rawData);
+  const userAddedBefore = [...session.userAddedExternalNodes];
 
   // Remove edges BEFORE nodes. Restriction-based edges (contains, partOf) require the node's
   // subClassOf quads to still exist for removeEdgeFromStore to find and remove them.
@@ -906,14 +830,14 @@ function performDeleteSelection(): boolean {
     // Del key deletion should remove both restriction and domain/range
     try {
       debugLog(`[DELETE] Calling removeEdgeFromStore for: ${from} -> ${to} : ${type}`);
-      removeEdgeFromStore(ttlStore, from, to, type);
+      removeEdgeFromStore(session.ttlStore, from, to, type);
       debugLog(`[DELETE] removeEdgeFromStore succeeded for: ${from} -> ${to} : ${type}`);
       // Successfully removed from store - remove from rawData
-      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      const idx = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       debugLog(`[DELETE] Edge index in rawData: ${idx}`);
       if (idx >= 0) {
-        rawData.edges.splice(idx, 1);
-        debugLog(`[DELETE] Removed edge from rawData. Remaining edges: ${rawData.edges.length}`);
+        session.rawData.edges.splice(idx, 1);
+        debugLog(`[DELETE] Removed edge from rawData. Remaining edges: ${session.rawData.edges.length}`);
       } else {
         debugWarn(`[DELETE] WARNING: Edge not found in rawData at index ${idx} for: ${from} -> ${to} : ${type}`);
       }
@@ -923,92 +847,92 @@ function performDeleteSelection(): boolean {
       debugError(`[DELETE] EXCEPTION removing edge from store: ${from} -> ${to} : ${type}`);
       debugError(`[DELETE] Exception message: ${err instanceof Error ? err.message : String(err)}`);
       debugError(`[DELETE] Exception stack:`, err instanceof Error ? err.stack : 'No stack trace');
-      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      const idx = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       debugLog(`[DELETE] Exception case - edge index in rawData: ${idx}`);
       if (idx >= 0) {
-        const edge = rawData.edges[idx];
+        const edge = session.rawData.edges[idx];
         debugLog(`[DELETE] Removing edge from rawData despite exception:`, { from: edge.from, to: edge.to, type: edge.type });
-        rawData.edges.splice(idx, 1);
-        debugLog(`[DELETE] Removed edge from rawData after exception. Remaining edges: ${rawData.edges.length}`);
+        session.rawData.edges.splice(idx, 1);
+        debugLog(`[DELETE] Removed edge from rawData after exception. Remaining edges: ${session.rawData.edges.length}`);
       } else {
         debugWarn(`[DELETE] WARNING: Edge not found in rawData at index ${idx} after exception for: ${from} -> ${to} : ${type}`);
       }
     }
   }
-  debugLog(`[DELETE] Finished edge deletion. Remaining edges in rawData: ${rawData.edges.length}`);
+  debugLog(`[DELETE] Finished edge deletion. Remaining edges in rawData: ${session.rawData.edges.length}`);
   if (readOnlyEdgesKept.length > 0) {
     alert(`These relationships can't be deleted in the editor yet (adjust them in the ontology source):\n${readOnlyEdgesKept.join('\n')}`);
   }
 
   for (const { from, to, type } of connectedEdges) {
-    const edge = rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
+    const edge = session.rawData.edges.find((e) => e.from === from && e.to === to && e.type === type);
     const lock = edge ? edgeLock(edge) : null;
     if (lock === 'classExpression') {
       // Leave the expression and the property's domain/range to removeNodeFromStore, which drops only the
       // axioms naming the deleted class; removeEdgeFromStore would drop the range all members share (#58).
-      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      const idx = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
       if (idx < 0) continue;
-      const [removedEdge] = rawData.edges.splice(idx, 1);
+      const [removedEdge] = session.rawData.edges.splice(idx, 1);
       // A restriction drawn for the expression's pair names the deleted class inside its blank node, which
       // removeNodeFromStore doesn't reach: remove just the restriction.
-      if (removedEdge.isRestriction) removeRestrictionEdgeFromStore(ttlStore, from, to, type);
+      if (removedEdge.isRestriction) removeRestrictionEdgeFromStore(session.ttlStore, from, to, type);
       continue;
     }
     if (lock === 'restriction') {
       // Deleting its class takes a read-only restriction with it: remove exactly its restriction(s) (#63).
-      removeRestrictionEdgeFromStore(ttlStore, from, to, type);
-      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-      if (idx >= 0) rawData.edges.splice(idx, 1);
+      removeRestrictionEdgeFromStore(session.ttlStore, from, to, type);
+      const idx = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) session.rawData.edges.splice(idx, 1);
       continue;
     }
     if (edgesToRemove.some((e) => e.from === from && e.to === to && e.type === type)) continue;
     try {
-      removeEdgeFromStore(ttlStore, from, to, type);
+      removeEdgeFromStore(session.ttlStore, from, to, type);
       // Successfully removed from store - remove from rawData
-      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-      if (idx >= 0) rawData.edges.splice(idx, 1);
+      const idx = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) session.rawData.edges.splice(idx, 1);
     } catch (err) {
       // Edge not found in store (may only exist in rawData from domain/range)
       // Still remove from rawData
       debugWarn(`Failed to remove connected edge from store: ${err instanceof Error ? err.message : String(err)}`);
-      const idx = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
-      if (idx >= 0) rawData.edges.splice(idx, 1);
+      const idx = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === type);
+      if (idx >= 0) session.rawData.edges.splice(idx, 1);
     }
   }
 
   // Handle data property restriction deletions
   for (const { classId, propertyName } of dataPropertyRestrictionsToRemove) {
-    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const classNode = session.rawData.nodes.find((n) => n.id === classId);
     const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     if (!classNode || !restriction) continue;
-    removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
-    const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
+    removeDataPropertyRestrictionFromClass(session.ttlStore, classId, propertyName);
+    const nodeIndex = session.rawData.nodes.findIndex((n) => n.id === classId);
     if (nodeIndex >= 0) {
-      rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, classId);
+      session.rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(session.ttlStore, classId);
     }
   }
 
   for (const nodeId of nodesToRemove) {
-    const node = rawData.nodes.find((n) => n.id === nodeId);
+    const node = session.rawData.nodes.find((n) => n.id === nodeId);
     if (!node) continue;
-    removeNodeFromStore(ttlStore, nodeId);
-    const idx = rawData.nodes.findIndex((n) => n.id === nodeId);
-    if (idx >= 0) rawData.nodes.splice(idx, 1);
+    removeNodeFromStore(session.ttlStore, nodeId);
+    const idx = session.rawData.nodes.findIndex((n) => n.id === nodeId);
+    if (idx >= 0) session.rawData.nodes.splice(idx, 1);
   }
 
-  userAddedExternalNodes = userAddedExternalNodes.filter((n) => !externalNodeIdsToRemove.includes(n.id));
+  session.userAddedExternalNodes = session.userAddedExternalNodes.filter((n) => !externalNodeIdsToRemove.includes(n.id));
 
   for (const externalId of externalNodeIdsToRemove) {
-    removeExternalClassReferencesFromStore(ttlStore, externalId);
+    removeExternalClassReferencesFromStore(session.ttlStore, externalId);
     for (const e of edgesConnectedToExternal.filter((e) => e.from === externalId || e.to === externalId)) {
-      const idx = rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
-      if (idx >= 0) rawData.edges.splice(idx, 1);
+      const idx = session.rawData.edges.findIndex((ed) => ed.from === e.from && ed.to === e.to && ed.type === e.type);
+      if (idx >= 0) session.rawData.edges.splice(idx, 1);
     }
   }
 
-  const storeChange = diffStore(storeBefore, ttlStore);
-  const graphAfter = snapshotGraph(rawData);
-  const userAddedAfter = [...userAddedExternalNodes];
+  const storeChange = diffStore(storeBefore, session.ttlStore);
+  const graphAfter = snapshotGraph(session.rawData);
+  const userAddedAfter = [...session.userAddedExternalNodes];
   // A node added from a referenced ontology with no relationship lives only in userAddedExternalNodes: deleting
   // it changes neither the store nor the graph data, but is still a change (#107 review).
   const graphChanged =
@@ -1026,37 +950,36 @@ function performDeleteSelection(): boolean {
 
   pushUndoable(
     () => {
-      revertStoreChange(ttlStore!, storeChange);
-      restoreGraph(rawData, graphBefore);
-      userAddedExternalNodes = [...userAddedBefore];
+      revertStoreChange(session.ttlStore!, storeChange);
+      restoreGraph(session.rawData, graphBefore);
+      session.userAddedExternalNodes = [...userAddedBefore];
     },
     () => {
-      reapplyStoreChange(ttlStore!, storeChange);
-      restoreGraph(rawData, graphAfter);
-      userAddedExternalNodes = [...userAddedAfter];
+      reapplyStoreChange(session.ttlStore!, storeChange);
+      restoreGraph(session.rawData, graphAfter);
+      session.userAddedExternalNodes = [...userAddedAfter];
     }
   );
-  hasUnsavedChanges = true;
+  fileState.hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   // Clean up unused external properties and update edge styles menu
-  objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
+  session.objectProperties = cleanupUnusedExternalProperties(session.rawData, session.objectProperties);
   const edgeStylesContent = document.getElementById('edgeStylesContent');
   if (edgeStylesContent) {
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
   }
-  debugLog(`[DELETE] About to call applyFilter. rawData.edges count: ${rawData.edges.length}`);
-  debugLog(`[DELETE] rawData.edges:`, rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
+  debugLog(`[DELETE] About to call applyFilter. rawData.edges count: ${session.rawData.edges.length}`);
+  debugLog(`[DELETE] rawData.edges:`, session.rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
   applyFilter(true);
-  debugLog(`[DELETE] After applyFilter. rawData.edges count: ${rawData.edges.length}`);
-  debugLog(`[DELETE] rawData.edges after filter:`, rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
-  network.unselectAll();
+  debugLog(`[DELETE] After applyFilter. rawData.edges count: ${session.rawData.edges.length}`);
+  debugLog(`[DELETE] rawData.edges after filter:`, session.rawData.edges.map(e => `${e.from}->${e.to}:${e.type}`));
+  canvasState.network.unselectAll();
   return true;
 }
 const SPACING = getSpacing();
 
 // Relationship utility functions moved to ui/relationshipUtils.ts
 
-let editRelationshipTypeHandlersInitialized = false;
 
 function setupClassSelector(inputId: string, resultsId: string): void {
   const input = document.getElementById(inputId) as HTMLInputElement;
@@ -1065,7 +988,7 @@ function setupClassSelector(inputId: string, resultsId: string): void {
   let blurTimer: number | null = null;
   const showResults = (query: string) => {
     const q = (query || '').toLowerCase().trim();
-    const nodes = rawData.nodes.slice();
+    const nodes = session.rawData.nodes.slice();
     const filtered = q
       ? nodes.filter((n) => n.id.toLowerCase().includes(q) || (n.label && n.label.toLowerCase().includes(q)))
       : nodes;
@@ -1115,23 +1038,23 @@ function setupPropertySelector(inputId: string, resultsId: string, getExcludeTyp
   let blurTimer: number | null = null;
   const showResults = (query: string) => {
     const excludeType = getExcludeType?.() ?? (document.getElementById('editRelationshipTypeModal') as HTMLElement)?.dataset?.type ?? null;
-    const types = getAllRelationshipTypes(rawData, objectProperties).filter((t) => t !== excludeType && t !== 'subClassOf');
+    const types = getAllRelationshipTypes(session.rawData, session.objectProperties).filter((t) => t !== excludeType && t !== 'subClassOf');
     const q = (query || '').toLowerCase().trim();
-    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
     const filtered = q
       ? types.filter((t) => {
-          const baseLabel = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-          const op = objectProperties.find((p) => p.name === t || p.uri === t);
-          const display = formatRelationshipLabelWithPrefix(t, baseLabel, externalOntologyReferences, op, mainBase);
+          const baseLabel = getRelationshipLabel(t, session.objectProperties, session.externalOntologyReferences);
+          const op = session.objectProperties.find((p) => p.name === t || p.uri === t);
+          const display = formatRelationshipLabelWithPrefix(t, baseLabel, session.externalOntologyReferences, op, mainBase);
           return t.toLowerCase().includes(q) || baseLabel.toLowerCase().includes(q) || display.toLowerCase().includes(q);
         })
       : types;
     const limit = 50;
     resultsDiv.innerHTML = '';
     filtered.slice(0, limit).forEach((type) => {
-      const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
-      const op = objectProperties.find((p) => p.name === type || p.uri === type);
-      const display = formatRelationshipLabelWithPrefix(type, baseLabel, externalOntologyReferences, op, mainBase);
+      const baseLabel = getRelationshipLabel(type, session.objectProperties, session.externalOntologyReferences);
+      const op = session.objectProperties.find((p) => p.name === type || p.uri === type);
+      const display = formatRelationshipLabelWithPrefix(type, baseLabel, session.externalOntologyReferences, op, mainBase);
       const div = document.createElement('div');
       div.className = 'rel-type-property-option';
       div.dataset.type = type;
@@ -1177,17 +1100,17 @@ function updateEditRelTypeIdentifierAndValidation(): void {
   const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
   const okBtn = document.getElementById('editRelTypeConfirm') as HTMLButtonElement;
-  const op = objectProperties.find((p) => p.name === type || p.uri === type);
-  const baseWithHash = getDisplayBase(ttlStore);
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const op = session.objectProperties.find((p) => p.name === type || p.uri === type);
+  const baseWithHash = getDisplayBase(session.ttlStore);
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const hasValidDefinedBy = op?.isDefinedBy && (op.isDefinedBy.startsWith('http://') || op.isDefinedBy.startsWith('https://'));
-  const isImported = op ? (hasValidDefinedBy ? isUriFromExternalOntology(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(op.uri, null, externalOntologyReferences, mainBase)) : false;
+  const isImported = op ? (hasValidDefinedBy ? isUriFromExternalOntology(op.uri, op.isDefinedBy, session.externalOntologyReferences, mainBase) : isUriFromExternalOntology(op.uri, null, session.externalOntologyReferences, mainBase)) : false;
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
     if (isImported && op) {
       // For imported properties, show with prefix format (e.g., "base:connectsTo")
       identifierEl.textContent = op.uri
-        ? importedIdentifier(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase)
+        ? importedIdentifier(op.uri, op.isDefinedBy, session.externalOntologyReferences, mainBase)
         : baseWithHash + (op.name ?? type);
     } else {
       const derived = labelToCamelCaseIdentifier(lbl) || (op?.name ?? type);
@@ -1228,8 +1151,8 @@ function updateEditRelTypeIdentifierAndValidation(): void {
 }
 
 function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onApply: () => void): void {
-  if (editRelationshipTypeHandlersInitialized) return;
-  editRelationshipTypeHandlersInitialized = true;
+  if (initFlags.editRelationshipTypeHandlersInitialized) return;
+  initFlags.editRelationshipTypeHandlersInitialized = true;
   setupClassSelector('editRelTypeDomain', 'editRelTypeDomainResults');
   setupClassSelector('editRelTypeRange', 'editRelTypeRangeResults');
   setupPropertySelector('editRelTypeSubPropertyOf', 'editRelTypeSubPropertyOfResults');
@@ -1252,8 +1175,8 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     const newRange = rangeInput?.value?.trim() ?? '';
     const newSubPropertyOf = subPropertyOfInput?.value?.trim() ?? '';
     const newDefinedBy = definedByInput?.value?.trim() ?? null;
-    if (!ttlStore) return;
-    const op = objectProperties.find((p) => p.name === type);
+    if (!session.ttlStore) return;
+    const op = session.objectProperties.find((p) => p.name === type);
     if (!op) return;
     const isImported = !!op.isDefinedBy;
     if (!isImported && !newLabel) return;
@@ -1284,34 +1207,34 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
     }
     let effectiveType = type;
     if (identifierChanged && op.uri && !op.isDefinedBy) {
-      const renamed = renameObjectPropertyInStore(ttlStore, op.uri, derivedId!);
+      const renamed = renameObjectPropertyInStore(session.ttlStore, op.uri, derivedId!);
       if (renamed) {
-        for (const e of rawData.edges) {
+        for (const e of session.rawData.edges) {
           if (e.type === type) e.type = derivedId!;
         }
-        objectProperties = currentObjectProperties(ttlStore);
-        objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
+        session.objectProperties = currentObjectProperties(session.ttlStore);
+        session.objectProperties = cleanupUnusedExternalProperties(session.rawData, session.objectProperties);
         effectiveType = derivedId!;
       }
     }
     if (labelChanged) {
-      updateObjectPropertyLabelInStore(ttlStore, effectiveType, newLabel);
-      const o = objectProperties.find((p) => p.name === effectiveType);
+      updateObjectPropertyLabelInStore(session.ttlStore, effectiveType, newLabel);
+      const o = session.objectProperties.find((p) => p.name === effectiveType);
       if (o) o.label = newLabel;
     }
     if (commentChanged) {
-      updateObjectPropertyCommentInStore(ttlStore, effectiveType, newComment || null);
-      const o = objectProperties.find((p) => p.name === effectiveType);
+      updateObjectPropertyCommentInStore(session.ttlStore, effectiveType, newComment || null);
+      const o = session.objectProperties.find((p) => p.name === effectiveType);
       if (o) o.comment = newComment || undefined;
     }
     if (domainChanged || rangeChanged) {
       updateObjectPropertyDomainRangeInStore(
-        ttlStore,
+        session.ttlStore,
         effectiveType,
         newDomain ? newDomain : null,
         newRange ? newRange : null
       );
-      const o = objectProperties.find((p) => p.name === effectiveType);
+      const o = session.objectProperties.find((p) => p.name === effectiveType);
       if (o) {
         // Same predicate the store writer uses, so the in-memory view cannot disagree with what
         // was written: the class field also accepts the full owl#Thing URI.
@@ -1322,19 +1245,19 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
       }
     }
     if (subPropertyOfChanged) {
-      updateObjectPropertySubPropertyOfInStore(ttlStore, effectiveType, newSubPropertyOf ? newSubPropertyOf : null);
-      const o = objectProperties.find((p) => p.name === effectiveType);
+      updateObjectPropertySubPropertyOfInStore(session.ttlStore, effectiveType, newSubPropertyOf ? newSubPropertyOf : null);
+      const o = session.objectProperties.find((p) => p.name === effectiveType);
       if (o) o.subPropertyOf = newSubPropertyOf || undefined;
     }
     if (definedByChanged) {
-      updateObjectPropertyIsDefinedByInStore(ttlStore, effectiveType, newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null);
-      const o = objectProperties.find((p) => p.name === effectiveType);
+      updateObjectPropertyIsDefinedByInStore(session.ttlStore, effectiveType, newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null);
+      const o = session.objectProperties.find((p) => p.name === effectiveType);
       if (o) o.isDefinedBy = (newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null) ?? undefined;
     }
-    hasUnsavedChanges = true;
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     initEdgeStylesMenu(edgeStylesContent, onApply);
-    updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+    updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences);
     applyFilter(true);
     document.getElementById('editRelationshipTypeModal')!.style.display = 'none';
   });
@@ -1348,7 +1271,7 @@ function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onAppl
 
 function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElement, onApply: () => void): void {
   // Declared only in an import (#104): editing it would write it into this ontology.
-  if (objectProperties.find((p) => p.name === type || p.uri === type)?.contextOnly) return;
+  if (session.objectProperties.find((p) => p.name === type || p.uri === type)?.contextOnly) return;
   initEditRelationshipTypeHandlers(edgeStylesContent, onApply);
   const modal = document.getElementById('editRelationshipTypeModal')!;
   modal.dataset.type = type;
@@ -1362,11 +1285,11 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const subPropertyOfInput = document.getElementById('editRelTypeSubPropertyOf') as HTMLInputElement;
   const subPropertyOfResults = document.getElementById('editRelTypeSubPropertyOfResults');
   // Find property by name or URI (type might be full URI for external properties)
-  const op = objectProperties.find((p) => p.name === type || p.uri === type || (type.startsWith('http') && p.uri === type));
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const op = session.objectProperties.find((p) => p.name === type || p.uri === type || (type.startsWith('http') && p.uri === type));
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   // Check if imported: use isDefinedBy if present and valid URL, otherwise check if URI belongs to external ontology
   const hasValidDefinedBy = op?.isDefinedBy && (op.isDefinedBy.startsWith('http://') || op.isDefinedBy.startsWith('https://'));
-  const isImported = op ? (hasValidDefinedBy ? isUriFromExternalOntology(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(op.uri, null, externalOntologyReferences, mainBase)) : false;
+  const isImported = op ? (hasValidDefinedBy ? isUriFromExternalOntology(op.uri, op.isDefinedBy, session.externalOntologyReferences, mainBase) : isUriFromExternalOntology(op.uri, null, session.externalOntologyReferences, mainBase)) : false;
   
   // Add/update warning icon if imported - place it in header aligned with h3
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -1395,7 +1318,7 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
   if (isImported && headerIcons) {
-    const ontologyUrl = hasValidDefinedBy ? op?.isDefinedBy : (op?.uri ? getDefiningOntologyFromUri(op.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = hasValidDefinedBy ? op?.isDefinedBy : (op?.uri ? getDefiningOntologyFromUri(op.uri, session.externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This object property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -1454,7 +1377,7 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   if (subPropertyOfInput) {
     const subUri = op?.subPropertyOf ?? '';
     if (subUri) {
-      const parentOp = objectProperties.find((p) => p.uri === subUri || p.name === subUri);
+      const parentOp = session.objectProperties.find((p) => p.uri === subUri || p.name === subUri);
       subPropertyOfInput.value = parentOp ? parentOp.name : subUri;
     } else {
       subPropertyOfInput.value = '';
@@ -1463,13 +1386,13 @@ function showEditRelationshipTypeModal(type: string, edgeStylesContent: HTMLElem
   const definedByInput = document.getElementById('editRelTypeDefinedBy') as HTMLInputElement;
   const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
-  const baseWithHash = getDisplayBase(ttlStore);
+  const baseWithHash = getDisplayBase(session.ttlStore);
   if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
   if (identifierEl) {
     if (isImported && op) {
       // For imported properties, show with prefix format (e.g., "base:connectsTo")
       const label = op.label || extractLocalName(op.uri || op.name || type);
-      const prefix = getPrefixForUri(op.uri, op.isDefinedBy, externalOntologyReferences, mainBase);
+      const prefix = getPrefixForUri(op.uri, op.isDefinedBy, session.externalOntologyReferences, mainBase);
       if (prefix) {
         identifierEl.textContent = `${prefix}:${label}`;
       } else {
@@ -1541,11 +1464,11 @@ function initEdgeStylesMenu(
     });
   }
   edgeStylesContent.innerHTML = '';
-  const types = getAllRelationshipTypes(rawData, objectProperties);
+  const types = getAllRelationshipTypes(session.rawData, session.objectProperties);
   // Get default colors for all types (distributed across spectrum)
-  const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
+  const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, session.objectProperties));
   /** The object property a relationship type stands for: by name, URI, or local name of its URI. */
-  const findOp = (type: string): ObjectPropertyInfo | undefined => objectProperties.find((p) => {
+  const findOp = (type: string): ObjectPropertyInfo | undefined => session.objectProperties.find((p) => {
     // Direct match by name or URI
     if (p.name === type || p.uri === type) return true;
     
@@ -1591,11 +1514,11 @@ function initEdgeStylesMenu(
     row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
     // HTML attributes can contain # without escaping, but we need to escape quotes
     const htmlEscapedType = type.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const baseLabel = getRelationshipLabel(type, objectProperties, externalOntologyReferences);
+    const baseLabel = getRelationshipLabel(type, session.objectProperties, session.externalOntologyReferences);
     // Find property by name, URI, or local name extracted from URI
     // For external properties, name should be full URI (after parser fix), and type might be full URI or local name
     const op = findOp(type);
-    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
     // Use op.uri or op.name (if full URI) for prefix detection, otherwise use type
     // This ensures imported properties get their prefix even if type is a local name
     const propertyNameForPrefix = op?.uri || (op?.name && (op.name.startsWith('http://') || op.name.startsWith('https://')) ? op.name : null) || type;
@@ -1610,11 +1533,11 @@ function initEdgeStylesMenu(
         opIsDefinedBy: op?.isDefinedBy,
         propertyNameForPrefix,
         baseLabel,
-        externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
+        externalRefs: session.externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
       });
     }
     
-    const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, externalOntologyReferences, op, mainBase);
+    const displayLabel = formatRelationshipLabelWithPrefix(propertyNameForPrefix, baseLabel, session.externalOntologyReferences, op, mainBase);
     row.innerHTML = `
       <span class="prop-name" style="font-weight: bold; font-family: Consolas, monospace; font-size: 12px; min-width: 100px;">${escapeHtml(displayLabel)}</span>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;">
@@ -1626,7 +1549,7 @@ function initEdgeStylesMenu(
         <span>Label</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;" title="Makes the tiers of the hierarchical layouts: the source above the target (a superclass above its subclasses). Changing it lays the graph out again.">
-        <input type="checkbox" class="edge-tier-cb" data-type="${htmlEscapedType}" ${hierarchyTypes.has(type) ? 'checked' : ''}>
+        <input type="checkbox" class="edge-tier-cb" data-type="${htmlEscapedType}" ${canvasState.hierarchyTypes.has(type) ? 'checked' : ''}>
         <span>Tiers</span>
       </label>
       <label style="display: flex; align-items: center; gap: 4px;">
@@ -1648,23 +1571,23 @@ function initEdgeStylesMenu(
   };
   // The ontology's own properties first, the imported ones in a collapsed group below (#137); a group holding a
   // hidden relationship type starts open, so what hides it is never hidden itself.
-  const mainBaseForGroups = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const mainBaseForGroups = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const entries = types.map((type) => {
     const op = findOp(type);
     return {
       item: { type, comment: op?.comment },
-      source: propertySource(op ?? { uri: /^https?:\/\//.test(type) ? type : null }, externalOntologyReferences, mainBaseForGroups),
+      source: propertySource(op ?? { uri: /^https?:\/\//.test(type) ? type : null }, session.externalOntologyReferences, mainBaseForGroups),
       deprecated: !!op?.deprecated,
     };
   });
   renderMenuGroups(edgeStylesContent, groupMenuEntries(entries), ({ item }) => rowFor(item.type));
   edgeStylesContent
     .querySelectorAll('.edge-show-cb, .edge-label-cb, .edge-color-picker')
-    .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences); }));
+    .forEach((el) => el.addEventListener('change', () => { onApply(); updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences); }));
   edgeStylesContent.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) =>
     cb.addEventListener('change', () => {
-      if (cb.checked) hierarchyTypes.add(cb.dataset.type!);
-      else hierarchyTypes.delete(cb.dataset.type!);
+      if (cb.checked) canvasState.hierarchyTypes.add(cb.dataset.type!);
+      else canvasState.hierarchyTypes.delete(cb.dataset.type!);
       forgetNodePositions();
       onApply();
     })
@@ -1678,39 +1601,38 @@ function initEdgeStylesMenu(
   edgeStylesContent.querySelectorAll('.edge-delete-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const type = (btn as HTMLElement).dataset.type!;
-      const count = rawData.edges.filter((e) => e.type === type).length;
+      const count = session.rawData.edges.filter((e) => e.type === type).length;
       const msg =
         count === 0
           ? `Delete object property "${type}"?`
           : `You're going to delete ${count} edge${count === 1 ? '' : 's'} by deleting this object property. Are you sure?`;
       if (!confirm(msg)) return;
-      if (!ttlStore) return;
-      const removed = removeObjectPropertyFromStore(ttlStore, type);
+      if (!session.ttlStore) return;
+      const removed = removeObjectPropertyFromStore(session.ttlStore, type);
       if (removed >= 0) {
-        rawData.edges = rawData.edges.filter((e) => e.type !== type);
-        objectProperties = objectProperties.filter((op) => op.name !== type);
+        session.rawData.edges = session.rawData.edges.filter((e) => e.type !== type);
+        session.objectProperties = session.objectProperties.filter((op) => op.name !== type);
         // Clean up unused external properties
-        objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
-        hasUnsavedChanges = true;
+        session.objectProperties = cleanupUnusedExternalProperties(session.rawData, session.objectProperties);
+        fileState.hasUnsavedChanges = true;
         updateSaveButtonVisibility();
         initEdgeStylesMenu(edgeStylesContent, onApply);
         applyFilter(true);
       }
     });
   });
-  updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+  updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences);
 }
 
 
-let addRelationshipTypeHandlersInitialized = false;
 
 function updateAddRelTypeIdentifierAndValidation(): void {
-  updateAddRelTypeIdentifierAndValidationFromModal(ttlStore, objectProperties);
+  updateAddRelTypeIdentifierAndValidationFromModal(session.ttlStore, session.objectProperties);
 }
 
 function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
-  if (addRelationshipTypeHandlersInitialized) return;
-  addRelationshipTypeHandlersInitialized = true;
+  if (initFlags.addRelationshipTypeHandlersInitialized) return;
+  initFlags.addRelationshipTypeHandlersInitialized = true;
   setupClassSelector('addRelTypeDomain', 'addRelTypeDomainResults');
   setupClassSelector('addRelTypeRange', 'addRelTypeRangeResults');
   setupPropertySelector('addRelTypeSubPropertyOf', 'addRelTypeSubPropertyOfResults', () => null);
@@ -1762,8 +1684,8 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
     const subPropertyOfInput = document.getElementById('addRelTypeSubPropertyOf') as HTMLInputElement;
     const labelValidationEl = document.getElementById('addRelTypeLabelValidation') as HTMLElement;
     const label = li.value.trim();
-    if (!ttlStore) return;
-    const existingNames = new Set(objectProperties.map((op) => extractLocalName(op.name) || op.name));
+    if (!session.ttlStore) return;
+    const existingNames = new Set(session.objectProperties.map((op) => extractLocalName(op.name) || op.name));
     const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
       duplicateMessage: 'An object property with this identifier already exists.',
     });
@@ -1780,7 +1702,7 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
     const range = rangeInput?.value?.trim() ?? null;
     const isDefinedBy = isDefinedByInput?.value?.trim() ?? null;
     const subPropertyOf = subPropertyOfInput?.value?.trim() ?? null;
-    const name = addObjectPropertyToStore(ttlStore, label, hasCardCb.checked, validation.identifier, {
+    const name = addObjectPropertyToStore(session.ttlStore, label, hasCardCb.checked, validation.identifier, {
       comment: comment || undefined,
       isDefinedBy: isDefinedBy || undefined,
       subPropertyOf: subPropertyOf || undefined,
@@ -1788,12 +1710,12 @@ function initAddRelationshipTypeHandlers(edgeStylesContent: HTMLElement): void {
       range: range || undefined,
     });
     if (name) {
-      objectProperties = currentObjectProperties(ttlStore);
-      objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
-      hasUnsavedChanges = true;
+      session.objectProperties = currentObjectProperties(session.ttlStore);
+      session.objectProperties = cleanupUnusedExternalProperties(session.rawData, session.objectProperties);
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       initEdgeStylesMenu(edgeStylesContent, applyFilter);
-      updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+      updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences);
       applyFilter(true);
       document.getElementById('addRelationshipTypeModal')!.style.display = 'none';
     }
@@ -1804,18 +1726,18 @@ const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 
 function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   
   // Helper to format property name with prefix
   const formatPropName = (dp: DataPropertyInfo): string => {
-    const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase);
+    const prefix = getPrefixForUri(dp.uri, dp.isDefinedBy, session.externalOntologyReferences, mainBase);
     return prefix ? `${prefix}:${dp.label}` : dp.label;
   };
   
   // The ontology's own properties first, the imported ones in a collapsed group below (#137).
-  const entries = dataProperties.map((dp) => ({
+  const entries = session.dataProperties.map((dp) => ({
     item: dp,
-    source: propertySource(dp, externalOntologyReferences, mainBase),
+    source: propertySource(dp, session.externalOntologyReferences, mainBase),
     deprecated: !!dp.deprecated,
   }));
   renderMenuGroups(dataPropsContent, groupMenuEntries(entries), ({ item: dp }) => {
@@ -1848,10 +1770,10 @@ function initDataPropsMenu(dataPropsContent: HTMLElement): void {
 function deleteDataPropertyWithConfirm(name: string): void {
   const dataPropsContent = document.getElementById('dataPropsContent') as HTMLElement;
   if (!confirm(`Delete data property "${name}"?`)) return;
-  if (!ttlStore) return;
+  if (!session.ttlStore) return;
   
   // Check if this property is used in any restrictions
-  const restrictionsUsingProperty = rawData.nodes.filter((n) =>
+  const restrictionsUsingProperty = session.rawData.nodes.filter((n) =>
     n.dataPropertyRestrictions?.some((r) => r.propertyName === name)
   );
   
@@ -1863,23 +1785,23 @@ function deleteDataPropertyWithConfirm(name: string): void {
     
     // Remove all restrictions using this property
     for (const node of restrictionsUsingProperty) {
-      removeDataPropertyRestrictionFromClass(ttlStore, node.id, name);
-      const nodeIndex = rawData.nodes.findIndex((n) => n.id === node.id);
+      removeDataPropertyRestrictionFromClass(session.ttlStore, node.id, name);
+      const nodeIndex = session.rawData.nodes.findIndex((n) => n.id === node.id);
       if (nodeIndex >= 0) {
-        rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, node.id);
+        session.rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(session.ttlStore, node.id);
       }
     }
   }
   
   // Try to remove from store
-  const removed = removeDataPropertyFromStore(ttlStore, name);
+  const removed = removeDataPropertyFromStore(session.ttlStore, name);
   
   // Always remove from the array and refresh UI, even if store removal failed
   // (the property might have been from an external ontology or already deleted)
-  const wasInArray = dataProperties.some((dp) => dp.name === name);
+  const wasInArray = session.dataProperties.some((dp) => dp.name === name);
   if (wasInArray) {
-    dataProperties = dataProperties.filter((dp) => dp.name !== name);
-    hasUnsavedChanges = true;
+    session.dataProperties = session.dataProperties.filter((dp) => dp.name !== name);
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     initDataPropsMenu(dataPropsContent);
     applyFilter(true); // Refresh the graph to reflect the deletion
@@ -1957,11 +1879,11 @@ function updateDataPropEditableState(): void {
   const labelInput = document.getElementById('editDataPropLabel') as HTMLInputElement;
   const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
   const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
-  const dp = dataProperties.find((p) => p.name === name);
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const dp = session.dataProperties.find((p) => p.name === name);
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const newDefinedBy = definedByInput?.value?.trim() || null;
   // Check if imported: use newDefinedBy if present, otherwise check if URI belongs to external ontology
-  const isImported = dp ? (newDefinedBy ? isUriFromExternalOntology(dp.uri, newDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+  const isImported = dp ? (newDefinedBy ? isUriFromExternalOntology(dp.uri, newDefinedBy, session.externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, session.externalOntologyReferences, mainBase)) : false;
   
   // Update warning icon in header
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -1969,7 +1891,7 @@ function updateDataPropEditableState(): void {
   const headerIcons = header?.querySelector('.modal-header-icons') as HTMLElement;
   let warningIcon = headerIcons?.querySelector('.imported-warning-icon') as HTMLElement;
   if (isImported && headerIcons) {
-    const ontologyUrl = newDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = newDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, session.externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This data property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -2049,18 +1971,18 @@ function updateEditDataPropIdentifierAndValidation(): void {
   const labelValidationEl = document.getElementById('editDataPropLabelValidation') as HTMLElement;
   const okBtn = document.getElementById('editDataPropConfirm') as HTMLButtonElement;
   const definedByInput = document.getElementById('editDataPropDefinedBy') as HTMLInputElement;
-  const dp = dataProperties.find((p) => p.name === name);
-  const baseWithHash = getDisplayBase(ttlStore);
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const dp = session.dataProperties.find((p) => p.name === name);
+  const baseWithHash = getDisplayBase(session.ttlStore);
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const newDefinedBy = definedByInput?.value?.trim() || null;
   // Check if imported: use newDefinedBy if present, otherwise check if URI belongs to external ontology
-  const isImported = dp ? (newDefinedBy ? isUriFromExternalOntology(dp.uri, newDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+  const isImported = dp ? (newDefinedBy ? isUriFromExternalOntology(dp.uri, newDefinedBy, session.externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, session.externalOntologyReferences, mainBase)) : false;
   const lbl = labelInput?.value?.trim() ?? '';
   if (identifierEl) {
     if (isImported) {
       // Shown as prefix:name, as for object properties (#101)
       identifierEl.textContent = dp?.uri
-        ? importedIdentifier(dp.uri, newDefinedBy ?? dp.isDefinedBy, externalOntologyReferences, mainBase)
+        ? importedIdentifier(dp.uri, newDefinedBy ?? dp.isDefinedBy, session.externalOntologyReferences, mainBase)
         : baseWithHash + (dp?.name ?? name);
     } else {
       const derived = labelToCamelCaseIdentifier(lbl) || (dp?.name ?? name);
@@ -2100,11 +2022,10 @@ function updateEditDataPropIdentifierAndValidation(): void {
   }
 }
 
-let editDataPropertyHandlersInitialized = false;
 
 function initEditDataPropertyHandlers(): void {
-  if (editDataPropertyHandlersInitialized) return;
-  editDataPropertyHandlersInitialized = true;
+  if (initFlags.editDataPropertyHandlersInitialized) return;
+  initFlags.editDataPropertyHandlersInitialized = true;
   document.getElementById('editDataPropLabel')?.addEventListener('input', updateEditDataPropIdentifierAndValidation);
   document.getElementById('editDataPropDefinedBy')?.addEventListener('input', updateDataPropEditableState);
   document.getElementById('editDataPropCancel')?.addEventListener('click', () => {
@@ -2122,8 +2043,8 @@ function initEditDataPropertyHandlers(): void {
     // The empty option is "No range asserted", which must stay null rather than becoming a datatype.
     const newRange = rangeSel?.value ? rangeSel.value : null;
     const newDefinedBy = definedByInput?.value?.trim() ?? null;
-    if (!ttlStore) return;
-    let dp = dataProperties.find((p) => p.name === name);
+    if (!session.ttlStore) return;
+    let dp = session.dataProperties.find((p) => p.name === name);
     if (!dp) return;
     const isImported = !!dp.isDefinedBy;
     if (!isImported && !newLabel) return;
@@ -2151,40 +2072,40 @@ function initEditDataPropertyHandlers(): void {
       return;
     }
     if (identifierChanged && dp.uri && !dp.isDefinedBy) {
-      const renamed = renameDataPropertyInStore(ttlStore, dp.uri, derivedId!);
+      const renamed = renameDataPropertyInStore(session.ttlStore, dp.uri, derivedId!);
       if (renamed) {
-        dataProperties = currentDataProperties(ttlStore);
+        session.dataProperties = currentDataProperties(session.ttlStore);
         name = derivedId!;
         (modal as HTMLElement).dataset.dataPropName = name;
-        dp = dataProperties.find((p) => p.name === name)!;
+        dp = session.dataProperties.find((p) => p.name === name)!;
       }
     }
     if (labelChanged) {
-      updateDataPropertyLabelInStore(ttlStore, name, newLabel);
+      updateDataPropertyLabelInStore(session.ttlStore, name, newLabel);
       dp.label = newLabel;
     }
     if (commentChanged) {
-      updateDataPropertyCommentInStore(ttlStore, name, newComment || null);
+      updateDataPropertyCommentInStore(session.ttlStore, name, newComment || null);
       dp.comment = newComment || undefined;
     }
     if (rangeChanged) {
-      updateDataPropertyRangeInStore(ttlStore, name, newRange);
+      updateDataPropertyRangeInStore(session.ttlStore, name, newRange);
       dp.range = newRange;
     }
     if (domainsChanged) {
-      updateDataPropertyDomainsInStore(ttlStore, name, currentDomains);
+      updateDataPropertyDomainsInStore(session.ttlStore, name, currentDomains);
     }
     if (definedByChanged) {
-      updateDataPropertyIsDefinedByInStore(ttlStore, name, newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null);
+      updateDataPropertyIsDefinedByInStore(session.ttlStore, name, newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null);
       dp.isDefinedBy = (newDefinedBy && newDefinedBy.startsWith('http') ? newDefinedBy : null) ?? undefined;
     }
-    hasUnsavedChanges = true;
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
-    dataProperties = currentDataProperties(ttlStore);
+    session.dataProperties = currentDataProperties(session.ttlStore);
     applyFilter(true);
     // Deleting the last domain moves the property off its class and into the free-standing band,
     // which is usually off-screen. Follow it there rather than leaving the user on an empty edit.
-    if (domainsChanged && domainAttachment(dataProperties.find((p) => p.name === name) ?? dp) === 'unattached') {
+    if (domainsChanged && domainAttachment(session.dataProperties.find((p) => p.name === name) ?? dp) === 'unattached') {
       revealNodeInView(unattachedDataPropertyNodeId(name));
     }
     const dataPropsContent = document.getElementById('dataPropsContent');
@@ -2202,11 +2123,11 @@ function initEditDataPropertyHandlers(): void {
   document.getElementById('editDataPropAddDomain')?.addEventListener('click', () => {
     const modal = document.getElementById('editDataPropertyModal')!;
     const name = (modal as HTMLElement).dataset.dataPropName!;
-    const dp = dataProperties.find((p) => p.name === name);
+    const dp = session.dataProperties.find((p) => p.name === name);
     if (!dp) return;
     
     // Get available classes (not already added as domains)
-    const availableClasses = rawData.nodes
+    const availableClasses = session.rawData.nodes
       .map((n) => ({ id: n.id, label: n.label || n.id }))
       .filter((c) => !dp.domains.includes(c.id))
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -2314,7 +2235,7 @@ function renderDomainsList(domainsListEl: HTMLElement, domains: string[], hasGlo
       const domainName = (btn as HTMLElement).dataset.domain!;
       const modal = document.getElementById('editDataPropertyModal')!;
       const name = (modal as HTMLElement).dataset.dataPropName!;
-      const dp = dataProperties.find((p) => p.name === name);
+      const dp = session.dataProperties.find((p) => p.name === name);
       if (!dp) return;
       
       // Remove domain from array
@@ -2329,7 +2250,7 @@ function renderDomainsList(domainsListEl: HTMLElement, domains: string[], hasGlo
 
 function showEditDataPropertyModal(name: string): void {
   // Declared only in an import (#104): editing it would write it into this ontology.
-  if (dataProperties.find((p) => p.name === name)?.contextOnly) return;
+  if (session.dataProperties.find((p) => p.name === name)?.contextOnly) return;
   initEditDataPropertyHandlers();
   const modal = document.getElementById('editDataPropertyModal')!;
   (modal as HTMLElement).dataset.dataPropName = name;
@@ -2340,10 +2261,10 @@ function showEditDataPropertyModal(name: string): void {
   const commentInput = document.getElementById('editDataPropComment') as HTMLTextAreaElement;
   const rangeSel = document.getElementById('editDataPropRange') as HTMLSelectElement;
   const domainsListEl = document.getElementById('editDataPropDomainsList') as HTMLElement;
-  const dp = dataProperties.find((p) => p.name === name);
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const dp = session.dataProperties.find((p) => p.name === name);
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   // Check if imported: use isDefinedBy if present, otherwise check if URI belongs to external ontology
-  const isImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+  const isImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, session.externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, session.externalOntologyReferences, mainBase)) : false;
   
   // Add/update warning icon if imported - place it in header aligned with h3
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -2374,7 +2295,7 @@ function showEditDataPropertyModal(name: string): void {
   const hasValidDefinedBy = dp?.isDefinedBy && (dp.isDefinedBy.startsWith('http://') || dp.isDefinedBy.startsWith('https://'));
   
   if (isImported && headerIcons) {
-    const ontologyUrl = hasValidDefinedBy ? dp?.isDefinedBy : (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = hasValidDefinedBy ? dp?.isDefinedBy : (dp?.uri ? getDefiningOntologyFromUri(dp.uri, session.externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This data property is defined in the external ontology ${ontologyUrl}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -2471,11 +2392,10 @@ function showEditDataPropertyModal(name: string): void {
   labelInput?.focus();
 }
 
-let editAnnotationPropertyHandlersInitialized = false;
 
 function initEditAnnotationPropertyHandlers(): void {
-  if (editAnnotationPropertyHandlersInitialized) return;
-  editAnnotationPropertyHandlersInitialized = true;
+  if (initFlags.editAnnotationPropertyHandlersInitialized) return;
+  initFlags.editAnnotationPropertyHandlersInitialized = true;
   document.getElementById('editAnnotationPropCancel')?.addEventListener('click', () => {
     document.getElementById('editAnnotationPropertyModal')!.style.display = 'none';
   });
@@ -2488,8 +2408,8 @@ function initEditAnnotationPropertyHandlers(): void {
     const newLabel = labelInput?.value?.trim() ?? '';
     const newComment = commentInput?.value?.trim() ?? '';
     const newRange = rangeSel?.value ?? null;
-    if (!newLabel || !ttlStore) return;
-    const ap = annotationProperties.find((p) => p.name === name);
+    if (!newLabel || !session.ttlStore) return;
+    const ap = session.annotationProperties.find((p) => p.name === name);
     if (!ap) return;
     const labelChanged = (ap.name !== newLabel && ap.name !== extractLocalName(newLabel));
     const commentChanged = false; // We don't track comments in annotationProperties array
@@ -2499,35 +2419,35 @@ function initEditAnnotationPropertyHandlers(): void {
       return;
     }
     if (labelChanged) {
-      updateAnnotationPropertyLabelInStore(ttlStore, name, newLabel);
+      updateAnnotationPropertyLabelInStore(session.ttlStore, name, newLabel);
       // Update the name if it changed (based on label)
       const newName = extractLocalName(newLabel) || name;
       if (newName !== name) {
         // Name changed, need to update the array
-        annotationProperties = annotationProperties.filter((p) => p.name !== name);
-        annotationProperties.push({ name: newName, isBoolean: ap.isBoolean, range: ap.range });
-        annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+        session.annotationProperties = session.annotationProperties.filter((p) => p.name !== name);
+        session.annotationProperties.push({ name: newName, isBoolean: ap.isBoolean, range: ap.range });
+        session.annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
       } else {
         // Just update the label in the existing entry
-        const idx = annotationProperties.findIndex((p) => p.name === name);
+        const idx = session.annotationProperties.findIndex((p) => p.name === name);
         if (idx >= 0) {
           // Label is stored as name, so we don't need to update it
         }
       }
     }
     if (commentChanged || commentInput?.value.trim()) {
-      updateAnnotationPropertyCommentInStore(ttlStore, name, newComment || null);
+      updateAnnotationPropertyCommentInStore(session.ttlStore, name, newComment || null);
     }
     if (rangeChanged) {
-      updateAnnotationPropertyRangeInStore(ttlStore, name, newRange || null);
-      const idx = annotationProperties.findIndex((p) => p.name === name);
+      updateAnnotationPropertyRangeInStore(session.ttlStore, name, newRange || null);
+      const idx = session.annotationProperties.findIndex((p) => p.name === name);
       if (idx >= 0) {
-        annotationProperties[idx].range = newRange || null;
+        session.annotationProperties[idx].range = newRange || null;
         // Update isBoolean for backward compatibility
-        annotationProperties[idx].isBoolean = newRange === XSD_NS + 'boolean' || newRange?.endsWith('#boolean') || false;
+        session.annotationProperties[idx].isBoolean = newRange === XSD_NS + 'boolean' || newRange?.endsWith('#boolean') || false;
       }
     }
-    hasUnsavedChanges = true;
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     const annotationPropsContent = document.getElementById('annotationPropsContent');
     if (annotationPropsContent) initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
@@ -2549,9 +2469,9 @@ function showEditAnnotationPropertyModal(name: string): void {
   const labelInput = document.getElementById('editAnnotationPropLabel') as HTMLInputElement;
   const commentInput = document.getElementById('editAnnotationPropComment') as HTMLTextAreaElement;
   const rangeSel = document.getElementById('editAnnotationPropRange') as HTMLSelectElement;
-  const ap = annotationProperties.find((p) => p.name === name);
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-  const isImported = ap ? isUriFromExternalOntology(ap.uri, ap.isDefinedBy, externalOntologyReferences, mainBase) : false;
+  const ap = session.annotationProperties.find((p) => p.name === name);
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
+  const isImported = ap ? isUriFromExternalOntology(ap.uri, ap.isDefinedBy, session.externalOntologyReferences, mainBase) : false;
   
   // Add/update warning icon if imported - place it in header aligned with h3
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -2583,7 +2503,7 @@ function showEditAnnotationPropertyModal(name: string): void {
   const isImportedWithValidUrl = isImported && hasValidDefinedBy;
 
   if (isImportedWithValidUrl && headerIcons) {
-    const ontologyUrl = ap?.isDefinedBy || (ap?.uri ? getDefiningOntologyFromUri(ap.uri, externalOntologyReferences) : 'an external ontology');
+    const ontologyUrl = ap?.isDefinedBy || (ap?.uri ? getDefiningOntologyFromUri(ap.uri, session.externalOntologyReferences) : 'an external ontology');
     const warningMessage = `This annotation property is defined in the external ontology ${ontologyUrl !== 'an external ontology' ? ontologyUrl : ''}, so it must be edited by opening that ontology instead.`;
     
     if (!warningIcon) {
@@ -2634,7 +2554,7 @@ function showEditAnnotationPropertyModal(name: string): void {
   }
   
   if (nameEl) {
-    const prefix = ap ? getPrefixForUri(ap.uri, ap.isDefinedBy, externalOntologyReferences, mainBase) : null;
+    const prefix = ap ? getPrefixForUri(ap.uri, ap.isDefinedBy, session.externalOntologyReferences, mainBase) : null;
     const displayName = prefix ? `${prefix}:${name}` : name;
     nameEl.textContent = `Identifier: ${displayName} (used in ontology)`;
   }
@@ -2657,9 +2577,9 @@ function showEditAnnotationPropertyModal(name: string): void {
   }
   // Get label from store - annotation properties may have rdfs:label
   if (labelInput) {
-    if (ttlStore && ap?.uri) {
+    if (session.ttlStore && ap?.uri) {
       const propUri = ap.uri;
-      const labelQuads = ttlStore.getQuads(propUri as any, 'http://www.w3.org/2000/01/rdf-schema#label', null, null);
+      const labelQuads = session.ttlStore.getQuads(propUri as any, 'http://www.w3.org/2000/01/rdf-schema#label', null, null);
       if (labelQuads.length > 0) {
         const labelObj = labelQuads[0].object as { value?: string };
         labelInput.value = labelObj?.value ?? name;
@@ -2672,9 +2592,9 @@ function showEditAnnotationPropertyModal(name: string): void {
   }
   if (commentInput) {
     // Try to get comment from store
-    if (ttlStore && ap?.uri) {
+    if (session.ttlStore && ap?.uri) {
       const propUri = ap.uri;
-      const commentQuads = ttlStore.getQuads(propUri as any, 'http://www.w3.org/2000/01/rdf-schema#comment', null, null);
+      const commentQuads = session.ttlStore.getQuads(propUri as any, 'http://www.w3.org/2000/01/rdf-schema#comment', null, null);
       if (commentQuads.length > 0) {
         const commentObj = commentQuads[0].object as { value?: string };
         commentInput.value = commentObj?.value ?? '';
@@ -2706,17 +2626,16 @@ function showEditAnnotationPropertyModal(name: string): void {
 
   // Where it is used (#139), collapsed.
   const usagesSection = document.getElementById('editAnnotationPropUsages') as HTMLDetailsElement | null;
-  if (usagesSection) fillUsagesSection(usagesSection, ttlStore && ap?.uri ? annotationUsages(ttlStore, ap.uri) : []);
+  if (usagesSection) fillUsagesSection(usagesSection, session.ttlStore && ap?.uri ? annotationUsages(session.ttlStore, ap.uri) : []);
 
   modal.style.display = 'flex';
   labelInput?.focus();
 }
 
-let addAnnotationPropertyHandlersInitialized = false;
 
 function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement): void {
-  if (addAnnotationPropertyHandlersInitialized) return;
-  addAnnotationPropertyHandlersInitialized = true;
+  if (initFlags.addAnnotationPropertyHandlersInitialized) return;
+  initFlags.addAnnotationPropertyHandlersInitialized = true;
   const labelInput = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
   const rangeSel = document.getElementById('addAnnotationPropRange') as HTMLSelectElement;
   
@@ -2757,13 +2676,13 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
     const li = document.getElementById('addAnnotationPropLabel') as HTMLInputElement;
     const range = rangeSel?.value || null;
     const label = li.value.trim();
-    if (!label || !ttlStore) return;
-    const name = addAnnotationPropertyToStore(ttlStore, label, range);
+    if (!label || !session.ttlStore) return;
+    const name = addAnnotationPropertyToStore(session.ttlStore, label, range);
     if (name) {
       const isBoolean = range === XSD_NS + 'boolean' || range?.endsWith('#boolean') || false;
-      annotationProperties.push({ name, isBoolean, range });
-      annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
-      hasUnsavedChanges = true;
+      session.annotationProperties.push({ name, isBoolean, range });
+      session.annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       const content = document.getElementById('annotationPropsContent');
       if (content) initAnnotationPropsMenu(content, getAnnotationPropsMenuDeps());
@@ -2772,15 +2691,14 @@ function initAddAnnotationPropertyHandlers(_annotationPropsContent?: HTMLElement
   });
 }
 
-let addDataPropertyHandlersInitialized = false;
 
 function updateAddDataPropIdentifierAndValidation(): void {
-  updateAddDataPropIdentifierAndValidationFromModal(ttlStore, dataProperties);
+  updateAddDataPropIdentifierAndValidationFromModal(session.ttlStore, session.dataProperties);
 }
 
 function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
-  if (addDataPropertyHandlersInitialized) return;
-  addDataPropertyHandlersInitialized = true;
+  if (initFlags.addDataPropertyHandlersInitialized) return;
+  initFlags.addDataPropertyHandlersInitialized = true;
   const labelInput = document.getElementById('addDataPropLabel') as HTMLInputElement;
   const rangeSel = document.getElementById('addDataPropRange') as HTMLSelectElement;
   if (rangeSel) {
@@ -2820,8 +2738,8 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
     const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
     const label = li.value.trim();
     const rangeUri = rangeEl?.value ? rangeEl.value : null;
-    if (!ttlStore) return;
-    const existingNames = new Set(dataProperties.map((dp) => dp.name));
+    if (!session.ttlStore) return;
+    const existingNames = new Set(session.dataProperties.map((dp) => dp.name));
     const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
       duplicateMessage: 'A data property with this identifier already exists.',
     });
@@ -2833,10 +2751,10 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
       }
       return;
     }
-    const name = addDataPropertyToStore(ttlStore, label, rangeUri, validation.identifier);
+    const name = addDataPropertyToStore(session.ttlStore, label, rangeUri, validation.identifier);
     if (name) {
-      dataProperties = currentDataProperties(ttlStore);
-      hasUnsavedChanges = true;
+      session.dataProperties = currentDataProperties(session.ttlStore);
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       const content = document.getElementById('dataPropsContent');
       if (content) initDataPropsMenu(content);
@@ -2852,23 +2770,23 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
 /** Property local names in priority order (highest first) for annotation styling. */
 /** The annotation properties that style classes, in priority order: deprecated ones never do. */
 function annotationPriorityOrder(): string[] {
-  return stylingOrder(annotationProperties);
+  return stylingOrder(session.annotationProperties);
 }
 
 /** Build the dependency bundle the annotation-properties menu needs (injected, so the menu
  * module stays decoupled from main.ts globals). */
 function getAnnotationPropsMenuDeps(): AnnotationPropsMenuDeps {
   return {
-    getAnnotationProperties: () => annotationProperties,
+    getAnnotationProperties: () => session.annotationProperties,
     setAnnotationProperties: (props) => {
-      annotationProperties = props;
+      session.annotationProperties = props;
     },
-    getTtlStore: () => ttlStore,
-    getExternalRefs: () => externalOntologyReferences,
+    getTtlStore: () => session.ttlStore,
+    getExternalRefs: () => session.externalOntologyReferences,
     onApply: () => applyFilter(),
     showEditModal: (name) => showEditAnnotationPropertyModal(name),
     markUnsaved: () => {
-      hasUnsavedChanges = true;
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     },
     scheduleSave: () => scheduleDisplayConfigSave(),
@@ -2937,8 +2855,8 @@ function buildNetworkData(
 ): { nodes: DataSet<any>; edges: DataSet<any> } {
   // The example images a node or edge shows in its tooltip (#142), resolved against where the ontology was opened from.
   const hoverImages = (values: string[] | undefined): { exampleImages?: string[] } =>
-    values?.length ? { exampleImages: resolveExampleImages(values, loadedFilePath) } : {};
-  const data = graphData ?? rawData;
+    values?.length ? { exampleImages: resolveExampleImages(values, fileState.loadedFilePath) } : {};
+  const data = graphData ?? session.rawData;
   let filteredNodes = data.nodes.filter((n) =>
     shouldShowNodeByAnnotations(n, filter.annotationStyleConfig)
   );
@@ -3009,14 +2927,14 @@ function buildNetworkData(
   const searchVocabulary = buildSearchVocabulary({
     nodes: filteredNodes,
     edgeTypes: getEdgeTypes(filteredEdges),
-    objectProperties,
-    dataProperties,
-    externalOntologyReferences,
-    mainOntologyBase: ttlStore ? getMainOntologyBase(ttlStore) : null,
+    objectProperties: session.objectProperties,
+    dataProperties: session.dataProperties,
+    externalOntologyReferences: session.externalOntologyReferences,
+    mainOntologyBase: session.ttlStore ? getMainOntologyBase(session.ttlStore) : null,
   });
   // The suggestions offer exactly what is drawn — including referenced external classes such as
   // skos:Concept, which aren't among the ontology's own classes (rawData.nodes).
-  searchSuggestionSources = searchVocabulary.sources;
+  canvasState.searchSuggestionSources = searchVocabulary.sources;
   const searchSets = computeSearchSets(
     filteredNodes,
     filteredEdges,
@@ -3027,7 +2945,7 @@ function buildNetworkData(
   );
   const { matchingNodeIds, neighborNodeIds } = searchSets;
   // What the pulsing search outline surrounds: direct matches only (#84).
-  searchOutlineTargets = outlineTargets(searchSets, matchQuery);
+  canvasState.searchOutlineTargets = outlineTargets(searchSets, matchQuery);
 
   // edgeStyleConfig is already defined above at the start of the function
   
@@ -3179,17 +3097,17 @@ function buildNetworkData(
   const dataPropertyFontSize = Math.max(8, Math.min(48, filter.dataPropertyFontSize ?? 12));
   // Classes defined by owl:equivalentClass rank below the named classes of their definition (#160), in the layout
   // and in the depth that sets font sizes.
-  const definitions = ttlStore ? definitionParents(ttlStore, nodeIds) : [];
-  const layoutOptions = { hierarchyTypes, definitions, stackLeaves };
-  const definitionEdges: GraphEdge[] = hierarchyTypes.has('subClassOf')
+  const definitions = session.ttlStore ? definitionParents(session.ttlStore, nodeIds) : [];
+  const layoutOptions = { hierarchyTypes: canvasState.hierarchyTypes, definitions, stackLeaves: canvasState.stackLeaves };
+  const definitionEdges: GraphEdge[] = canvasState.hierarchyTypes.has('subClassOf')
     ? definitions.map(({ cls, parent }) => ({ from: cls, to: parent, type: 'subClassOf' }))
     : [];
-  const { depth, maxDepth } = computeNodeDepths(nodeIds, [...filteredEdges, ...definitionEdges], hierarchyTypes);
+  const { depth, maxDepth } = computeNodeDepths(nodeIds, [...filteredEdges, ...definitionEdges], canvasState.hierarchyTypes);
   // Class-expression badges are sized with the display fonts (relative to their defaults); nodes by depth,
   // as they are drawn (roots follow Max, the deepest nodes Min).
   const fontSettings = { minFontSize, maxFontSize, relationshipFontSize, dataPropertyFontSize };
-  const nodeCountForDefaults = rawData?.nodes?.length ?? 0;
-  classExpressionFontRatios = {
+  const nodeCountForDefaults = session.rawData?.nodes?.length ?? 0;
+  canvasState.classExpressionFontRatios = {
     ...fontSettingRatios(fontSettings, nodeCountForDefaults),
     byNode: Object.fromEntries(
       [...nodeIds].map((id) => [id, nodeFontRatio(fontSettings, depth[id] ?? 0, maxDepth, nodeCountForDefaults)]),
@@ -3197,9 +3115,9 @@ function buildNetworkData(
   };
 
   // The small "(defined by: …)" line above the label of imported classes and relationships (#111).
-  const mainBaseForNotes = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const mainBaseForNotes = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const importedNoteBox = (n: GraphNode, fontSize: number) => {
-    const text = importedNoteForNode(n, externalOntologyReferences, mainBaseForNotes);
+    const text = importedNoteForNode(n, session.externalOntologyReferences, mainBaseForNotes);
     return text ? { text, fontSize: importedNoteFontSize(fontSize) } : undefined;
   };
 
@@ -3285,7 +3203,7 @@ function buildNetworkData(
     });
   }
 
-  const mainBaseForNodes = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const mainBaseForNodes = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const nodes = filteredNodes.map((n) => {
     const pos = (n.x != null && n.y != null) ? { x: n.x, y: n.y } : nodePositions[n.id];
     const d = depth[n.id] ?? 0;
@@ -3304,12 +3222,12 @@ function buildNetworkData(
         label: n.label,
         isExternal: (n as GraphNode & { isExternal?: boolean }).isExternal,
         externalOntologyUrl: (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl,
-        externalRefs: externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
+        externalRefs: session.externalOntologyReferences.map(r => ({ url: r.url, prefix: r.prefix, usePrefix: r.usePrefix })),
       });
     }
     // The label is just the name: an imported term's defining ontology is in the note above it, and a built-in
     // term such as owl:Thing needs no prefix (#111).
-    const importedNote = importedNoteForNode(n, externalOntologyReferences, mainBaseForNodes);
+    const importedNote = importedNoteForNode(n, session.externalOntologyReferences, mainBaseForNodes);
     const displayLabel = n.label;
     
     // Apply search transparency if search query is active; external nodes use configured opacity.
@@ -3321,7 +3239,7 @@ function buildNetworkData(
     const externalUrl =
       (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl ??
       (definedElsewhere ? getNodeOntologyUrl(n) ?? undefined : undefined);
-    const baseOpacity = isExternalLike ? getOpacityForExternalOntology(externalUrl, externalOntologyReferences) : 1.0;
+    const baseOpacity = isExternalLike ? getOpacityForExternalOntology(externalUrl, session.externalOntologyReferences) : 1.0;
     let nodeOpacity = baseOpacity;
     let backgroundColor = style.background;
     let borderColor = style.border;
@@ -3413,7 +3331,7 @@ function buildNetworkData(
         dataPropsByClass.set(n.id, []);
       }
       restrictions.forEach((restriction) => {
-        const dp = dataProperties.find((p) => p.name === restriction.propertyName);
+        const dp = session.dataProperties.find((p) => p.name === restriction.propertyName);
         const label = dp?.label ?? restriction.propertyName;
         const cardLabel =
           restriction.minCardinality != null || restriction.maxCardinality != null
@@ -3436,14 +3354,14 @@ function buildNetworkData(
   // Then, collect generic data properties. Properties that assert no rdfs:domain are not attached
   // to any class here; they are drawn free-standing further below, unless a restriction already
   // puts them on a class — that restriction is an assertion, so the node is not floating.
-  const unattachedDataProps = dataProperties.filter(
+  const unattachedDataProps = session.dataProperties.filter(
     (dp) => !dp.contextOnly && domainAttachment(dp) === 'unattached' && !restrictedPropertyNames.has(dp.name)
   );
-  dataProperties.forEach((dp) => {
+  session.dataProperties.forEach((dp) => {
     if (dp.contextOnly) return; // declared only in an import (#104): listed in the menu, never drawn
     filteredNodes.forEach((n) => {
       if (displayedAsRestriction.has(`${n.id}__${dp.name}`)) return;
-      if (!appliesToClass(dp, n.id, clusterThingDataProperties)) return;
+      if (!appliesToClass(dp, n.id, canvasState.clusterThingDataProperties)) return;
       
       if (!dataPropsByClass.has(n.id)) {
         dataPropsByClass.set(n.id, []);
@@ -3576,18 +3494,18 @@ function buildNetworkData(
         y: currentY + (rowIndex % 2 === 0 ? 0 : verticalOffset), // Alternate up/down for even/odd rows
       };
       
-      const dp = dataProperties.find((p) => p.name === dataProp.propertyName);
+      const dp = session.dataProperties.find((p) => p.name === dataProp.propertyName);
       
       // An unasserted rdfs:range contributes no suffix, so it cannot be read as a declared datatype.
       const rangeDisplay = describeRange(dp, dataProp.onDataRange);
       
       // Check if data property is imported and get its opacity
       // Use isDefinedBy if present, otherwise check if URI belongs to external ontology
-      const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-      const isDataPropImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, externalOntologyReferences, mainBase)) : false;
+      const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
+      const isDataPropImported = dp ? (dp.isDefinedBy ? isUriFromExternalOntology(dp.uri, dp.isDefinedBy, session.externalOntologyReferences, mainBase) : isUriFromExternalOntology(dp.uri, null, session.externalOntologyReferences, mainBase)) : false;
       // Get the defining ontology URL for opacity lookup
-      const definingOntologyUrl = dp?.isDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
-      const baseDataPropOpacity = isDataPropImported ? getOpacityForExternalOntology(definingOntologyUrl, externalOntologyReferences) : 1.0;
+      const definingOntologyUrl = dp?.isDefinedBy || (dp?.uri ? getDefiningOntologyFromUri(dp.uri, session.externalOntologyReferences) : null);
+      const baseDataPropOpacity = isDataPropImported ? getOpacityForExternalOntology(definingOntologyUrl, session.externalOntologyReferences) : 1.0;
       
       // Apply search transparency if search query is active
       // Data property nodes use imported opacity if applicable, otherwise inherit from class node
@@ -3614,9 +3532,9 @@ function buildNetworkData(
       }
       
       // Get prefix for data property if it's imported
-      const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, externalOntologyReferences, mainBase) : null;
+      const dataPropPrefix = dp ? getPrefixForUri(dp.uri, dp.isDefinedBy, session.externalOntologyReferences, mainBase) : null;
       // The label is just the name: an imported property's defining ontology is in the note above it (#111).
-      const dataPropNote = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
+      const dataPropNote = importedNoteForDataProperty(dp, session.externalOntologyReferences, mainBase);
       const dataPropDisplayLabel = dataProp.label;
       
       // A data property whose domain/range is an anonymous class expression is marked with a small
@@ -3713,13 +3631,13 @@ function buildNetworkData(
   // the graph with no edge to anything. Drawing them on a class would state a domain the ontology
   // never asserted - which is how a domainless property used to end up hanging off skos:Concept.
   if (unattachedDataProps.length > 0) {
-    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+    const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
     const entries = unattachedDataProps.map((dp) => {
       const rangeDisplay = describeRange(dp);
-      const note = importedNoteForDataProperty(dp, externalOntologyReferences, mainBase);
+      const note = importedNoteForDataProperty(dp, session.externalOntologyReferences, mainBase);
       const label = `${dp.label}${rangeDisplay.labelSuffix}`;
-      const definingOntologyUrl = dp.isDefinedBy || (dp.uri ? getDefiningOntologyFromUri(dp.uri, externalOntologyReferences) : null);
-      const isImported = isUriFromExternalOntology(dp.uri, dp.isDefinedBy ?? null, externalOntologyReferences, mainBase);
+      const definingOntologyUrl = dp.isDefinedBy || (dp.uri ? getDefiningOntologyFromUri(dp.uri, session.externalOntologyReferences) : null);
+      const isImported = isUriFromExternalOntology(dp.uri, dp.isDefinedBy ?? null, session.externalOntologyReferences, mainBase);
       const notes = [
         rangeDisplay.source === 'asserted' ? null : rangeDisplay.tooltipNote,
         UNATTACHED_DOMAIN_NOTE,
@@ -3729,7 +3647,7 @@ function buildNetworkData(
       // These nodes stand outside the class graph, so they have no class to take a search category
       // or an external-ontology fade from - both have to be resolved from the property itself.
       const importedOpacity = isImported
-        ? getOpacityForExternalOntology(definingOntologyUrl, externalOntologyReferences)
+        ? getOpacityForExternalOntology(definingOntologyUrl, session.externalOntologyReferences)
         : 1.0;
       const opacity =
         getDataPropertySearchOpacity(dp.name, null, searchSets, searchQuery) * importedOpacity;
@@ -3799,10 +3717,10 @@ function buildNetworkData(
       color: getDefaultColor(),
       lineType: 'solid' as BorderLineType,
     };
-    const edgeComment = getRelationshipComment(e.type, objectProperties);
+    const edgeComment = getRelationshipComment(e.type, session.objectProperties);
     // Relationships defined in another ontology carry the same small note as imported classes (#111).
-    const importedEdgeNote = style.showLabel ? importedNoteForRelationship(e.type, objectProperties, externalOntologyReferences, mainBaseForNotes) : null;
-    const edgeLabelText = style.showLabel ? getEdgeDisplayLabel(e, objectProperties, externalOntologyReferences) : '';
+    const importedEdgeNote = style.showLabel ? importedNoteForRelationship(e.type, session.objectProperties, session.externalOntologyReferences, mainBaseForNotes) : null;
+    const edgeLabelText = style.showLabel ? getEdgeDisplayLabel(e, session.objectProperties, session.externalOntologyReferences) : '';
     
     // Styling based on whether edge is from restriction or domain/range
     // Thick continuous line for restrictions, thin dashed line for normal object properties
@@ -3862,7 +3780,7 @@ function buildNetworkData(
       dashes,
       width,
       ...(edgeComment && { title: edgeComment }),
-      ...hoverImages(objectProperties.find((p) => p.name === e.type)?.exampleImages),
+      ...hoverImages(session.objectProperties.find((p) => p.name === e.type)?.exampleImages),
     };
   });
   
@@ -3903,7 +3821,7 @@ function buildNetworkData(
     const toLocal = to.includes('#') ? to.split('#').pop() : to.includes('/') ? to.split('/').pop() : to;
     
     // Add variations with op.uri and op.name
-    const op = objectProperties.find((p) => p.name === type || p.uri === type);
+    const op = session.objectProperties.find((p) => p.name === type || p.uri === type);
     if (op) {
       if (op.name && op.name !== type) {
         keys.add(`${from}->${to}:${op.name}`);
@@ -4073,11 +3991,11 @@ function buildNetworkData(
 
 /** Nodes/properties used to resolve a term's URI (includes external nodes when they are displayed). */
 function getTermLookup(): TermLookup {
-  return { nodes: (currentGraphDataForBuild ?? rawData).nodes, objectProperties, dataProperties };
+  return { nodes: (session.currentGraphDataForBuild ?? session.rawData).nodes, objectProperties: session.objectProperties, dataProperties: session.dataProperties };
 }
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setVersionPinnedUriResolver((kind, id) =>
-  versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, ttlStore ? readOntologyVersion(ttlStore) : null)
+  versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, session.ttlStore ? readOntologyVersion(session.ttlStore) : null)
 );
 
 function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
@@ -4086,8 +4004,8 @@ function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
 
 /** Link for the selected term: the loaded TTL + #fragment for main-ontology terms, else the term URI. */
 function getTermLink(termUri: string | null): string | null {
-  const namespaces = ttlStore ? [getMainOntologyBase(ttlStore), getClassNamespace(ttlStore)] : [];
-  return buildTermLink(termUri, loadedFilePath, namespaces.filter((ns): ns is string => !!ns));
+  const namespaces = session.ttlStore ? [getMainOntologyBase(session.ttlStore), getClassNamespace(session.ttlStore)] : [];
+  return buildTermLink(termUri, fileState.loadedFilePath, namespaces.filter((ns): ns is string => !!ns));
 }
 
 function updateSelectionInfoDisplay(net: Network): void {
@@ -4103,7 +4021,7 @@ function updateSelectionInfoDisplay(net: Network): void {
       updateStatusBarSelection('');
     }
   } else if (nodeIds.length === 1) {
-    const node = rawData.nodes.find((n) => n.id === nodeIds[0]);
+    const node = session.rawData.nodes.find((n) => n.id === nodeIds[0]);
     const term = resolveTerm('node', nodeIds[0]);
     updateStatusBarSelectedTerm(
       node?.label ?? term?.label ?? nodeIds[0],
@@ -4145,13 +4063,13 @@ function setupNetworkSelectionAndNavigation(
   // Draw anonymous class-expression marks (∪ ∩ ¬ {}) on top of the graph.
   const classExprMarks = attachClassExpressionMarks(
     net as unknown as Parameters<typeof attachClassExpressionMarks>[0],
-    () => rawData?.classExpressions ?? [],
-    () => classExpressionFontRatios,
+    () => session.rawData?.classExpressions ?? [],
+    () => canvasState.classExpressionFontRatios,
   );
   // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
   hideEdgeLinesUnderNodes(net);
   // A pulsing outline around what the search matched, in an SVG layer that follows the view (#84).
-  attachSearchOutline(net as unknown as Parameters<typeof attachSearchOutline>[0], container, () => searchOutlineTargets);
+  attachSearchOutline(net as unknown as Parameters<typeof attachSearchOutline>[0], container, () => canvasState.searchOutlineTargets);
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;
@@ -4312,20 +4230,20 @@ function setupNetworkSelectionAndNavigation(
 
   const handleNativeClick = (e: MouseEvent) => {
     // Allow clicks even when ttlStore is null (e.g., empty ontology) - network should still work
-    if (!network) return;
+    if (!canvasState.network) return;
     const target = e.target as HTMLElement;
     // When clicking Add node button, let vis-network's manipulation UI handle it
     // It will call our addNode handler when canvas is clicked
     if (target.closest?.('.vis-add')) {
-      addNodeMode = true;
+      editState.addNodeMode = true;
       // Don't prevent default - let vis-network handle it
       return;
     }
     // Don't interfere with manipulation UI unless we're in add node mode
-    if (target.closest?.('.vis-manipulation') && !addNodeMode) return;
+    if (target.closest?.('.vis-manipulation') && !editState.addNodeMode) return;
     
     // Only handle clicks on the canvas itself when in add node mode
-    if (!addNodeMode) return;
+    if (!editState.addNodeMode) return;
     
     // Check if click is on the network canvas (not on UI elements)
     // Allow clicks on the network container or its children
@@ -4337,16 +4255,16 @@ function setupNetworkSelectionAndNavigation(
     const nodeAt = net.getNodeAt(domPos);
     if (nodeAt != null) {
       // Clicked on a node, exit add node mode
-      addNodeMode = false;
+      editState.addNodeMode = false;
       return;
     }
     const canvasPos = net.DOMtoCanvas(domPos);
     showAddNodeModal(canvasPos.x, canvasPos.y);
-    addNodeMode = false; // Reset after showing modal
+    editState.addNodeMode = false; // Reset after showing modal
   };
 
   const handleNativeDblclick = (e: MouseEvent) => {
-    if (!ttlStore || !network) return;
+    if (!session.ttlStore || !canvasState.network) return;
     // Embedded mode is read-only: no edit modals, and no create-node on empty-canvas double-click.
     if (isEmbedded()) return;
     const target = e.target as HTMLElement;
@@ -4382,7 +4300,7 @@ function setupNetworkSelectionAndNavigation(
 
     // A click on a class-expression mark opens its details. Checked before node handling so a
     // data-property badge (which overlaps its stub node) wins over selecting the node underneath.
-    if (!addNodeMode && container) {
+    if (!editState.addNodeMode && container) {
       let dom = params.pointer?.DOM ?? null;
       if (!dom && params.event?.srcEvent) {
         const rect = container.getBoundingClientRect();
@@ -4392,7 +4310,7 @@ function setupNetworkSelectionAndNavigation(
     }
 
     // If in add node mode and no node clicked, show the add node modal
-    if (addNodeMode && !clickedNode) {
+    if (editState.addNodeMode && !clickedNode) {
       const srcEvent = params.event?.srcEvent;
       const pointer = params.pointer;
 
@@ -4417,8 +4335,8 @@ function setupNetworkSelectionAndNavigation(
     }
 
     // If in add node mode and a node is clicked, exit add node mode
-    if (addNodeMode && clickedNode) {
-      addNodeMode = false;
+    if (editState.addNodeMode && clickedNode) {
+      editState.addNodeMode = false;
       return;
     }
 
@@ -4463,12 +4381,12 @@ function setupNetworkSelectionAndNavigation(
 function updateSaveButtonVisibility(): void {
   const group = document.getElementById('saveGroup');
   if (group) {
-    group.style.display = hasUnsavedChanges ? 'inline-flex' : 'none';
+    group.style.display = fileState.hasUnsavedChanges ? 'inline-flex' : 'none';
   }
 }
 
 function updateFilePathDisplay(): void {
-  updateStatusBarFilePath(loadedFilePath);
+  updateStatusBarFilePath(fileState.loadedFilePath);
 }
 
 function updateSerializerDropdown(): void {
@@ -4480,21 +4398,21 @@ function updateSerializerDropdown(): void {
   }
   
   // Only show for TTL files in debug mode
-  if (isTtlFile && isDebugMode()) {
+  if (fileState.isTtlFile && isDebugMode()) {
     dropdown.style.display = 'inline-block';
-    dropdown.value = currentSerializerType;
-    debugLog('[updateSerializerDropdown] Showing dropdown, isTtlFile:', isTtlFile, 'currentSerializerType:', currentSerializerType);
+    dropdown.value = fileState.currentSerializerType;
+    debugLog('[updateSerializerDropdown] Showing dropdown, isTtlFile:', fileState.isTtlFile, 'currentSerializerType:', fileState.currentSerializerType);
     
     // Disable custom option if prerequisites not met
     const customOption = dropdown.querySelector('option[value="custom"]') as HTMLOptionElement;
     if (customOption) {
-      if (!originalFileCache || originalFileCache.format !== 'turtle') {
+      if (!fileState.originalFileCache || fileState.originalFileCache.format !== 'turtle') {
         customOption.disabled = true;
         customOption.title = 'Custom serializer requires file cache (load a .ttl file)';
-        debugLog('[updateSerializerDropdown] Custom option disabled, cache:', !!originalFileCache);
+        debugLog('[updateSerializerDropdown] Custom option disabled, cache:', !!fileState.originalFileCache);
         // If custom was selected but prerequisites not met, switch to rdflib
-        if (currentSerializerType === 'custom') {
-          currentSerializerType = 'rdflib';
+        if (fileState.currentSerializerType === 'custom') {
+          fileState.currentSerializerType = 'rdflib';
           dropdown.value = 'rdflib';
         }
       } else {
@@ -4505,7 +4423,7 @@ function updateSerializerDropdown(): void {
     }
   } else {
     dropdown.style.display = 'none';
-    debugLog('[updateSerializerDropdown] Hiding dropdown, isTtlFile:', isTtlFile, 'isDebugMode:', isDebugMode());
+    debugLog('[updateSerializerDropdown] Hiding dropdown, isTtlFile:', fileState.isTtlFile, 'isDebugMode:', isDebugMode());
   }
 }
 
@@ -4527,13 +4445,13 @@ function showRenameModal(
   const renameDupErr = document.getElementById('renameDuplicateError') as HTMLElement;
   if (renameDupErr) { renameDupErr.style.display = 'none'; renameDupErr.textContent = ''; }
   refreshRenameModalFromInput();
-  const node = rawData.nodes.find((n) => n.id === nodeId);
+  const node = session.rawData.nodes.find((n) => n.id === nodeId);
   const isExternal = node?.isExternal && node?.externalOntologyUrl;
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   // A class declared locally but defined elsewhere (rdfs:isDefinedBy → another ontology) is
   // read-only here too — its real definition lives in the source ontology.
   const definedElsewhere = !!node && isDefinedElsewhere(node, mainBase);
-  const isImported = !!(isExternal || definedElsewhere || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, externalOntologyReferences, mainBase)));
+  const isImported = !!(isExternal || definedElsewhere || (node && node.externalOntologyUrl && isUriFromExternalOntology(node.id, node.externalOntologyUrl, session.externalOntologyReferences, mainBase)));
   
   // Add/update warning icon if imported - place it in header aligned with h3
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -4583,35 +4501,35 @@ function showRenameModal(
   const renameIdentifier = document.getElementById('renameIdentifier');
   if (renameIdentifierLabel) (renameIdentifierLabel as HTMLElement).style.display = '';
   if (renameIdentifier) (renameIdentifier as HTMLElement).style.display = '';
-  renameModalAnnotationValues = {};
-  setRenameModalTipButtonVisible(!fileHandle);
+  editState.renameModalAnnotationValues = {};
+  setRenameModalTipButtonVisible(!fileState.fileHandle);
 
   // Render annotation properties
   const annotPropsSection = document.getElementById('renameAnnotationPropsSection');
   if (annotPropsSection) {
-    if (annotationProperties.length === 0) {
+    if (session.annotationProperties.length === 0) {
       annotPropsSection.style.display = 'none';
     } else {
       annotPropsSection.style.display = 'block';
-      renameModalAnnotationValues = {};
+      editState.renameModalAnnotationValues = {};
       nodeModalFormUi.renderRenameModalAnnotationPropsList(
         nodeId,
         node,
-        annotationProperties,
-        buildAnnotationPropsDeps(nodeId, renameModalAnnotationValues)
+        session.annotationProperties,
+        buildAnnotationPropsDeps(nodeId, editState.renameModalAnnotationValues)
       );
     }
   }
   
   const dataPropsSection = document.getElementById('renameDataPropsSection');
   if (dataPropsSection) {
-    if (dataProperties.length === 0) {
+    if (session.dataProperties.length === 0) {
       dataPropsSection.style.display = 'none';
     } else {
       dataPropsSection.style.display = 'block';
-      renameModalInitialDataProps = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
-      renameModalDataPropertyRestrictions = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
-      nodeModalFormUi.renderRenameModalDataPropsList(renameModalDataPropertyRestrictions, dataProperties, onRemoveRenameDataProp);
+      editState.renameModalInitialDataProps = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
+      editState.renameModalDataPropertyRestrictions = node?.dataPropertyRestrictions ? [...node.dataPropertyRestrictions] : [];
+      nodeModalFormUi.renderRenameModalDataPropsList(editState.renameModalDataPropertyRestrictions, session.dataProperties, onRemoveRenameDataProp);
       nodeModalFormUi.updateRenameDataPropAddButtonState();
     }
   }
@@ -4644,7 +4562,7 @@ function showMultiEditModal(nodeIds: string[]): void {
   input.value = 'multiple nodes selected';
   input.disabled = true;
   input.style.color = '#999';
-  const nodes = nodeIds.map((id) => rawData.nodes.find((n) => n.id === id)).filter(Boolean) as GraphNode[];
+  const nodes = nodeIds.map((id) => session.rawData.nodes.find((n) => n.id === id)).filter(Boolean) as GraphNode[];
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   const comments = nodes.map((n) => n.comment ?? '').filter((c) => c);
   if (commentInput) {
@@ -4666,42 +4584,40 @@ function showMultiEditModal(nodeIds: string[]): void {
 
 // hideRenameModal moved to ui/modals.ts
 
-let addNodeSearchTimeout: ReturnType<typeof setTimeout> | null = null;
-let selectedExternalClass: ExternalClassInfo | null = null;
 
 function onRemoveRenameDataProp(name: string): void {
-  renameModalDataPropertyRestrictions = renameModalDataPropertyRestrictions.filter((r) => r.propertyName !== name);
-  nodeModalFormUi.renderRenameModalDataPropsList(renameModalDataPropertyRestrictions, dataProperties, onRemoveRenameDataProp);
+  editState.renameModalDataPropertyRestrictions = editState.renameModalDataPropertyRestrictions.filter((r) => r.propertyName !== name);
+  nodeModalFormUi.renderRenameModalDataPropsList(editState.renameModalDataPropertyRestrictions, session.dataProperties, onRemoveRenameDataProp);
 }
 function onRemoveAddNodeDataProp(name: string): void {
-  addNodeDataPropertyRestrictions = addNodeDataPropertyRestrictions.filter((r) => r.propertyName !== name);
-  nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
+  editState.addNodeDataPropertyRestrictions = editState.addNodeDataPropertyRestrictions.filter((r) => r.propertyName !== name);
+  nodeModalFormUi.renderAddNodeDataPropsList(editState.addNodeDataPropertyRestrictions, session.dataProperties, onRemoveAddNodeDataProp);
 }
 function refreshRenameModalFromInput(): void {
   const modal = document.getElementById('renameModal');
   if (!modal || (modal as HTMLElement).style.display === 'none') return;
   const input = document.getElementById('renameInput') as HTMLInputElement;
   const nodeId = input?.dataset.nodeId ?? '';
-  nodeModalFormUi.syncRenameModal({ store: ttlStore, nodeId, label: input?.value?.trim() ?? '', existingIds: new Set(rawData.nodes.map((n) => n.id)) });
+  nodeModalFormUi.syncRenameModal({ store: session.ttlStore, nodeId, label: input?.value?.trim() ?? '', existingIds: new Set(session.rawData.nodes.map((n) => n.id)) });
 }
 function refreshAddNodeOkButton(): void {
   const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
   const customTabContent = document.getElementById('addNodeCustomTab');
   const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
-  const allNodeIds = (currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id);
+  const allNodeIds = (session.currentGraphDataForBuild?.nodes ?? session.rawData.nodes).map((n) => n.id);
   nodeModalFormUi.syncAddNodeModal({
-    store: ttlStore,
+    store: session.ttlStore,
     existingIds: new Set(allNodeIds),
     label: customInput?.value?.trim() ?? '',
-    externalLabel: selectedExternalClass?.label ?? null,
-    externalClassUri: selectedExternalClass?.uri ?? null,
+    externalLabel: editState.selectedExternalClass?.label ?? null,
+    externalClassUri: editState.selectedExternalClass?.uri ?? null,
     isCustomTab: !!isCustomTab,
   });
 }
 
 function showAddNodeModal(canvasX: number, canvasY: number): void {
-  pendingAddNodePosition = { x: canvasX, y: canvasY };
-  addNodeModalShowing = true;
+  editState.pendingAddNodePosition = { x: canvasX, y: canvasY };
+  editState.addNodeModalShowing = true;
   const modal = document.getElementById('addNodeModal')!;
   const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
   const externalInput = document.getElementById('addNodeExternalInput') as HTMLInputElement;
@@ -4711,7 +4627,7 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   const customTabContent = document.getElementById('addNodeCustomTab');
   
   // Show/hide external tab based on whether we have external references
-  if (externalTabBtn && externalOntologyReferences.length > 0) {
+  if (externalTabBtn && session.externalOntologyReferences.length > 0) {
     externalTabBtn.style.display = '';
   } else if (externalTabBtn) {
     externalTabBtn.style.display = 'none';
@@ -4743,28 +4659,28 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
   const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
   if (dupErr) { dupErr.style.display = 'none'; dupErr.textContent = ''; }
   if (extDupErr) { extDupErr.style.display = 'none'; extDupErr.textContent = ''; }
-  addNodeAnnotationValues = {};
-  addNodeDataPropertyRestrictions = [];
+  editState.addNodeAnnotationValues = {};
+  editState.addNodeDataPropertyRestrictions = [];
   const addNodeAnnotationPropsSection = document.getElementById('addNodeAnnotationPropsSection');
   if (addNodeAnnotationPropsSection) {
-    if (annotationProperties.length === 0) {
+    if (session.annotationProperties.length === 0) {
       addNodeAnnotationPropsSection.style.display = 'none';
     } else {
       addNodeAnnotationPropsSection.style.display = 'block';
-      addNodeAnnotationValues = {};
+      editState.addNodeAnnotationValues = {};
       nodeModalFormUi.renderAddNodeAnnotationPropsList(
-        annotationProperties,
-        buildAnnotationPropsDeps(null, addNodeAnnotationValues)
+        session.annotationProperties,
+        buildAnnotationPropsDeps(null, editState.addNodeAnnotationValues)
       );
     }
   }
   const addNodeDataPropsSection = document.getElementById('addNodeDataPropsSection');
   if (addNodeDataPropsSection) {
-    if (dataProperties.length === 0) {
+    if (session.dataProperties.length === 0) {
       addNodeDataPropsSection.style.display = 'none';
     } else {
       addNodeDataPropsSection.style.display = 'block';
-      nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
+      nodeModalFormUi.renderAddNodeDataPropsList(editState.addNodeDataPropertyRestrictions, session.dataProperties, onRemoveAddNodeDataProp);
     }
   }
   const resultsDiv = document.getElementById('addNodeExternalResults');
@@ -4779,15 +4695,15 @@ function showAddNodeModal(canvasX: number, canvasY: number): void {
 
 // hideAddNodeModal wrapper - state cleanup still needed in main.ts
 function hideAddNodeModalWithCleanup(): void {
-  pendingAddNodePosition = null;
-  addNodeMode = false;
-  addNodeModalShowing = false;
-  selectedExternalClass = null;
-  addNodeAnnotationValues = {};
-  addNodeDataPropertyRestrictions = [];
-  if (addNodeSearchTimeout) {
-    clearTimeout(addNodeSearchTimeout);
-    addNodeSearchTimeout = null;
+  editState.pendingAddNodePosition = null;
+  editState.addNodeMode = false;
+  editState.addNodeModalShowing = false;
+  editState.selectedExternalClass = null;
+  editState.addNodeAnnotationValues = {};
+  editState.addNodeDataPropertyRestrictions = [];
+  if (editState.addNodeSearchTimeout) {
+    clearTimeout(editState.addNodeSearchTimeout);
+    editState.addNodeSearchTimeout = null;
   }
   hideAddNodeModal();
 }
@@ -4799,7 +4715,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
   if (!query.trim()) {
     if (resultsDiv) resultsDiv.style.display = 'none';
     if (descDiv) descDiv.style.display = 'none';
-    selectedExternalClass = null;
+    editState.selectedExternalClass = null;
     refreshAddNodeOkButton();
     return;
   }
@@ -4808,31 +4724,31 @@ async function handleExternalClassSearch(query: string): Promise<void> {
   // Debug logging (only in debug mode)
   if (isDebugMode()) {
     debugLog('Search query:', query);
-    debugLog('External references:', externalOntologyReferences);
+    debugLog('External references:', session.externalOntologyReferences);
   }
   
-  if (externalOntologyReferences.length === 0) {
+  if (session.externalOntologyReferences.length === 0) {
     if (resultsDiv) {
       resultsDiv.innerHTML = '<div style="padding: 8px; color: #666; font-size: 11px;">No external ontologies referenced. Add one via "Manage external references".</div>';
       resultsDiv.style.display = 'block';
     }
     if (descDiv) descDiv.style.display = 'none';
-    selectedExternalClass = null;
+    editState.selectedExternalClass = null;
     refreshAddNodeOkButton();
     return;
   }
   
   try {
     const queryLower = query.toLowerCase().trim();
-    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-    const referencedFromStore = ttlStore && mainBase
-      ? getReferencedExternalClassesFromStore(ttlStore, mainBase, externalOntologyReferences)
+    const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
+    const referencedFromStore = session.ttlStore && mainBase
+      ? getReferencedExternalClassesFromStore(session.ttlStore, mainBase, session.externalOntologyReferences)
       : [];
-    referencedFromStore.forEach((c) => knownExternalClassUris.add(c.uri));
+    referencedFromStore.forEach((c) => session.knownExternalClassUris.add(c.uri));
     const stubs: ExternalClassInfo[] = [];
-    for (const uri of knownExternalClassUris) {
+    for (const uri of session.knownExternalClassUris) {
       if (referencedFromStore.some((c) => c.uri === uri)) continue;
-      const stub = getStubExternalClassForUri(uri, externalOntologyReferences);
+      const stub = getStubExternalClassForUri(uri, session.externalOntologyReferences);
       if (stub) stubs.push(stub);
     }
     const combined = [...referencedFromStore, ...stubs];
@@ -4841,7 +4757,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
       const labelLower = cls.label.toLowerCase();
       return localNameLower.includes(queryLower) || labelLower.includes(queryLower);
     });
-    const fetched = await searchExternalClasses(query, externalOntologyReferences);
+    const fetched = await searchExternalClasses(query, session.externalOntologyReferences);
     const seenUris = new Set(referencedMatches.map((c) => c.uri));
     const fromFetched = fetched.filter((c) => !seenUris.has(c.uri));
     fromFetched.forEach((c) => seenUris.add(c.uri));
@@ -4851,7 +4767,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
       debugLog('Search results:', results);
     }
 
-    const existingNodeIds = new Set((currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id));
+    const existingNodeIds = new Set((session.currentGraphDataForBuild?.nodes ?? session.rawData.nodes).map((n) => n.id));
     const ALREADY_IN_GRAPH_MSG = 'The node related to this class is already existing in the editor canvas.';
     const alreadyInGraphHtml = (msg: string) =>
       `<div style="font-size: 11px; color: #b8860b; margin-top: 4px; font-weight: 500;">${msg}</div>`;
@@ -4862,10 +4778,10 @@ async function handleExternalClassSearch(query: string): Promise<void> {
         resultsDiv.style.display = 'block';
       }
       if (descDiv) descDiv.style.display = 'none';
-      selectedExternalClass = null;
+      editState.selectedExternalClass = null;
     } else if (results.length === 1) {
       const match = results[0];
-      selectedExternalClass = match;
+      editState.selectedExternalClass = match;
       if (descDiv) {
         const alreadyInGraph = existingNodeIds.has(match.uri);
         descDiv.innerHTML = `
@@ -4894,7 +4810,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
 
       resultsDiv.querySelectorAll('.external-class-result').forEach((el, idx) => {
         el.addEventListener('click', () => {
-          selectedExternalClass = results[idx];
+          editState.selectedExternalClass = results[idx];
           if (descDiv) {
             const r = results[idx];
             const alreadyInGraph = existingNodeIds.has(r.uri);
@@ -4912,7 +4828,7 @@ async function handleExternalClassSearch(query: string): Promise<void> {
       });
     }
     if (descDiv) descDiv.style.display = 'none';
-    selectedExternalClass = results[0];
+    editState.selectedExternalClass = results[0];
     }
     
     refreshAddNodeOkButton();
@@ -4923,27 +4839,27 @@ async function handleExternalClassSearch(query: string): Promise<void> {
       resultsDiv.style.display = 'block';
     }
     if (descDiv) descDiv.style.display = 'none';
-    selectedExternalClass = null;
+    editState.selectedExternalClass = null;
     refreshAddNodeOkButton();
   }
 }
 
 function confirmAddNode(): void {
-  if (!pendingAddNodePosition) return;
+  if (!editState.pendingAddNodePosition) return;
   const customInput = document.getElementById('addNodeInput') as HTMLInputElement;
   const customTabContent = document.getElementById('addNodeCustomTab');
   const isCustomTab = customTabContent && customTabContent.style.display !== 'none';
   const dupErr = document.getElementById('addNodeDuplicateError') as HTMLElement;
   const extDupErr = document.getElementById('addNodeExternalDuplicateError') as HTMLElement;
 
-  const { x, y } = pendingAddNodePosition;
+  const { x, y } = editState.pendingAddNodePosition;
 
   if (isCustomTab) {
     const label = customInput?.value?.trim();
     if (!label) return;
-    if (!ttlStore) return;
+    if (!session.ttlStore) return;
     const displayLabel = label.trim() || 'New class';
-    const id = addNodeToStore(ttlStore, displayLabel);
+    const id = addNodeToStore(session.ttlStore, displayLabel);
     if (!id) {
       if (dupErr) {
         dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
@@ -4957,11 +4873,11 @@ function confirmAddNode(): void {
       labellableRoot: null,
       ...(x != null && y != null && { x, y }),
     };
-    rawData.nodes.push(node);
+    session.rawData.nodes.push(node);
     const commentInput = document.getElementById('addNodeComment') as HTMLTextAreaElement;
     const newComment = commentInput?.value?.trim() ?? '';
     const annotationValues: Record<string, boolean | string | null> = {};
-    annotationProperties.forEach((ap) => {
+    session.annotationProperties.forEach((ap) => {
       if (ap.isBoolean) {
         const checkbox = document.getElementById(`addNodeAnnotProp_${ap.name}`) as HTMLInputElement;
         annotationValues[ap.name] = checkbox ? (checkbox.indeterminate ? null : checkbox.checked) : null;
@@ -4970,27 +4886,27 @@ function confirmAddNode(): void {
     const addNodeFormData: NodeFormData = {
       comment: newComment,
       annotationValues,
-      textualAnnotationValues: { ...addNodeAnnotationValues },
-      dataPropertyRestrictions: addNodeDataPropertyRestrictions,
+      textualAnnotationValues: { ...editState.addNodeAnnotationValues },
+      dataPropertyRestrictions: editState.addNodeDataPropertyRestrictions,
     };
-    const baseIri = getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI;
-    applyNodeFormToStore(id, addNodeFormData, ttlStore, node, baseIri, annotationProperties);
+    const baseIri = getClassNamespace(session.ttlStore) ?? getMainOntologyBase(session.ttlStore) ?? BASE_IRI;
+    applyNodeFormToStore(id, addNodeFormData, session.ttlStore, node, baseIri, session.annotationProperties);
     pushUndoable(
       () => {
         for (const r of addNodeFormData.dataPropertyRestrictions) {
-          removeDataPropertyRestrictionFromClass(ttlStore!, id, r.propertyName);
+          removeDataPropertyRestrictionFromClass(session.ttlStore!, id, r.propertyName);
         }
-        removeNodeFromStore(ttlStore!, id);
-        const i = rawData.nodes.findIndex((n) => n.id === id);
-        if (i >= 0) rawData.nodes.splice(i, 1);
+        removeNodeFromStore(session.ttlStore!, id);
+        const i = session.rawData.nodes.findIndex((n) => n.id === id);
+        if (i >= 0) session.rawData.nodes.splice(i, 1);
       },
       () => {
-        addNodeToStore(ttlStore!, displayLabel, id);
-        rawData.nodes.push(node);
-        applyNodeFormToStore(id, addNodeFormData, ttlStore!, node, baseIri, annotationProperties);
+        addNodeToStore(session.ttlStore!, displayLabel, id);
+        session.rawData.nodes.push(node);
+        applyNodeFormToStore(id, addNodeFormData, session.ttlStore!, node, baseIri, session.annotationProperties);
       }
     );
-    hasUnsavedChanges = true;
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     applyFilter(true);
     hideAddNodeModalWithCleanup();
@@ -4998,12 +4914,12 @@ function confirmAddNode(): void {
   }
 
   // Add from external ontology: add as external node (correct opacity/tooltip), not a new local class
-  if (!selectedExternalClass || !ttlStore) return;
-  knownExternalClassUris.add(selectedExternalClass.uri);
-  const label = selectedExternalClass.label;
-  const uri = selectedExternalClass.uri;
+  if (!editState.selectedExternalClass || !session.ttlStore) return;
+  session.knownExternalClassUris.add(editState.selectedExternalClass.uri);
+  const label = editState.selectedExternalClass.label;
+  const uri = editState.selectedExternalClass.uri;
 
-  const existingIds = new Set((currentGraphDataForBuild?.nodes ?? rawData.nodes).map((n) => n.id));
+  const existingIds = new Set((session.currentGraphDataForBuild?.nodes ?? session.rawData.nodes).map((n) => n.id));
   if (existingIds.has(uri)) {
     if (extDupErr) {
       extDupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
@@ -5017,17 +4933,17 @@ function confirmAddNode(): void {
     label,
     labellableRoot: null,
     isExternal: true,
-    externalOntologyUrl: selectedExternalClass.ontologyUrl,
-    comment: selectedExternalClass.comment
-      ? `${selectedExternalClass.comment}\n\n(Imported from ${selectedExternalClass.ontologyUrl})`
-      : `(Imported from ${selectedExternalClass.ontologyUrl})`,
+    externalOntologyUrl: editState.selectedExternalClass.ontologyUrl,
+    comment: editState.selectedExternalClass.comment
+      ? `${editState.selectedExternalClass.comment}\n\n(Imported from ${editState.selectedExternalClass.ontologyUrl})`
+      : `(Imported from ${editState.selectedExternalClass.ontologyUrl})`,
     ...(x != null && y != null && { x, y }),
   };
-  userAddedExternalNodes.push(externalNode);
-  if (loadedNodePositions) {
-    loadedNodePositions[uri] = { x: x ?? 0, y: y ?? 0 };
+  session.userAddedExternalNodes.push(externalNode);
+  if (canvasState.loadedNodePositions) {
+    canvasState.loadedNodePositions[uri] = { x: x ?? 0, y: y ?? 0 };
   } else {
-    loadedNodePositions = { [uri]: { x: x ?? 0, y: y ?? 0 } };
+    canvasState.loadedNodePositions = { [uri]: { x: x ?? 0, y: y ?? 0 } };
   }
   applyFilter(true);
   hideAddNodeModalWithCleanup();
@@ -5035,8 +4951,6 @@ function confirmAddNode(): void {
 
 // Relationship utility functions moved to ui/relationshipUtils.ts
 
-let selectedEdgeType: string | null = null;
-let selectedExternalObjectProperty: ExternalObjectPropertyInfo | null = null;
 
 // Wrapper for updateEditEdgeCommentDisplay that updates the DOM
 /**
@@ -5046,8 +4960,8 @@ let selectedExternalObjectProperty: ExternalObjectPropertyInfo | null = null;
  */
 function updateEditEdgeTypeSections(): void {
   const cardWrap = document.getElementById('editEdgeCardinalityWrap');
-  if (cardWrap && selectedEdgeType) {
-    cardWrap.style.display = selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(selectedEdgeType, objectProperties, selectedExternalObjectProperty) ? 'block' : 'none';
+  if (cardWrap && editState.selectedEdgeType) {
+    cardWrap.style.display = editState.selectedEdgeType !== 'subClassOf' && getPropertyHasCardinality(editState.selectedEdgeType, session.objectProperties, editState.selectedExternalObjectProperty) ? 'block' : 'none';
   }
   updateEditEdgeCommentDisplayLocal();
 }
@@ -5058,10 +4972,10 @@ function updateEditEdgeCommentDisplayLocal(): void {
   if (!typeInput || !commentEl) return;
   
   const comment = updateEditEdgeCommentDisplay(
-    selectedEdgeType,
-    selectedExternalObjectProperty,
+    editState.selectedEdgeType,
+    editState.selectedExternalObjectProperty,
     typeInput.value,
-    objectProperties
+    session.objectProperties
   );
   
   if (comment) {
@@ -5083,30 +4997,30 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
     resultsDiv.innerHTML = '';
     resultsDiv.style.display = 'none';
     hideRelationshipTooltip();
-    selectedEdgeType = null;
-    selectedExternalObjectProperty = null;
+    editState.selectedEdgeType = null;
+    editState.selectedExternalObjectProperty = null;
     updateEditEdgeCommentDisplayLocal();
     return;
   }
   
   // Search local object properties
-  const allTypes = getAllEdgeTypes(rawData, objectProperties);
-  const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
+  const allTypes = getAllEdgeTypes(session.rawData, session.objectProperties);
+  const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   const localMatches: Array<{ type: string; label: string; displayLabel: string; comment: string | null; isExternal: boolean; externalProp: ExternalObjectPropertyInfo | null }> = allTypes.filter((t) => {
-    const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-    const op = objectProperties.find((p) => p.name === t || p.uri === t);
-    const displayLabel = formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences, op, mainBase);
+    const label = getRelationshipLabel(t, session.objectProperties, session.externalOntologyReferences);
+    const op = session.objectProperties.find((p) => p.name === t || p.uri === t);
+    const displayLabel = formatRelationshipLabelWithPrefix(t, label, session.externalOntologyReferences, op, mainBase);
     return label.toLowerCase().includes(q) || 
            displayLabel.toLowerCase().includes(q) ||
            t.toLowerCase().includes(q);
   }).map((t) => {
-    const comment = getRelationshipComment(t, objectProperties);
-    const op = objectProperties.find((p) => p.name === t || p.uri === t);
-    const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
+    const comment = getRelationshipComment(t, session.objectProperties);
+    const op = session.objectProperties.find((p) => p.name === t || p.uri === t);
+    const label = getRelationshipLabel(t, session.objectProperties, session.externalOntologyReferences);
     return {
       type: t,
       label: label,
-      displayLabel: formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences, op, mainBase),
+      displayLabel: formatRelationshipLabelWithPrefix(t, label, session.externalOntologyReferences, op, mainBase),
       comment: comment || null,
       isExternal: false,
       externalProp: null as ExternalObjectPropertyInfo | null,
@@ -5115,13 +5029,13 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   
   // Search external object properties
   let externalMatches: Array<{ type: string; label: string; displayLabel: string; comment: string | null; isExternal: boolean; externalProp: ExternalObjectPropertyInfo | null }> = [];
-  if (externalOntologyReferences.length > 0) {
+  if (session.externalOntologyReferences.length > 0) {
     try {
       // Debug logging (only in debug mode)
       if (isDebugMode()) {
-        debugLog(`Searching external object properties for "${query}" across ${externalOntologyReferences.length} reference(s):`, externalOntologyReferences.map(r => r.url));
+        debugLog(`Searching external object properties for "${query}" across ${session.externalOntologyReferences.length} reference(s):`, session.externalOntologyReferences.map(r => r.url));
       }
-      const externalProps = await searchExternalObjectProperties(query, externalOntologyReferences);
+      const externalProps = await searchExternalObjectProperties(query, session.externalOntologyReferences);
       // Debug logging (only in debug mode)
       if (isDebugMode()) {
         debugLog(`Found ${externalProps.length} external object properties matching "${query}"`);
@@ -5157,17 +5071,17 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   if (allMatches.length === 0) {
     resultsDiv.innerHTML = '<div style="padding: 8px; color: #999;">No matches</div>';
     resultsDiv.style.display = 'block';
-    selectedEdgeType = null;
-    selectedExternalObjectProperty = null;
+    editState.selectedEdgeType = null;
+    editState.selectedExternalObjectProperty = null;
   } else if (allMatches.length === 1) {
     // Auto-select single match
     const match = allMatches[0];
     if (match.isExternal && match.externalProp) {
-      selectedExternalObjectProperty = match.externalProp;
-      selectedEdgeType = match.type; // Store the URI
+      editState.selectedExternalObjectProperty = match.externalProp;
+      editState.selectedEdgeType = match.type; // Store the URI
     } else {
-      selectedEdgeType = match.type;
-      selectedExternalObjectProperty = null;
+      editState.selectedEdgeType = match.type;
+      editState.selectedExternalObjectProperty = null;
     }
     typeInput.value = match.displayLabel;
     updateEditEdgeTypeSections();
@@ -5231,11 +5145,11 @@ async function updateEditEdgeTypeSearch(query: string): Promise<void> {
       // Click handler
       resultEl.addEventListener('click', () => {
         if (match.isExternal && match.externalProp) {
-          selectedExternalObjectProperty = match.externalProp;
-          selectedEdgeType = match.type; // Store the URI
+          editState.selectedExternalObjectProperty = match.externalProp;
+          editState.selectedEdgeType = match.type; // Store the URI
         } else {
-          selectedEdgeType = match.type;
-          selectedExternalObjectProperty = null;
+          editState.selectedEdgeType = match.type;
+          editState.selectedExternalObjectProperty = null;
         }
         typeInput.value = match.displayLabel;
         resultsDiv.style.display = 'none';
@@ -5267,7 +5181,7 @@ function openEditModalForNode(nodeId: string): void {
     }
   }
   // Handle regular class nodes
-  const node = rawData.nodes.find((n) => n.id === nodeId);
+  const node = session.rawData.nodes.find((n) => n.id === nodeId);
   if (node) {
     showRenameModal(nodeId, node.label, node.labellableRoot);
   }
@@ -5336,7 +5250,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     const [, classId, propertyName] = match;
 
-    showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(rawData.classExpressions, classId, classId, propertyName));
+    showEditEdgeClassExpressionNotice(modal, findClassExpressionGroupForEdge(session.rawData.classExpressions, classId, classId, propertyName));
 
     modal.dataset.mode = 'edit';
     modal.dataset.oldFrom = edgeFrom;
@@ -5345,7 +5259,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     modal.dataset.dataPropertyName = propertyName;
     modal.dataset.classId = classId;
     
-    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const classNode = session.rawData.nodes.find((n) => n.id === classId);
     const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     
     // For data properties, show the data property name and class, but disable editing
@@ -5355,8 +5269,8 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     if (typeInput) {
       typeInput.disabled = true;
       typeInput.value = 'dataprop (data property)';
-      selectedEdgeType = 'dataprop';
-      selectedExternalObjectProperty = null;
+      editState.selectedEdgeType = 'dataprop';
+      editState.selectedExternalObjectProperty = null;
     }
     
     // Constrain select widths to prevent modal from expanding too wide
@@ -5373,10 +5287,10 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     }
     
     // Show data property node label and class node label
-    const dp = dataProperties.find((p) => p.name === propertyName);
+    const dp = session.dataProperties.find((p) => p.name === propertyName);
     const dpLabel = dp?.label ?? propertyName;
     fromSel.innerHTML = `<option value="${edgeFrom}" selected>${dpLabel} (data property)</option>`;
-    toSel.innerHTML = rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
+    toSel.innerHTML = session.rawData.nodes.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${n.label}</option>`).join('');
     
     
     // Show cardinality for data properties
@@ -5416,9 +5330,9 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     // Regular object property edge
     // Find all matching edges first
     const isThisEdge = (e: GraphEdge) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType;
-    let allMatchingEdges = rawData.edges.filter(isThisEdge);
+    let allMatchingEdges = session.rawData.edges.filter(isThisEdge);
     // An edge only the external expansion draws (#99)
-    if (allMatchingEdges.length === 0) allMatchingEdges = currentGraphDataForBuild?.edges.filter(isThisEdge) ?? [];
+    if (allMatchingEdges.length === 0) allMatchingEdges = session.currentGraphDataForBuild?.edges.filter(isThisEdge) ?? [];
     
     // ALWAYS prioritize restriction edges - they have the actual cardinality constraints
     let edge = allMatchingEdges.find((e) => e.isRestriction === true);
@@ -5437,7 +5351,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
         edgeFrom,
         edgeTo,
         edgeType,
-        allEdgesWithType: rawData.edges.filter((e) => e.type === edgeType).slice(0, 5),
+        allEdgesWithType: session.rawData.edges.filter((e) => e.type === edgeType).slice(0, 5),
       });
     }
     
@@ -5479,21 +5393,21 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       modalContent.style.maxWidth = '';
     }
     
-    const nodesForDropdown = currentGraphDataForBuild?.nodes ?? rawData.nodes;
-    fromSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
-    toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
+    const nodesForDropdown = session.currentGraphDataForBuild?.nodes ?? session.rawData.nodes;
+    fromSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeFrom ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, session.externalOntologyReferences)}</option>`).join('');
+    toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === edgeTo ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, session.externalOntologyReferences)}</option>`).join('');
     if (typeInputEdit) {
-      const label = getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences);
+      const label = getRelationshipLabel(edgeType, session.objectProperties, session.externalOntologyReferences);
       // Find property by name, URI, or full URI string (edgeType might be local name or full URI for imported properties)
       // Try multiple matching strategies:
       // 1. Exact match by name
       // 2. Exact match by URI
       // 3. If edgeType is a local name, check if any property's URI ends with it
       // 4. If edgeType is a full URI, check if any property's URI matches it
-      let op = objectProperties.find((p) => p.name === edgeType || p.uri === edgeType);
+      let op = session.objectProperties.find((p) => p.name === edgeType || p.uri === edgeType);
       if (!op && !edgeType.startsWith('http')) {
         // edgeType is likely a local name, try to find by URI ending
-        op = objectProperties.find((p) => {
+        op = session.objectProperties.find((p) => {
           if (!p.uri) return false;
           const uriLocalName = p.uri.includes('#') ? p.uri.split('#').pop() : p.uri.split('/').pop();
           return uriLocalName === edgeType || p.uri.endsWith('#' + edgeType) || p.uri.endsWith('/' + edgeType);
@@ -5501,16 +5415,16 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       }
       if (!op && edgeType.startsWith('http')) {
         // edgeType is a full URI, try to find by URI matching
-        op = objectProperties.find((p) => {
+        op = session.objectProperties.find((p) => {
           if (!p.uri) return false;
           return p.uri === edgeType || edgeType.includes(p.uri) || p.uri.includes(edgeType);
         });
       }
-      const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-      const displayLabel = formatRelationshipLabelWithPrefix(edgeType, label, externalOntologyReferences, op, mainBase);
+      const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
+      const displayLabel = formatRelationshipLabelWithPrefix(edgeType, label, session.externalOntologyReferences, op, mainBase);
       typeInputEdit.value = displayLabel;
-      selectedEdgeType = edgeType;
-      selectedExternalObjectProperty = null;
+      editState.selectedEdgeType = edgeType;
+      editState.selectedExternalObjectProperty = null;
     }
 
     // Debug: Log edge lookup for troubleshooting
@@ -5519,7 +5433,7 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
       edgeTo,
       edgeType,
       foundEdge: edge,
-      allMatchingEdges: rawData.edges.filter((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType),
+      allMatchingEdges: session.rawData.edges.filter((e) => e.from === edgeFrom && e.to === edgeTo && e.type === edgeType),
     });
     
     // Set cardinality values - handle null/undefined correctly
@@ -5553,12 +5467,12 @@ function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: string): 
     cardWrap.style.display = isRestrictionCb?.checked === true ? 'block' : 'none';
 
     // Locked from where the parser drew the edge, not from whether a mark is drawn for it (#58).
-    const propertyLabel = getRelationshipLabel(edgeType, objectProperties, externalOntologyReferences);
+    const propertyLabel = getRelationshipLabel(edgeType, session.objectProperties, session.externalOntologyReferences);
     const lock = edge ? edgeLock(edge) : null;
     const lockedByExpression = lock === 'classExpression';
     showEditEdgeClassExpressionNotice(
       modal,
-      findClassExpressionGroupForEdge(rawData.classExpressions, edgeFrom, edgeTo, edgeType),
+      findClassExpressionGroupForEdge(session.rawData.classExpressions, edgeFrom, edgeTo, edgeType),
       lockedByExpression ? propertyLabel : undefined,
     );
     showEditEdgeRestrictionNotice(modal, edge ?? null, propertyLabel, lockedByExpression || lock === 'externalTarget');
@@ -5587,23 +5501,23 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   showEditEdgeClassExpressionNotice(modal, null);
   showEditEdgeRestrictionNotice(modal, null, '');
   modal.dataset.mode = 'add';
-  pendingAddEdgeData = { from, to, callback };
+  editState.pendingAddEdgeData = { from, to, callback };
   fromSel.disabled = true;
   toSel.disabled = true;
   // Use same node list as Edit Edge modal so user-added external nodes (full URI id) appear and pre-select correctly
-  const nodesForDropdown = currentGraphDataForBuild?.nodes ?? rawData.nodes;
-  fromSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
-  toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, externalOntologyReferences)}</option>`).join('');
+  const nodesForDropdown = session.currentGraphDataForBuild?.nodes ?? session.rawData.nodes;
+  fromSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === from ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, session.externalOntologyReferences)}</option>`).join('');
+  toSel.innerHTML = nodesForDropdown.map((n) => `<option value="${n.id}"${n.id === to ? ' selected' : ''}>${formatNodeLabelWithPrefix(n, session.externalOntologyReferences)}</option>`).join('');
   const typeInputAdd = document.getElementById('editEdgeType') as HTMLInputElement;
   if (typeInputAdd) {
     const defaultType = 'subClassOf';
-    const label = getRelationshipLabel(defaultType, objectProperties, externalOntologyReferences);
-    const op = objectProperties.find((p) => p.name === defaultType || p.uri === defaultType);
-    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-    const displayLabel = formatRelationshipLabelWithPrefix(defaultType, label, externalOntologyReferences, op, mainBase);
+    const label = getRelationshipLabel(defaultType, session.objectProperties, session.externalOntologyReferences);
+    const op = session.objectProperties.find((p) => p.name === defaultType || p.uri === defaultType);
+    const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
+    const displayLabel = formatRelationshipLabelWithPrefix(defaultType, label, session.externalOntologyReferences, op, mainBase);
     typeInputAdd.value = displayLabel;
-    selectedEdgeType = defaultType;
-    selectedExternalObjectProperty = null;
+    editState.selectedEdgeType = defaultType;
+    editState.selectedExternalObjectProperty = null;
   }
 
   minCardInput.value = '';
@@ -5626,13 +5540,13 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
 
 // hideEditEdgeModal wrapper - state cleanup still needed in main.ts
 function hideEditEdgeModalWithCleanup(): void {
-  if (pendingEditEdgeCallback) {
-    pendingEditEdgeCallback(null);
-    pendingEditEdgeCallback = null;
+  if (editState.pendingEditEdgeCallback) {
+    editState.pendingEditEdgeCallback(null);
+    editState.pendingEditEdgeCallback = null;
   }
-  if (pendingAddEdgeData) {
-    pendingAddEdgeData.callback(null);
-    pendingAddEdgeData = null;
+  if (editState.pendingAddEdgeData) {
+    editState.pendingAddEdgeData.callback(null);
+    editState.pendingAddEdgeData = null;
   }
   hideEditEdgeModal();
 }
@@ -5649,17 +5563,17 @@ function confirmEditEdge(): void {
   
   // Check if we have a selected external object property
   let newType: string | null = null;
-  if (selectedExternalObjectProperty) {
-    newType = selectedExternalObjectProperty.uri; // Use full URI for external properties
-  } else if (selectedEdgeType) {
-    newType = selectedEdgeType;
+  if (editState.selectedExternalObjectProperty) {
+    newType = editState.selectedExternalObjectProperty.uri; // Use full URI for external properties
+  } else if (editState.selectedEdgeType) {
+    newType = editState.selectedEdgeType;
   } else if (typeInput?.value.trim()) {
     // Try to find in local types
-    const mainBase = ttlStore ? getMainOntologyBase(ttlStore) : null;
-    const found = getAllEdgeTypes(rawData, objectProperties).find(t => {
-      const label = getRelationshipLabel(t, objectProperties, externalOntologyReferences);
-      const op = objectProperties.find((p) => p.name === t || p.uri === t);
-      const displayLabel = formatRelationshipLabelWithPrefix(t, label, externalOntologyReferences, op, mainBase);
+    const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
+    const found = getAllEdgeTypes(session.rawData, session.objectProperties).find(t => {
+      const label = getRelationshipLabel(t, session.objectProperties, session.externalOntologyReferences);
+      const op = session.objectProperties.find((p) => p.name === t || p.uri === t);
+      const displayLabel = formatRelationshipLabelWithPrefix(t, label, session.externalOntologyReferences, op, mainBase);
       return displayLabel === typeInput.value.trim() || label === typeInput.value.trim() || t === typeInput.value.trim();
     });
     if (found) {
@@ -5677,9 +5591,9 @@ function confirmEditEdge(): void {
     return;
   }
 
-  if (mode === 'add' && pendingAddEdgeData) {
-    const { from, to, callback } = pendingAddEdgeData;
-    if (!ttlStore) {
+  if (mode === 'add' && editState.pendingAddEdgeData) {
+    const { from, to, callback } = editState.pendingAddEdgeData;
+    if (!session.ttlStore) {
       hideEditEdgeModalWithCleanup();
       return;
     }
@@ -5690,7 +5604,7 @@ function confirmEditEdge(): void {
     
     // Only include cardinality if this is a restriction
     const card = isRestriction ? cardinality : undefined;
-    const ok = addEdgeToStore(ttlStore, from, to, newType, card);
+    const ok = addEdgeToStore(session.ttlStore, from, to, newType, card);
     if (!ok) {
       alert('Failed to add edge. An edge may already exist between these nodes.');
       hideEditEdgeModalWithCleanup();
@@ -5698,7 +5612,7 @@ function confirmEditEdge(): void {
     }
 
     // Use canonical type (URI when available) so rawData key matches expandWithExternalRefs and we don't get duplicate edges
-    const op = objectProperties.find((p) => p.name === newType || p.uri === newType);
+    const op = session.objectProperties.find((p) => p.name === newType || p.uri === newType);
     const canonicalType = op?.uri ?? newType;
 
     const newEdge: import('./types').GraphEdge = { 
@@ -5711,49 +5625,49 @@ function confirmEditEdge(): void {
       newEdge.minCardinality = card.minCardinality ?? undefined;
       newEdge.maxCardinality = card.maxCardinality ?? undefined;
     }
-    rawData.edges.push(newEdge);
+    session.rawData.edges.push(newEdge);
     
     // If this is an external object property, add it to objectProperties array
-    if (selectedExternalObjectProperty) {
-      const existing = objectProperties.find((o) => o.name === newType);
+    if (editState.selectedExternalObjectProperty) {
+      const existing = session.objectProperties.find((o) => o.name === newType);
       if (!existing) {
-        objectProperties.push({
+        session.objectProperties.push({
           name: newType, // Store the full URI as the name
-          label: selectedExternalObjectProperty.label,
-          hasCardinality: selectedExternalObjectProperty.hasCardinality ?? true,
-          comment: selectedExternalObjectProperty.comment || null,
+          label: editState.selectedExternalObjectProperty.label,
+          hasCardinality: editState.selectedExternalObjectProperty.hasCardinality ?? true,
+          comment: editState.selectedExternalObjectProperty.comment || null,
         });
-        objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+        session.objectProperties.sort((a, b) => a.name.localeCompare(b.name));
         // Re-initialize the edge styles menu to include the new property
         const edgeStylesContent = document.getElementById('edgeStylesContent');
         if (edgeStylesContent) {
           initEdgeStylesMenu(edgeStylesContent, applyFilter);
         }
       }
-      selectedExternalObjectProperty = null;
+      editState.selectedExternalObjectProperty = null;
     }
     pushUndoable(
       () => {
         try {
-          removeEdgeFromStore(ttlStore!, from, to, newType);
+          removeEdgeFromStore(session.ttlStore!, from, to, newType);
         } catch (err) {
           console.warn(`Undo: Failed to remove edge from store: ${err instanceof Error ? err.message : String(err)}`);
         }
-        const i = rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === canonicalType);
-        if (i >= 0) rawData.edges.splice(i, 1);
+        const i = session.rawData.edges.findIndex((e) => e.from === from && e.to === to && e.type === canonicalType);
+        if (i >= 0) session.rawData.edges.splice(i, 1);
       },
       () => {
-        addEdgeToStore(ttlStore!, from, to, newType, card);
-        rawData.edges.push(newEdge);
+        addEdgeToStore(session.ttlStore!, from, to, newType, card);
+        session.rawData.edges.push(newEdge);
       }
     );
-    hasUnsavedChanges = true;
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     callback({ from, to, id: `${from}->${to}:${canonicalType}` });
-    pendingAddEdgeData = null;
+    editState.pendingAddEdgeData = null;
     hideEditEdgeModalWithCleanup();
     // Clean up unused external properties and update edge styles menu
-    objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
+    session.objectProperties = cleanupUnusedExternalProperties(session.rawData, session.objectProperties);
     const edgeStylesContent = document.getElementById('edgeStylesContent');
     if (edgeStylesContent) {
       initEdgeStylesMenu(edgeStylesContent, applyFilter);
@@ -5771,10 +5685,10 @@ function confirmEditEdge(): void {
     // Handle data property restriction update
     const propertyName = modal.dataset.dataPropertyName!;
     const classId = modal.dataset.classId!;
-    const classNode = rawData.nodes.find((n) => n.id === classId);
+    const classNode = session.rawData.nodes.find((n) => n.id === classId);
     const restriction = classNode?.dataPropertyRestrictions?.find((r) => r.propertyName === propertyName);
     
-    if (!ttlStore || !classNode || !restriction) {
+    if (!session.ttlStore || !classNode || !restriction) {
       hideEditEdgeModalWithCleanup();
       return;
     }
@@ -5791,16 +5705,16 @@ function confirmEditEdge(): void {
     }
     
     // Update the restriction in the store
-    removeDataPropertyRestrictionFromClass(ttlStore, classId, propertyName);
-    addDataPropertyRestrictionToClass(ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined }, restriction.onDataRange);
+    removeDataPropertyRestrictionFromClass(session.ttlStore, classId, propertyName);
+    addDataPropertyRestrictionToClass(session.ttlStore, classId, propertyName, { minCardinality: newMin ?? undefined, maxCardinality: newMax ?? undefined }, restriction.onDataRange);
     
     // Update in rawData
-    const nodeIndex = rawData.nodes.findIndex((n) => n.id === classId);
+    const nodeIndex = session.rawData.nodes.findIndex((n) => n.id === classId);
     if (nodeIndex >= 0) {
-      rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(ttlStore, classId);
+      session.rawData.nodes[nodeIndex].dataPropertyRestrictions = getDataPropertyRestrictionsForClass(session.ttlStore, classId);
     }
     
-    hasUnsavedChanges = true;
+    fileState.hasUnsavedChanges = true;
     updateSaveButtonVisibility();
     hideEditEdgeModalWithCleanup();
     applyFilter(true);
@@ -5827,7 +5741,7 @@ function confirmEditEdge(): void {
     oldWasRestriction === isRestriction &&
     (card?.minCardinality ?? null) === (oldEdge?.minCardinality ?? null) &&
     (card?.maxCardinality ?? null) === (oldEdge?.maxCardinality ?? null);
-  if (!ttlStore || sameEdge) {
+  if (!session.ttlStore || sameEdge) {
     hideEditEdgeModalWithCleanup();
     return;
   }
@@ -5840,7 +5754,7 @@ function confirmEditEdge(): void {
   try {
     if (oldWasRestriction && !isRestriction) {
       // Unchecking "is restriction" - only remove restriction, edge remains as domain/range
-      removeRestrictionFromStore(ttlStore, oldFrom, oldTo, oldType);
+      removeRestrictionFromStore(session.ttlStore, oldFrom, oldTo, oldType);
       onlyRemovedRestriction = true;
     } else if (!oldWasRestriction && isRestriction && !isChangingEdge) {
       // Checking "is restriction" on existing domain/range edge (not changing from/to/type)
@@ -5849,7 +5763,7 @@ function confirmEditEdge(): void {
       // Skip removal - nothing to remove
     } else if (isChangingEdge || (oldWasRestriction && isRestriction)) {
       // Changing from/to/type OR changing restriction properties - remove edge completely
-      removeEdgeFromStore(ttlStore, oldFrom, oldTo, oldType);
+      removeEdgeFromStore(session.ttlStore, oldFrom, oldTo, oldType);
       onlyRemovedRestriction = false;
     }
     // If !oldWasRestriction && !isRestriction && !isChangingEdge: no change, nothing to do (handled by sameEdge check above)
@@ -5871,17 +5785,17 @@ function confirmEditEdge(): void {
     // and we're not changing from/to/type, domain/range should still exist, so just add the restriction
     if (onlyRemovedRestriction && !isChangingEdge) {
       try {
-        addRestrictionToStore(ttlStore, newFrom, newTo, newType, card);
+        addRestrictionToStore(session.ttlStore, newFrom, newTo, newType, card);
       } catch (err) {
         // If restriction addition fails (e.g., domain/range doesn't exist), try adding complete edge
-        const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
+        const addOk = addEdgeToStore(session.ttlStore, newFrom, newTo, newType, card);
         if (!addOk) {
           // Restore the old restriction if adding new one failed
           if (oldWasRestriction) {
             try {
-              addRestrictionToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+              addRestrictionToStore(session.ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
             } catch {
-              addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+              addEdgeToStore(session.ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
             }
           }
           alert('Failed to update edge.');
@@ -5891,15 +5805,15 @@ function confirmEditEdge(): void {
       }
     } else {
       // Removed edge completely or changing from/to/type - need to add complete edge (domain/range + restriction)
-      const addOk = addEdgeToStore(ttlStore, newFrom, newTo, newType, card);
+      const addOk = addEdgeToStore(session.ttlStore, newFrom, newTo, newType, card);
       if (!addOk) {
         // Restore the old restriction if adding new one failed
         if (oldWasRestriction) {
           try {
-            addRestrictionToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+            addRestrictionToStore(session.ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
           } catch {
             // If restoration fails, try adding complete edge
-            addEdgeToStore(ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
+            addEdgeToStore(session.ttlStore, oldFrom, oldTo, oldType, { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null });
           }
         }
         alert('Failed to update edge.');
@@ -5910,8 +5824,8 @@ function confirmEditEdge(): void {
   }
   
   // Update rawData - remove old edge and add new one
-  const idx = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
-  if (idx >= 0) rawData.edges.splice(idx, 1);
+  const idx = session.rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+  if (idx >= 0) session.rawData.edges.splice(idx, 1);
   
   // Always add the edge back to rawData with the correct isRestriction flag
   const newEdge: import('./types').GraphEdge = { 
@@ -5924,26 +5838,26 @@ function confirmEditEdge(): void {
     newEdge.minCardinality = card.minCardinality ?? undefined;
     newEdge.maxCardinality = card.maxCardinality ?? undefined;
   }
-  rawData.edges.push(newEdge);
+  session.rawData.edges.push(newEdge);
   
   // If this is an external object property, add it to objectProperties array
-  if (selectedExternalObjectProperty && newType !== oldType) {
-    const existing = objectProperties.find((op) => op.name === newType);
+  if (editState.selectedExternalObjectProperty && newType !== oldType) {
+    const existing = session.objectProperties.find((op) => op.name === newType);
     if (!existing) {
-      objectProperties.push({
+      session.objectProperties.push({
         name: newType, // Store the full URI as the name
-        label: selectedExternalObjectProperty.label,
-        hasCardinality: selectedExternalObjectProperty.hasCardinality ?? true,
-        comment: selectedExternalObjectProperty.comment || null,
+        label: editState.selectedExternalObjectProperty.label,
+        hasCardinality: editState.selectedExternalObjectProperty.hasCardinality ?? true,
+        comment: editState.selectedExternalObjectProperty.comment || null,
       });
-      objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+      session.objectProperties.sort((a, b) => a.name.localeCompare(b.name));
       // Re-initialize the edge styles menu to include the new property
       const edgeStylesContent = document.getElementById('edgeStylesContent');
       if (edgeStylesContent) {
         initEdgeStylesMenu(edgeStylesContent, applyFilter);
       }
     }
-    selectedExternalObjectProperty = null;
+    editState.selectedExternalObjectProperty = null;
   }
   
   const oldCard = { minCardinality: oldEdge?.minCardinality ?? null, maxCardinality: oldEdge?.maxCardinality ?? null };
@@ -5952,16 +5866,16 @@ function confirmEditEdge(): void {
       // Undo: restore old edge state
       // Remove new edge completely
       try {
-        removeEdgeFromStore(ttlStore!, newFrom, newTo, newType);
+        removeEdgeFromStore(session.ttlStore!, newFrom, newTo, newType);
       } catch (err) {
         console.warn(`Undo: Failed to remove new edge from store: ${err instanceof Error ? err.message : String(err)}`);
       }
       // Restore old edge
       if (oldWasRestriction) {
-        addEdgeToStore(ttlStore!, oldFrom, oldTo, oldType, oldCard);
+        addEdgeToStore(session.ttlStore!, oldFrom, oldTo, oldType, oldCard);
       }
-      const i = rawData.edges.findIndex((e) => e.from === newFrom && e.to === newTo && e.type === newType);
-      if (i >= 0) rawData.edges.splice(i, 1);
+      const i = session.rawData.edges.findIndex((e) => e.from === newFrom && e.to === newTo && e.type === newType);
+      if (i >= 0) session.rawData.edges.splice(i, 1);
       const restoredEdge: import('./types').GraphEdge = { 
         from: oldFrom, 
         to: oldTo, 
@@ -5972,7 +5886,7 @@ function confirmEditEdge(): void {
         restoredEdge.minCardinality = oldCard.minCardinality ?? undefined;
         restoredEdge.maxCardinality = oldCard.maxCardinality ?? undefined;
       }
-      rawData.edges.push(restoredEdge);
+      session.rawData.edges.push(restoredEdge);
     },
     () => {
       // Redo: apply new edge state again
@@ -5980,27 +5894,27 @@ function confirmEditEdge(): void {
       try {
         if (oldWasRestriction && !isRestriction) {
           // Was unchecking restriction - remove restriction only
-          removeRestrictionFromStore(ttlStore!, oldFrom, oldTo, oldType);
+          removeRestrictionFromStore(session.ttlStore!, oldFrom, oldTo, oldType);
         } else {
           // Was changing other properties or checking restriction - remove edge completely
-          removeEdgeFromStore(ttlStore!, oldFrom, oldTo, oldType);
+          removeEdgeFromStore(session.ttlStore!, oldFrom, oldTo, oldType);
         }
       } catch (err) {
         console.warn(`Redo: Failed to remove old edge from store: ${err instanceof Error ? err.message : String(err)}`);
       }
       // Add new edge
       if (isRestriction) {
-        addEdgeToStore(ttlStore!, newFrom, newTo, newType, card);
+        addEdgeToStore(session.ttlStore!, newFrom, newTo, newType, card);
       }
-      const i = rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
-      if (i >= 0) rawData.edges.splice(i, 1);
-      rawData.edges.push(newEdge);
+      const i = session.rawData.edges.findIndex((e) => e.from === oldFrom && e.to === oldTo && e.type === oldType);
+      if (i >= 0) session.rawData.edges.splice(i, 1);
+      session.rawData.edges.push(newEdge);
     }
   );
-  hasUnsavedChanges = true;
+  fileState.hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   // Clean up unused external properties and update edge styles menu
-  objectProperties = cleanupUnusedExternalProperties(rawData, objectProperties);
+  session.objectProperties = cleanupUnusedExternalProperties(session.rawData, session.objectProperties);
   const edgeStylesContent = document.getElementById('edgeStylesContent');
   if (edgeStylesContent) {
     initEdgeStylesMenu(edgeStylesContent, applyFilter);
@@ -6016,7 +5930,7 @@ function confirmRename(): void {
 
   if (mode === 'multi') {
     const nodeIdsJson = modal.dataset.nodeIds;
-    if (!nodeIdsJson || !ttlStore) {
+    if (!nodeIdsJson || !session.ttlStore) {
       hideRenameModal();
       return;
     }
@@ -6026,15 +5940,15 @@ function confirmRename(): void {
     // For multi-edit, we only support comment changes for now
     // Annotation properties would need more complex UI
     const oldVals = nodeIds.map((id) => {
-      const n = rawData.nodes.find((x) => x.id === id);
+      const n = session.rawData.nodes.find((x) => x.id === id);
       return { id, comment: n?.comment ?? '' };
     });
     let anyChanged = false;
     for (const nodeId of nodeIds) {
-      const node = rawData.nodes.find((n) => n.id === nodeId);
+      const node = session.rawData.nodes.find((n) => n.id === nodeId);
       if (node && (node.comment ?? '') !== newComment) {
         node.comment = newComment || undefined;
-        updateCommentInStore(ttlStore, nodeId, newComment || null);
+        updateCommentInStore(session.ttlStore, nodeId, newComment || null);
         anyChanged = true;
       }
     }
@@ -6042,24 +5956,24 @@ function confirmRename(): void {
       pushUndoable(
         () => {
           oldVals.forEach(({ id, comment }) => {
-            const n = rawData.nodes.find((x) => x.id === id);
-            if (n && ttlStore) {
+            const n = session.rawData.nodes.find((x) => x.id === id);
+            if (n && session.ttlStore) {
               n.comment = comment || undefined;
-              updateCommentInStore(ttlStore, id, comment || null);
+              updateCommentInStore(session.ttlStore, id, comment || null);
             }
           });
         },
         () => {
           nodeIds.forEach((id) => {
-            const n = rawData.nodes.find((x) => x.id === id);
-            if (n && ttlStore) {
+            const n = session.rawData.nodes.find((x) => x.id === id);
+            if (n && session.ttlStore) {
               n.comment = newComment || undefined;
-              updateCommentInStore(ttlStore, id, newComment || null);
+              updateCommentInStore(session.ttlStore, id, newComment || null);
             }
           });
         }
       );
-      hasUnsavedChanges = true;
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     }
     hideRenameModal();
@@ -6071,7 +5985,7 @@ function confirmRename(): void {
   const newLabel = input.value.trim();
   if (!nodeId || !newLabel) return;
 
-  const existingIds = new Set(rawData.nodes.map((n) => n.id));
+  const existingIds = new Set(session.rawData.nodes.map((n) => n.id));
   if (isDuplicateIdentifierForRename(newLabel, existingIds, nodeId)) {
     const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
     if (dupErr) {
@@ -6083,12 +5997,12 @@ function confirmRename(): void {
     return;
   }
 
-  const nodeIndex = rawData.nodes.findIndex((n) => n.id === nodeId);
+  const nodeIndex = session.rawData.nodes.findIndex((n) => n.id === nodeId);
   if (nodeIndex < 0) {
     hideRenameModal();
     return;
   }
-  const node = rawData.nodes[nodeIndex];
+  const node = session.rawData.nodes[nodeIndex];
 
   const commentInput = document.getElementById('renameComment') as HTMLTextAreaElement;
   const newComment = commentInput?.value?.trim() ?? '';
@@ -6105,7 +6019,7 @@ function confirmRename(): void {
   const newTextualValues: Record<string, string[]> = {};
   let annotationPropsChanged = false;
 
-  annotationProperties.forEach((ap) => {
+  session.annotationProperties.forEach((ap) => {
     if (ap.isBoolean) {
       const oldValue = (node.annotations?.[ap.name] ?? null) as boolean | null;
       oldAnnotationValues[ap.name] = oldValue;
@@ -6117,8 +6031,8 @@ function confirmRename(): void {
       }
     } else {
       const propUri = ap.uri ?? BASE_IRI.replace(/#?$/, '#') + ap.name;
-      const oldVals = ttlStore ? getAnnotationValuesForClass(ttlStore, nodeId, propUri) : [];
-      const newVals = renameModalAnnotationValues[ap.name] ?? oldVals;
+      const oldVals = session.ttlStore ? getAnnotationValuesForClass(session.ttlStore, nodeId, propUri) : [];
+      const newVals = editState.renameModalAnnotationValues[ap.name] ?? oldVals;
       oldTextualValues[ap.name] = oldVals;
       newTextualValues[ap.name] = newVals;
       const equal = oldVals.length === newVals.length && oldVals.every((v, i) => v === newVals[i]);
@@ -6126,8 +6040,8 @@ function confirmRename(): void {
     }
   });
 
-  const initialDataProps = renameModalInitialDataProps ?? [];
-  const currentDataProps = renameModalDataPropertyRestrictions;
+  const initialDataProps = editState.renameModalInitialDataProps ?? [];
+  const currentDataProps = editState.renameModalDataPropertyRestrictions;
   const dataPropsEqual =
     initialDataProps.length === currentDataProps.length &&
     initialDataProps.every((a) => {
@@ -6152,7 +6066,7 @@ function confirmRename(): void {
     textualAnnotationValues: newTextualValues,
     dataPropertyRestrictions: currentDataProps,
   };
-  annotationProperties.forEach((ap) => {
+  session.annotationProperties.forEach((ap) => {
     if (ap.isBoolean) {
       newFormData.annotationValues[ap.name] = newAnnotationValues[ap.name] ?? oldAnnotationValues[ap.name] ?? null;
     }
@@ -6165,18 +6079,18 @@ function confirmRename(): void {
   };
 
   // Calculate baseIri for undo/redo callbacks
-  const baseIri = ttlStore ? (getClassNamespace(ttlStore) ?? getMainOntologyBase(ttlStore) ?? BASE_IRI) : BASE_IRI;
+  const baseIri = session.ttlStore ? (getClassNamespace(session.ttlStore) ?? getMainOntologyBase(session.ttlStore) ?? BASE_IRI) : BASE_IRI;
 
   // Use workflow function if store is available, otherwise use fallback
-  if (ttlStore) {
+  if (session.ttlStore) {
     const result = editNodeProperties({
-      store: ttlStore,
+      store: session.ttlStore,
       nodeId,
       node,
       newLabel,
       formData: newFormData,
-      annotationProperties,
-      existingNodeIds: new Set(rawData.nodes.map(n => n.id))
+      annotationProperties: session.annotationProperties,
+      existingNodeIds: new Set(session.rawData.nodes.map(n => n.id))
     });
 
     if (!result.success) {
@@ -6203,10 +6117,10 @@ function confirmRename(): void {
     () => {
       if (labelChanged) {
         node.label = oldLabel;
-        if (ttlStore) updateLabelInStore(ttlStore, nodeId, oldLabel);
+        if (session.ttlStore) updateLabelInStore(session.ttlStore, nodeId, oldLabel);
       }
-      if (ttlStore) {
-        applyNodeFormToStore(nodeId, oldFormData, ttlStore, node, baseIri, annotationProperties);
+      if (session.ttlStore) {
+        applyNodeFormToStore(nodeId, oldFormData, session.ttlStore, node, baseIri, session.annotationProperties);
       } else {
         node.comment = oldFormData.comment.trim() || undefined;
         node.exampleImages = oldFormData.textualAnnotationValues?.exampleImage?.length ? [...oldFormData.textualAnnotationValues.exampleImage] : undefined;
@@ -6216,10 +6130,10 @@ function confirmRename(): void {
     () => {
       if (labelChanged) {
         node.label = newLabel;
-        if (ttlStore) updateLabelInStore(ttlStore, nodeId, newLabel);
+        if (session.ttlStore) updateLabelInStore(session.ttlStore, nodeId, newLabel);
       }
-      if (ttlStore) {
-        applyNodeFormToStore(nodeId, newFormData, ttlStore, node, baseIri, annotationProperties);
+      if (session.ttlStore) {
+        applyNodeFormToStore(nodeId, newFormData, session.ttlStore, node, baseIri, session.annotationProperties);
       } else {
         node.comment = newFormData.comment.trim() || undefined;
         node.exampleImages = newFormData.textualAnnotationValues?.exampleImage?.length ? [...newFormData.textualAnnotationValues.exampleImage] : undefined;
@@ -6228,21 +6142,21 @@ function confirmRename(): void {
     }
   );
 
-  hasUnsavedChanges = true;
+  fileState.hasUnsavedChanges = true;
   updateSaveButtonVisibility();
   hideRenameModal();
   applyFilter(true);
 }
 
 async function saveTtl(): Promise<void> {
-  if (!ttlStore) {
+  if (!session.ttlStore) {
     debugError('[saveTtl] No ttlStore available');
     return;
   }
   
   // Validate custom serializer prerequisites
-  if (currentSerializerType === 'custom') {
-    if (!originalFileCache || originalFileCache.format !== 'turtle') {
+  if (fileState.currentSerializerType === 'custom') {
+    if (!fileState.originalFileCache || fileState.originalFileCache.format !== 'turtle') {
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
       if (errorMsg) {
         errorMsg.textContent = 
@@ -6255,36 +6169,36 @@ async function saveTtl(): Promise<void> {
   }
   
   const overwriteCb = document.getElementById('overwriteFile') as HTMLInputElement | null;
-  const doOverwrite = overwriteCb?.checked === true && fileHandle;
+  const doOverwrite = overwriteCb?.checked === true && fileState.fileHandle;
   try {
-    debugLog('[saveTtl] Starting save, serializer:', currentSerializerType, 'doOverwrite:', doOverwrite);
+    debugLog('[saveTtl] Starting save, serializer:', fileState.currentSerializerType, 'doOverwrite:', doOverwrite);
     
     // Pass serializer type to storeToTurtle
     const ttlString = await storeToTurtle(
-      ttlStore, 
-      externalOntologyReferences, 
-      originalTtlString ?? undefined, 
-      originalFileCache ?? undefined,
-      currentSerializerType
+      session.ttlStore, 
+      session.externalOntologyReferences, 
+      fileState.originalTtlString ?? undefined, 
+      fileState.originalFileCache ?? undefined,
+      fileState.currentSerializerType
     );
     debugLog('[saveTtl] Got ttlString, length:', ttlString.length);
     if (doOverwrite) {
-      if (!fileHandle) {
+      if (!fileState.fileHandle) {
         throw new Error('File handle not available for overwrite');
       }
-      const writable = await fileHandle.createWritable();
+      const writable = await fileState.fileHandle.createWritable();
       await writable.write(ttlString);
       await writable.close();
       // Update originalTtlString to the newly saved content for idempotent round trips
       // This ensures that subsequent saves use the saved format as the reference
-      originalTtlString = ttlString;
+      fileState.originalTtlString = ttlString;
       // Update cache if we used reconstruction (cache will be updated with new content)
-      if (originalFileCache) {
+      if (fileState.originalFileCache) {
         // Re-parse to update cache with new content
         try {
-          const pathForParse = loadedFilePath ?? loadedFileName ?? '';
+          const pathForParse = fileState.loadedFilePath ?? fileState.loadedFileName ?? '';
           const { parseResult: newParseResult } = await loadOntologyFromContent(ttlString, pathForParse);
-          originalFileCache = newParseResult.originalFileCache ?? null;
+          fileState.originalFileCache = newParseResult.originalFileCache ?? null;
           // Update dropdown state after cache update
           updateSerializerDropdown();
         } catch (e) {
@@ -6298,7 +6212,7 @@ async function saveTtl(): Promise<void> {
       const a = document.createElement('a');
       a.href = url;
       // Ensure filename has .ttl extension
-      let downloadName = loadedFileName ?? 'ontology.ttl';
+      let downloadName = fileState.loadedFileName ?? 'ontology.ttl';
       if (!downloadName.toLowerCase().endsWith('.ttl') && !downloadName.toLowerCase().endsWith('.turtle')) {
         downloadName = `${downloadName}.ttl`;
       }
@@ -6327,7 +6241,7 @@ async function saveTtl(): Promise<void> {
       }, 1000);
       debugLog('[saveTtl] File download triggered');
     }
-    hasUnsavedChanges = false;
+    fileState.hasUnsavedChanges = false;
     updateSaveButtonVisibility();
     debugLog('[saveTtl] Save completed successfully');
   } catch (err) {
@@ -6337,7 +6251,7 @@ async function saveTtl(): Promise<void> {
       let errorText = `Save error: ${err instanceof Error ? err.message : String(err)}`;
       
       // Special handling for custom serializer errors
-      if (currentSerializerType === 'custom' && 
+      if (fileState.currentSerializerType === 'custom' && 
           err instanceof Error && 
           err.message.includes('cache')) {
         errorText += ' Try switching to "rdflib Serializer" in the dropdown.';
@@ -6359,12 +6273,12 @@ async function saveTtl(): Promise<void> {
  * itself (see openExternalOntologyTab), so the wait for the folder can't get it blocked as a popup.
  */
 function openExternalOntology(url: string): Promise<void> {
-  const fileName = loadedFileName;
+  const fileName = fileState.loadedFileName;
   return openExternalOntologyTab({
-    fromDisk: !!fileName && !/^https?:\/\//i.test(loadedFilePath ?? ''),
+    fromDisk: !!fileName && !/^https?:\/\//i.test(fileState.loadedFilePath ?? ''),
     open: (target) => window.open(target, '_blank'),
     findLocalUrl: async () => {
-      const directory = await getOrRequestOntologyDirectory(fileHandle);
+      const directory = await getOrRequestOntologyDirectory(fileState.fileHandle);
       if (!directory) return null;
       const { findMatchingLocalFile, openLocalFileInNewTab } = await import('./lib/localFileOpener');
       const localFile = await findMatchingLocalFile(directory, fileName!, url);
@@ -6375,38 +6289,30 @@ function openExternalOntology(url: string): Promise<void> {
   });
 }
 
-/** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
- * after some edits; this is merged back in each time. */
-let importedDeclarations: PropertyLists | null = null;
-/** The loaded ontology's imports that could be read (#131), and whether they are still being read. */
-let importedOntologies: ImportedOntology[] = [];
-let importsBeingRead = false;
-/** For each import that was read, the newer release found for it, if any (#132). */
-let importNewerVersions = new Map<string, string | null>();
 
 /** What the imports dialog shows of an import's version (#131); null for a reference that is not an import. */
 setImportVersionLookup((url) => {
-  if (!ttlStore) return null;
-  const isImport = ttlStore.getQuads(null, 'http://www.w3.org/2002/07/owl#imports', null, null).some((q) => bareIri(q.object.value) === bareIri(url));
+  if (!session.ttlStore) return null;
+  const isImport = session.ttlStore.getQuads(null, 'http://www.w3.org/2002/07/owl#imports', null, null).some((q) => bareIri(q.object.value) === bareIri(url));
   if (!isImport) return null;
-  const imported = importedOntologies.find((o) => bareIri(o.url) === bareIri(url));
-  if (imported) return { state: 'read', version: readOntologyVersion(imported.store), newer: importNewerVersions.get(imported.url) };
-  return importsBeingRead ? { state: 'reading' } : { state: 'unread' };
+  const imported = session.importedOntologies.find((o) => bareIri(o.url) === bareIri(url));
+  if (imported) return { state: 'read', version: readOntologyVersion(imported.store), newer: session.importNewerVersions.get(imported.url) };
+  return session.importsBeingRead ? { state: 'reading' } : { state: 'unread' };
 });
 
 /** The object properties of `store`, with what the imports declare merged in. */
-function currentObjectProperties(store: NonNullable<typeof ttlStore>): ObjectPropertyInfo[] {
+function currentObjectProperties(store: NonNullable<typeof session.ttlStore>): ObjectPropertyInfo[] {
   const own = getObjectProperties(store);
-  return importedDeclarations
-    ? mergeImportedDeclarations({ objectProperties: own, dataProperties: [], annotationProperties: [] }, importedDeclarations).objectProperties
+  return session.importedDeclarations
+    ? mergeImportedDeclarations({ objectProperties: own, dataProperties: [], annotationProperties: [] }, session.importedDeclarations).objectProperties
     : own;
 }
 
 /** The data properties of `store`, with what the imports declare merged in. */
-function currentDataProperties(store: NonNullable<typeof ttlStore>): DataPropertyInfo[] {
+function currentDataProperties(store: NonNullable<typeof session.ttlStore>): DataPropertyInfo[] {
   const own = getDataProperties(store);
-  return importedDeclarations
-    ? mergeImportedDeclarations({ objectProperties: [], dataProperties: own, annotationProperties: [] }, importedDeclarations).dataProperties
+  return session.importedDeclarations
+    ? mergeImportedDeclarations({ objectProperties: [], dataProperties: own, annotationProperties: [] }, session.importedDeclarations).dataProperties
     : own;
 }
 
@@ -6431,28 +6337,28 @@ function refreshPropertyMenus(): void {
  * skipped and nothing changes. The loaded store is never touched, so saving is unaffected. Nothing happens
  * if another ontology was opened in the meantime.
  */
-function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): void {
+function startLoadingImportedDeclarations(store: NonNullable<typeof session.ttlStore>): void {
   beginImportsSettle();
-  importedOntologies = [];
+  session.importedOntologies = [];
   setImportedPrefixes({});
-  importNewerVersions = new Map();
-  importsBeingRead = true;
+  session.importNewerVersions = new Map();
+  session.importsBeingRead = true;
   void (async () => {
     try {
       // Background reads are bounded: a slow or huge import is given up on, not waited for (and not kept).
       const imported = await loadImportedOntologies(store, (url) =>
         fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
       );
-      if (store !== ttlStore || imported.length === 0) return;
-      importedOntologies = imported;
+      if (store !== session.ttlStore || imported.length === 0) return;
+      session.importedOntologies = imported;
       // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
       setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
-      importedDeclarations = readImportedDeclarations(imported);
-      const before = { objectProperties, dataProperties, annotationProperties };
-      const merged = mergeImportedDeclarations(before, importedDeclarations);
-      objectProperties = merged.objectProperties;
-      dataProperties = merged.dataProperties;
-      annotationProperties = merged.annotationProperties;
+      session.importedDeclarations = readImportedDeclarations(imported);
+      const before = { objectProperties: session.objectProperties, dataProperties: session.dataProperties, annotationProperties: session.annotationProperties };
+      const merged = mergeImportedDeclarations(before, session.importedDeclarations);
+      session.objectProperties = merged.objectProperties;
+      session.dataProperties = merged.dataProperties;
+      session.annotationProperties = merged.annotationProperties;
       refreshPropertyMenus();
       // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
       // uses came from an import; properties added as context are never drawn.
@@ -6460,8 +6366,8 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
     } catch (err) {
       debugWarn('Could not read the declarations of the imports:', err);
     } finally {
-      if (store === ttlStore) {
-        importsBeingRead = false;
+      if (store === session.ttlStore) {
+        session.importsBeingRead = false;
         refreshExternalRefsList();
         importsSettled();
         void findImportsNewerVersions(store);
@@ -6471,10 +6377,10 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof ttlStore>): 
 }
 
 /** Look, in the background, for a newer release of each import that was read (#132); the imports dialog names it. */
-async function findImportsNewerVersions(store: NonNullable<typeof ttlStore>): Promise<void> {
-  const found = await Promise.all(importedOntologies.map(async (o) => [o.url, (await findVersions(o.store, o.url, browserVersionSources)).newer?.version ?? null] as const));
-  if (store !== ttlStore) return;
-  importNewerVersions = new Map(found);
+async function findImportsNewerVersions(store: NonNullable<typeof session.ttlStore>): Promise<void> {
+  const found = await Promise.all(session.importedOntologies.map(async (o) => [o.url, (await findVersions(o.store, o.url, browserVersionSources)).newer?.version ?? null] as const));
+  if (store !== session.ttlStore) return;
+  session.importNewerVersions = new Map(found);
   refreshExternalRefsList();
 }
 
@@ -6483,16 +6389,16 @@ async function findImportsNewerVersions(store: NonNullable<typeof ttlStore>): Pr
  * (#133). Choosing one opens it, after asking when there are unsaved edits. The versions seen are remembered for
  * the tab, so an older version still offers the later ones. Not offered when embedded: the view is read-only there.
  */
-function startFindingVersions(store: NonNullable<typeof ttlStore>, loadedUrl: string | null): void {
+function startFindingVersions(store: NonNullable<typeof session.ttlStore>, loadedUrl: string | null): void {
   updateAvailableVersions(null, () => {});
   const ontologyIri = readOntologyVersion(store)?.ontologyIri;
   if (isEmbedded() || !ontologyIri) return;
   void findVersions(store, loadedUrl, browserVersionSources, recallSeenVersions(ontologyIri)).then((available) => {
-    if (store !== ttlStore) return;
+    if (store !== session.ttlStore) return;
     rememberSeenVersions(ontologyIri, available.entries);
     updateAvailableVersions(available, (entry) => {
       if (!entry.url) return;
-      if (hasUnsavedChanges && !confirm(`Open version ${entry.version}? Your unsaved changes will be lost.`)) return;
+      if (fileState.hasUnsavedChanges && !confirm(`Open version ${entry.version}? Your unsaved changes will be lost.`)) return;
       void loadFromUrl(entry.url);
     });
   });
@@ -6518,39 +6424,39 @@ async function loadTtlAndRender(
 
   try {
     // Store original TTL string to preserve format when saving
-    originalTtlString = ttlString;
+    fileState.originalTtlString = ttlString;
     
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps, originalFileCache: cache } = parseResult;
     
     // Store the store early so tests can detect when parsing is complete
-    ttlStore = store;
+    session.ttlStore = store;
     // A loaded ontology is never left under the "Open ontology" dialog, whichever way it arrived — including
     // one loaded while start-up was still deciding whether to show that dialog.
     hideOpenOntologyModal();
 
     // Store original file cache for source preservation
-    originalFileCache = cache ?? null;
+    fileState.originalFileCache = cache ?? null;
     
     // Detect if file is TTL and load serializer config
     const isTurtle = pathForParse.toLowerCase().endsWith('.ttl') || 
                      pathForParse.toLowerCase().endsWith('.turtle') ||
                      (!pathForParse && cache?.format === 'turtle');
-    isTtlFile = isTurtle;
+    fileState.isTtlFile = isTurtle;
     
     // Load serializer config from IndexedDB
-    if (isTurtle && !skipSlowOperationsForTests) {
-      const savedConfig = await loadSerializerConfigFromIndexedDB(loadedFilePath, loadedFileName);
+    if (isTurtle && !fileState.skipSlowOperationsForTests) {
+      const savedConfig = await loadSerializerConfigFromIndexedDB(fileState.loadedFilePath, fileState.loadedFileName);
       if (savedConfig) {
-        currentSerializerType = savedConfig.serializerType;
+        fileState.currentSerializerType = savedConfig.serializerType;
       } else {
         // Default to 'custom' for TTL files
-        currentSerializerType = 'custom';
+        fileState.currentSerializerType = 'custom';
       }
     } else {
       // Non-TTL files: default to rdflib (dropdown will be hidden)
-      currentSerializerType = 'rdflib';
+      fileState.currentSerializerType = 'rdflib';
     }
     
     // Update dropdown visibility and state (call after cache is set)
@@ -6558,7 +6464,7 @@ async function loadTtlAndRender(
     
     // Merge external refs early so we can detect used annotation properties before processing nodes
     // Skip IndexedDB operations in test mode for faster execution
-    const dbRefs = skipSlowOperationsForTests ? [] : await loadExternalRefsFromIndexedDB(loadedFilePath, loadedFileName);
+    const dbRefs = fileState.skipSlowOperationsForTests ? [] : await loadExternalRefsFromIndexedDB(fileState.loadedFilePath, fileState.loadedFileName);
     const mergedRefs: ExternalOntologyReference[] = [];
     const seenUrls = new Set<string>();
     
@@ -6604,7 +6510,7 @@ async function loadTtlAndRender(
       }
     }
     
-    externalOntologyReferences = mergedRefs;
+    session.externalOntologyReferences = mergedRefs;
     
     // Now detect used annotation properties BEFORE we process nodes for styling
     // This ensures imported annotation properties like core:labellableRoot are available
@@ -6634,7 +6540,7 @@ async function loadTtlAndRender(
       if (alreadyExists) continue;
       
       // Check if this predicate belongs to an external ontology
-      const isExternal = isUriFromExternalOntology(predUri, null, externalOntologyReferences, mainBaseForAnnotProps);
+      const isExternal = isUriFromExternalOntology(predUri, null, session.externalOntologyReferences, mainBaseForAnnotProps);
       if (isExternal) {
         usedAnnotationProps.add(localName);
         usedAnnotationPropsWithUri.set(localName, predUri);
@@ -6691,7 +6597,7 @@ async function loadTtlAndRender(
             isDefinedBy = fullUri.slice(0, slashIndex + 1);
           }
           if (!isDefinedBy) {
-            const definingOntology = getDefiningOntologyFromUri(fullUri, externalOntologyReferences);
+            const definingOntology = getDefiningOntologyFromUri(fullUri, session.externalOntologyReferences);
             isDefinedBy = definingOntology !== 'an external ontology' ? definingOntology : undefined;
           }
         }
@@ -6795,26 +6701,26 @@ async function loadTtlAndRender(
       console.warn('Ontology validation warnings:', validationResult.warnings);
     }
 
-    rawData = graphData;
+    session.rawData = graphData;
     clearPositionsBeforeLayout();
-    positionsArranged = false;
-    annotationProperties = annotationProps;
-    objectProperties = objectProps;
-    dataProperties = dataProps;
-    importedDeclarations = null; // those of the previous ontology's imports
+    canvasState.positionsArranged = false;
+    session.annotationProperties = annotationProps;
+    session.objectProperties = objectProps;
+    session.dataProperties = dataProps;
+    session.importedDeclarations = null; // those of the previous ontology's imports
     // ttlStore already set earlier after parsing (for faster test detection)
-    knownExternalClassUris = new Set();
-    userAddedExternalNodes = [];
+    session.knownExternalClassUris = new Set();
+    session.userAddedExternalNodes = [];
 
-    loadedFileName = fileName ?? null;
-    loadedFilePath = pathHint ?? fileName ?? null;
-    fileHandle = handle ?? null;
+    fileState.loadedFileName = fileName ?? null;
+    fileState.loadedFilePath = pathHint ?? fileName ?? null;
+    fileState.fileHandle = handle ?? null;
     forgetOntologyDirectory(); // another ontology, maybe in another folder (#103)
-hasUnsavedChanges = false;
+fileState.hasUnsavedChanges = false;
     clearUndoRedo();
     updateFilePathDisplay();
 
-    loadedEdgeStyleConfig = null;
+    canvasState.loadedEdgeStyleConfig = null;
 
     // Check if ontology has no classes AND no edges (canvas is truly empty)
     // If there are edges (even connecting external nodes), the canvas is not empty
@@ -6845,10 +6751,10 @@ hasUnsavedChanges = false;
     }
 
     setTimeout(() => {
-      updateStatusBar(ttlStore, pathHint ?? fileName ?? null);
-      updateOntologyInfoDisplay(ttlStore ? getOntologyInfo(ttlStore, prefixMap) : null);
-      updateOntologyVersionDisplay(ttlStore ? readOntologyVersion(ttlStore) : null);
-      if (ttlStore) startFindingVersions(ttlStore, pathHint && /^https?:\/\//i.test(pathHint) ? pathHint : null);
+      updateStatusBar(session.ttlStore, pathHint ?? fileName ?? null);
+      updateOntologyInfoDisplay(session.ttlStore ? getOntologyInfo(session.ttlStore, prefixMap) : null);
+      updateOntologyVersionDisplay(session.ttlStore ? readOntologyVersion(session.ttlStore) : null);
+      if (session.ttlStore) startFindingVersions(session.ttlStore, pathHint && /^https?:\/\//i.test(pathHint) ? pathHint : null);
     }, 0);
 
     if (handle && fileName) {
@@ -6872,7 +6778,7 @@ hasUnsavedChanges = false;
     const manageExternalRefsBtn = document.getElementById('manageExternalRefs');
     if (manageExternalRefsBtn) manageExternalRefsBtn.style.display = 'inline-block';
 
-    debugLog('[DEBUG] After parsing - describes edges in rawData.edges:', rawData.edges.filter((e) => e.type.includes('describes')).length);
+    debugLog('[DEBUG] After parsing - describes edges in rawData.edges:', session.rawData.edges.filter((e) => e.type.includes('describes')).length);
     // Debug logging (only in debug mode)
     if (isDebugMode()) {
       debugLog('Extracted external references from ontology:', extractedRefs);
@@ -6883,8 +6789,8 @@ hasUnsavedChanges = false;
     // This ensures external ontology references are available when detecting used annotation properties
     
     // Add refs from namespaces used in the store (e.g. DANO loaded as RDF/XML has no owl:imports and no TTL prefixes)
-    const mainBaseForNamespaceRefs = getMainOntologyBase(ttlStore);
-    for (const ref of extractUsedNamespaceRefsFromStore(ttlStore, mainBaseForNamespaceRefs)) {
+    const mainBaseForNamespaceRefs = getMainOntologyBase(session.ttlStore);
+    for (const ref of extractUsedNamespaceRefsFromStore(session.ttlStore, mainBaseForNamespaceRefs)) {
       const normalized = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url.replace(/\/$/, '');
       if (!seenUrls.has(normalized)) {
         mergedRefs.push(ref);
@@ -6893,29 +6799,29 @@ hasUnsavedChanges = false;
     }
 
     sortExternalRefsByUrl(mergedRefs);
-    externalOntologyReferences = mergedRefs;
+    session.externalOntologyReferences = mergedRefs;
 
     sortExternalRefsByUrl(mergedRefs);
-    externalOntologyReferences = mergedRefs;
+    session.externalOntologyReferences = mergedRefs;
     // Debug logging removed - use debugLog if needed in future
     // Debug logging (only in debug mode)
     if (isDebugMode()) {
-      debugLog(`Total external references: ${externalOntologyReferences.length}`);
-      for (const ref of externalOntologyReferences) {
+      debugLog(`Total external references: ${session.externalOntologyReferences.length}`);
+      for (const ref of session.externalOntologyReferences) {
         debugLog(`  - ${ref.url} (prefix: ${ref.prefix || 'none'}, usePrefix: ${ref.usePrefix})`);
       }
     }
 
-    const mainBaseForSeed = getMainOntologyBase(ttlStore);
-    if (mainBaseForSeed && externalOntologyReferences.length > 0) {
-      const refed = getReferencedExternalClassesFromStore(ttlStore, mainBaseForSeed, externalOntologyReferences);
-      refed.forEach((c) => knownExternalClassUris.add(c.uri));
+    const mainBaseForSeed = getMainOntologyBase(session.ttlStore);
+    if (mainBaseForSeed && session.externalOntologyReferences.length > 0) {
+      const refed = getReferencedExternalClassesFromStore(session.ttlStore, mainBaseForSeed, session.externalOntologyReferences);
+      refed.forEach((c) => session.knownExternalClassUris.add(c.uri));
     }
 
     // Pre-fetch and cache external ontology classes and object properties (non-blocking)
     // Failures are expected (CORS, 404, etc.) and are handled silently unless in debug mode
-    if (externalOntologyReferences.length > 0) {
-      preloadExternalOntologyClasses(externalOntologyReferences).catch((err) => {
+    if (session.externalOntologyReferences.length > 0) {
+      preloadExternalOntologyClasses(session.externalOntologyReferences).catch((err) => {
         // Only log in debug mode - failures are expected for many external ontologies
         if (isDebugMode()) {
           debugWarn('Failed to pre-load external ontologies:', err);
@@ -6926,13 +6832,13 @@ hasUnsavedChanges = false;
     // Extract external object properties from edges that use full URIs
     // This ensures external properties appear in the Object Properties menu
     // Create basic entries immediately without any network requests to avoid blocking
-    const edgeTypes = getEdgeTypes(rawData.edges);
+    const edgeTypes = getEdgeTypes(session.rawData.edges);
     for (const edgeType of edgeTypes) {
       if ((edgeType.startsWith('http://') || edgeType.startsWith('https://'))) {
         // Check if this property already exists (either as full URI or as local name)
         const localName = extractLocalName(edgeType);
-        const existingByUri = objectProperties.find((op) => op.name === edgeType);
-        const existingByLocalName = objectProperties.find((op) => op.name === localName);
+        const existingByUri = session.objectProperties.find((op) => op.name === edgeType);
+        const existingByLocalName = session.objectProperties.find((op) => op.name === localName);
         
         // If it exists as local name, update it to use the full URI to avoid duplicates
         if (existingByLocalName && !existingByUri) {
@@ -6941,7 +6847,7 @@ hasUnsavedChanges = false;
         
         // Only add if it doesn't exist yet - create basic entry immediately (no network requests)
         if (!existingByUri && !existingByLocalName) {
-          objectProperties.push({
+          session.objectProperties.push({
             name: edgeType,
             label: extractLocalName(edgeType),
             hasCardinality: true,
@@ -6950,11 +6856,11 @@ hasUnsavedChanges = false;
         }
       }
     }
-    objectProperties.sort((a, b) => a.name.localeCompare(b.name));
+    session.objectProperties.sort((a, b) => a.name.localeCompare(b.name));
 
     // Note: Used annotation properties are already detected and added earlier (before node re-processing)
     // This ensures imported annotation properties like core:labellableRoot are available when nodes are processed
-    annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
+    session.annotationProperties.sort((a, b) => a.name.localeCompare(b.name));
 
     const edgeStylesContent = document.getElementById('edgeStylesContent')!;
     const annotationPropsContent = document.getElementById('annotationPropsContent');
@@ -6968,53 +6874,53 @@ hasUnsavedChanges = false;
 
     let savedViewState: { scale: number; position: { x: number; y: number } } | null = null;
     // Skip IndexedDB operations in test mode for faster execution
-    const displayConfig = skipSlowOperationsForTests ? null : await loadDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName);
+    const displayConfig = fileState.skipSlowOperationsForTests ? null : await loadDisplayConfigFromIndexedDB(fileState.loadedFilePath, fileState.loadedFileName);
 
     // Apply the saved annotation-property priority order (drives styling precedence) and restore
     // saved per-property colours into the freshly rendered menu. The menu was rendered above with
     // alphabetical order + default colours; this overrides both from the saved display config.
     if (displayConfig && annotationPropsContent) {
-      annotationProperties = applyAnnotationPropertyOrder(annotationProperties, displayConfig.annotationPropertyOrder);
+      session.annotationProperties = applyAnnotationPropertyOrder(session.annotationProperties, displayConfig.annotationPropertyOrder);
       initAnnotationPropsMenu(annotationPropsContent, getAnnotationPropsMenuDeps());
       applyAnnotationStyleConfigToDom(
         annotationPropsContent,
         displayConfig.annotationStyleConfig as AnnotationStyleConfig | undefined,
-        annotationProperties
+        session.annotationProperties
       );
     }
 
     // Set lastLayoutMode BEFORE applying config to prevent clearing positions.
     // Resolve to the default DAG layout when the config's mode no longer exists (issue #19).
-    lastLayoutMode = resolveLayoutMode(displayConfig?.layoutMode);
+    canvasState.lastLayoutMode = resolveLayoutMode(displayConfig?.layoutMode);
     
     if (displayConfig) {
       // Debug logging (only in debug mode)
       if (isDebugMode()) {
-        debugLog('[DISPLAY CONFIG] Loading display config from IndexedDB for:', loadedFileName);
+        debugLog('[DISPLAY CONFIG] Loading display config from IndexedDB for:', fileState.loadedFileName);
         debugLog('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.nodePositions || {}).length, 'node positions');
         debugLog('[DISPLAY CONFIG] Config has', Object.keys(displayConfig.edgeStyleConfig || {}).length, 'edge style configs');
       }
       // Store the edge style config so it can be merged when building the filter
-      loadedEdgeStyleConfig = displayConfig.edgeStyleConfig || null;
+      canvasState.loadedEdgeStyleConfig = displayConfig.edgeStyleConfig || null;
       applyDisplayConfig(displayConfig);
       if (displayConfig.viewState) savedViewState = displayConfig.viewState;
     } else {
       // No saved config: default the "Max" node font size to a value scaled to the ontology size
       // (fewer nodes → smaller Max, gentler root→leaf gap). See issue #44.
       const maxFontEl = document.getElementById('maxFontSize') as HTMLInputElement | null;
-      if (maxFontEl) maxFontEl.value = String(defaultMaxFontSize(rawData?.nodes?.length ?? 0));
+      if (maxFontEl) maxFontEl.value = String(defaultMaxFontSize(session.rawData?.nodes?.length ?? 0));
       // Debug logging (only in debug mode)
       if (isDebugMode()) {
-        debugLog('[DISPLAY CONFIG] No display config found in IndexedDB for:', loadedFileName);
+        debugLog('[DISPLAY CONFIG] No display config found in IndexedDB for:', fileState.loadedFileName);
       }
     }
 
     // Allow layout to settle after vizControls appears, then render
     // Skip double requestAnimationFrame in test mode for faster execution
-    if (skipSlowOperationsForTests) {
+    if (fileState.skipSlowOperationsForTests) {
       applyFilter();
-      if (network && savedViewState) {
-        network.moveTo({
+      if (canvasState.network && savedViewState) {
+        canvasState.network.moveTo({
           scale: savedViewState.scale,
           position: savedViewState.position,
           animation: false,
@@ -7024,8 +6930,8 @@ hasUnsavedChanges = false;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           applyFilter();
-          if (network && savedViewState) {
-            network.moveTo({
+          if (canvasState.network && savedViewState) {
+            canvasState.network.moveTo({
               scale: savedViewState.scale,
               position: savedViewState.position,
               animation: false,
@@ -7055,13 +6961,13 @@ hasUnsavedChanges = false;
  */
 function revealNodeInView(nodeId: string): void {
   requestAnimationFrame(() => {
-    if (!network) return;
-    const position = network.getPositions([nodeId])[nodeId];
+    if (!canvasState.network) return;
+    const position = canvasState.network.getPositions([nodeId])[nodeId];
     if (!position) return;
-    network.moveTo({
+    canvasState.network.moveTo({
       position,
-      scale: network.getScale(),
-      animation: skipSlowOperationsForTests
+      scale: canvasState.network.getScale(),
+      animation: fileState.skipSlowOperationsForTests
         ? false
         : { duration: 400, easingFunction: 'easeInOutQuad' },
     });
@@ -7074,18 +6980,18 @@ function revealNodeInView(nodeId: string): void {
  */
 function setHierarchyTypes(types: string[] | undefined): boolean {
   const next = new Set(types ?? DEFAULT_HIERARCHY_TYPES);
-  const changed = next.size !== hierarchyTypes.size || [...next].some((t) => !hierarchyTypes.has(t));
-  hierarchyTypes = next;
+  const changed = next.size !== canvasState.hierarchyTypes.size || [...next].some((t) => !canvasState.hierarchyTypes.has(t));
+  canvasState.hierarchyTypes = next;
   document.querySelectorAll<HTMLInputElement>('.edge-tier-cb').forEach((cb) => {
-    cb.checked = hierarchyTypes.has(cb.dataset.type!);
+    cb.checked = canvasState.hierarchyTypes.has(cb.dataset.type!);
   });
   return changed;
 }
 
 /** Sets whether leaf children are stacked under their parent (#159), and its checkbox. Returns whether it changed. */
 function setStackLeaves(value: boolean): boolean {
-  const changed = value !== stackLeaves;
-  stackLeaves = value;
+  const changed = value !== canvasState.stackLeaves;
+  canvasState.stackLeaves = value;
   const el = document.getElementById('stackLeaves') as HTMLInputElement | null;
   if (el) el.checked = value;
   return changed;
@@ -7097,26 +7003,25 @@ function setStackLeaves(value: boolean): boolean {
  */
 function forgetNodePositions(): void {
   // What was shown before, for "Restore positions" (#152); the first copy is kept while trying several layouts.
-  if (!positionsBeforeLayout) {
-    const shown: Record<string, { x: number; y: number }> = network ? network.getPositions() : {};
-    rawData.nodes.forEach((n) => {
+  if (!canvasState.positionsBeforeLayout) {
+    const shown: Record<string, { x: number; y: number }> = canvasState.network ? canvasState.network.getPositions() : {};
+    session.rawData.nodes.forEach((n) => {
       if (!shown[n.id] && n.x != null && n.y != null) shown[n.id] = { x: n.x, y: n.y };
     });
     if (Object.keys(shown).length > 0) {
-      positionsBeforeLayout = shown;
-      arrangedBeforeLayout = positionsArranged;
+      canvasState.positionsBeforeLayout = shown;
+      canvasState.arrangedBeforeLayout = canvasState.positionsArranged;
     }
   }
-  positionsArranged = false;
-  rawData.nodes.forEach((node) => {
+  canvasState.positionsArranged = false;
+  session.rawData.nodes.forEach((node) => {
     delete node.x;
     delete node.y;
   });
-  loadedNodePositions = null;
+  canvasState.loadedNodePositions = null;
   updateRestorePositionsButton();
 }
 
-let asyncLayoutRun = 0;
 
 /**
  * Runs an asynchronous layout (ELK, #153) and keeps its positions for the nodes that had none, then redraws. Only
@@ -7135,19 +7040,19 @@ function runAsyncLayout(
   sizeOf: (id: string) => { width: number; height: number },
   shown: Record<string, { x: number; y: number }>
 ): void {
-  const run = ++asyncLayoutRun;
+  const run = ++canvasState.asyncLayoutRun;
   const keep = (positions: Record<string, { x: number; y: number }>) => {
-    if (run !== asyncLayoutRun || (document.getElementById('layoutMode') as HTMLSelectElement).value !== mode) return;
+    if (run !== canvasState.asyncLayoutRun || (document.getElementById('layoutMode') as HTMLSelectElement).value !== mode) return;
     let changed = false;
     for (const [id, pos] of Object.entries(positions)) {
       if (!toPlace.has(id)) continue;
-      const node = rawData.nodes.find((n) => n.id === id);
+      const node = session.rawData.nodes.find((n) => n.id === id);
       if (node && (node.x != null || node.y != null)) continue;
       if (node) {
         node.x = pos.x;
         node.y = pos.y;
       } else {
-        loadedNodePositions = { ...(loadedNodePositions ?? {}), [id]: pos };
+        canvasState.loadedNodePositions = { ...(canvasState.loadedNodePositions ?? {}), [id]: pos };
       }
       changed = true;
     }
@@ -7163,9 +7068,9 @@ function runAsyncLayout(
 
 /** Puts every node back where it was before the positions were dropped (#152). */
 function restoreNodePositions(): void {
-  const before = positionsBeforeLayout;
+  const before = canvasState.positionsBeforeLayout;
   if (!before) return;
-  rawData.nodes.forEach((node) => {
+  session.rawData.nodes.forEach((node) => {
     if (before[node.id]) {
       node.x = before[node.id].x;
       node.y = before[node.id].y;
@@ -7174,22 +7079,22 @@ function restoreNodePositions(): void {
       delete node.y;
     }
   });
-  loadedNodePositions = { ...before };
-  positionsBeforeLayout = null;
-  positionsArranged = arrangedBeforeLayout;
+  canvasState.loadedNodePositions = { ...before };
+  canvasState.positionsBeforeLayout = null;
+  canvasState.positionsArranged = canvasState.arrangedBeforeLayout;
   updateRestorePositionsButton();
   applyFilter(true);
 }
 
 /** Forgets the positions "Restore positions" would bring back: another ontology or config is shown. */
 function clearPositionsBeforeLayout(): void {
-  positionsBeforeLayout = null;
+  canvasState.positionsBeforeLayout = null;
   updateRestorePositionsButton();
 }
 
 function updateRestorePositionsButton(): void {
   const btn = document.getElementById('restorePositions');
-  if (btn) btn.style.display = positionsBeforeLayout ? '' : 'none';
+  if (btn) btn.style.display = canvasState.positionsBeforeLayout ? '' : 'none';
 }
 
 function applyFilter(preserveView = false): void {
@@ -7198,9 +7103,9 @@ function applyFilter(preserveView = false): void {
 
   let savedScale: number | null = null;
   let savedPosition: { x: number; y: number } | null = null;
-  if (preserveView && network) {
-    savedScale = network.getScale();
-    savedPosition = network.getViewPosition();
+  if (preserveView && canvasState.network) {
+    savedScale = canvasState.network.getScale();
+    savedPosition = canvasState.network.getViewPosition();
   }
 
   const layoutMode = (document.getElementById('layoutMode') as HTMLSelectElement)
@@ -7209,19 +7114,19 @@ function applyFilter(preserveView = false): void {
   // Clear stored node positions ONLY when switching to a different layout mode
   // This ensures the new layout algorithm's positions are used, but preserves
   // positions when just applying filters or reloading
-  const layoutModeChanged = lastLayoutMode !== null && lastLayoutMode !== layoutMode;
+  const layoutModeChanged = canvasState.lastLayoutMode !== null && canvasState.lastLayoutMode !== layoutMode;
   if (layoutModeChanged) {
     const layoutAlgorithm = getLayoutAlgorithm(layoutMode) ?? getAsyncLayoutAlgorithm(layoutMode);
     if (layoutAlgorithm || layoutMode === 'force') {
       // Switching to a layout that computes positions - clear stored positions
       // Debug logging (only in debug mode)
       if (isDebugMode()) {
-        debugLog(`[DISPLAY CONFIG] Layout mode changed from ${lastLayoutMode} to ${layoutMode}, clearing node positions`);
+        debugLog(`[DISPLAY CONFIG] Layout mode changed from ${canvasState.lastLayoutMode} to ${layoutMode}, clearing node positions`);
       }
       forgetNodePositions();
     }
   }
-  lastLayoutMode = layoutMode;
+  canvasState.lastLayoutMode = layoutMode;
   const wrapChars =
     parseInt(
       (document.getElementById('wrapChars') as HTMLInputElement).value,
@@ -7255,12 +7160,12 @@ function applyFilter(preserveView = false): void {
 
   const annotationPropsContent = document.getElementById('annotationPropsContent');
   // Get edge style config from DOM (user's current checkbox states)
-  const domEdgeStyleConfig = getEdgeStyleConfig(edgeStylesContent, rawData, objectProperties, externalOntologyReferences);
+  const domEdgeStyleConfig = getEdgeStyleConfig(edgeStylesContent, session.rawData, session.objectProperties, session.externalOntologyReferences);
   
   // Merge with loaded edge style config (from display config file) if present
   // DOM checkboxes take precedence over loaded config (user interaction overrides saved state)
   // Loaded config is used as fallback for edge types not yet in the DOM
-  const mergedEdgeStyleConfig = loadedEdgeStyleConfig ? { ...loadedEdgeStyleConfig } : {};
+  const mergedEdgeStyleConfig = canvasState.loadedEdgeStyleConfig ? { ...canvasState.loadedEdgeStyleConfig } : {};
   // Override with DOM checkbox states (user's current selections)
   Object.keys(domEdgeStyleConfig).forEach((type) => {
     const domStyle = domEdgeStyleConfig[type];
@@ -7284,16 +7189,16 @@ function applyFilter(preserveView = false): void {
     searchScope: getSearchScope(),
     exactMatch: exactMatchEl?.checked ?? true,
     edgeStyleConfig: mergedEdgeStyleConfig,
-    annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent, annotationProperties),
+    annotationStyleConfig: getAnnotationStyleConfig(annotationPropsContent, session.annotationProperties),
     layoutMode,
   };
 
-  let graphDataForBuild: GraphData = rawData;
-  if (displayExternalReferences && ttlStore && externalOntologyReferences.length > 0) {
-    graphDataForBuild = expandWithExternalRefs(rawData, ttlStore, externalOntologyReferences, {
-      displayExternalReferences,
-      externalNodeLayout,
-      nodePositions: loadedNodePositions ?? undefined,
+  let graphDataForBuild: GraphData = session.rawData;
+  if (canvasState.displayExternalReferences && session.ttlStore && session.externalOntologyReferences.length > 0) {
+    graphDataForBuild = expandWithExternalRefs(session.rawData, session.ttlStore, session.externalOntologyReferences, {
+      displayExternalReferences: canvasState.displayExternalReferences,
+      externalNodeLayout: canvasState.externalNodeLayout,
+      nodePositions: canvasState.loadedNodePositions ?? undefined,
     });
     
     // CRITICAL FIX: Deduplicate edges after expansion to prevent duplicates during undo
@@ -7306,7 +7211,7 @@ function applyFilter(preserveView = false): void {
       keys.add(`${edge.from}||${edge.to}||${edge.type}`);
       
       // Add variations with op.uri and op.name
-      const op = objectProperties.find((p) => p.name === edge.type || p.uri === edge.type);
+      const op = session.objectProperties.find((p) => p.name === edge.type || p.uri === edge.type);
       if (op) {
         if (op.name) keys.add(`${edge.from}||${edge.to}||${op.name}`);
         if (op.uri) keys.add(`${edge.from}||${edge.to}||${op.uri}`);
@@ -7327,16 +7232,16 @@ function applyFilter(preserveView = false): void {
       return true;
     });
   }
-  for (const n of userAddedExternalNodes) {
+  for (const n of session.userAddedExternalNodes) {
     if (!graphDataForBuild.nodes.some((nn) => nn.id === n.id)) {
       graphDataForBuild.nodes.push({ ...n });
     }
   }
-  graphDataForBuild = withThingNode(graphDataForBuild, dataProperties, clusterThingDataProperties);
-  currentGraphDataForBuild = graphDataForBuild;
+  graphDataForBuild = withThingNode(graphDataForBuild, session.dataProperties, canvasState.clusterThingDataProperties);
+  session.currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
-  if (network && ttlStore) {
-    updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, openExternalOntology);
+  if (canvasState.network && session.ttlStore) {
+    updateContextMenuData(session.ttlStore, graphDataForBuild, session.externalOntologyReferences, openExternalOntology);
   }
   const options = getNetworkOptions(layoutMode, { embedded: isEmbedded() });
 
@@ -7349,7 +7254,7 @@ function applyFilter(preserveView = false): void {
       nodeData: { x?: number; y?: number },
       callback: (data: { id: string; label: string; x?: number; y?: number } | null) => void
     ) => {
-      if (addNodeModalShowing) {
+      if (editState.addNodeModalShowing) {
         callback(null);
         return;
       }
@@ -7358,14 +7263,14 @@ function applyFilter(preserveView = false): void {
       let y = nodeData.y ?? 0;
       // If coordinates are 0 or not provided, use the center of the view
       if ((x === 0 && y === 0) || (x === undefined && y === undefined)) {
-        if (network) {
-          const viewPos = network.getViewPosition();
+        if (canvasState.network) {
+          const viewPos = canvasState.network.getViewPosition();
           x = viewPos.x;
           y = viewPos.y;
         }
       }
       showAddNodeModal(x, y);
-      addNodeMode = false; // Reset after showing modal
+      editState.addNodeMode = false; // Reset after showing modal
       callback(null);
     },
     addEdge: (
@@ -7389,7 +7294,7 @@ function applyFilter(preserveView = false): void {
       ) => {
         const edgeId = edgeData.id ?? '';
         const parsed = parseEdgeId(edgeId);
-        if (!parsed || !ttlStore) {
+        if (!parsed || !session.ttlStore) {
           callback(null);
           return;
         }
@@ -7399,16 +7304,16 @@ function applyFilter(preserveView = false): void {
         debugLog('[DEBUG] Edge clicked for editing:', { edgeId, from, to, type });
         
         // Debug: Check what edges exist in rawData for this match
-        const matchingEdges = rawData.edges.filter((e) => e.from === from && e.to === to && e.type === type);
+        const matchingEdges = session.rawData.edges.filter((e) => e.from === from && e.to === to && e.type === type);
         debugLog('[DEBUG] All matching edges in rawData:', {
           from,
           to,
           type,
           matchingEdges,
-          allEdgesWithType: rawData.edges.filter((e) => e.type === type).slice(0, 5),
+          allEdgesWithType: session.rawData.edges.filter((e) => e.type === type).slice(0, 5),
         });
         
-        pendingEditEdgeCallback = callback;
+        editState.pendingEditEdgeCallback = callback;
         showEditEdgeModal(from, to, type);
       },
     },
@@ -7427,13 +7332,13 @@ function applyFilter(preserveView = false): void {
   // Update status bar with node/edge counts
   updateNodeEdgeCounts(data.nodes.length, data.edges.length);
   // Legend must use displayed edges (graphDataForBuild) so domain/range edges from expandWithExternalRefs appear
-  updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences, graphDataForBuild.edges);
+  updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences, graphDataForBuild.edges);
 
   // The view keeps moving until this render's fit (or restored position) is applied (#93).
   const settleToken = beginViewSettle();
-  if (network) {
-    network.setData(data);
-    network.setOptions({
+  if (canvasState.network) {
+    canvasState.network.setData(data);
+    canvasState.network.setOptions({
       ...options,
       manipulation: manipulationToUse,
       width: '100%',
@@ -7441,10 +7346,10 @@ function applyFilter(preserveView = false): void {
     });
     const w = networkContainer.clientWidth;
     const h = networkContainer.clientHeight;
-    if (w > 0 && h > 0) network.setSize(`${w}px`, `${h}px`);
+    if (w > 0 && h > 0) canvasState.network.setSize(`${w}px`, `${h}px`);
     if (preserveView && savedScale !== null && savedPosition !== null) {
       requestAnimationFrame(() => {
-        network?.moveTo({
+        canvasState.network?.moveTo({
           position: savedPosition!,
           scale: savedScale!,
           animation: false,
@@ -7452,14 +7357,14 @@ function applyFilter(preserveView = false): void {
         viewSettled(settleToken);
       });
     } else if (layoutMode === 'force') {
-      network.once('stabilizationIterationsDone', () => {
-        network!.fit();
+      canvasState.network.once('stabilizationIterationsDone', () => {
+        canvasState.network!.fit();
         viewSettled(settleToken);
       });
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
       setTimeout(() => {
-        network!.fit();
+        canvasState.network!.fit();
         viewSettled(settleToken);
       }, 100);
     }
@@ -7470,42 +7375,42 @@ function applyFilter(preserveView = false): void {
       width: '100%',
       height: '100%',
     };
-    network = new Network(networkContainer, data, opts);
+    canvasState.network = new Network(networkContainer, data, opts);
     if (layoutMode === 'force') {
-      network.once('stabilizationIterationsDone', () => {
-        network!.fit();
+      canvasState.network.once('stabilizationIterationsDone', () => {
+        canvasState.network!.fit();
         viewSettled(settleToken);
       });
     } else {
       // Computed (physics-disabled) layouts: fit once positions are applied.
       setTimeout(() => {
-        network!.fit();
+        canvasState.network!.fit();
         viewSettled(settleToken);
       }, 100);
     }
     // Resize network when container size changes (e.g. flex layout settling)
     const resizeNetwork = () => {
-      if (network && networkContainer) {
+      if (canvasState.network && networkContainer) {
         const w = networkContainer.clientWidth;
         const h = networkContainer.clientHeight;
         if (w > 0 && h > 0) {
-          network.setSize(`${w}px`, `${h}px`);
-          network.redraw();
+          canvasState.network.setSize(`${w}px`, `${h}px`);
+          canvasState.network.redraw();
         }
       }
     };
     const ro = new ResizeObserver(resizeNetwork);
     ro.observe(networkContainer);
     resizeNetwork(); // Initial size
-    setupNetworkSelectionAndNavigation(network, networkContainer);
+    setupNetworkSelectionAndNavigation(canvasState.network, networkContainer);
     
     // Initialize context menu
-    if (ttlStore) {
+    if (session.ttlStore) {
       initContextMenu(
-        network,
+        canvasState.network,
         networkContainer,
-        ttlStore,
-        rawData,
+        session.ttlStore,
+        session.rawData,
         (addedEdges, _failedEdges) => {
           // On paste callback - add to undo stack
           if (addedEdges.length > 0) {
@@ -7514,21 +7419,21 @@ function applyFilter(preserveView = false): void {
                 // Undo: remove pasted edges
                 addedEdges.forEach((edge) => {
                   try {
-                    removeEdgeFromStore(ttlStore!, edge.from, edge.to, edge.type);
+                    removeEdgeFromStore(session.ttlStore!, edge.from, edge.to, edge.type);
                   } catch (err) {
                     console.warn(`Undo: Failed to remove pasted edge from store: ${err instanceof Error ? err.message : String(err)}`);
                   }
-                  const idx = rawData.edges.findIndex(
+                  const idx = session.rawData.edges.findIndex(
                     (e) => e.from === edge.from && e.to === edge.to && e.type === edge.type
                   );
-                  if (idx >= 0) rawData.edges.splice(idx, 1);
+                  if (idx >= 0) session.rawData.edges.splice(idx, 1);
                 });
                 applyFilter(true);
               },
               () => {
                 // Redo: re-add pasted edges
                 addedEdges.forEach((edge) => {
-                  const card = rawData.edges.find(
+                  const card = session.rawData.edges.find(
                     (e) => e.from === edge.from && e.to === edge.to && e.type === edge.type
                   );
                   const cardinality = card
@@ -7537,9 +7442,9 @@ function applyFilter(preserveView = false): void {
                         maxCardinality: card.maxCardinality ?? null,
                       }
                     : undefined;
-                  addEdgeToStore(ttlStore!, edge.from, edge.to, edge.type, cardinality);
+                  addEdgeToStore(session.ttlStore!, edge.from, edge.to, edge.type, cardinality);
                   if (!card) {
-                    rawData.edges.push({
+                    session.rawData.edges.push({
                       from: edge.from,
                       to: edge.to,
                       type: edge.type,
@@ -7552,7 +7457,7 @@ function applyFilter(preserveView = false): void {
               }
             );
             applyFilter(true);
-            hasUnsavedChanges = true;
+            fileState.hasUnsavedChanges = true;
           }
         },
         (count) => {
@@ -7565,37 +7470,37 @@ function applyFilter(preserveView = false): void {
         (nodeId) => openEditModalForNode(nodeId),
         (edgeId) => openEditModalForEdge(edgeId),
         () => {
-          if (network) updateSelectionInfoDisplay(network);
+          if (canvasState.network) updateSelectionInfoDisplay(canvasState.network);
         }
       );
       
       // Update context menu data after initialization (use graphDataForBuild so external nodes are included)
-      updateContextMenuData(ttlStore, graphDataForBuild, externalOntologyReferences, openExternalOntology);
+      updateContextMenuData(session.ttlStore, graphDataForBuild, session.externalOntologyReferences, openExternalOntology);
     }
     
-    network.on('click', () => {
-      if (network) updateSelectionInfoDisplay(network);
+    canvasState.network.on('click', () => {
+      if (canvasState.network) updateSelectionInfoDisplay(canvasState.network);
     });
     // Dragging a node arranges the graph: from then on the browser keeps its positions between visits.
-    network.on('dragEnd', (params?: { nodes?: unknown[] }) => {
-      if (params?.nodes?.length) positionsArranged = true;
+    canvasState.network.on('dragEnd', (params?: { nodes?: unknown[] }) => {
+      if (params?.nodes?.length) canvasState.positionsArranged = true;
     });
-    setupDragCoupling(network as unknown as Parameters<typeof setupDragCoupling>[0], {
+    setupDragCoupling(canvasState.network as unknown as Parameters<typeof setupDragCoupling>[0], {
       onDragEnd: () => {
-        if (!network) return;
-        persistNodePositionsFromNetwork(network, rawData, scheduleDisplayConfigSave);
+        if (!canvasState.network) return;
+        persistNodePositionsFromNetwork(canvasState.network, session.rawData, scheduleDisplayConfigSave);
         flushDisplayConfigSave();
       },
     });
-    network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
-      if (!network) return;
+    canvasState.network.on('doubleClick', (params: { nodes: string[]; edges: string[] }) => {
+      if (!canvasState.network) return;
       if (isEmbedded()) return; // read-only in embedded mode
       if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0] as string;
         if (clickedNodeId.startsWith('http://') || clickedNodeId.startsWith('https://')) {
           return;
         }
-        const selectedIds = network.getSelectedNodes().map(String);
+        const selectedIds = canvasState.network.getSelectedNodes().map(String);
         if (selectedIds.length > 1 && selectedIds.includes(clickedNodeId)) {
           showMultiEditModal(selectedIds);
         } else {
@@ -7648,13 +7553,13 @@ async function loadFromFile(): Promise<void> {
       // Try to load display config from sibling .display.json file
       const localDisplayConfig = await loadDisplayConfigFromLocalFile(handle, file.name);
       if (localDisplayConfig) {
-        loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
+        canvasState.loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             applyDisplayConfig(localDisplayConfig);
             applyFilter();
-            if (network && localDisplayConfig.viewState) {
-              network.moveTo({
+            if (canvasState.network && localDisplayConfig.viewState) {
+              canvasState.network.moveTo({
                 scale: localDisplayConfig.viewState.scale,
                 position: localDisplayConfig.viewState.position,
                 animation: false,
@@ -7824,7 +7729,7 @@ async function loadFromUrl(url: string): Promise<void> {
     setOntologyUrlParamInAddressBar(url);
 
     // A version opened without a config of its own borrows the latest version's, and says so (#136).
-    const latestSource = !urlDisplayConfig && ttlStore ? latestDisplayConfigSource(url, readOntologyVersion(ttlStore)) : null;
+    const latestSource = !urlDisplayConfig && session.ttlStore ? latestDisplayConfigSource(url, readOntologyVersion(session.ttlStore)) : null;
     if (latestSource && (await fetchExternalOntologyTtl(latestSource, { timeoutMs: IMPORT_READ_TIMEOUT_MS }))) {
       urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(latestSource, servedFrom(latestSource)));
       if (urlDisplayConfig) {
@@ -7833,13 +7738,13 @@ async function loadFromUrl(url: string): Promise<void> {
     }
 
     if (urlDisplayConfig) {
-      loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;
+      canvasState.loadedEdgeStyleConfig = urlDisplayConfig.edgeStyleConfig || null;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           applyDisplayConfig(urlDisplayConfig!);
           applyFilter();
-          if (network && urlDisplayConfig!.viewState) {
-            network.moveTo({
+          if (canvasState.network && urlDisplayConfig!.viewState) {
+            canvasState.network.moveTo({
               scale: urlDisplayConfig!.viewState.scale,
               position: urlDisplayConfig!.viewState.position,
               animation: false,
@@ -7890,13 +7795,13 @@ async function loadOntologyFromFileHandle(handle: FileSystemFileHandle, storedPa
     // Try to load display config from sibling .display.json file
     const localDisplayConfig = await loadDisplayConfigFromLocalFile(handle, file.name);
     if (localDisplayConfig) {
-      loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
+      canvasState.loadedEdgeStyleConfig = localDisplayConfig.edgeStyleConfig || null;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           applyDisplayConfig(localDisplayConfig);
           applyFilter();
-          if (network && localDisplayConfig.viewState) {
-            network.moveTo({
+          if (canvasState.network && localDisplayConfig.viewState) {
+            canvasState.network.moveTo({
               scale: localDisplayConfig.viewState.scale,
               position: localDisplayConfig.viewState.position,
               animation: false,
@@ -8015,10 +7920,10 @@ function setupEventListeners(): void {
 
   const externalRefsCallbacks: ExternalRefsModalCallbacks = {
     onUpdate: () => {
-      hasUnsavedChanges = true;
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
       // Refresh all UI elements that display prefixes
-      if (ttlStore) {
+      if (session.ttlStore) {
         const edgeStylesContent = document.getElementById('edgeStylesContent');
         if (edgeStylesContent) {
           initEdgeStylesMenu(edgeStylesContent, () => applyFilter(true));
@@ -8041,11 +7946,11 @@ function setupEventListeners(): void {
   };
   
   document.getElementById('manageExternalRefs')?.addEventListener('click', () => {
-    showExternalRefsModal(externalOntologyReferences, externalRefsCallbacks, loadedFilePath, loadedFileName);
+    showExternalRefsModal(session.externalOntologyReferences, externalRefsCallbacks, fileState.loadedFilePath, fileState.loadedFileName);
     const displayEl = document.getElementById('displayExternalRefs') as HTMLInputElement | null;
     const layoutEl = document.getElementById('externalNodeLayout') as HTMLSelectElement | null;
-    if (displayEl) displayEl.checked = displayExternalReferences;
-    if (layoutEl) layoutEl.value = externalNodeLayout;
+    if (displayEl) displayEl.checked = canvasState.displayExternalReferences;
+    if (layoutEl) layoutEl.value = canvasState.externalNodeLayout;
   });
   document.getElementById('stackLeaves')?.addEventListener('change', (e) => {
     setStackLeaves((e.target as HTMLInputElement).checked);
@@ -8054,17 +7959,17 @@ function setupEventListeners(): void {
     scheduleDisplayConfigSave();
   });
   document.getElementById('clusterThingDataProps')?.addEventListener('change', (e) => {
-    clusterThingDataProperties = (e.target as HTMLInputElement).checked;
+    canvasState.clusterThingDataProperties = (e.target as HTMLInputElement).checked;
     applyFilter(true);
     scheduleDisplayConfigSave();
   });
   document.getElementById('displayExternalRefs')?.addEventListener('change', (e) => {
-    displayExternalReferences = (e.target as HTMLInputElement).checked;
+    canvasState.displayExternalReferences = (e.target as HTMLInputElement).checked;
     applyFilter(true);
     scheduleDisplayConfigSave();
   });
   document.getElementById('externalNodeLayout')?.addEventListener('change', (e) => {
-    externalNodeLayout = (e.target as HTMLSelectElement).value as ExternalNodeLayout;
+    canvasState.externalNodeLayout = (e.target as HTMLSelectElement).value as ExternalNodeLayout;
     applyFilter(true);
     scheduleDisplayConfigSave();
   });
@@ -8088,7 +7993,7 @@ function setupEventListeners(): void {
     }
     
     // Check if already exists
-    if (externalOntologyReferences.some((ref) => ref.url === url)) {
+    if (session.externalOntologyReferences.some((ref) => ref.url === url)) {
       alert('This ontology is already in the list');
       return;
     }
@@ -8192,21 +8097,21 @@ function setupEventListeners(): void {
         usePrefix,
         prefix: preferredPrefix,
       };
-      externalOntologyReferences.push(newRef);
-      sortExternalRefsByUrl(externalOntologyReferences);
+      session.externalOntologyReferences.push(newRef);
+      sortExternalRefsByUrl(session.externalOntologyReferences);
 
       urlInput.value = '';
       const externalRefsCallbacks: ExternalRefsModalCallbacks = {
         onUpdate: () => {
-          hasUnsavedChanges = true;
+          fileState.hasUnsavedChanges = true;
           updateSaveButtonVisibility();
         },
         onSave: () => {
           // Additional save logic if needed
         },
       };
-      renderExternalRefsList(externalOntologyReferences, externalRefsCallbacks, loadedFilePath, loadedFileName);
-      await saveExternalRefsToIndexedDB(externalOntologyReferences, loadedFilePath, loadedFileName);
+      renderExternalRefsList(session.externalOntologyReferences, externalRefsCallbacks, fileState.loadedFilePath, fileState.loadedFileName);
+      await saveExternalRefsToIndexedDB(session.externalOntologyReferences, fileState.loadedFilePath, fileState.loadedFileName);
       
       // Pre-fetch the newly added ontology
       try {
@@ -8215,7 +8120,7 @@ function setupEventListeners(): void {
         console.warn(`Failed to pre-load newly added ontology ${newRef.url}:`, err);
       }
       
-      hasUnsavedChanges = true;
+      fileState.hasUnsavedChanges = true;
       updateSaveButtonVisibility();
     } catch (error) {
       alert(`Failed to validate ontology: ${error instanceof Error ? error.message : String(error)}\n\nPlease ensure the URL points to a valid ontology file (Turtle/RDF format).`);
@@ -8290,8 +8195,8 @@ function setupEventListeners(): void {
     }
     
     // Reset selection when user types
-    selectedEdgeType = null;
-    selectedExternalObjectProperty = null;
+    editState.selectedEdgeType = null;
+    editState.selectedExternalObjectProperty = null;
     
     // Debounce search
     editEdgeTypeSearchTimeout = setTimeout(() => {
@@ -8301,7 +8206,7 @@ function setupEventListeners(): void {
     }, 150);
     
     // Also update comment display immediately if we have a selected type
-    if (selectedEdgeType) {
+    if (editState.selectedEdgeType) {
       updateEditEdgeCommentDisplayLocal();
     }
   });
@@ -8352,7 +8257,7 @@ function setupEventListeners(): void {
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';
-    (document.getElementById('maxFontSize') as HTMLInputElement).value = String(defaultMaxFontSize(rawData?.nodes?.length ?? 0));
+    (document.getElementById('maxFontSize') as HTMLInputElement).value = String(defaultMaxFontSize(session.rawData?.nodes?.length ?? 0));
     (document.getElementById('relationshipFontSize') as HTMLInputElement).value = '18';
     (document.getElementById('searchQuery') as HTMLInputElement).value = '';
     setSearchScope(DEFAULT_SEARCH_SCOPE);
@@ -8364,13 +8269,13 @@ function setupEventListeners(): void {
     }
     document.querySelectorAll('.edge-show-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.edge-label-cb').forEach((cb) => ((cb as HTMLInputElement).checked = true));
-    const types = getAllRelationshipTypes(rawData, objectProperties);
-    const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, objectProperties));
+    const types = getAllRelationshipTypes(session.rawData, session.objectProperties);
+    const defaultColors = getDefaultEdgeColors(colourableRelationshipTypes(types, session.objectProperties));
     types.forEach((type) => {
       const colorEl = document.querySelector(`.edge-color-picker[data-type="${type}"]`) as HTMLInputElement;
       if (colorEl) colorEl.value = defaultColors[type] ?? getDefaultColor();
     });
-    updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+    updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences);
     document.querySelectorAll('.ap-bool-show').forEach((cb) => ((cb as HTMLInputElement).checked = true));
     document.querySelectorAll('.ap-bool-fill[data-val="true"]').forEach((el) => ((el as HTMLInputElement).value = DEFAULT_BOOL_COLORS.whenTrue.fill));
     document.querySelectorAll('.ap-bool-border[data-val="true"]').forEach((el) => ((el as HTMLInputElement).value = DEFAULT_BOOL_COLORS.whenTrue.border));
@@ -8419,7 +8324,7 @@ function setupEventListeners(): void {
       });
     });
     applyFilter();
-    network?.fit();
+    canvasState.network?.fit();
   });
   document.getElementById('saveChanges')?.addEventListener('click', saveTtl);
   
@@ -8428,14 +8333,14 @@ function setupEventListeners(): void {
   if (serializerSelect) {
     serializerSelect.addEventListener('change', async (e) => {
       const newType = (e.target as HTMLSelectElement).value as SerializerType;
-      currentSerializerType = newType;
+      fileState.currentSerializerType = newType;
       
       // Save to IndexedDB
-      if (isTtlFile && !skipSlowOperationsForTests) {
+      if (fileState.isTtlFile && !fileState.skipSlowOperationsForTests) {
         await saveSerializerConfigToIndexedDB(
           { serializerType: newType },
-          loadedFilePath,
-          loadedFileName
+          fileState.loadedFilePath,
+          fileState.loadedFileName
         );
       }
       
@@ -8444,11 +8349,11 @@ function setupEventListeners(): void {
   }
 
   document.getElementById('saveDisplayConfig')?.addEventListener('click', async () => {
-    if (rawData.nodes.length === 0) return;
-    if (network) {
-      const positions = network.getPositions();
+    if (session.rawData.nodes.length === 0) return;
+    if (canvasState.network) {
+      const positions = canvasState.network.getPositions();
       Object.entries(positions).forEach(([id, pos]) => {
-        const node = rawData.nodes.find((n) => n.id === id);
+        const node = session.rawData.nodes.find((n) => n.id === id);
         if (node && pos) {
           node.x = pos.x;
           node.y = pos.y;
@@ -8457,7 +8362,7 @@ function setupEventListeners(): void {
     }
     const config = collectDisplayConfig();
     if (!config) return;
-    const baseName = displayConfigBaseName(loadedFileName || loadedFilePath || 'ontology');
+    const baseName = displayConfigBaseName(fileState.loadedFileName || fileState.loadedFilePath || 'ontology');
     const suggestedName = `${baseName}.display.json`;
     try {
       if ('showSaveFilePicker' in window) {
@@ -8491,7 +8396,7 @@ function setupEventListeners(): void {
   loadDisplayConfigInput.addEventListener('change', async () => {
     const file = loadDisplayConfigInput.files?.[0];
     loadDisplayConfigInput.value = '';
-    if (!file || rawData.nodes.length === 0) return;
+    if (!file || session.rawData.nodes.length === 0) return;
     try {
       console.log('[DISPLAY CONFIG] Loading display config from file:', file.name);
       const text = await file.text();
@@ -8507,10 +8412,10 @@ function setupEventListeners(): void {
       applyFilter();
       
       // Apply view state after a short delay to ensure network is ready
-      if (network && config.viewState) {
+      if (canvasState.network && config.viewState) {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            network?.moveTo({
+            canvasState.network?.moveTo({
               scale: config.viewState!.scale,
               position: config.viewState!.position,
               animation: false,
@@ -8522,7 +8427,7 @@ function setupEventListeners(): void {
       // Save the upgraded config back to IndexedDB
       const upgradedConfig = collectDisplayConfig();
       if (upgradedConfig) {
-        saveDisplayConfigToIndexedDB(upgradedConfig, loadedFilePath, loadedFileName).catch(() => {});
+        saveDisplayConfigToIndexedDB(upgradedConfig, fileState.loadedFilePath, fileState.loadedFileName).catch(() => {});
       }
     } catch (err) {
       const errorMsg = document.getElementById('errorMsg') as HTMLElement;
@@ -8532,7 +8437,7 @@ function setupEventListeners(): void {
   });
 
   document.getElementById('loadDisplayConfig')?.addEventListener('click', async () => {
-    if (rawData.nodes.length === 0) return;
+    if (session.rawData.nodes.length === 0) return;
     try {
       if ('showOpenFilePicker' in window) {
         const [handle] = await (window as Window & { showOpenFilePicker: (o?: object) => Promise<FileSystemFileHandle[]> })
@@ -8543,14 +8448,14 @@ function setupEventListeners(): void {
         if (!config || typeof config !== 'object') throw new Error('Invalid config format');
         applyDisplayConfig(config);
         applyFilter();
-        if (network && config.viewState) {
-          network.moveTo({
+        if (canvasState.network && config.viewState) {
+          canvasState.network.moveTo({
             scale: config.viewState.scale,
             position: config.viewState.position,
             animation: false,
           });
         }
-        saveDisplayConfigToIndexedDB(config, loadedFilePath, loadedFileName).catch(() => {});
+        saveDisplayConfigToIndexedDB(config, fileState.loadedFilePath, fileState.loadedFileName).catch(() => {});
       } else {
         loadDisplayConfigInput.click();
       }
@@ -8564,7 +8469,7 @@ function setupEventListeners(): void {
   });
 
   document.getElementById('resetDisplayConfig')?.addEventListener('click', async () => {
-    if (rawData.nodes.length === 0) return;
+    if (session.rawData.nodes.length === 0) return;
     
     forgetNodePositions();
     setHierarchyTypes(undefined);
@@ -8582,21 +8487,21 @@ function setupEventListeners(): void {
     (document.getElementById('searchExactMatch') as HTMLInputElement).checked = true;
 
     // Clear loaded edge style config (so it doesn't override DOM checkboxes)
-    loadedEdgeStyleConfig = null;
+    canvasState.loadedEdgeStyleConfig = null;
     
     // Reset Object Property display settings to defaults
     // Reinitialize the edge styles menu which will reset all checkboxes to default values
     const edgeStylesContent = document.getElementById('edgeStylesContent');
     if (edgeStylesContent) {
       initEdgeStylesMenu(edgeStylesContent, applyFilter);
-      updateEdgeColorsLegend(rawData, objectProperties, externalOntologyReferences);
+      updateEdgeColorsLegend(session.rawData, session.objectProperties, session.externalOntologyReferences);
     }
     
     // Delete display config from IndexedDB
-    await deleteDisplayConfigFromIndexedDB(loadedFilePath, loadedFileName).catch(() => {});
+    await deleteDisplayConfigFromIndexedDB(fileState.loadedFilePath, fileState.loadedFileName).catch(() => {});
     
     // Reset lastLayoutMode to prevent position clearing on first applyFilter
-    lastLayoutMode = 'hierarchical-dag';
+    canvasState.lastLayoutMode = 'hierarchical-dag';
     
     // Regenerate layout by applying filter
     applyFilter();
@@ -8605,14 +8510,14 @@ function setupEventListeners(): void {
   const redrawNetworkOnMenuToggle = (): void => {
     requestAnimationFrame(() => {
       setTimeout(() => {
-        if (network) {
+        if (canvasState.network) {
           const nc = document.getElementById('network');
           if (nc) {
             const w = nc.clientWidth;
             const h = nc.clientHeight;
             if (w > 0 && h > 0) {
-              network.setSize(`${w}px`, `${h}px`);
-              network.redraw();
+              canvasState.network.setSize(`${w}px`, `${h}px`);
+              canvasState.network.redraw();
             }
           }
         }
@@ -8640,13 +8545,13 @@ function setupEventListeners(): void {
     if (min !== '' && (Number.isNaN(minCardinality!) || minCardinality! < 0)) return;
     if (max !== '' && (Number.isNaN(maxCardinality!) || maxCardinality! < 0)) return;
     if (minCardinality !== undefined && maxCardinality !== undefined && minCardinality! > maxCardinality!) return;
-    renameModalDataPropertyRestrictions.push({
+    editState.renameModalDataPropertyRestrictions.push({
       propertyName: propName,
       ...(minCardinality !== undefined && { minCardinality: minCardinality! }),
       ...(maxCardinality !== undefined && { maxCardinality: maxCardinality! }),
     });
     if (selectEl) selectEl.value = '';
-    nodeModalFormUi.renderRenameModalDataPropsList(renameModalDataPropertyRestrictions, dataProperties, onRemoveRenameDataProp);
+    nodeModalFormUi.renderRenameModalDataPropsList(editState.renameModalDataPropertyRestrictions, session.dataProperties, onRemoveRenameDataProp);
     if (minEl) minEl.value = '';
     if (maxEl) maxEl.value = '';
   });
@@ -8666,13 +8571,13 @@ function setupEventListeners(): void {
     if (min !== '' && (Number.isNaN(minCardinality!) || minCardinality! < 0)) return;
     if (max !== '' && (Number.isNaN(maxCardinality!) || maxCardinality! < 0)) return;
     if (minCardinality !== undefined && maxCardinality !== undefined && minCardinality! > maxCardinality!) return;
-    addNodeDataPropertyRestrictions.push({
+    editState.addNodeDataPropertyRestrictions.push({
       propertyName: propName,
       ...(minCardinality !== undefined && { minCardinality: minCardinality! }),
       ...(maxCardinality !== undefined && { maxCardinality: maxCardinality! }),
     });
     if (selectEl) selectEl.value = '';
-    nodeModalFormUi.renderAddNodeDataPropsList(addNodeDataPropertyRestrictions, dataProperties, onRemoveAddNodeDataProp);
+    nodeModalFormUi.renderAddNodeDataPropsList(editState.addNodeDataPropertyRestrictions, session.dataProperties, onRemoveAddNodeDataProp);
     if (minEl) minEl.value = '';
     if (maxEl) maxEl.value = '';
   });
@@ -8734,12 +8639,12 @@ function setupEventListeners(): void {
     const query = (e.target as HTMLInputElement).value.trim();
     
     // Clear previous timeout
-    if (addNodeSearchTimeout) {
-      clearTimeout(addNodeSearchTimeout);
+    if (editState.addNodeSearchTimeout) {
+      clearTimeout(editState.addNodeSearchTimeout);
     }
     
     // Debounce search
-    addNodeSearchTimeout = setTimeout(() => {
+    editState.addNodeSearchTimeout = setTimeout(() => {
       handleExternalClassSearch(query).catch((err) => {
         console.error('Search error:', err);
       });
@@ -8786,7 +8691,7 @@ function setupEventListeners(): void {
         // Run in capture phase so we handle Delete before search input (which would delete a character)
         const activeEl = document.activeElement as HTMLElement;
         debugLog(`[DELETE KEY] Delete/Backspace key pressed. Active element:`, activeEl?.id || activeEl?.tagName);
-        if (activeEl?.id === 'searchQuery' && network?.getSelectedNodes().length) {
+        if (activeEl?.id === 'searchQuery' && canvasState.network?.getSelectedNodes().length) {
           activeEl.blur();
         }
         if (performDeleteSelection()) e.preventDefault();
@@ -8903,7 +8808,7 @@ function updateSearchAutocomplete(): void {
   }
   // Relationships, classes and data properties as drawn by the last render, shown by prefixed name
   // (foaf:member) with the full IRI as a tooltip (#81).
-  const suggestions = buildSearchSuggestions(query, searchSuggestionSources);
+  const suggestions = buildSearchSuggestions(query, canvasState.searchSuggestionSources);
   list.innerHTML = '';
   list.classList.remove('visible');
   list.dataset.highlight = '-1';
@@ -9000,7 +8905,7 @@ setTimeout(() => {
         showOpenOntologyModal,
         hideOpenOntologyModal
       ),
-    hasOntology: () => ttlStore !== null,
+    hasOntology: () => session.ttlStore !== null,
     showOpenOntologyModal,
   });
 }, 100);
@@ -9011,25 +8916,25 @@ const { addTestLog, getTestLogs } = installTestLogCapture(isDebugMode);
 // E2E test hook: attach programmatic control for browser automation (e.g. Playwright).
 attachEditorTestHook({
   hideOpenOntologyModal,
-  getRawData: () => rawData,
-  getNetwork: () => network,
+  getRawData: () => session.rawData,
+  getNetwork: () => canvasState.network,
   showContextMenu,
   performDeleteSelection,
   performUndo,
   performRedo,
-  getUndoStack: () => undoStack,
+  getUndoStack: () => editState.undoStack,
   getRelationshipLabel,
-  getObjectProperties: () => objectProperties,
-  getExternalOntologyReferences: () => externalOntologyReferences,
+  getObjectProperties: () => session.objectProperties,
+  getExternalOntologyReferences: () => session.externalOntologyReferences,
   openEditModalForNode,
   openEditModalForEdge,
   showEditEdgeModal,
   showAddEdgeModal,
   showAddNodeModal,
   showEditDataPropertyModal,
-  getDataProperties: () => dataProperties,
-  getAnnotationProperties: () => annotationProperties,
-  getTtlStore: () => ttlStore,
+  getDataProperties: () => session.dataProperties,
+  getAnnotationProperties: () => session.annotationProperties,
+  getTtlStore: () => session.ttlStore,
   storeToTurtle,
   applyFilter,
   showEditRelationshipTypeModal,
@@ -9038,20 +8943,20 @@ attachEditorTestHook({
   getTestLogs,
   isDebugMode,
   saveTtl,
-  setHasUnsavedChanges: (value: boolean) => { hasUnsavedChanges = value; },
+  setHasUnsavedChanges: (value: boolean) => { fileState.hasUnsavedChanges = value; },
   updateSaveButtonVisibility,
-  getHasUnsavedChanges: () => hasUnsavedChanges,
+  getHasUnsavedChanges: () => fileState.hasUnsavedChanges,
   loadTtlDirectly: async (ttlString: string, fileName?: string, pathHint?: string) => {
     // For tests: call loadTtlAndRender directly, bypassing file input UI
     // Set loadedFilePath/loadedFileName so IndexedDB operations use the right keys
     // Enable test mode to skip slow operations (IndexedDB, rendering delays)
-    loadedFilePath = pathHint ?? fileName ?? null;
-    loadedFileName = fileName ?? null;
-    skipSlowOperationsForTests = true;
+    fileState.loadedFilePath = pathHint ?? fileName ?? null;
+    fileState.loadedFileName = fileName ?? null;
+    fileState.skipSlowOperationsForTests = true;
     try {
       await loadTtlAndRender(ttlString, fileName, null, pathHint);
     } finally {
-      skipSlowOperationsForTests = false;
+      fileState.skipSlowOperationsForTests = false;
     }
   },
 });
