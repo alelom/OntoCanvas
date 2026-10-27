@@ -3,7 +3,6 @@ import {
   storeToTurtle,
 } from './parser';
 
-/** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
 import { session, fileState, canvasState, editState } from './state/appState';
 import { installTestLogCapture } from './e2e/testLogCapture';
 import { renderApp } from './ui/appShell';
