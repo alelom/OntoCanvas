@@ -2,11 +2,11 @@
  * Which E2E tests a change selects (#174, #175): the selection logic, and the integrity of the real area map.
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { areaOfTest, loadConfig, matchesPattern, selectAreas, testFilesFor } from '../../scripts/e2eSelect.mjs';
+import { areaOfTest, badgeMarkdown, loadConfig, matchesPattern, readmeTable, selectAreas, testFilesFor } from '../../scripts/e2eSelect.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -157,10 +157,34 @@ describe('the command line', () => {
     });
   });
 
+  it('prints every area and every test with --all, for the manual full run', () => {
+    const r = run('--all', '--json');
+    expect(r.status).toBe(0);
+    const out = JSON.parse(r.stdout);
+    expect(out.all).toBe(true);
+    expect(out.areas).toEqual(Object.keys(loadConfig().areas));
+    expect(out.tests).toHaveLength(Object.values(loadConfig().areas as Record<string, { tests: string[] }>).reduce((n, a) => n + a.tests.length, 0));
+  });
+
   it('refuses an unknown area and names the known ones', () => {
     const r = run('--area', 'nope');
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/Unknown area: nope/);
     expect(r.stderr).toMatch(/search/);
+  });
+});
+
+describe('the README', () => {
+  const readme = readFileSync(join(ROOT, 'README.md'), 'utf8').replace(/\r\n/g, '\n');
+
+  it('shows the table of areas that the map generates, so a new area cannot be left out of it', () => {
+    const block = /<!-- e2e-areas:start[^>]*-->\n([\s\S]*?)\n<!-- e2e-areas:end -->/.exec(readme);
+    expect(block, 'the markers are missing from README.md').not.toBeNull();
+    expect(block![1]).toBe(readmeTable(loadConfig()));
+  });
+
+  it('has a badge for the unit tests and one for the E2E tests overall', () => {
+    expect(readme).toContain(badgeMarkdown('unit.json', 'Unit tests'));
+    expect(readme).toContain(badgeMarkdown('e2e.json', 'E2E tests'));
   });
 });

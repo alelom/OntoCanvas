@@ -6,6 +6,7 @@
  *   node scripts/e2eSelect.mjs --area search,embed --run    run those areas
  *   node scripts/e2eSelect.mjs --changed --run              run what the changes against origin/main touch
  *   node scripts/e2eSelect.mjs --changed --json             print the selection (for CI)
+ *   node scripts/e2eSelect.mjs --all --json                 every area (for CI)
  *
  * The map is tests/e2e/areas.json. A changed file selects the areas that list it; a file the map does not place
  * selects every area, so a wrong or missing entry costs time, never a missed test. The full suite is
@@ -86,6 +87,17 @@ export function testFilesFor(areaNames, config) {
   return areaNames.flatMap((a) => config.areas[a].tests.map((t) => `tests/e2e/${t}.e2e.test.ts`));
 }
 
+/** The README's table of areas, with each area's badge (the badge files are written by the badges workflow). */
+export const BADGE_BASE = 'https://img.shields.io/endpoint?url=' + encodeURIComponent('https://raw.githubusercontent.com/alelom/OntoCanvas/badges/');
+export const BADGES_WORKFLOW = 'https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml';
+export const badgeMarkdown = (file, alt) => `[![${alt}](${BADGE_BASE}${encodeURIComponent(file)})](${BADGES_WORKFLOW})`;
+export function readmeTable(config) {
+  const rows = Object.entries(config.areas).map(
+    ([name, a]) => `| \`${name}\` | ${a.description} | ${a.tests.length} | ${badgeMarkdown(`e2e-${name}.json`, `E2E ${name}`)} |`
+  );
+  return ['| Area | Covers | Tests | State of main |', '|---|---|---|---|', ...rows].join('\n');
+}
+
 // ---- command line
 
 function git(args) {
@@ -123,6 +135,11 @@ function main(argv) {
   const flag = (name) => argv.includes(name);
   const value = (name) => { const i = argv.indexOf(name); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : null; };
 
+  if (flag('--readme')) {
+    console.log(readmeTable(config));
+    return 0;
+  }
+
   if (flag('--list')) {
     for (const [name, a] of Object.entries(config.areas)) console.log(`${name.padEnd(15)} ${String(a.tests.length).padStart(2)} tests  ${a.description}`);
     console.log(`\n${Object.values(config.areas).reduce((n, a) => n + a.tests.length, 0)} tests in ${Object.keys(config.areas).length} areas`);
@@ -130,7 +147,9 @@ function main(argv) {
   }
 
   let selection;
-  if (value('--area')) {
+  if (flag('--all')) {
+    selection = { all: true, areas: Object.keys(config.areas), reasons: {}, ignored: [], unplaced: [] };
+  } else if (value('--area')) {
     const names = value('--area').split(',').map((s) => s.trim()).filter(Boolean);
     const unknown = names.filter((n) => !config.areas[n]);
     if (unknown.length) { console.error(`Unknown area: ${unknown.join(', ')}. Known: ${Object.keys(config.areas).join(', ')}`); return 2; }
@@ -139,7 +158,7 @@ function main(argv) {
     const base = value('--base') ?? 'origin/main';
     selection = selectAreas(changedFiles(base, { includeWorkingTree: !flag('--no-worktree') }), config);
   } else {
-    console.error('Use --list, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI.');
+    console.error('Use --list, --all, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI.');
     return 2;
   }
 

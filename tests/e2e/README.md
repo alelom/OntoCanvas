@@ -1,47 +1,47 @@
-# E2E Tests for Edit Edge Modal
+# E2E tests
 
-These tests verify that the Edit Edge modal correctly displays cardinality and restriction checkbox for object property restrictions.
+Playwright drives the built app in Chromium. The tests are grouped into **areas**, one per feature, so a change runs
+only the tests that cover it.
 
-## Prerequisites
+## Running them
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+No server needs to be started: the global setup (`globalSetup.ts`) builds the app, serves it on `http://localhost:5173/`
+and stops it when the run is over. A server that already answers on that port (a developer's `npm run dev`) is used as it
+is, and then the tests run against the dev server, not a build.
 
-2. Start the dev server:
-   ```bash
-   npm run dev
-   ```
-
-   The dev server should be running on `http://localhost:5173/`
-
-## Running Tests
-
-Run E2E tests:
 ```bash
-npm run test:e2e
+npm run test:e2e:affected            # the areas your changes touch, against origin/main (and your uncommitted files)
+npm run test:e2e:area -- search      # one or more areas, comma separated: search,embed
+npm run test:e2e:areas               # list the areas and how many tests each has
+npm run test:e2e:full                # the whole suite (also: npm run test:e2e)
+npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one file
 ```
 
-Run E2E tests in watch mode:
-```bash
-npm run test:e2e:watch
-```
+- **The build is reused** when no source is newer than the last build the setup made (`dist/.e2e-build.json`), so a small
+  run starts in seconds instead of after a 40 to 50 s build. `EDITOR_E2E_REBUILD=1` forces a build. A `dist/` that
+  the setup did not build is never trusted.
+- **Two runs cannot overlap** on one machine: the tests use port 5173.
+- **Before a merge the whole suite is run by hand**: `gh workflow run e2e-full.yml -f pr=<number>`. It records the commit
+  status `e2e-full`, which `main` requires for a merge through a pull request. Pull requests run only the selected areas.
+- `npm run test:e2e:flake` measures how flaky the suite is.
 
-## Test Files
+## The areas
 
-- `editEdgeModal.e2e.test.ts` - Tests for Edit Edge modal functionality
-- `../fixtures/simple-object-property.ttl` - Test ontology with simple object property (no restriction)
-- `../fixtures/simple-restriction.ttl` - Test ontology with object property restriction (minCardinality: 2)
+`areas.json` lists, for each area, its test files (`tests`) and the source modules that implement it (`sources`).
 
-## Test Cases
+- A changed file selects the areas that list it. A file in `everything`, or one that no area lists and `ignore` does not
+  cover, selects **every** area: a missing entry costs time and never skips a test.
+- **Adding an E2E test:** put its name (without `.e2e.test.ts`) in exactly one area. A unit test fails if a test file is in no
+  area or in two, if a listed path no longer exists, or if the README's table of areas is out of date
+  (`node scripts/e2eSelect.mjs --readme` prints the table to paste).
+- **Adding or moving a source module:** list it under the area whose tests exercise it. If you do not, a change to it runs
+  everything, which is safe.
 
-1. **Simple Object Property Test**: Verifies that a non-restriction edge shows empty cardinality fields and unchecked "OWL restriction" checkbox.
+## Writing a test
 
-2. **Restriction Test**: Verifies that a restriction edge shows `Min: 2`, empty `Max`, and checked "OWL restriction" checkbox.
-
-## Notes
-
-- Tests use Playwright's browser automation API within Vitest
-- Tests require the dev server to be running
-- Tests use the `__EDITOR_TEST__` hook exposed by the editor for programmatic control
+- Open a page with `launchBrowser()` from `browser.ts` (it blocks the real network), load an ontology with the helpers in
+  `testHelpers.ts` (`openEditorWithTtl`, `loadTestFile`), and wait with `waitForAppReady` or on a condition. There are no
+  fixed sleeps: wait for the outcome you expect.
+- Reach the app through `window.__EDITOR_TEST__` (`src/e2e/editorTestHook.ts`).
+- Timeouts are at most 5 s, 10 s at the very most. A test that needs more has a deeper problem.
+- Prefer a unit test when the logic can be called directly; E2E is for what only the page can show.

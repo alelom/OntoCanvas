@@ -2,9 +2,9 @@
   <img src="OntoCanvas.png" alt="OntoCanvas" width="200"/>
   <h1>OntoCanvas</h1>
   
-  <!-- Test Status Badges (shields.io) -->
-  ![Unit Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=Unit%20Tests&branch=main)
-  ![E2E Tests](https://img.shields.io/github/actions/workflow/status/alelom/OntoCanvas/test.yml?label=E2E%20Tests&branch=main)
+  <!-- State of main, written nightly by .github/workflows/badges.yml (one badge per E2E area is under Testing) -->
+  [![Unit tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Funit.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml)
+  [![E2E tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml)
 </div>
 
 
@@ -142,12 +142,45 @@ Output is in `dist/`. Deploy the contents to any static host (e.g. GitHub Pages)
 ## Testing
 
 ```bash
-npm run test        # Run tests once
-npm run test:watch  # Run tests in watch mode
+npm run test                        # unit tests, once
+npm run test:watch                  # unit tests in watch mode
+npm run test:e2e:affected           # the E2E tests for what you changed against origin/main
+npm run test:e2e:area -- search     # the E2E tests of one or more areas (comma separated)
+npm run test:e2e:areas              # list the areas
+npm run test:e2e:full               # the whole E2E suite
 ```
 
-Tests cover load (parse), edit (label update), save (serialize), and round-trip consistency with E2E tests.
+Unit tests cover load (parse), edit (label update), save (serialize) and round-trip consistency. The E2E tests drive the
+built app in Chromium (Playwright). They are grouped into **areas**, one per feature: [`tests/e2e/areas.json`](tests/e2e/areas.json)
+lists, for each area, its test files and the source modules that implement it.
 
+- **Locally and on a pull request, only the areas your changes touch run** (`test:e2e:affected`, and the same selection in CI). A
+  file the map does not place selects every area, so a missing entry costs time and never skips a test. Docs and unit tests select none.
+- **The whole suite runs before a merge, by hand:** `gh workflow run e2e-full.yml -f pr=<number>` runs it on the pull request
+  and records the result as the commit status `e2e-full`, which `main` requires for a merge through a pull request. A new commit
+  on the pull request drops the status, so run it again.
+- **A start-up takes seconds, not a build:** the E2E setup builds the app only when a source is newer than its last build
+  (`EDITOR_E2E_REBUILD=1` forces a build).
+- **The badges show the state of `main`**, run nightly by [`badges.yml`](.github/workflows/badges.yml).
+
+<!-- e2e-areas:start (generated: node scripts/e2eSelect.mjs --readme) -->
+| Area | Covers | Tests | State of main |
+|---|---|---|---|
+| `loading` | Opening an ontology: from a file, a URL, a folder or the start-up dialog, and the failures. | 8 | [![E2E loading](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-loading.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `saving` | Saving to Turtle, and what the saved file keeps of the original. | 3 | [![E2E saving](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-saving.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `layout` | Layouts, saved positions and the free-standing data property band. | 7 | [![E2E layout](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-layout.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `display-config` | The display config: options, edge styles, and loading one with an ontology. | 4 | [![E2E display-config](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-display-config.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `data-properties` | Data properties: display on nodes, editing, dragging, owl:Thing and the unattached ones. | 7 | [![E2E data-properties](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-data-properties.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `relationships` | Relationships between classes: object properties, restrictions, class expressions, editing and deleting edges. | 12 | [![E2E relationships](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-relationships.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `nodes` | Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu. | 6 | [![E2E nodes](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-nodes.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `annotations` | Annotation properties: the menu, the modals, their values, and styling nodes by annotation. | 5 | [![E2E annotations](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-annotations.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `external-refs` | References to other ontologies: the references modal, prefixes, and the external nodes drawn at half opacity. | 5 | [![E2E external-refs](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-external-refs.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `imports` | owl:imports: reading imported ontologies, their properties and versions. | 6 | [![E2E imports](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-imports.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `search` | The search box: suggestions, scope and the outline around the matches. | 3 | [![E2E search](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-search.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `embed` | The app embedded in an iframe: the compact, read-only view. | 2 | [![E2E embed](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-embed.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `shell` | The bottom bar and what it shows about the selection. | 1 | [![E2E shell](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-shell.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+| `sparql` | SPARQL queries over the loaded ontology. | 1 | [![E2E sparql](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fbadges%2Fe2e-sparql.json)](https://github.com/alelom/OntoCanvas/actions/workflows/badges.yml) |
+<!-- e2e-areas:end -->
 ## Repository hygiene
 
 This is a public repository. A guard fails CI if internal-only names (private infrastructure, feeds, trackers, emails) are committed. Run it locally before pushing:
