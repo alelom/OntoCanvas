@@ -280,7 +280,7 @@ import './style.css';
 
 import { updateFilePathDisplay, updateSaveButtonVisibility, updateSerializerDropdown } from './ui/fileBar';
 
-import { collectDisplayConfig, loadDisplayConfigFromLocalFile, loadDisplayConfigFromUrl } from './workflows/displayConfigFiles';
+import { collectDisplayConfig, loadDisplayConfigFromLocalFile } from './workflows/displayConfigFiles';
 import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, getTermLink, getTermLookup, revealNodeInView } from './graph/canvasHelpers';
 import { setHierarchyTypes, setStackLeaves, updateRestorePositionsButton } from './workflows/layoutOptions';
 import { annotationPriorityOrder, buildAnnotationPropsDeps, currentDataProperties, currentObjectProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
@@ -288,6 +288,7 @@ import { setupClassSelector, setupPropertySelector, updateAddRelTypeIdentifierAn
 import { renderDomainsList, showWarningIconPopover, updateAddDataPropIdentifierAndValidation, updateEditDataPropIdentifierAndValidation } from './ui/dataPropertyForm';
 import { hideAddNodeModalWithCleanup, onRemoveAddNodeDataProp, onRemoveRenameDataProp, refreshAddNodeOkButton, refreshRenameModalFromInput, showMultiEditModal } from './ui/nodeModalHelpers';
 import { hideEditEdgeModalWithCleanup, updateEditEdgeCommentDisplayLocal } from './ui/edgeModalHelpers';
+import { firstDisplayConfig, flushDisplayConfigSave, scheduleDisplayConfigSave } from './workflows/displayConfigSave';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -493,20 +494,6 @@ function applyDisplayConfig(config: DisplayConfig): void {
   // Annotation style config is stored but restoration is deferred (complex DOM structure)
 }
 
-
-function scheduleDisplayConfigSave(): void {
-  if (canvasState.displayConfigSaveTimer != null) window.clearTimeout(canvasState.displayConfigSaveTimer);
-  canvasState.displayConfigSaveTimer = window.setTimeout(() => {
-    canvasState.displayConfigSaveTimer = null;
-    flushDisplayConfigSave();
-  }, 500);
-}
-
-/** Run display config save immediately (e.g. after drag end so refresh preserves positions). */
-function flushDisplayConfigSave(): void {
-  const config = collectDisplayConfig({ forBrowser: true });
-  if (config) saveDisplayConfigToIndexedDB(config, fileState.loadedFilePath, fileState.loadedFileName).catch(() => {});
-}
 
 
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
@@ -6849,19 +6836,6 @@ async function loadFromFile(): Promise<void> {
   } else {
     fileInput.click();
   }
-}
-
-/**
- * Attempt to load display config from a URL.
- * Returns the config if found, null otherwise (doesn't throw on 404).
- */
-/** The first display config found among `displayUrls`, tried in order; null when none is. */
-async function firstDisplayConfig(displayUrls: string[]): Promise<DisplayConfig | null> {
-  for (const displayUrl of displayUrls) {
-    const config = await loadDisplayConfigFromUrl(displayUrl);
-    if (config) return config;
-  }
-  return null;
 }
 
 /**
