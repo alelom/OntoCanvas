@@ -21,7 +21,6 @@ import {
   updateObjectPropertyIsDefinedByInStore,
   getMainOntologyBase,
   getClassNamespace,
-  getObjectProperties,
   renameObjectPropertyInStore,
   renameDataPropertyInStore,
   BASE_IRI,
@@ -32,7 +31,6 @@ import {
   updateDataPropertyRangeInStore,
   updateDataPropertyDomainsInStore,
   updateDataPropertyIsDefinedByInStore,
-  getDataProperties,
   addDataPropertyRestrictionToClass,
   removeDataPropertyRestrictionFromClass,
   getDataPropertyRestrictionsForClass,
@@ -191,7 +189,7 @@ import { latestDisplayConfigSource } from './lib/displayConfigFallback';
 import { showWarningBar, hideWarningBar } from './ui/warningBar';
 import { groupMenuEntries } from './ui/propertyMenuGroups';
 import { renderMenuGroups } from './ui/propertyMenuGroupsDom';
-import { propertySource, annotationUsedAnywhere, annotationDisplayName } from './ui/propertyMenuFacts';
+import { propertySource } from './ui/propertyMenuFacts';
 import { annotationUsages } from './lib/annotationUsages';
 import { fillUsagesSection } from './ui/annotationUsagesView';
 import { openExternalOntologyTab } from './lib/openExternalOntology';
@@ -260,7 +258,7 @@ import {
   validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
 import { getDisplayBase } from './lib/displayBase';
-import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder, stylingOrder } from './lib/annotationStyle';
+import { resolveNodeAnnotationStyle, applyAnnotationPropertyOrder } from './lib/annotationStyle';
 import { DATA_PROPERTY_FILL, DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, RELATIONSHIP_LABEL_BG_RGB, type AnnotationStyleConfig } from './ui/constants';
 import { readableTextColor } from './lib/textContrast';
 import {
@@ -289,6 +287,7 @@ import { updateFilePathDisplay, updateSaveButtonVisibility, updateSerializerDrop
 import { collectDisplayConfig, loadDisplayConfigFromLocalFile, loadDisplayConfigFromUrl } from './workflows/displayConfigFiles';
 import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, getTermLink, getTermLookup, revealNodeInView } from './graph/canvasHelpers';
 import { setHierarchyTypes, setStackLeaves, updateRestorePositionsButton } from './workflows/layoutOptions';
+import { annotationPriorityOrder, buildAnnotationPropsDeps, currentDataProperties, currentObjectProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -519,42 +518,6 @@ const EDGE_LOCK_REASON: Record<EdgeLock, string> = {
   classExpression: 'drawn from a class expression',
   externalTarget: 'a restriction on an imported class',
 };
-
-/**
- * Build the dependency bundle the annotation-properties list needs to render textual properties
- * as multi-value editors. `nodeId` is the class being edited (null for a new node, so initial
- * values are empty). `valuesMap` is seeded with each property's current values and updated on edit.
- */
-function buildAnnotationPropsDeps(
-  nodeId: string | null,
-  valuesMap: Record<string, string[]>
-): nodeModalFormUi.AnnotationPropsListDeps {
-  return {
-    getInitialValues: (ap) => {
-      if (!session.ttlStore || !nodeId) {
-        valuesMap[ap.name] = [];
-        return [];
-      }
-      const propUri = ap.uri ?? BASE_IRI.replace(/#?$/, '#') + ap.name;
-      const values = getAnnotationValuesForClass(session.ttlStore, nodeId, propUri);
-      valuesMap[ap.name] = [...values];
-      return values;
-    },
-    onTextualValuesChange: (name, values) => {
-      valuesMap[name] = values;
-    },
-    onOpenLink: (value) => {
-      window.open(value, '_blank', 'noopener,noreferrer');
-    },
-    // Grouped as in the Annotation Properties menu (#141).
-    groupFacts: (ap) => ({
-      source: propertySource(ap, session.externalOntologyReferences, session.ttlStore ? getMainOntologyBase(session.ttlStore) : null),
-      unused: !!session.ttlStore && !!ap.uri && !annotationUsedAnywhere(session.ttlStore, ap.uri),
-      deprecated: !!ap.deprecated,
-    }),
-    displayName: (ap) => annotationDisplayName(ap, session.externalOntologyReferences, session.ttlStore ? getMainOntologyBase(session.ttlStore) : null),
-  };
-}
 
 function pushUndoable(undo: () => void, redo: () => void): void {
   editState.redoStack = [];
@@ -1747,18 +1710,6 @@ function deleteDataPropertyWithConfirm(name: string): void {
   }
 }
 
-// Helper to get defining ontology from URI
-function getDefiningOntologyFromUri(uri: string | null | undefined, externalOntologyReferences: ExternalOntologyReference[]): string {
-  if (!uri) return 'an external ontology';
-  for (const ref of externalOntologyReferences) {
-    const refUrl = ref.url.endsWith('#') ? ref.url.slice(0, -1) : ref.url;
-    if (uri.startsWith(refUrl) || uri.startsWith(refUrl + '#')) {
-      return ref.url;
-    }
-  }
-  return 'an external ontology';
-}
-
 // Helper to show warning icon popover (similar to rename modal popover)
 function showWarningIconPopover(anchor: HTMLElement, message: string, modal: HTMLElement): void {
   const modalContent = modal.querySelector('.modal-content') as HTMLElement;
@@ -2700,12 +2651,6 @@ function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
       document.getElementById('addDataPropertyModal')!.style.display = 'none';
     }
   });
-}
-
-/** Property local names in priority order (highest first) for annotation styling. */
-/** The annotation properties that style classes, in priority order: deprecated ones never do. */
-function annotationPriorityOrder(): string[] {
-  return stylingOrder(session.annotationProperties);
 }
 
 /** Build the dependency bundle the annotation-properties menu needs (injected, so the menu
@@ -6137,22 +6082,6 @@ setImportVersionLookup((url) => {
   return session.importsBeingRead ? { state: 'reading' } : { state: 'unread' };
 });
 
-/** The object properties of `store`, with what the imports declare merged in. */
-function currentObjectProperties(store: NonNullable<typeof session.ttlStore>): ObjectPropertyInfo[] {
-  const own = getObjectProperties(store);
-  return session.importedDeclarations
-    ? mergeImportedDeclarations({ objectProperties: own, dataProperties: [], annotationProperties: [] }, session.importedDeclarations).objectProperties
-    : own;
-}
-
-/** The data properties of `store`, with what the imports declare merged in. */
-function currentDataProperties(store: NonNullable<typeof session.ttlStore>): DataPropertyInfo[] {
-  const own = getDataProperties(store);
-  return session.importedDeclarations
-    ? mergeImportedDeclarations({ objectProperties: [], dataProperties: own, annotationProperties: [] }, session.importedDeclarations).dataProperties
-    : own;
-}
-
 /** How long, and how large (in bytes), one imported ontology may be when it is read in the background (#104). */
 const IMPORT_READ_TIMEOUT_MS = 8000;
 const IMPORT_READ_MAX_BYTES = 5_000_000;
@@ -6211,14 +6140,6 @@ function startLoadingImportedDeclarations(store: NonNullable<typeof session.ttlS
       }
     }
   })();
-}
-
-/** Look, in the background, for a newer release of each import that was read (#132); the imports dialog names it. */
-async function findImportsNewerVersions(store: NonNullable<typeof session.ttlStore>): Promise<void> {
-  const found = await Promise.all(session.importedOntologies.map(async (o) => [o.url, (await findVersions(o.store, o.url, browserVersionSources)).newer?.version ?? null] as const));
-  if (store !== session.ttlStore) return;
-  session.importNewerVersions = new Map(found);
-  refreshExternalRefsList();
 }
 
 /**
