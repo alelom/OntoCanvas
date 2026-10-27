@@ -188,9 +188,13 @@ describe('testFilesFor', () => {
 
 describe('the real area map (tests/e2e/areas.json)', () => {
   const config = loadConfig();
-  const testFiles = readdirSync(join(ROOT, 'tests/e2e'))
-    .filter((f) => f.endsWith('.e2e.test.ts'))
-    .map((f) => f.replace(/\.e2e\.test\.ts$/, ''));
+  const e2eFiles = readdirRecursive(join(ROOT, 'tests/e2e')).map((f) => f.slice('tests/e2e/'.length)).filter((f) => f.endsWith('.e2e.test.ts'));
+
+  it('keeps every E2E test file directly in tests/e2e, the only place the selection looks', () => {
+    expect(e2eFiles.filter((f) => f.includes('/'))).toEqual([]);
+  });
+
+  const testFiles = e2eFiles.map((f) => f.replace(/\.e2e\.test\.ts$/, ''));
 
   it('puts every E2E test file in exactly one area', () => {
     const owners = new Map<string, string[]>();
