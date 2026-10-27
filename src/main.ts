@@ -15,7 +15,6 @@ import {
   getClassNamespace,
   renameDataPropertyInStore,
   BASE_IRI,
-  addDataPropertyToStore,
   removeDataPropertyFromStore,
   updateDataPropertyLabelInStore,
   updateDataPropertyCommentInStore,
@@ -220,7 +219,6 @@ import { showValidationErrorModal } from './ui/validationErrorModal';
 import {
   labelToCamelCaseIdentifier,
   validateLabelForIdentifier,
-  validateLabelForIdentifierWithUniqueness,
 } from './lib/identifierFromLabel';
 
 import { applyAnnotationPropertyOrder } from './lib/annotationStyle';
@@ -251,7 +249,7 @@ import { collectDisplayConfig, loadDisplayConfigFromLocalFile } from './workflow
 import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, revealNodeInView } from './graph/canvasHelpers';
 import { setHierarchyTypes, setStackLeaves } from './workflows/layoutOptions';
 import { currentDataProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
-import { renderDomainsList, showWarningIconPopover, updateAddDataPropIdentifierAndValidation, updateEditDataPropIdentifierAndValidation } from './ui/dataPropertyForm';
+import { renderDomainsList, showWarningIconPopover, updateEditDataPropIdentifierAndValidation } from './ui/dataPropertyForm';
 import { hideAddNodeModalWithCleanup, onRemoveAddNodeDataProp, onRemoveRenameDataProp, refreshAddNodeOkButton, refreshRenameModalFromInput, showMultiEditModal } from './ui/nodeModalHelpers';
 import { hideEditEdgeModalWithCleanup, updateEditEdgeCommentDisplayLocal } from './ui/edgeModalHelpers';
 import { firstDisplayConfig, flushDisplayConfigSave, scheduleDisplayConfigSave } from './workflows/displayConfigSave';
@@ -273,6 +271,7 @@ import { updateEditEdgeTypeSearch, updateEditEdgeTypeSections } from './ui/editE
 import { resolveTerm, updateSelectionInfoDisplay } from './ui/selectionInfo';
 import { initAddRelationshipTypeHandlers, initEdgeStylesMenu, showEditRelationshipTypeModal } from './ui/relationshipTypeModal';
 import { getAnnotationPropsMenuDeps, initAddAnnotationPropertyHandlers } from './ui/annotationPropertyModal';
+import { initAddDataPropertyHandlers } from './ui/addDataPropertyHandlers';
 // Removed updateLoadLastOpenedButton - now handled by openOntologyModal
 
 
@@ -541,7 +540,7 @@ const SPACING = getSpacing();
 
 
 
-function initDataPropsMenu(dataPropsContent: HTMLElement): void {
+export function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
   const mainBase = session.ttlStore ? getMainOntologyBase(session.ttlStore) : null;
   
@@ -953,77 +952,6 @@ function showEditDataPropertyModal(name: string): void {
 
 
 
-
-function initAddDataPropertyHandlers(_dataPropsContent?: HTMLElement): void {
-  if (initFlags.addDataPropertyHandlersInitialized) return;
-  initFlags.addDataPropertyHandlersInitialized = true;
-  const labelInput = document.getElementById('addDataPropLabel') as HTMLInputElement;
-  const rangeSel = document.getElementById('addDataPropRange') as HTMLSelectElement;
-  if (rangeSel) {
-    // Consistent with the edit modal and the annotation modal: a new property must be allowed to
-    // assert no range, otherwise the typing-stub pattern cannot be authored here at all.
-    const rangeOptions = [{ value: '', label: 'No range asserted' }, ...DATA_PROPERTY_RANGE_OPTIONS];
-    rangeSel.innerHTML = rangeOptions.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join('');
-  }
-  if (labelInput) {
-    labelInput.addEventListener('input', updateAddDataPropIdentifierAndValidation);
-    labelInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('addDataPropConfirm')?.click();
-    });
-  }
-  document.getElementById('addDataPropertyBtn')?.addEventListener('click', () => {
-    const modal = document.getElementById('addDataPropertyModal')!;
-    const li = document.getElementById('addDataPropLabel') as HTMLInputElement;
-    const okBtn = document.getElementById('addDataPropConfirm') as HTMLButtonElement;
-    const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
-    li.value = '';
-    if (labelValidationEl) {
-      labelValidationEl.style.display = 'none';
-      labelValidationEl.textContent = '';
-    }
-    okBtn.disabled = true;
-    const identifierEl = document.getElementById('addDataPropIdentifier') as HTMLElement;
-    if (identifierEl) identifierEl.textContent = '';
-    li.focus();
-    modal.style.display = 'flex';
-  });
-  document.getElementById('addDataPropCancel')?.addEventListener('click', () => {
-    document.getElementById('addDataPropertyModal')!.style.display = 'none';
-  });
-  document.getElementById('addDataPropConfirm')?.addEventListener('click', () => {
-    const li = document.getElementById('addDataPropLabel') as HTMLInputElement;
-    const rangeEl = document.getElementById('addDataPropRange') as HTMLSelectElement;
-    const labelValidationEl = document.getElementById('addDataPropLabelValidation') as HTMLElement;
-    const label = li.value.trim();
-    const rangeUri = rangeEl?.value ? rangeEl.value : null;
-    if (!session.ttlStore) return;
-    const existingNames = new Set(session.dataProperties.map((dp) => dp.name));
-    const validation = validateLabelForIdentifierWithUniqueness(label, existingNames, {
-      duplicateMessage: 'A data property with this identifier already exists.',
-    });
-    if (!validation.valid || !validation.identifier) {
-      if (labelValidationEl) {
-        labelValidationEl.style.display = 'block';
-        labelValidationEl.style.color = '#c0392b';
-        labelValidationEl.textContent = validation.error ?? 'Label is required.';
-      }
-      return;
-    }
-    const name = addDataPropertyToStore(session.ttlStore, label, rangeUri, validation.identifier);
-    if (name) {
-      session.dataProperties = currentDataProperties(session.ttlStore);
-      fileState.hasUnsavedChanges = true;
-      updateSaveButtonVisibility();
-      const content = document.getElementById('dataPropsContent');
-      if (content) initDataPropsMenu(content);
-      applyFilter(true);
-      // The modal asks for no domain, so the property is always free-standing and lands below the
-      // class graph - outside the viewport applyFilter just restored. Show the user what they made.
-      revealNodeInView(unattachedDataPropertyNodeId(name));
-      document.getElementById('addDataPropertyModal')!.style.display = 'none';
-    }
-  });
-}
 
 /**
  * Get opacity value based on search category.
@@ -5887,7 +5815,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-registerActions({ applyFilter });
+registerActions({ applyFilter, initDataPropsMenu });
 renderApp();
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {
