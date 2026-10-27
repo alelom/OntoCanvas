@@ -114,6 +114,11 @@ describe('the release and the deployment', () => {
     expect(release.jobs.release.if).toMatch(/event == 'push'/);
   });
 
+  it('release pushes with the deploy key, because the ruleset on main would block the workflow token\'s push', () => {
+    const checkout = (workflows['release.yml'].jobs.release.steps ?? []).find((s) => s.uses?.startsWith('actions/checkout')) as { with?: Record<string, string> } | undefined;
+    expect(checkout?.with?.['ssh-key']).toBe('${{ secrets.RELEASE_DEPLOY_KEY }}');
+  });
+
   it('release checks that the commit it releases is the verified one', () => {
     expect(JSON.stringify(workflows['release.yml'].jobs.release)).toContain('github.event.workflow_run.head_sha');
     expect(runs(workflows['release.yml'].jobs.release)).toContain('gh run cancel');

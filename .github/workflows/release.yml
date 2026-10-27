@@ -25,11 +25,15 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     steps:
+      # Over SSH with a deploy key, not the workflow token: the ruleset on main requires the check "Ready to merge" for a
+      # push, and GitHub does not let the Actions app bypass a ruleset on a personal repository, but it does let a deploy
+      # key. semantic-release pushes its version commit as this key; it calls the GitHub API with the workflow token.
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       # Release the commit that was verified, and only that one. If main has moved on, the newer commit's own
       # verification will release it (with this one in its history); this run ends cancelled so Deploy does not run.
