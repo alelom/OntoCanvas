@@ -1,0 +1,40 @@
+{
+  "_about": "Which unit tests to run for a change (#175). Vitest's own import graph (`vitest related`) selects the tests that import a changed file; this file covers what the graph cannot see, a test reading a file from disk. `full`: a change here runs every unit test. `ignore`: no unit test depends on it. `alwaysRun`: tests that scan the whole repository, run on every selection. `reads`: a change here also runs these tests, which read the files at that path directly. The whole suite always runs on main after a merge.",
+  "full": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tests/unitSetup.ts",
+    "tests/unitGlobalSetup.ts",
+    "tests/storageShim.ts",
+    "tests/fixtures/",
+    "examples/"
+  ],
+  "ignore": [
+    "**/*.md",
+    ".github/",
+    ".claude/",
+    ".cursor/",
+    "release.config.cjs",
+    "pyproject.toml",
+    "uv.lock",
+    "index.html",
+    "public/",
+    "src/style.css",
+    "tests/e2e/browser.ts",
+    "tests/e2e/globalSetup.ts",
+    "tests/e2e/testHelpers.ts",
+    "vitest.e2e.config.ts"
+  ],
+  "alwaysRun": [
+    "tests/unit/noFixtureWrites.test.ts"
+  ],
+  "reads": {
+    "README.md": ["tests/unit/e2eSelect.test.ts"],
+    "tests/e2e/": ["tests/unit/e2eSelect.test.ts", "tests/unit/writeBadges.test.ts"],
+    "scripts/": ["tests/unit/e2eSelect.test.ts", "tests/unit/writeBadges.test.ts", "tests/unit/reportMainFailure.test.ts", "tests/unit/unitSelect.test.ts"],
+    ".github/workflows/": ["tests/unit/workflows.test.ts"]
+  }
+}
