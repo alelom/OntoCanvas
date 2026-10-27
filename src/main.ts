@@ -282,13 +282,15 @@ import { updateFilePathDisplay, updateSaveButtonVisibility, updateSerializerDrop
 
 import { collectDisplayConfig, loadDisplayConfigFromLocalFile } from './workflows/displayConfigFiles';
 import { applyOpacityToColor, findShownEdge, getEdgeIdAtLabelPoint, getTermLink, getTermLookup, revealNodeInView } from './graph/canvasHelpers';
-import { setHierarchyTypes, setStackLeaves, updateRestorePositionsButton } from './workflows/layoutOptions';
+import { setHierarchyTypes, setStackLeaves } from './workflows/layoutOptions';
 import { annotationPriorityOrder, buildAnnotationPropsDeps, currentDataProperties, currentObjectProperties, findImportsNewerVersions, getDefiningOntologyFromUri } from './workflows/propertyLists';
 import { setupClassSelector, setupPropertySelector, updateAddRelTypeIdentifierAndValidation, updateEditRelTypeIdentifierAndValidation } from './ui/relationshipTypeForm';
 import { renderDomainsList, showWarningIconPopover, updateAddDataPropIdentifierAndValidation, updateEditDataPropIdentifierAndValidation } from './ui/dataPropertyForm';
 import { hideAddNodeModalWithCleanup, onRemoveAddNodeDataProp, onRemoveRenameDataProp, refreshAddNodeOkButton, refreshRenameModalFromInput, showMultiEditModal } from './ui/nodeModalHelpers';
 import { hideEditEdgeModalWithCleanup, updateEditEdgeCommentDisplayLocal } from './ui/edgeModalHelpers';
 import { firstDisplayConfig, flushDisplayConfigSave, scheduleDisplayConfigSave } from './workflows/displayConfigSave';
+import { clearPositionsBeforeLayout, forgetNodePositions, restoreNodePositions } from './workflows/nodePositions';
+import { registerActions } from './state/actions';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -6254,31 +6256,6 @@ fileState.hasUnsavedChanges = false;
   }
 }
 
-/**
- * Drops every node position, so the layout places them all again: the local classes' (on rawData) and the
- * loaded config's, from which imported nodes take theirs (#156).
- */
-function forgetNodePositions(): void {
-  // What was shown before, for "Restore positions" (#152); the first copy is kept while trying several layouts.
-  if (!canvasState.positionsBeforeLayout) {
-    const shown: Record<string, { x: number; y: number }> = canvasState.network ? canvasState.network.getPositions() : {};
-    session.rawData.nodes.forEach((n) => {
-      if (!shown[n.id] && n.x != null && n.y != null) shown[n.id] = { x: n.x, y: n.y };
-    });
-    if (Object.keys(shown).length > 0) {
-      canvasState.positionsBeforeLayout = shown;
-      canvasState.arrangedBeforeLayout = canvasState.positionsArranged;
-    }
-  }
-  canvasState.positionsArranged = false;
-  session.rawData.nodes.forEach((node) => {
-    delete node.x;
-    delete node.y;
-  });
-  canvasState.loadedNodePositions = null;
-  updateRestorePositionsButton();
-}
-
 
 /**
  * Runs an asynchronous layout (ELK, #153) and keeps its positions for the nodes that had none, then redraws. Only
@@ -6323,33 +6300,7 @@ function runAsyncLayout(
     });
 }
 
-/** Puts every node back where it was before the positions were dropped (#152). */
-function restoreNodePositions(): void {
-  const before = canvasState.positionsBeforeLayout;
-  if (!before) return;
-  session.rawData.nodes.forEach((node) => {
-    if (before[node.id]) {
-      node.x = before[node.id].x;
-      node.y = before[node.id].y;
-    } else {
-      delete node.x;
-      delete node.y;
-    }
-  });
-  canvasState.loadedNodePositions = { ...before };
-  canvasState.positionsBeforeLayout = null;
-  canvasState.positionsArranged = canvasState.arrangedBeforeLayout;
-  updateRestorePositionsButton();
-  applyFilter(true);
-}
-
-/** Forgets the positions "Restore positions" would bring back: another ontology or config is shown. */
-function clearPositionsBeforeLayout(): void {
-  canvasState.positionsBeforeLayout = null;
-  updateRestorePositionsButton();
-}
-
-function applyFilter(preserveView = false): void {
+export function applyFilter(preserveView = false): void {
   // Don't return early - we need to initialize the network even with no nodes
   // so that Add node/Add edge buttons and double-click work
 
@@ -8007,6 +7958,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
+registerActions({ applyFilter });
 renderApp();
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {
