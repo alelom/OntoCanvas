@@ -78,7 +78,7 @@ import { edgeLock, type EdgeLock } from './lib/edgeEditability';
 import { showCanvasTooltip, hideCanvasTooltip, pickTooltip } from './ui/canvasTooltip';
 import { resolveExampleImages } from './lib/exampleImages';
 import { withThingNode, OWL_THING_URI, splitThingBoxSelection, thingBoxId } from './graph/thingNode';
-import { getOrRequestOntologyDirectory, forgetOntologyDirectory } from './lib/ontologyDirectory';
+import { forgetOntologyDirectory } from './lib/ontologyDirectory';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange, snapshotGraph, restoreGraph } from './lib/storeChange';
 
 /** Overlay renderer for anonymous class expressions (union domains etc.). See issue #59. */
@@ -184,7 +184,7 @@ import { openOnStartup } from './ui/startupOpen';
 import { debounced } from './utils/debounced';
 import { beginViewSettle, viewSettled } from './ui/viewSettle';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
-import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, convertOntologyUrlToHtmlUrl, getAllDisplayFileUrls } from './utils/urlParams';
+import { clearOntologyParamsFromAddressBar, setOntologyUrlParamInAddressBar, displayConfigBaseName, getAllDisplayFileUrls } from './utils/urlParams';
 import { latestDisplayConfigSource } from './lib/displayConfigFallback';
 import { showWarningBar, hideWarningBar } from './ui/warningBar';
 import { groupMenuEntries } from './ui/propertyMenuGroups';
@@ -192,7 +192,7 @@ import { renderMenuGroups } from './ui/propertyMenuGroupsDom';
 import { propertySource } from './ui/propertyMenuFacts';
 import { annotationUsages } from './lib/annotationUsages';
 import { fillUsagesSection } from './ui/annotationUsagesView';
-import { openExternalOntologyTab } from './lib/openExternalOntology';
+
 import {
   extractUsedNamespaceRefsFromStore,
   formatNodeLabelWithPrefix,
@@ -292,6 +292,7 @@ import { clearPositionsBeforeLayout, forgetNodePositions, restoreNodePositions }
 import { registerActions } from './state/actions';
 import { clearUndoRedo, performRedo, performUndo, pushUndoable } from './workflows/undoRedo';
 import { getNodeStyleFromAnnotations, shouldShowNodeByAnnotations } from './lib/annotationNodeStyle';
+import { openExternalOntology } from './workflows/openExternalTab';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -5475,29 +5476,6 @@ async function saveTtl(): Promise<void> {
   }
 }
 
-
-/**
- * "Open external ontology": open the imported ontology in a new tab. When the open ontology came from a
- * local file, its file is looked for in the same folder first (the folder is asked for once, #103), which
- * avoids CORS; otherwise, or when it isn't there, the ontology is opened by URL. The tab opens on the click
- * itself (see openExternalOntologyTab), so the wait for the folder can't get it blocked as a popup.
- */
-function openExternalOntology(url: string): Promise<void> {
-  const fileName = fileState.loadedFileName;
-  return openExternalOntologyTab({
-    fromDisk: !!fileName && !/^https?:\/\//i.test(fileState.loadedFilePath ?? ''),
-    open: (target) => window.open(target, '_blank'),
-    findLocalUrl: async () => {
-      const directory = await getOrRequestOntologyDirectory(fileState.fileHandle);
-      if (!directory) return null;
-      const { findMatchingLocalFile, openLocalFileInNewTab } = await import('./lib/localFileOpener');
-      const localFile = await findMatchingLocalFile(directory, fileName!, url);
-      return localFile ? openLocalFileInNewTab(localFile) : null;
-    },
-    // Open the HTML documentation URL when the ontology URL converts to one (hyphens to underscores, .html).
-    byUrl: () => `${window.location.origin + window.location.pathname}?onto=${encodeURIComponent(convertOntologyUrlToHtmlUrl(url) || url)}`,
-  });
-}
 
 
 /** What the imports dialog shows of an import's version (#131); null for a reference that is not an import. */
