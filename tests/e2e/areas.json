@@ -1,5 +1,5 @@
 {
-  "_about": "Which E2E tests cover which code (#174, #175). `tests` are file names under tests/e2e (without .e2e.test.ts); `sources` are repo paths (a trailing / is a directory). A changed file selects the areas that list it; a file that is in `everything`, or that no area lists and `ignore` does not cover, selects every area. Every E2E test file belongs to exactly one area (a unit test checks it).",
+  "_about": "Which E2E tests cover which code (#174, #175). `tests` are file names under tests/e2e (without .e2e.test.ts); `sources` are repo paths (a trailing / is a directory). A changed file selects the areas that list it and the areas of the modules that import it (through chains of imports, not through the hubs in `everything`); a file in `everything`, or that no area lists, that nothing but a hub imports and that `ignore` does not cover, selects every area. Every E2E test file belongs to exactly one area (a unit test checks it).",
   "everything": [
     "src/main.ts",
     "src/state/",

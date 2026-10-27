@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { areaOfTest, badgeMarkdown, loadConfig, matchesPattern, readmeTable, selectAreas, testFilesFor } from '../../scripts/e2eSelect.mjs';
+import { areaOfTest, badgeMarkdown, buildImporterGraph, loadConfig, matchesPattern, matchesAny, readmeTable, selectAreas, testFilesFor } from '../../scripts/e2eSelect.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -88,6 +88,97 @@ describe('selectAreas', () => {
     expect(selectAreas([], sample)).toMatchObject({ all: false, areas: [] });
   });
 });
+
+describe('selectAreas follows the import graph (the areas of the modules that import a changed file)', () => {
+  // vocab is listed under `saving`; search and embed code import it; main.ts, a hub in `everything`, imports everything.
+  const importers: Record<string, string[]> = {
+    'src/rdf/vocab.ts': ['src/ui/search.ts', 'src/utils/embedMode.ts', 'src/main.ts'],
+    'src/lib/deep.ts': ['src/lib/mid.ts'],
+    'src/lib/mid.ts': ['src/ui/search.ts', 'src/main.ts'],
+    'src/lib/onlyHub.ts': ['src/main.ts'],
+    'src/lib/loopA.ts': ['src/lib/loopB.ts'],
+    'src/lib/loopB.ts': ['src/lib/loopA.ts', 'src/utils/embedMode.ts'],
+  };
+  const of = (file: string) => importers[file] ?? [];
+
+  it('selects the areas of the modules that import a listed file, besides the areas that list it', () => {
+    expect(selectAreas(['src/rdf/vocab.ts'], sample, of).areas).toEqual(['search', 'embed', 'saving']);
+  });
+
+  it('does not let a hub in the everything list turn that into every area', () => {
+    const s = selectAreas(['src/rdf/vocab.ts'], sample, of);
+    expect(s.all).toBe(false);
+    expect(s.reasons['*']).toBeUndefined();
+  });
+
+  it('finds an importer through a chain of importers', () => {
+    expect(selectAreas(['src/lib/deep.ts'], sample, of).areas).toEqual(['search']);
+  });
+
+  it('places a file that no area lists by the areas of its importers instead of selecting everything', () => {
+    const s = selectAreas(['src/lib/deep.ts'], sample, of);
+    expect(s).toMatchObject({ all: false, unplaced: [] });
+  });
+
+  it('still selects every area for a file that nothing but a hub imports, since nothing places it', () => {
+    const s = selectAreas(['src/lib/onlyHub.ts'], sample, of);
+    expect(s).toMatchObject({ all: true, unplaced: ['src/lib/onlyHub.ts'] });
+  });
+
+  it('copes with an import cycle', () => {
+    expect(selectAreas(['src/lib/loopA.ts'], sample, of).areas).toEqual(['embed']);
+  });
+
+  it('says through which module an area was selected', () => {
+    expect(selectAreas(['src/rdf/vocab.ts'], sample, of).reasons.embed).toEqual(['src/rdf/vocab.ts (imported by src/utils/embedMode.ts)']);
+  });
+
+  it('is what selection used to be when nothing is imported', () => {
+    expect(selectAreas(['src/rdf/vocab.ts'], sample).areas).toEqual(['saving']);
+  });
+});
+
+describe('the import graph of the real source tree', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+  const isHub = (f: string) => matchesAny(f, config.everything);
+
+  it.each([
+    ['src/rdf/reservedVocabulary.ts', ['external-refs', 'imports']],
+    ['src/rdf/propertyNamespace.ts', ['external-refs']],
+    ['src/lib/termUri.ts', ['nodes', 'shell']],
+  ])('%s selects the areas of the code that imports it', (file, expected) => {
+    const s = selectAreas([file], config, importers);
+    expect(s.areas).toEqual(expect.arrayContaining(expected));
+    expect(s.all).toBe(false);
+  });
+
+  it('finds the importers of a module the way the code writes them', () => {
+    expect(importers('src/lib/termUri.ts')).toContain('src/ui/selectionInfo.ts');
+  });
+
+  it('selects, for every module, at least the areas of the modules that import it (hubs and tests aside)', () => {
+    const problems: string[] = [];
+    for (const file of readdirRecursive(join(ROOT, 'src')).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))) {
+      if (isHub(file)) continue;
+      const selected = selectAreas([file], config, importers);
+      if (selected.all) continue;
+      for (const importer of importers(file).filter((i) => !isHub(i))) {
+        const own = Object.keys(config.areas).filter((a) => matchesAny(importer, config.areas[a].sources));
+        const missing = own.filter((a) => !selected.areas.includes(a));
+        if (missing.length) problems.push(`${file} does not select ${missing.join(', ')}, which ${importer} belongs to`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
+function readdirRecursive(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = join(dir, e.name);
+    return e.isDirectory() ? readdirRecursive(p) : [p.slice(ROOT.length + 1).replace(/\\/g, '/')];
+  });
+}
 
 describe('testFilesFor', () => {
   it('lists the test files of the areas, as repo paths', () => {

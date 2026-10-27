@@ -7,14 +7,16 @@
  *   node scripts/e2eSelect.mjs --changed --json             print the selection (for CI)
  *   node scripts/e2eSelect.mjs --all --json                 every area (for CI)
  *
- * The map is tests/e2e/areas.json. A changed file selects the areas that list it; a file the map does not place
- * selects every area, so a wrong or missing entry costs time, never a missed test. The full suite is
+ * The map is tests/e2e/areas.json. A changed file selects the areas that list it, and the areas of the modules that
+ * import it (a change to a shared module reaches the areas whose code uses it, however the map lists it). The shared hub
+ * modules in `everything` are not followed: a change to one of those selects every area, and a change below one does not
+ * go through it, since the whole suite runs after the merge. A file nothing places selects every area. The full suite is
  * `npm run test:e2e`.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = join(ROOT, 'tests', 'e2e', 'areas.json');
@@ -41,24 +43,81 @@ export function matchesPattern(file, pattern) {
   return f === pattern;
 }
 
-const matchesAny = (file, patterns) => patterns.some((p) => matchesPattern(file, p));
+export const matchesAny = (file, patterns) => patterns.some((p) => matchesPattern(file, p));
 
 /** The area that owns the test file `tests/e2e/<name>.e2e.test.ts`, or undefined. */
 export function areaOfTest(name, config) {
   return Object.keys(config.areas).find((a) => config.areas[a].tests.includes(name));
 }
 
+// `from '...'` (import and re-export), `import('...')` and `import '...'`. A match inside a comment only adds an edge, which can
+// select an area too many, never one too few.
+const IMPORT_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s*['"]([^'"]+)['"]/g;
+
+function sourceFiles(dir, root) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path, root);
+    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [normalise(path.slice(root.length + 1))] : [];
+  });
+}
+
+/**
+ * Who imports whom under src/, read from the source with no dependency (the selection job in CI installs nothing).
+ * @returns {(file: string) => string[]} the modules that import `file`, directly
+ */
+export function buildImporterGraph(root = ROOT) {
+  const files = sourceFiles(join(root, 'src'), root);
+  const known = new Set(files);
+  const importers = new Map();
+  for (const file of files) {
+    const text = readFileSync(join(root, file), 'utf8');
+    for (const match of text.matchAll(IMPORT_SPECIFIER)) {
+      const spec = match[1] ?? match[2] ?? match[3];
+      if (!spec.startsWith('.')) continue;
+      const base = posix.normalize(posix.join(posix.dirname(file), spec));
+      const target = [`${base}.ts`, `${base}/index.ts`, base].find((c) => known.has(c));
+      if (!target || target === file) continue;
+      if (!importers.has(target)) importers.set(target, new Set());
+      importers.get(target).add(file);
+    }
+  }
+  return (file) => [...(importers.get(normalise(file)) ?? [])];
+}
+
 /**
  * What a set of changed files selects.
+ * @param {string[]} changedFiles
+ * @param {object} config tests/e2e/areas.json
+ * @param {(file: string) => string[]} [importersOf] who imports a module; without it only the map decides
  * @returns {{ all: boolean, areas: string[], reasons: Record<string, string[]>, ignored: string[], unplaced: string[] }}
  *   `reasons` says, per area (or `*` for everything), which files selected it.
  */
-export function selectAreas(changedFiles, config) {
+export function selectAreas(changedFiles, config, importersOf = () => []) {
   const reasons = {};
   const add = (key, file) => (reasons[key] ??= []).push(file);
   const ignored = [];
   const unplaced = [];
   let all = false;
+
+  /** The areas of `file`, and of every module that imports it through other modules (the hubs in `everything` aside). */
+  function ownersThroughImports(file) {
+    const found = new Map(); // area -> the file that selected it
+    const seen = new Set([file]);
+    const queue = [file];
+    while (queue.length) {
+      const current = queue.shift();
+      for (const area of Object.keys(config.areas)) {
+        if (!found.has(area) && matchesAny(current, config.areas[area].sources)) found.set(area, current);
+      }
+      for (const importer of importersOf(current)) {
+        if (seen.has(importer) || matchesAny(importer, config.everything)) continue;
+        seen.add(importer);
+        queue.push(importer);
+      }
+    }
+    return found;
+  }
 
   for (const raw of changedFiles) {
     const file = normalise(raw);
@@ -70,8 +129,11 @@ export function selectAreas(changedFiles, config) {
       continue;
     }
     if (matchesAny(file, config.everything)) { all = true; add('*', file); continue; }
-    const owners = Object.keys(config.areas).filter((a) => matchesAny(file, config.areas[a].sources));
-    if (owners.length) { for (const a of owners) add(a, file); continue; }
+    const owners = ownersThroughImports(file);
+    if (owners.size) {
+      for (const [area, via] of owners) add(area, via === file ? file : `${file} (imported by ${via})`);
+      continue;
+    }
     if (matchesAny(file, config.ignore)) { ignored.push(file); continue; }
     all = true;
     unplaced.push(file);
@@ -155,7 +217,7 @@ function main(argv) {
     selection = { all: false, areas: names, reasons: {}, ignored: [], unplaced: [] };
   } else if (flag('--changed') || value('--base')) {
     const base = value('--base') ?? 'origin/main';
-    selection = selectAreas(changedFiles(base, { includeWorkingTree: !flag('--no-worktree') }), config);
+    selection = selectAreas(changedFiles(base, { includeWorkingTree: !flag('--no-worktree') }), config, buildImporterGraph(ROOT));
   } else {
     console.error('Use --list, --all, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI.');
     return 2;

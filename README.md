@@ -168,8 +168,8 @@ built app in Chromium (Playwright).
 - **The badges above** are the state of `main` from those two full runs.
 
 The E2E tests are grouped into **areas**, one per feature: [`tests/e2e/areas.json`](tests/e2e/areas.json) lists, for each area, its test
-files and the source modules that implement it. A file the map does not place selects every area, so a missing entry costs time and
-never skips a test; docs select none. The E2E setup builds the app only when a source is newer than its last build
+files and the source modules that implement it. A change selects the areas that list the changed file **and the areas of the code that
+imports it**; a file nothing places selects every area, and docs select none. The E2E setup builds the app only when a source is newer than its last build
 (`EDITOR_E2E_REBUILD=1` forces a build), so a run of one area starts in seconds.
 
 <!-- e2e-areas:start (generated: node scripts/e2eSelect.mjs --readme) -->

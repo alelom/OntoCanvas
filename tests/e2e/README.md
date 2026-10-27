@@ -30,8 +30,11 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
 
 `areas.json` lists, for each area, its test files (`tests`) and the source modules that implement it (`sources`).
 
-- A changed file selects the areas that list it. A file in `everything`, or one that no area lists and `ignore` does not
-  cover, selects **every** area: a missing entry costs time and never skips a test.
+- A changed file selects the areas that list it **and the areas of the modules that import it** (read from the source, through
+  chains of imports), so a shared module reaches the areas whose code uses it however it is listed. The shared hub modules in
+  `everything` are not followed: a change to one of them selects **every** area, and a change below one does not go through it,
+  since the whole suite runs after the merge. A file that no area lists, that nothing but a hub imports, and that `ignore` does not
+  cover, selects every area.
 - **Adding an E2E test:** put its name (without `.e2e.test.ts`) in exactly one area. A unit test fails if a test file is in no
   area or in two, if a listed path no longer exists, or if the README's table of areas is out of date
   (`node scripts/e2eSelect.mjs --readme` prints the table to paste).
