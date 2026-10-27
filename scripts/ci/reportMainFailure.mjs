@@ -16,7 +16,7 @@ import { join } from 'node:path';
 
 export const LABEL = 'main-red';
 
-const EVENT_TEXT = { push: 'a push to main', schedule: 'the nightly run', workflow_dispatch: 'a manual run' };
+const EVENT_TEXT = { push: 'a push to main', schedule: 'the nightly run', workflow_dispatch: 'a manual run, or the one the auto-merge starts' };
 
 /**
  * @param {{ sha: string, runUrl: string, event: string, failed: {label: string, status: string}[], pr?: {number: number, title: string} | null, author?: string | null }} input

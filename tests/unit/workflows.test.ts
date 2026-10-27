@@ -105,6 +105,42 @@ describe('the verification of main (main-verify.yml)', () => {
   });
 });
 
+describe('auto-merge (auto-merge.yml)', () => {
+  const wf = workflows['auto-merge.yml'];
+  const job = wf.jobs.merge;
+  const script = runs(job);
+
+  it('reacts to the Tests workflow finishing, for a pull request, green', () => {
+    expect((wf.on.workflow_run as { workflows: string[] }).workflows).toEqual(['Tests']);
+    expect(job.if).toMatch(/event == 'pull_request'/);
+    expect(job.if).toMatch(/conclusion == 'success'/);
+  });
+
+  it('merges only the owner\'s open, non-draft pull request that has not changed since the tests ran', () => {
+    expect(script).toContain('GITHUB_REPOSITORY_OWNER');
+    expect(script).toContain('isDraft');
+    expect(script).toContain('no-auto-merge');
+    expect(script).toContain('headRefOid');
+    expect(script).toContain('TESTED_SHA');
+    expect(script).toContain('gh pr merge');
+  });
+
+  it('starts the verification of main itself, since a merge made with the workflow token starts no push run', () => {
+    expect(script).toContain('gh workflow run main-verify.yml');
+    expect((wf as unknown as { permissions: Record<string, string> }).permissions).toMatchObject({ actions: 'write', contents: 'write', 'pull-requests': 'write' });
+  });
+
+  it('never checks out the pull request\'s code, since it runs with a token that can write', () => {
+    expect((job.steps ?? []).some((s) => s.uses?.startsWith('actions/checkout'))).toBe(false);
+  });
+
+  it('is what main-verify and release accept: a verification dispatched on main', () => {
+    expect(workflows['main-verify.yml'].jobs['still-current'].if).toMatch(/workflow_dispatch/);
+    expect(workflows['release.yml'].jobs.release.if).toMatch(/workflow_run\.event == 'workflow_dispatch'/);
+    expect(workflows['release.yml'].jobs.release.if).toMatch(/head_branch == 'main'/);
+  });
+});
+
 describe('the release and the deployment', () => {
   it('release waits for a green verification of main, and only a push releases', () => {
     const release = workflows['release.yml'];

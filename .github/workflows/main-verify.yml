@@ -6,8 +6,9 @@ name: Main verification
 #   red    -> an issue is opened (label main-red) and nothing is released or deployed until main is fixed.
 #
 # Pull requests run only what their changes touch (test.yml); this is the net behind that selection. It also runs every
-# night, to catch what drifts under a green main (a runner image, a dependency), and on demand. It writes the two
-# README badges.
+# night, to catch what drifts under a green main (a runner image, a dependency), and on demand: auto-merge.yml starts it
+# after merging a pull request, because a merge made with the workflow token does not start the push run. It writes the
+# two README badges.
 on:
   push:
     branches: [main]
@@ -98,7 +99,7 @@ jobs:
   still-current:
     name: Is this still the tip of main?
     needs: [unit, e2e]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       actions: write
