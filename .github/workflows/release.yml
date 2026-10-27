@@ -2,8 +2,8 @@ name: Release
 
 # Runs when "Main verification" (the whole unit suite and the whole E2E suite on main) has passed, so a red main is
 # never released, and Deploy, which follows this workflow, never ships it either (#174, #175).
-# Only a verification started by a push to main, or dispatched on main (auto-merge.yml does that after it merges a pull
-# request), releases; the nightly one does not. workflow_dispatch of this workflow is kept for a manual release.
+# A nightly or manual verification does not release: only a push to main does. workflow_dispatch is kept for a
+# manual release.
 on:
   workflow_run:
     workflows: ["Main verification"]
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || (github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.head_branch == 'main'))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
