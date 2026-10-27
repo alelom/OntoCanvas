@@ -1,3 +1,11 @@
+## [1.36.1](https://github.com/alelom/OntoCanvas/compare/v1.36.0...v1.36.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* the badge commit has an author, so the badges branch can be written ([#174](https://github.com/alelom/OntoCanvas/issues/174)) ([bde4706](https://github.com/alelom/OntoCanvas/commit/bde470681c5e8363ea8976ef92a6189ad4958a2a))
+* the badge commit has an author, so the badges branch can be written ([#174](https://github.com/alelom/OntoCanvas/issues/174)) ([#177](https://github.com/alelom/OntoCanvas/issues/177)) ([5cef84c](https://github.com/alelom/OntoCanvas/commit/5cef84c24e784c7840244461f6c0f57eb8158ffa))
+
 # [1.36.0](https://github.com/alelom/OntoCanvas/compare/v1.35.1...v1.36.0) (2026-10-26)
 
 
