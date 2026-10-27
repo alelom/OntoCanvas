@@ -226,13 +226,11 @@ import {
   getRelationshipComment,
   getAllEdgeTypes,
   getPropertyHasCardinality,
-  updateEditEdgeCommentDisplay,
   showRelationshipTooltip,
   hideRelationshipTooltip,
 } from './ui/relationshipUtils';
 import {
   hideRenameModal,
-  hideEditEdgeModal,
   getCardinalityFromEditModal,
   showLoadingModal,
   hideLoadingModal,
@@ -289,6 +287,7 @@ import { annotationPriorityOrder, buildAnnotationPropsDeps, currentDataPropertie
 import { setupClassSelector, setupPropertySelector, updateAddRelTypeIdentifierAndValidation, updateEditRelTypeIdentifierAndValidation } from './ui/relationshipTypeForm';
 import { renderDomainsList, showWarningIconPopover, updateAddDataPropIdentifierAndValidation, updateEditDataPropIdentifierAndValidation } from './ui/dataPropertyForm';
 import { hideAddNodeModalWithCleanup, onRemoveAddNodeDataProp, onRemoveRenameDataProp, refreshAddNodeOkButton, refreshRenameModalFromInput, showMultiEditModal } from './ui/nodeModalHelpers';
+import { hideEditEdgeModalWithCleanup, updateEditEdgeCommentDisplayLocal } from './ui/edgeModalHelpers';
 function applyDisplayConfig(config: DisplayConfig): void {
   canvasState.displayExternalReferences = config.displayExternalReferences ?? true;
   canvasState.clusterThingDataProperties = config.clusterThingDataProperties ?? true;
@@ -4345,27 +4344,6 @@ function updateEditEdgeTypeSections(): void {
   updateEditEdgeCommentDisplayLocal();
 }
 
-function updateEditEdgeCommentDisplayLocal(): void {
-  const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
-  const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
-  if (!typeInput || !commentEl) return;
-  
-  const comment = updateEditEdgeCommentDisplay(
-    editState.selectedEdgeType,
-    editState.selectedExternalObjectProperty,
-    typeInput.value,
-    session.objectProperties
-  );
-  
-  if (comment) {
-    commentEl.textContent = comment;
-    commentEl.style.display = 'block';
-  } else {
-    commentEl.textContent = '';
-    commentEl.style.display = 'none';
-  }
-}
-
 async function updateEditEdgeTypeSearch(query: string): Promise<void> {
   const resultsDiv = document.getElementById('editEdgeTypeResults');
   const typeInput = document.getElementById('editEdgeType') as HTMLInputElement;
@@ -4915,19 +4893,6 @@ function showAddEdgeModal(from: string, to: string, callback: (data: { from: str
   updateEditEdgeCommentDisplayLocal();
   modal.querySelector('h3')!.textContent = 'Add edge';
   modal.style.display = 'flex';
-}
-
-// hideEditEdgeModal wrapper - state cleanup still needed in main.ts
-function hideEditEdgeModalWithCleanup(): void {
-  if (editState.pendingEditEdgeCallback) {
-    editState.pendingEditEdgeCallback(null);
-    editState.pendingEditEdgeCallback = null;
-  }
-  if (editState.pendingAddEdgeData) {
-    editState.pendingAddEdgeData.callback(null);
-    editState.pendingAddEdgeData = null;
-  }
-  hideEditEdgeModal();
 }
 
 // getCardinalityFromEditModal moved to ui/modals.ts
