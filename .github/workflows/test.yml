@@ -131,7 +131,8 @@ jobs:
     name: "E2E: ${{ matrix.area }}"
     needs: [e2e-select]
     if: needs.e2e-select.outputs.any == 'true'
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:

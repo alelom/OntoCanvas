@@ -58,7 +58,8 @@ jobs:
   e2e:
     name: "E2E: ${{ matrix.area }}"
     needs: [areas]
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
