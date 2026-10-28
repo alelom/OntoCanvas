@@ -143,8 +143,6 @@ export async function loadTtlAndRender(
     
     const pathForParse = pathHint ?? fileName ?? '';
     const { parseResult, prefixMap, extractedRefs } = await loadOntologyFromContent(ttlString, pathForParse);
-    session.currentPrefixMap = parseResult.prefixes ?? {};
-    session.sidePanel?.refresh();
     const { graphData, store, annotationProperties: annotationProps, objectProperties: objectProps, dataProperties: dataProps, originalFileCache: cache } = parseResult;
     
     // Store the store early so tests can detect when parsing is complete
@@ -431,6 +429,10 @@ export async function loadTtlAndRender(
 
     fileState.loadedFileName = fileName ?? null;
     fileState.loadedFilePath = pathHint ?? fileName ?? null;
+    // The query panel reads the new ontology's store, file name and prefixes, so it is refreshed only now that they are all set: earlier
+    // it showed the previous ontology's history and starting query, and Clear then cleared the wrong history (#182).
+    session.currentPrefixMap = parseResult.prefixes ?? {};
+    session.sidePanel?.refresh();
     fileState.fileHandle = handle ?? null;
     forgetOntologyDirectory(); // another ontology, maybe in another folder (#103)
 fileState.hasUnsavedChanges = false;

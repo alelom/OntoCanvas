@@ -13,6 +13,8 @@ export interface HistoryEntry {
 
 /** How many queries are kept for a file. */
 export const HISTORY_LIMIT = 30;
+/** The longest query written to the storage; a longer one is kept for the session only. */
+export const MAX_STORED_QUERY = 20_000;
 /** How many files have a history; the one used longest ago is forgotten first, so the storage cannot grow without end. */
 export const HISTORY_FILES = 50;
 
@@ -74,15 +76,28 @@ function readAll(storage: StorageLike): Stored {
   }
 }
 
-/** The history in local storage, or in a storage given for a test; `null` for no storage at all (everything is then a no-op). */
+/** The history in local storage, or in a storage given for a test; `null` for no storage at all (the history then lasts for the session). */
 export function localStorageHistory(storage: StorageLike | null | undefined = undefined): HistoryStore {
   const target = storage === undefined ? defaultStorage() : storage;
+  /** What this session saved. It is what `load` gives for a file whose storage is not the whole truth (see `needsMemory`). */
+  const session = new Map<string, HistoryEntry[]>();
+  /** Files whose list is not in the storage in full: there is no storage, a write failed, or a query was too large to keep there. */
+  const needsMemory = new Set<string>();
 
   const save = (key: string, entries: HistoryEntry[]): void => {
-    if (!target) return;
+    const kept = entries.slice(0, HISTORY_LIMIT);
+    session.set(key, kept);
+    // A very large pasted query would make every later write fail until 30 newer ones pushed it out: it stays in this session only.
+    const storable = kept.filter((entry) => entry.query.length <= MAX_STORED_QUERY);
+    if (storable.length < kept.length) needsMemory.add(key);
+    else needsMemory.delete(key);
+    if (!target) {
+      needsMemory.add(key);
+      return;
+    }
     const all = readAll(target);
-    if (entries.length === 0) delete all.files[key];
-    else all.files[key] = { at: Date.now(), entries: entries.slice(0, HISTORY_LIMIT) };
+    if (storable.length === 0) delete all.files[key];
+    else all.files[key] = { at: Date.now(), entries: storable };
     const keys = Object.keys(all.files);
     if (keys.length > HISTORY_FILES) {
       keys.sort((a, b) => all.files[a].at - all.files[b].at);
@@ -92,11 +107,12 @@ export function localStorageHistory(storage: StorageLike | null | undefined = un
       target.setItem(STORAGE_KEY, JSON.stringify(all));
     } catch {
       // A full or blocked storage: the history of this visit stays in memory only.
+      needsMemory.add(key);
     }
   };
 
   return {
-    load: (key) => (target ? readAll(target).files[key]?.entries ?? [] : []),
+    load: (key) => (needsMemory.has(key) ? session.get(key) ?? [] : target ? readAll(target).files[key]?.entries ?? [] : []),
     save,
     clear: (key) => save(key, []),
   };

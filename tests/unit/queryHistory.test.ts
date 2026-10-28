@@ -7,6 +7,7 @@ import { Store, DataFactory } from 'n3';
 import {
   HISTORY_FILES,
   HISTORY_LIMIT,
+  MAX_STORED_QUERY,
   addToHistory,
   historyKeyOf,
   historyLabel,
@@ -208,5 +209,70 @@ describe('historyLabel', () => {
 
   it('uses the first line when the query is nothing but PREFIX lines', () => {
     expect(historyLabel({ query: 'PREFIX : <http://example.org/>', at }, sameDay, 'en-GB')).toBe('14:05  PREFIX : <http://example.org/>');
+  });
+});
+
+describe('the history of a session without working storage (#196 review)', () => {
+  const broken = {
+    getItem: () => { throw new Error('SecurityError'); },
+    setItem: () => { throw new Error('QuotaExceededError'); },
+  };
+
+  it.each([
+    ['no storage at all', null],
+    ['a storage that refuses to read and to write', broken],
+  ])('gives back what was saved earlier in the session, with %s', (_name, storage) => {
+    const history = localStorageHistory(storage);
+    history.save('a', [{ query: 'ASK { <http://a> ?p ?o }', at: 1 }]);
+    history.save('b', [{ query: 'ASK { <http://b> ?p ?o }', at: 2 }]);
+
+    expect(history.load('a').map((e) => e.query)).toEqual(['ASK { <http://a> ?p ?o }']);
+    expect(history.load('b').map((e) => e.query)).toEqual(['ASK { <http://b> ?p ?o }']);
+    expect(history.load('c')).toEqual([]);
+  });
+
+  it('forgets a cleared history for the session too', () => {
+    const history = localStorageHistory(null);
+    history.save('a', [{ query: 'ASK {}', at: 1 }]);
+
+    history.clear('a');
+
+    expect(history.load('a')).toEqual([]);
+  });
+
+  it('prefers what this session saved to what an older visit stored, once it has saved', () => {
+    const storage = memoryStorage();
+    localStorageHistory(storage).save('a', [{ query: 'ASK { ?s ?p "old" }', at: 1 }]);
+    const history = localStorageHistory(storage);
+    expect(history.load('a')[0].query).toBe('ASK { ?s ?p "old" }');
+
+    history.save('a', [{ query: 'ASK { ?s ?p "new" }', at: 2 }]);
+
+    expect(history.load('a')[0].query).toBe('ASK { ?s ?p "new" }');
+  });
+});
+
+describe('a very large query (#196 review)', () => {
+  const huge = `SELECT * WHERE { ?s ?p "${'x'.repeat(MAX_STORED_QUERY)}" }`;
+
+  it('is kept for the session but not written to the storage, so that it cannot make every later write fail', () => {
+    // A storage that, like a real one, refuses a value over its quota.
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        if (v.length > MAX_STORED_QUERY) throw new Error('QuotaExceededError');
+        data.set(k, v);
+      },
+    };
+    const history = localStorageHistory(storage);
+
+    history.save('a', [{ query: huge, at: 3 }, { query: 'ASK { ?s ?p ?o }', at: 2 }]);
+    history.save('a', [{ query: 'SELECT * WHERE { ?s ?p ?o }', at: 4 }, { query: huge, at: 3 }, { query: 'ASK { ?s ?p ?o }', at: 2 }]);
+
+    // This session still has all of them ...
+    expect(history.load('a').map((e) => e.query.length > MAX_STORED_QUERY)).toEqual([false, true, false]);
+    // ... and a later visit finds the small ones, which were written, in order.
+    expect(localStorageHistory(storage).load('a').map((e) => e.query)).toEqual(['SELECT * WHERE { ?s ?p ?o }', 'ASK { ?s ?p ?o }']);
   });
 });
