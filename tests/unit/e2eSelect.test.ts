@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { areaOfTest, badgeMarkdown, buildImporterGraph, loadConfig, matchesPattern, matchesAny, readmeTable, selectAreas, testFilesFor } from '../../scripts/e2eSelect.mjs';
+import { areaOfTest, badgeMarkdown, buildImporterGraph, loadConfig, matchesPattern, matchesAny, readmeTable, selectAreas, selectionSummary, testFilesFor } from '../../scripts/e2eSelect.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -249,6 +249,8 @@ describe('the command line', () => {
         'tests/e2e/embedMode.e2e.test.ts',
       ],
       ignored: [],
+      skipped: expect.arrayContaining(['loading', 'layout']),
+      reasons: {},
     });
   });
 
@@ -266,6 +268,53 @@ describe('the command line', () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/Unknown area: nope/);
     expect(r.stderr).toMatch(/search/);
+  });
+});
+
+describe('selectionSummary, the explanation shown on the pull request (#189)', () => {
+  const summary = (files: string[]) => selectionSummary(selectAreas(files, sample), sample);
+
+  it('lists every area, those that run with the files that selected them and those that are skipped with the reason', () => {
+    const text = summary(['src/ui/search.ts']);
+
+    expect(text).toContain('1 of 3 areas run');
+    expect(text).toContain('| `search` | run | 2 | `src/ui/search.ts` |');
+    expect(text).toContain('| `embed` | skipped | 1 | no changed file touches it |');
+    expect(text).toContain('| `saving` | skipped | 1 | no changed file touches it |');
+  });
+
+  it('names the shared hub that selected every area', () => {
+    const text = summary(['src/main.ts']);
+
+    expect(text).toContain('3 of 3 areas run');
+    expect(text).toContain('`src/main.ts`: a shared hub');
+    expect(text).toContain('| `embed` | run | 1 |');
+  });
+
+  it('names a file that no area places', () => {
+    expect(summary(['src/lib/orphan.ts'])).toContain('`src/lib/orphan.ts`: not placed in any area');
+  });
+
+  it('says so when nothing needs an E2E area, and counts the files no E2E test covers', () => {
+    const text = summary(['README.md', 'docs/guide.txt']);
+
+    expect(text).toContain('0 of 3 areas run');
+    expect(text).toContain('2 changed files are covered by no E2E test');
+  });
+
+  it('says the whole suite was asked for when there are no reasons (a manual run)', () => {
+    const text = selectionSummary({ all: true, areas: Object.keys(sample.areas), reasons: {}, ignored: [], unplaced: [] }, sample);
+
+    expect(text).toContain('3 of 3 areas run');
+    expect(text).toContain('the whole suite was asked for');
+  });
+
+  it('is printed by --summary, for the job summary of a run', () => {
+    const r = spawnSync('node', ['scripts/e2eSelect.mjs', '--area', 'search', '--summary'], { cwd: ROOT, encoding: 'utf8' });
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('areas run');
+    expect(r.stdout).toContain('| `search` | run |');
   });
 });
 

@@ -6,6 +6,7 @@
  *   node scripts/e2eSelect.mjs --changed --run              run what the changes against origin/main touch
  *   node scripts/e2eSelect.mjs --changed --json             print the selection (for CI)
  *   node scripts/e2eSelect.mjs --all --json                 every area (for CI)
+ *   node scripts/e2eSelect.mjs --changed --summary          the selection explained, as Markdown (the job summary in CI)
  *
  * The map is tests/e2e/areas.json. A changed file selects the areas that list it, and the areas of the modules that
  * import it (a change to a shared module reaches the areas whose code uses it, however the map lists it). The shared hub
@@ -143,6 +144,46 @@ export function selectAreas(changedFiles, config, importersOf = () => []) {
   return { all, areas, reasons, ignored, unplaced };
 }
 
+/**
+ * The selection explained, as Markdown for the job summary of a run (#189): every area, whether it runs, and why. When
+ * everything is selected, which file did it, and whether that is a shared hub or a file no area places.
+ * @param {{ all: boolean, areas: string[], reasons: Record<string, string[]>, ignored: string[], unplaced: string[] }} selection
+ */
+export function selectionSummary(selection, config) {
+  const names = Object.keys(config.areas);
+  const lines = [`### E2E areas: ${selection.areas.length} of ${names.length} areas run`, ''];
+
+  if (selection.all) {
+    const triggers = selection.reasons['*'] ?? [];
+    if (!triggers.length) {
+      lines.push('Every area runs: the whole suite was asked for.');
+    } else {
+      lines.push('Every area runs because of:');
+      for (const file of triggers) {
+        const why = matchesAny(file, config.everything)
+          ? 'a shared hub (listed under `everything` in tests/e2e/areas.json: a change to it can reach any area)'
+          : 'not placed in any area (add it to an area in tests/e2e/areas.json)';
+        lines.push(`- \`${file}\`: ${why}`);
+      }
+    }
+    lines.push('');
+  }
+
+  lines.push('| Area | | Tests | Why |', '|---|---|---|---|');
+  for (const name of names) {
+    const runs = selection.areas.includes(name);
+    const why = (selection.reasons[name] ?? []).map((f) => `\`${f}\``).join(', ');
+    const reason = runs ? why || (selection.all ? 'every area runs' : 'asked for') : 'no changed file touches it';
+    lines.push(`| \`${name}\` | ${runs ? 'run' : 'skipped'} | ${config.areas[name].tests.length} | ${reason} |`);
+  }
+
+  if (selection.ignored.length) {
+    const n = selection.ignored.length;
+    lines.push('', `${n} changed file${n === 1 ? ' is' : 's are'} covered by no E2E test (docs, unit tests, workflows).`);
+  }
+  return lines.join('\n');
+}
+
 /** The test files of the given areas, as repo-relative paths. */
 export function testFilesFor(areaNames, config) {
   return areaNames.flatMap((a) => config.areas[a].tests.map((t) => `tests/e2e/${t}.e2e.test.ts`));
@@ -219,13 +260,18 @@ function main(argv) {
     const base = value('--base') ?? 'origin/main';
     selection = selectAreas(changedFiles(base, { includeWorkingTree: !flag('--no-worktree') }), config, buildImporterGraph(ROOT));
   } else {
-    console.error('Use --list, --all, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI.');
+    console.error('Use --list, --all, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI, --summary for Markdown.');
     return 2;
   }
 
   const files = testFilesFor(selection.areas, config);
   if (flag('--json')) {
-    console.log(JSON.stringify({ all: selection.all, areas: selection.areas, tests: files, ignored: selection.ignored }));
+    const skipped = Object.keys(config.areas).filter((a) => !selection.areas.includes(a));
+    console.log(JSON.stringify({ all: selection.all, areas: selection.areas, skipped, reasons: selection.reasons, tests: files, ignored: selection.ignored }));
+    return 0;
+  }
+  if (flag('--summary')) {
+    console.log(selectionSummary(selection, config));
     return 0;
   }
   console.log(describe(selection, config));
