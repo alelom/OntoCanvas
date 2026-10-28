@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { buildPackageImporters, loadConfig, packageJsonChange, selectAreas, selectionSummary } from '../../scripts/e2eSelect.mjs';
+import { buildImporterGraph, buildPackageImporters, loadConfig, packageJsonChange, selectAreas, selectionSummary } from '../../scripts/e2eSelect.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -196,5 +196,27 @@ describe('the real area map (#190)', () => {
         .map((s) => `${ts.SyntaxKind[s.kind]}: ${s.getText(source).slice(0, 60)}`);
       expect(runtime, file).toEqual([]);
     }
+  });
+});
+
+describe('the core of loading an ontology stays a hub (#194 review)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+
+  // Every E2E test loads an ontology through parseRdfToGraph (buildGraph), which reads the store with readOntology and the
+  // vocabulary: a regression there reaches every area, so a change to it must run them all and not wait for the run after
+  // the merge. The modules that edit the store keep their precision: only the areas of their importers run.
+  it.each(['src/ontology/buildGraph.ts', 'src/ontology/readOntology.ts', 'src/ontology/vocab.ts'])('%s selects every area', (file) => {
+    const s = selectAreas([file], config, importers);
+
+    expect(s.all).toBe(true);
+    expect(s.areas).toEqual(Object.keys(config.areas));
+  });
+
+  it.each(['src/ontology/editEdges.ts', 'src/ontology/editDataProperties.ts'])('%s still selects only the areas of its importers', (file) => {
+    const s = selectAreas([file], config, importers);
+
+    expect(s.all).toBe(false);
+    expect(s.areas.length).toBeLessThan(Object.keys(config.areas).length);
   });
 });

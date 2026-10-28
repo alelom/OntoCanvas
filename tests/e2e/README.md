@@ -42,6 +42,10 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
   on the base: a new dependency selects the areas of the modules that import it, a change to the version or to a script that is
   not how the E2E tests are built or run selects nothing, and a dev dependency, a script like `build` or `test:e2e:*`, or any
   other field selects every area. The lock file follows `package.json`, and selects every area when it changed alone.
+- **The core of loading an ontology is a hub** (`src/ontology/vocab.ts`, `readOntology.ts`, `buildGraph.ts`, which came out of
+  `parser.ts`, #193): every E2E test loads an ontology through `parseRdfToGraph`, so a change to one of them selects every area,
+  and a test pins that. The modules that edit the store (`edit*.ts`) and the one that saves (`serialize.ts`) are not hubs: a change
+  to one selects the areas of the modules that import it (`editEdges.ts`: 3 areas).
 - **See why an area ran:** on a pull request, "Select E2E areas" writes a summary (every area, run or skipped, and the files that
   selected it; for "every area", which file did it), and every area is a check, a skipped one shown as skipped (#189).
   `node scripts/e2eSelect.mjs --changed --summary` prints the same locally.
