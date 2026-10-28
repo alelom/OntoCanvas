@@ -161,7 +161,7 @@ describe('buildPackageImporters, on the real source tree', () => {
   it('finds the modules that import a package, by static and dynamic import', () => {
     expect(importersOf('@comunica/query-sparql-rdfjs-lite')).toContain('src/sparql/runQuery.ts');
     expect(importersOf('@codemirror/view')).toContain('src/ui/sidePanel/codeMirrorEditor.ts');
-    expect(importersOf('n3')).toContain('src/parser.ts');
+    expect(importersOf('n3')).toContain('src/ontology/buildGraph.ts');
   });
 
   it('knows a package by its name', () => {
