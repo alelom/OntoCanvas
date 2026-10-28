@@ -1,3 +1,15 @@
+# [1.39.0](https://github.com/alelom/OntoCanvas/compare/v1.38.0...v1.39.0) (2026-10-28)
+
+
+### Bug Fixes
+
+* review of [#195](https://github.com/alelom/OntoCanvas/issues/195): the formats the loader accepts, entities that cannot be expanded, DOCTYPE comments, no extra pass in parseRdfToQuads ([c4af973](https://github.com/alelom/OntoCanvas/commit/c4af973d9d69c38b666f968d57f781a4388a43df)), closes [#187](https://github.com/alelom/OntoCanvas/issues/187)
+
+
+### Features
+
+* start the query panel with the prefixes of an RDF/XML or JSON-LD file ([#187](https://github.com/alelom/OntoCanvas/issues/187)) ([7c534ae](https://github.com/alelom/OntoCanvas/commit/7c534ae8a8c0fb78c3a9ff110e97497ff5daebdb))
+
 # [1.38.0](https://github.com/alelom/OntoCanvas/compare/v1.37.0...v1.38.0) (2026-10-28)
 
 
