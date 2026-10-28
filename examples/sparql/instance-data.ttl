@@ -1,0 +1,22 @@
+# A file of instance data (an A-box), and what OntoCanvas shows for it (issues #181 and #168).
+#
+# The graph draws classes, so it shows one node here, :Room, the only class the file declares. The four individuals,
+# and the classes :Door and :Wall that they use without declaring them, are not drawn. Expected:
+#   - the bottom bar shows "issues (1)"; its popup says "4 individuals" are not drawn, and links the issues that track
+#     drawing instance data;
+#   - the SPARQL panel's starting query lists the individuals with their classes (it lists classes for a file without
+#     individuals): four rows, :door1 :Door / :room1 :Room / :room2 :Room / :wallA :Wall;
+#   - this query shows the links between them: SELECT ?a ?b WHERE { ?a :hasDoor ?b } ORDER BY ?a -> :room1 :door1 and :room2 :door1.
+@prefix : <http://example.org/examples/instance-data#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/instance-data> a owl:Ontology ;
+    rdfs:label "Instance data example" .
+
+:Room a owl:Class ; rdfs:label "Room" .
+
+:room1 a :Room ; rdfs:label "Room one" ; :hasDoor :door1 .
+:room2 a :Room ; rdfs:label "Room two" ; :hasDoor :door1 .
+:door1 a :Door ; rdfs:label "Door" .
+:wallA a :Wall ; rdfs:label "Wall A" .

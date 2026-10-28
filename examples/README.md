@@ -75,6 +75,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
 | [query-panel.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsparql%2Fquery-panel.ttl) | A small ontology with queries to try in the SPARQL side panel: a property path, a language tag, a blank node, an aggregate, ASK, CONSTRUCT, and a refused update | #171 | [TTL](sparql/query-panel.ttl) |
+| [instance-data.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsparql%2Finstance-data.ttl) | A file of instance data: one class drawn, a bottom-bar warning that the individuals are not drawn, and a SPARQL starting query that lists them | #181 | [TTL](sparql/instance-data.ttl) |
 
 ## Term URIs
 

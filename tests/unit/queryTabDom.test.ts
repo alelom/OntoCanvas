@@ -53,6 +53,35 @@ describe('query tab', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  describe('the starter query (#181)', () => {
+    const RDF_TYPE = namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type');
+
+    it('lists the classes of a file that has none of the individuals', () => {
+      store!.add(quad(iri('Room'), RDF_TYPE, namedNode('http://www.w3.org/2002/07/owl#Class')));
+      mount();
+      expect(editor().value).toContain('?class a owl:Class');
+      expect(editor().value).not.toContain('?individual');
+    });
+
+    it('lists the individuals of a file that has some, with their classes', () => {
+      store!.add(quad(iri('r1'), RDF_TYPE, iri('Room')));
+      mount();
+      expect(editor().value).toContain('?individual a ?class');
+      expect(editor().value).not.toContain('?class a owl:Class');
+      expect(editor().value).toContain('PREFIX : <http://example.org/o#>');
+    });
+
+    it('changes with the file, when the user has not edited the query', () => {
+      const tab = mount();
+      expect(editor().value).toContain('?class a owl:Class');
+
+      store = new Store([quad(iri('r1'), RDF_TYPE, iri('Room'))]);
+      tab.refresh();
+
+      expect(editor().value).toContain('?individual a ?class');
+    });
+  });
+
   it('says that external stub classes are not part of the data', () => {
     mount();
     expect(container.textContent).toMatch(/external/i);

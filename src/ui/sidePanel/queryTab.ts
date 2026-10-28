@@ -7,6 +7,7 @@ import type { Store } from 'n3';
 import type { QueryResult, RunOptions } from '../../sparql/runQuery';
 import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
+import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
@@ -30,12 +31,21 @@ export interface QueryTab extends SidePanelTab {
 
 const lazyRun: RunQuery = (stores, query, options) => import('../../sparql/runQuery').then((m) => m.runQuery(stores, query, options));
 
-const STARTER_QUERY = `SELECT ?class ?label
+export const CLASSES_STARTER_QUERY = `SELECT ?class ?label
 WHERE {
   ?class a owl:Class .
   OPTIONAL { ?class rdfs:label ?label }
 }
 ORDER BY ?class
+LIMIT 100`;
+
+/** For a file with instance data, which the graph does not draw: its individuals with their classes (the vocabularies' own types left out). */
+export const INDIVIDUALS_STARTER_QUERY = `SELECT ?individual ?class
+WHERE {
+  ?individual a ?class .
+  FILTER (!STRSTARTS(STR(?class), STR(owl:)) && !STRSTARTS(STR(?class), STR(rdfs:)))
+}
+ORDER BY ?class ?individual
 LIMIT 100`;
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -81,7 +91,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
 
   const starterText = () => {
     headerPrefixes = JSON.stringify(deps.getPrefixes());
-    return `${prefixHeader(deps.getPrefixes())}\n\n${STARTER_QUERY}`;
+    const store = deps.getStore();
+    const starter = store && individualsOf(store).size > 0 ? INDIVIDUALS_STARTER_QUERY : CLASSES_STARTER_QUERY;
+    return `${prefixHeader(deps.getPrefixes())}\n\n${starter}`;
   };
 
   function render(container: HTMLElement): void {

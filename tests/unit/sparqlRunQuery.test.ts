@@ -12,6 +12,8 @@ import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/parser';
 import { runQuery } from '../../src/sparql/runQuery';
 import { QueryStopped } from '../../src/sparql/readCapped';
+import { prefixHeader } from '../../src/sparql/prefixHeader';
+import { INDIVIDUALS_STARTER_QUERY } from '../../src/ui/sidePanel/queryTab';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class';
@@ -228,6 +230,25 @@ describe('runQuery', () => {
 
     it('rejects a malformed query with a readable error', async () => {
       await expect(runQuery([new Store()], 'SELECT WHERE {')).rejects.toThrow(/parse/i);
+    });
+  });
+
+  describe('the starter query for a file of individuals (#181)', () => {
+    it('lists the individuals with their classes, and not the classes themselves', async () => {
+      const store = storeFromTurtle(`
+        :Room a owl:Class .
+        :r1 a :Room ; rdfs:label "Room one" .
+        :r2 a :Room .
+        :k1 a :Kind .`);
+
+      const result = await bindingsOf([store], `${prefixHeader({})}\n\n${INDIVIDUALS_STARTER_QUERY}`);
+
+      expect(result.variables).toEqual(['individual', 'class']);
+      expect(result.rows.map((r) => [r.individual.value, r.class.value])).toEqual([
+        ['http://example.org/k1', 'http://example.org/Kind'],
+        ['http://example.org/r1', 'http://example.org/Room'],
+        ['http://example.org/r2', 'http://example.org/Room'],
+      ]);
     });
   });
 
