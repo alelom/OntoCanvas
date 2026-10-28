@@ -75,12 +75,38 @@ function toStoreQuad(quad: RDF.BaseQuad, storeCount: number): Quad {
   );
 }
 
-/** Reject updates up front, with the parser Comunica itself uses, so no store is ever handed to an update. */
-async function assertReadOnly(query: string): Promise<void> {
-  const { Parser } = await import('@traqula/parser-sparql-1-2');
-  if (new Parser().parse(query).type === 'update') {
+type Operation = ReturnType<typeof import('@traqula/algebra-sparql-1-2').toAlgebra>;
+
+/**
+ * Give the engine a result of at most `rows` solutions: an ORDER BY has to see every row before it can give the first,
+ * so reading only the first rows of its stream still builds (and sorts) the whole result in memory. A slice over the
+ * sort lets the engine keep just the best `rows` (the same as a LIMIT written in the query, which the query's own
+ * LIMIT and OFFSET stay in charge of when they are smaller). ASK, CONSTRUCT and DESCRIBE are left as they are.
+ */
+function capSolutions(operation: Operation, rows: number): Operation {
+  if (operation.type === 'ask' || operation.type === 'construct' || operation.type === 'describe') return operation;
+  if (operation.type === 'slice') return { ...operation, length: Math.min(operation.length ?? rows, rows) };
+  return { type: 'slice', input: operation, start: 0, length: rows } as Operation;
+}
+
+/**
+ * Parse with the parser Comunica itself uses, so a query that is not read-only is rejected before any store is handed
+ * to the engine. Returns what to give the engine: the query itself, or its algebra with the result capped.
+ */
+async function prepare(query: string, limit: number): Promise<string | Operation> {
+  const [{ Parser }, { toAlgebra }, { AstFactory }, { DataFactory: RdfDataFactory }] = await Promise.all([
+    import('@traqula/parser-sparql-1-2'),
+    import('@traqula/algebra-sparql-1-2'),
+    import('@traqula/rules-sparql-1-2'),
+    import('rdf-data-factory'),
+  ]);
+  const parsed = new Parser().parse(query, { astFactory: new AstFactory() });
+  if (parsed.type === 'update') {
     throw new Error('SPARQL update queries are not supported: queries are read-only.');
   }
+  if (!Number.isFinite(limit)) return query;
+  const operation = toAlgebra(parsed, { quads: true, blankToVariable: true, dataFactory: new RdfDataFactory() });
+  return capSolutions(operation, limit + 1);
 }
 
 export async function runQuery(stores: Store[], query: string, options: RunOptions = {}): Promise<QueryResult> {
@@ -89,9 +115,9 @@ export async function runQuery(stores: Store[], query: string, options: RunOptio
 }
 
 async function execute(stores: Store[], query: string, limit: number, signal: AbortSignal | undefined): Promise<QueryResult> {
-  await assertReadOnly(query);
+  const prepared = await prepare(query, limit);
   const engine = await getEngine();
-  const result = await engine.query(query, { sources: stores as [Store, ...Store[]] });
+  const result = await engine.query(prepared, { sources: stores as [Store, ...Store[]] });
 
   switch (result.resultType) {
     case 'bindings': {

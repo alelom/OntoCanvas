@@ -116,8 +116,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       .then((mount) => {
         const text = editor!.getText();
         const hadFocus = editorHost.contains(document.activeElement);
+        const selection = editor!.getSelection();
         editorHost.replaceChildren();
-        editor = mount(editorHost, text, hooks);
+        editor = mount(editorHost, text, hooks, selection);
         editorHost.setAttribute('data-editor', 'codemirror');
         if (hadFocus) editor.focus();
       })

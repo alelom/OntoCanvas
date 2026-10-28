@@ -10,7 +10,7 @@ const performRedo = vi.fn();
 vi.mock('../../src/workflows/undoRedo', () => ({ performUndo: () => performUndo(), performRedo: () => performRedo() }));
 
 import { handleHistoryShortcut } from '../../src/ui/historyShortcuts';
-import { isTextEditingElement } from '../../src/utils/textEditing';
+import { isFieldElement, isTextEditingElement } from '../../src/utils/textEditing';
 
 function press(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true, ...init });
@@ -39,9 +39,47 @@ describe('isTextEditingElement', () => {
     expect(isTextEditingElement(make('<div></div>'))).toBe(false);
     expect(isTextEditingElement(null)).toBe(false);
   });
+
+  it('counts only the inputs that take typed text, not checkboxes, radios, ranges or buttons (#179 review)', () => {
+    const make = (html: string) => {
+      document.body.innerHTML = html;
+      return document.body.firstElementChild as HTMLElement;
+    };
+    for (const type of ['text', 'search', 'url', 'email', 'number', 'password', 'tel']) {
+      expect(isTextEditingElement(make(`<input type="${type}">`)), type).toBe(true);
+    }
+    for (const type of ['checkbox', 'radio', 'range', 'button', 'file', 'color']) {
+      expect(isTextEditingElement(make(`<input type="${type}">`)), type).toBe(false);
+    }
+  });
+});
+
+describe('isFieldElement', () => {
+  it('is true for every input, whatever its type, and for textareas and contenteditable elements', () => {
+    const make = (html: string) => {
+      document.body.innerHTML = html;
+      return document.body.firstElementChild as HTMLElement;
+    };
+    expect(isFieldElement(make('<input type="checkbox">'))).toBe(true);
+    expect(isFieldElement(make('<input>'))).toBe(true);
+    expect(isFieldElement(make('<textarea></textarea>'))).toBe(true);
+    expect(isFieldElement(make('<div contenteditable="true"></div>'))).toBe(true);
+    expect(isFieldElement(make('<button></button>'))).toBe(false);
+    expect(isFieldElement(null)).toBe(false);
+  });
 });
 
 describe('handleHistoryShortcut', () => {
+  it('still undoes the ontology when a toolbar checkbox has the focus (#179 review)', () => {
+    document.body.innerHTML = '<input type="checkbox" id="box">';
+    document.getElementById('box')!.focus();
+
+    const event = press('z');
+
+    expect(performUndo).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it('undoes the ontology on Ctrl+Z when nothing is being typed in', () => {
     const event = press('z');
     expect(performUndo).toHaveBeenCalledTimes(1);

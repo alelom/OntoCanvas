@@ -4,7 +4,7 @@
  *
  * Tab is left to the browser (it moves focus out of the editor), so the keyboard is never trapped.
  */
-import { EditorState } from '@codemirror/state';
+import { EditorSelection, EditorState, Transaction } from '@codemirror/state';
 import { EditorView, drawSelection, keymap } from '@codemirror/view';
 import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -18,12 +18,13 @@ const theme = EditorView.theme({
   '.cm-content': { padding: '8px' },
 });
 
-export const mountCodeMirror: MountEditor = (parent, text, hooks) => {
+export const mountCodeMirror: MountEditor = (parent, text, hooks, selection) => {
   let silent = false;
   const view = new EditorView({
     parent,
     state: EditorState.create({
       doc: text,
+      selection: selection ? EditorSelection.range(selection.from, selection.to) : undefined,
       extensions: [
         history(),
         drawSelection(),
@@ -56,11 +57,13 @@ export const mountCodeMirror: MountEditor = (parent, text, hooks) => {
     setText(next) {
       silent = true;
       try {
-        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next } });
+        // Not an undo step: Ctrl+Z must not bring back the text of the previous ontology.
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, annotations: Transaction.addToHistory.of(false) });
       } finally {
         silent = false;
       }
     },
     focus: () => view.focus(),
+    getSelection: () => ({ from: view.state.selection.main.from, to: view.state.selection.main.to }),
   };
 };

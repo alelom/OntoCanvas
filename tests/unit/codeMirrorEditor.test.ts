@@ -5,6 +5,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SparqlLanguage } from 'codemirror-lang-sparql';
+import { EditorView } from '@codemirror/view';
+import { undo } from '@codemirror/commands';
 import { mountCodeMirror } from '../../src/ui/sidePanel/codeMirrorEditor';
 
 const hooks = () => ({ onChange: vi.fn(), onRun: vi.fn() });
@@ -26,6 +28,20 @@ describe('mountCodeMirror', () => {
     editor.setText('SELECT * WHERE { ?s ?p ?o }');
     expect(editor.getText()).toBe('SELECT * WHERE { ?s ?p ?o }');
     expect(h.onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps a rewrite by setText out of the undo history, so Ctrl+Z cannot bring the old text back (#179 review)', () => {
+    const editor = mountCodeMirror(parent(), 'PREFIX a: <http://a/#>', hooks());
+    editor.setText('PREFIX b: <http://b/#>');
+
+    undo(EditorView.findFromDOM(document.querySelector<HTMLElement>('.cm-editor')!)!);
+
+    expect(editor.getText()).toBe('PREFIX b: <http://b/#>');
+  });
+
+  it('starts with the selection it is given, so a swap keeps the cursor where it was (#179 review)', () => {
+    const editor = mountCodeMirror(parent(), 'SELECT * WHERE {}', hooks(), { from: 7, to: 8 });
+    expect(editor.getSelection()).toEqual({ from: 7, to: 8 });
   });
 
   it('runs on Ctrl+Enter', () => {

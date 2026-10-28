@@ -16,17 +16,24 @@ export interface QueryEditor {
   /** Replace the text without counting as a change by the user. */
   setText(text: string): void;
   focus(): void;
+  /** The selection, as character offsets (a cursor has `from === to`). */
+  getSelection(): EditorSelectionRange;
 }
 
-/** Mounts an editor inside `parent`, holding `text`. */
-export type MountEditor = (parent: HTMLElement, text: string, hooks: QueryEditorHooks) => QueryEditor;
+export interface EditorSelectionRange {
+  from: number;
+  to: number;
+}
+
+/** Mounts an editor inside `parent`, holding `text`, with `selection` selected (the start of the text when not given). */
+export type MountEditor = (parent: HTMLElement, text: string, hooks: QueryEditorHooks, selection?: EditorSelectionRange) => QueryEditor;
 
 /** Fetches the CodeMirror editor. Injected into the tab so that tests do not load it. */
 export type LoadEditor = () => Promise<MountEditor>;
 
 export const loadCodeMirrorEditor: LoadEditor = () => import('./codeMirrorEditor').then((m) => m.mountCodeMirror);
 
-export const mountTextarea: MountEditor = (parent, text, hooks) => {
+export const mountTextarea: MountEditor = (parent, text, hooks, selection) => {
   const textarea = document.createElement('textarea');
   textarea.className = 'query-editor-textarea';
   textarea.spellcheck = false;
@@ -41,11 +48,13 @@ export const mountTextarea: MountEditor = (parent, text, hooks) => {
     }
   });
   parent.append(textarea);
+  if (selection) textarea.setSelectionRange(selection.from, selection.to);
   return {
     getText: () => textarea.value,
     setText: (next) => {
       textarea.value = next;
     },
     focus: () => textarea.focus(),
+    getSelection: () => ({ from: textarea.selectionStart, to: textarea.selectionEnd }),
   };
 };

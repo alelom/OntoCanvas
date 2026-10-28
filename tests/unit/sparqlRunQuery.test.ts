@@ -3,6 +3,8 @@
  * Calls runQuery directly on stores produced by parseRdfToGraph or built by hand, no UI involved.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { Store, Parser, DataFactory, type Term } from 'n3';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
@@ -258,6 +260,48 @@ describe('runQuery', () => {
       const result = await runQuery([store], "CONSTRUCT { ?a ?b ?f } WHERE { ?a ?b ?c . ?d ?e ?f }", { limit: 100 });
       expect(result).toMatchObject({ kind: "quads", truncated: true });
       if (result.kind === "quads") expect(result.quads).toHaveLength(100);
+    });
+
+    describe('with ORDER BY, which must see every row before it can give the first', () => {
+      it("sorts only what is needed, so the memory stays below that of sorting the whole join", async () => {
+        const store = await loadFixtureStore("aec_drawing_ontology.ttl");
+        v8.setFlagsFromString("--expose-gc");
+        const collect = vm.runInNewContext("gc") as () => void;
+        collect();
+        const before = process.memoryUsage().heapUsed;
+        let peak = before;
+        const sampler = setInterval(() => (peak = Math.max(peak, process.memoryUsage().heapUsed)), 10);
+
+        const result = await runQuery([store], "SELECT * WHERE { ?a ?b ?c . ?d ?e ?f } ORDER BY ?a", { limit: 500 });
+        clearInterval(sampler);
+
+        expect(result).toMatchObject({ kind: "bindings", truncated: true });
+        // Measured on this fixture: about 520 MB when the sort is given the whole join, about 205 MB with the cap pushed into it.
+        expect((peak - before) / 1e6).toBeLessThan(350);
+      });
+
+      it("still returns the first rows of the sorted result", async () => {
+        const store = storeFromTurtle(":C a owl:Class . :A a owl:Class . :B a owl:Class . :D a owl:Class .");
+        const result = await runQuery([store], PREFIXES + "SELECT ?c WHERE { ?c a owl:Class } ORDER BY ?c", { limit: 2 });
+
+        expect(result).toMatchObject({ kind: "bindings", truncated: true });
+        if (result.kind === "bindings") expect(result.rows.map((r) => r.c.value)).toEqual(["http://example.org/A", "http://example.org/B"]);
+      });
+
+      it("keeps the LIMIT and OFFSET of the query when they are smaller than the cap", async () => {
+        const store = storeFromTurtle(":C a owl:Class . :A a owl:Class . :B a owl:Class . :D a owl:Class .");
+        const result = await runQuery([store], PREFIXES + "SELECT ?c WHERE { ?c a owl:Class } ORDER BY ?c LIMIT 2 OFFSET 1", { limit: 500 });
+
+        expect(result).toMatchObject({ kind: "bindings", truncated: false });
+        if (result.kind === "bindings") expect(result.rows.map((r) => r.c.value)).toEqual(["http://example.org/B", "http://example.org/C"]);
+      });
+
+      it("says there are more when the LIMIT of the query is bigger than the cap", async () => {
+        const store = storeFromTurtle(":C a owl:Class . :A a owl:Class . :B a owl:Class . :D a owl:Class .");
+        const result = await runQuery([store], PREFIXES + "SELECT ?c WHERE { ?c a owl:Class } ORDER BY ?c LIMIT 100", { limit: 2 });
+
+        expect(result).toMatchObject({ kind: "bindings", truncated: true });
+      });
     });
 
     it("can be stopped while it runs", async () => {

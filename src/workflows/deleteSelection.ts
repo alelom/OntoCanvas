@@ -2,7 +2,7 @@
  * Deleting what is selected on the canvas: nodes, edges and data properties, with the checks that lock some of them.
  * Moved out of main.ts (#175).
  */
-import { isTextEditingElement } from '../utils/textEditing';
+import { isFieldElement } from '../utils/textEditing';
 import { findShownEdge } from '../graph/canvasHelpers';
 import { removeExternalClassReferencesFromStore } from '../graph/removeExternalReferences';
 import { splitThingBoxSelection, thingBoxId, OWL_THING_URI } from '../graph/thingNode';
@@ -28,7 +28,7 @@ export function performDeleteSelection(): boolean {
   // Embedded mode is read-only.
   if (isEmbedded()) return false;
   const activeEl = document.activeElement as HTMLElement;
-  if (isTextEditingElement(activeEl)) {
+  if (isFieldElement(activeEl)) {
     debugLog(`[DELETE] Early return: active element is input/textarea/contentEditable:`, activeEl.tagName);
     return false;
   }

@@ -15,9 +15,10 @@ let run: ReturnType<typeof vi.fn>;
 
 /** A stand-in for CodeMirror: a div, the text it holds, and the hooks it was given. */
 function fakeEditor() {
-  const state = { text: '', hooks: null as Parameters<MountEditor>[2] | null, focused: false };
-  const mountFake: MountEditor = (parent, text, hooks) => {
+  const state = { text: '', hooks: null as Parameters<MountEditor>[2] | null, focused: false, selection: null as { from: number; to: number } | null | undefined };
+  const mountFake: MountEditor = (parent, text, hooks, selection) => {
     state.text = text;
+    state.selection = selection;
     state.hooks = hooks;
     const el = document.createElement('div');
     el.className = 'fake-cm';
@@ -30,6 +31,7 @@ function fakeEditor() {
       focus: () => {
         state.focused = true;
       },
+      getSelection: () => state.selection ?? { from: 0, to: 0 },
     };
   };
   return { state, mountFake, load: (() => Promise.resolve(mountFake)) as LoadEditor };
