@@ -31,6 +31,24 @@ export async function parseRdfToQuads(
   content: string,
   options: ParseRdfOptions = {}
 ): Promise<Quad[]> {
+  return (await parseRdfToQuadsWithPrefixes(content, options)).quads;
+}
+
+/** The quads of a file, and the prefixes the parser reported while reading it (prefix → namespace, `''` for the default). */
+export interface ParsedQuads {
+  quads: Quad[];
+  prefixes: Record<string, string>;
+}
+
+/**
+ * Like parseRdfToQuads, with the prefixes the parser itself used. Turtle reports its `@prefix`/`PREFIX` declarations, with a
+ * relative namespace already resolved against `@base` (or `baseIRI`), so they agree with the quads; a later declaration of a
+ * prefix wins. This version of rdf-parse reports none for RDF/XML (`xmlns`) or JSON-LD (`@context`).
+ */
+export async function parseRdfToQuadsWithPrefixes(
+  content: string,
+  options: ParseRdfOptions = {}
+): Promise<ParsedQuads> {
   const { path, contentType, baseIRI } = options;
   const stream = stringToStream(content);
 
@@ -43,12 +61,16 @@ export async function parseRdfToQuads(
   // supplies at least one for format detection), matching the ParseOptions union.
   const quadStream = rdfParser.parse(stream, parseOptions as ParseOptions);
   const quads: Quad[] = [];
+  const prefixes: Record<string, string> = {};
 
   return new Promise((resolve, reject) => {
     quadStream.on('data', (quad: Quad) => quads.push(quad));
+    quadStream.on('prefix', (prefix: string, iri: { value: string } | string) => {
+      prefixes[prefix] = typeof iri === 'string' ? iri : iri.value;
+    });
     quadStream.on('error', (err: Error) => {
       reject(new Error(`Failed to parse RDF: ${err.message}`));
     });
-    quadStream.on('end', () => resolve(quads));
+    quadStream.on('end', () => resolve({ quads, prefixes }));
   });
 }
