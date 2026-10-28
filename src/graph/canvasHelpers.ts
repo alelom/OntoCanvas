@@ -4,7 +4,7 @@
  * Moved out of main.ts (#175).
  */
 import { type TermLookup, buildTermLink } from '../lib/termUri';
-import { getMainOntologyBase, getClassNamespace } from '../parser';
+import { getMainOntologyBase, getClassNamespace } from '../ontology/readOntology';
 import { session, fileState, canvasState } from '../state/appState';
 import type { GraphEdge } from '../types';
 import { type EdgeLabelBox, findEdgeIdAtLabelPoint } from './edgeLabelHit';

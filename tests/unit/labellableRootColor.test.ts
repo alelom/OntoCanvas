@@ -8,7 +8,7 @@
  * 3. The actual fix in loadTtlAndRender will re-process nodes to extract these values
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -53,7 +53,7 @@ describe('LabellableRoot Color Unit Tests', () => {
     const { DataFactory } = await import('n3');
     const RDF_NS = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
     const OWL_NS = 'http://www.w3.org/2002/07/owl#';
-    const { extractLocalName } = await import('../../src/parser');
+    const { extractLocalName } = await import('../../src/utils/localName');
     
     // First, detect the used annotation property (simulating the logic in loadTtlAndRender)
     const labellableRootUri = 'http://example.org/core#labellableRoot';

@@ -16,17 +16,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  parseRdfToGraph,
-  storeToTurtle,
-  updateLabelInStore,
-  updateCommentInStore,
-  addNodeToStore,
-  removeNodeFromStore,
-  addEdgeToStore,
-  removeEdgeFromStore,
-  type SerializerType,
-} from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { updateLabelInStore, updateCommentInStore, addNodeToStore, removeNodeFromStore } from '../../../src/ontology/editClasses';
+import { addEdgeToStore, removeEdgeFromStore } from '../../../src/ontology/editEdges';
+import type { SerializerType } from '../../../src/storage';
 import { changedLineCount, formatDiff, isAttributionOnlyChange, blockUnchanged } from './minimalDiff';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

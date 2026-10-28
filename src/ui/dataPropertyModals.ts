@@ -5,7 +5,10 @@
 import { revealNodeInView } from '../graph/canvasHelpers';
 import { DATA_PROPERTY_RANGE_OPTIONS, domainAttachment, unattachedDataPropertyNodeId, describeRange } from '../lib/dataPropertyDisplay';
 import { validateLabelForIdentifier, labelToCamelCaseIdentifier } from '../lib/identifierFromLabel';
-import { getMainOntologyBase, extractLocalName, renameDataPropertyInStore, updateDataPropertyLabelInStore, updateDataPropertyCommentInStore, updateDataPropertyRangeInStore, updateDataPropertyDomainsInStore, updateDataPropertyIsDefinedByInStore, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass, removeDataPropertyFromStore } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
+import { extractLocalName } from '../utils/localName';
+import { renameDataPropertyInStore, updateDataPropertyLabelInStore, updateDataPropertyCommentInStore, updateDataPropertyRangeInStore, updateDataPropertyDomainsInStore, updateDataPropertyIsDefinedByInStore, removeDataPropertyFromStore } from '../ontology/editDataProperties';
+import { removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../ontology/editRestrictions';
 import { actions } from '../state/actions';
 import { session, initFlags, fileState } from '../state/appState';
 import type { DataPropertyInfo } from '../types';

@@ -11,12 +11,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  parseRdfToGraph,
-  getDataProperties,
-  renameDataPropertyInStore,
-  extractLocalName,
-} from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getDataProperties } from '../../src/ontology/readOntology';
+import { renameDataPropertyInStore } from '../../src/ontology/editDataProperties';
+import { extractLocalName } from '../../src/utils/localName';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

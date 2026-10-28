@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { DataFactory, type Store } from 'n3';
-import { parseRdfToGraph, getDataProperties, updateDataPropertyRangeInStore } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getDataProperties } from '../../src/ontology/readOntology';
+import { updateDataPropertyRangeInStore } from '../../src/ontology/editDataProperties';
 import { describeDataRange } from '../../src/rdf/dataRanges';
 
 /** Anonymous data ranges described for display: facets, unions, complements, enumerations (#63). */

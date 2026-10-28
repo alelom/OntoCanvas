@@ -1,7 +1,5 @@
 import 'vis-network/styles/vis-network.css';
-import {
-  storeToTurtle,
-} from './parser';
+import { storeToTurtle } from './ontology/serialize';
 
 import { session, fileState, canvasState, editState } from './state/appState';
 import { installTestLogCapture } from './e2e/testLogCapture';

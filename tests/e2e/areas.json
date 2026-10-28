@@ -4,7 +4,6 @@
     "src/main.ts",
     "src/state/",
     "src/state.ts",
-    "src/parser.ts",
     "src/storage.ts",
     "src/style.css",
     "src/ui/appShell.ts",

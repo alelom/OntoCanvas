@@ -3,7 +3,10 @@
  * Moved out of main.ts (#175).
  */
 import { getAnnotationValuesForClass } from '../lib/annotationValues';
-import { addNodeToStore, getClassNamespace, getMainOntologyBase, BASE_IRI, removeDataPropertyRestrictionFromClass, removeNodeFromStore, updateCommentInStore, updateLabelInStore } from '../parser';
+import { addNodeToStore, removeNodeFromStore, updateCommentInStore, updateLabelInStore } from '../ontology/editClasses';
+import { getClassNamespace, getMainOntologyBase } from '../ontology/readOntology';
+import { BASE_IRI } from '../ontology/vocab';
+import { removeDataPropertyRestrictionFromClass } from '../ontology/editRestrictions';
 import { actions } from '../state/actions';
 import { editState, session, fileState, canvasState } from '../state/appState';
 import type { GraphNode } from '../types';

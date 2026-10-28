@@ -8,7 +8,9 @@ import { removeExternalClassReferencesFromStore } from '../graph/removeExternalR
 import { splitThingBoxSelection, thingBoxId, OWL_THING_URI } from '../graph/thingNode';
 import { edgeLock, EDGE_LOCK_REASON } from '../lib/edgeEditability';
 import { snapshotStore, snapshotGraph, diffStore, revertStoreChange, restoreGraph, reapplyStoreChange } from '../lib/storeChange';
-import { removeEdgeFromStore, removeRestrictionEdgeFromStore, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass, removeNodeFromStore } from '../parser';
+import { removeEdgeFromStore } from '../ontology/editEdges';
+import { removeRestrictionEdgeFromStore, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../ontology/editRestrictions';
+import { removeNodeFromStore } from '../ontology/editClasses';
 import { actions } from '../state/actions';
 import { canvasState, session, fileState } from '../state/appState';
 import { updateSaveButtonVisibility } from '../ui/fileBar';

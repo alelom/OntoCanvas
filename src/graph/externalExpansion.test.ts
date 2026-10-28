@@ -6,7 +6,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
 import { loadOntologyFromContent } from '../lib/loadOntology';
-import { parseTtlToGraph } from '../parser';
+import { parseTtlToGraph } from '../ontology/buildGraph';
 import { expandWithExternalRefs, isExternalNodeId } from './externalExpansion';
 import { edgeLock } from '../lib/edgeEditability';
 

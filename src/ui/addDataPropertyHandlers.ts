@@ -5,7 +5,7 @@
 import { revealNodeInView } from '../graph/canvasHelpers';
 import { DATA_PROPERTY_RANGE_OPTIONS, unattachedDataPropertyNodeId } from '../lib/dataPropertyDisplay';
 import { validateLabelForIdentifierWithUniqueness } from '../lib/identifierFromLabel';
-import { addDataPropertyToStore } from '../parser';
+import { addDataPropertyToStore } from '../ontology/editDataProperties';
 import { actions } from '../state/actions';
 import { initFlags, session, fileState } from '../state/appState';
 import { currentDataProperties } from '../workflows/propertyLists';

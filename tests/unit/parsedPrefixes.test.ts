@@ -5,7 +5,7 @@
  * a declaration is not one. There is no second reader of the source text to disagree with the parser.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 
 const prefixesOf = async (content: string, options: { contentType?: string; baseIRI?: string } = { contentType: 'text/turtle' }) =>
   (await parseRdfToGraph(content, options)).prefixes;

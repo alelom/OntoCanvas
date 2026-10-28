@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import type { ExternalOntologyReference } from '../../src/storage';
 

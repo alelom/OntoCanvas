@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { resolveEdgeTerm, resolveNodeTerm, type TermLookup } from '../../src/lib/termUri';
 import { versionPinnedUri } from '../../src/lib/versionPinnedUri';
 import { readOntologyVersion } from '../../src/lib/ontologyVersion';

@@ -4,7 +4,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { DataFactory, type Store } from 'n3';
 import { parseTtlWithCache, modifyLabel } from './customSerializerTests/helpers';
-import { storeToTurtle, parseRdfToGraph } from '../../src/parser';
+import { storeToTurtle } from '../../src/ontology/serialize';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '../fixtures');
 const NS = 'http://example.org/ce#';

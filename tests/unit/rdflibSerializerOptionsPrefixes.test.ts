@@ -4,7 +4,7 @@
  * If the option is ignored (dead config), these tests fail.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { serializeStoreWithRdflib } from '../../src/rdf/rdflibSerializer';
 import { Store } from 'n3';
 

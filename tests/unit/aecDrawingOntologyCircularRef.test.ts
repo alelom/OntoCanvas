@@ -5,7 +5,7 @@
  * reports circular references. This test reproduces the issue and verifies the fix.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { validateOntologyStructure } from '../../src/lib/ontologyValidation';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';

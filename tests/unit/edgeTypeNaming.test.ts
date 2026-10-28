@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph, removeObjectPropertyFromStore } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { removeObjectPropertyFromStore } from '../../src/ontology/editObjectProperties';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples');
 

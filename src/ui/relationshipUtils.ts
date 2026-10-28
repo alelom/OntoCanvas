@@ -2,7 +2,7 @@ import type { GraphEdge, GraphData, ObjectPropertyInfo } from '../types';
 import type { ExternalOntologyReference } from '../storage';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
-import { extractLocalName } from '../parser';
+import { extractLocalName } from '../utils/localName';
 import { RESTRICTION_GLYPH } from '../rdf/restrictions';
 
 export const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';

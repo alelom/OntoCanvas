@@ -2,7 +2,7 @@
  * Unit test to verify which edges are created from edge-style-test.ttl
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';

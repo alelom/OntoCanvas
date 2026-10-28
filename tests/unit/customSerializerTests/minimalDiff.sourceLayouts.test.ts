@@ -10,7 +10,8 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { DataFactory, type Store } from 'n3';
-import { storeToTurtle, parseRdfToGraph } from '../../../src/parser';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { parseTtlWithCache, modifyLabel } from './helpers';
 import { lineDiff, formatDiff } from './minimalDiff';
 

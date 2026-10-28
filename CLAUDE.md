@@ -37,7 +37,7 @@ The old N3-Writer "serialize-then-fix" approach was abandoned as architecturally
 
 ## Working rules (non-negotiable)
 
-1. **Keep `main.ts` thin.** [src/main.ts](src/main.ts) is ~9,300 lines and already too long. Put new logic in dedicated modules (`src/lib`, `src/ui`, `src/graph`, `src/workflows`, `src/rdf`, `src/utils`). When you touch code in `main.ts`, move logic *out* where reasonable. Pure, side-effect-free logic should live in its own file so it can be unit-tested directly.
+1. **Keep `main.ts` thin.** [src/main.ts](src/main.ts) is ~9,300 lines and already too long. Put new logic in dedicated modules (`src/lib`, `src/ui`, `src/graph`, `src/workflows`, `src/rdf`, `src/ontology`, `src/utils`). When you touch code in `main.ts`, move logic *out* where reasonable. Pure, side-effect-free logic should live in its own file so it can be unit-tested directly.
 2. **Every fix or feature gets a test — write it first.** Reproduce a bug with a failing test before fixing it, to lock in the regression guard.
 3. **Prefer unit tests over E2E.** If logic can be tested with a direct function call (e.g. `parseRdfToGraph(content, opts)` + store queries), do that. Reserve E2E for genuine UI/rendering/workflow behavior. See [.cursor/rules/testing-priority.mdc](.cursor/rules/testing-priority.mdc).
 4. **Run tests after every change and confirm they pass** (`npm run test`, and `npm run test:e2e` when UI is involved).
@@ -57,5 +57,5 @@ The old N3-Writer "serialize-then-fix" approach was abandoned as architecturally
 ## Conventions
 
 - Save is **Turtle-only**; loading supports any `rdf-parse` format.
-- `BASE_IRI` (`http://example.org/aec-drawing-ontology#`) is a default base used for **newly created** terms. **Do not assume a loaded ontology uses it** — resolve a term's real URI from the store (see `getDataPropertyUriFromStore` in [src/parser.ts](src/parser.ts)) rather than concatenating `BASE_IRI + name`.
+- `BASE_IRI` (`http://example.org/aec-drawing-ontology#`) is a default base used for **newly created** terms. **Do not assume a loaded ontology uses it** — resolve a term's real URI from the store (see `getDataPropertyUriFromStore` in [src/ontology/editDataProperties.ts](src/ontology/editDataProperties.ts)) rather than concatenating `BASE_IRI + name`.
 - Versioning/releases are automated via `semantic-release`; don't hand-edit the version in `package.json`.

@@ -3,7 +3,7 @@
  * These tests verify the core logic without DOM interactions.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -12,7 +12,7 @@ import {
   getPrefixForUri,
   isUriFromExternalOntology 
 } from '../../src/ui/externalRefs';
-import { getMainOntologyBase } from '../../src/parser';
+import { getMainOntologyBase } from '../../src/ontology/readOntology';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 import type { ExternalOntologyReference } from '../../src/storage';
 

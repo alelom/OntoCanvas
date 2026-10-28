@@ -10,7 +10,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph, updateDataPropertyRangeInStore } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { updateDataPropertyRangeInStore } from '../../src/ontology/editDataProperties';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../fixtures/restriction-on-data-range.ttl');

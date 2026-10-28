@@ -1,6 +1,6 @@
 import type { GraphEdge, GraphData } from '../types';
 import type { Store } from 'n3';
-import { addEdgeToStore } from '../parser';
+import { addEdgeToStore } from '../ontology/editEdges';
 
 /**
  * Represents a copied relationship that can be pasted to another node.

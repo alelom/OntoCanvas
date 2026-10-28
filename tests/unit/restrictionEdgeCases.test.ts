@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { Store } from 'n3';
-import { parseRdfToGraph, removeRestrictionEdgeFromStore, getDataProperties } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { removeRestrictionEdgeFromStore } from '../../src/ontology/editRestrictions';
+import { getDataProperties } from '../../src/ontology/readOntology';
 import { describeDataRange } from '../../src/rdf/dataRanges';
 import { resolveExpressionClassUris, type RdfTerm } from '../../src/rdf/classExpressions';
 import { describeRange } from '../../src/lib/dataPropertyDisplay';

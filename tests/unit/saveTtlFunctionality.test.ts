@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
 import { DataFactory, Store } from 'n3';
 
 describe('saveTtl Functionality', () => {

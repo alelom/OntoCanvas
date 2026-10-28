@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph, getMainOntologyBase, getClassNamespace, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getMainOntologyBase, getClassNamespace } from '../../src/ontology/readOntology';
+import { storeToTurtle } from '../../src/ontology/serialize';
 import { getExampleImageUrisForClass, setExampleImageUrisForClass } from '../../src/lib/exampleImageStore';
 import type { SerializerType } from '../../src/storage';
 

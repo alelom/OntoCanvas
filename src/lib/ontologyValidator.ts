@@ -2,7 +2,7 @@ import type { Store } from 'n3';
 import { DataFactory } from 'n3';
 import type { CopiedRelationship } from './relationshipClipboard';
 import type { GraphData } from '../types';
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { isExternalPropertyUri } from '../rdf/propertyNamespace';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';

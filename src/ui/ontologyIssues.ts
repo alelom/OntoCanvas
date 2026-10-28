@@ -1,5 +1,6 @@
 import { Store, DataFactory } from 'n3';
-import { getAnnotationProperties, extractLocalName, getMainOntologyBase, getClassNamespace } from '../parser';
+import { getAnnotationProperties, getMainOntologyBase, getClassNamespace } from '../ontology/readOntology';
+import { extractLocalName } from '../utils/localName';
 import { getExampleImageUrisForClassUri } from '../lib/exampleImageStore';
 import { resolveImageUrl, isImageUrlReachable } from '../lib/exampleImageUrlValidation';
 import { individualsOf } from '../lib/instanceData';

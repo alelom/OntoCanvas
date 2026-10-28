@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../../src/parser.js';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph.js';
 import { convertN3QuadsToRdflibStatements } from '../utils/n3ToRdflib.js';
 import { serializeWithRdflib, type SerializationFormat } from '../utils/rdflibSerializer.js';
 import { compareOutputs, type ComparisonResult } from '../utils/comparison.js';

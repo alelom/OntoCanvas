@@ -13,15 +13,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  parseRdfToGraph,
-  storeToTurtle,
-  updateAnnotationPropertyValueInStore,
-  updateCommentInStore,
-  addDataPropertyRestrictionToClass,
-  removeDataPropertyRestrictionFromClass,
-  type SerializerType,
-} from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { updateAnnotationPropertyValueInStore } from '../../../src/ontology/editAnnotationProperties';
+import { updateCommentInStore } from '../../../src/ontology/editClasses';
+import { addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass } from '../../../src/ontology/editRestrictions';
+import type { SerializerType } from '../../../src/storage';
 import { setExampleImageUrisForClass } from '../../../src/lib/exampleImageStore';
 import { meaningfulLineDiff, changedLineCount, formatDiff, blockUnchanged } from './minimalDiff';
 

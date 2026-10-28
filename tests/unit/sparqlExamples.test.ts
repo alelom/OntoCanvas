@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { Store, Term } from 'n3';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { runQuery } from '../../src/sparql/runQuery';
 import { prefixHeader, withStandardPrefixes } from '../../src/sparql/prefixHeader';
 import { describeResult } from '../../src/sparql/resultView';

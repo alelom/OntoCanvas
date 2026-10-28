@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph } from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { extractPropertyLines, type OriginalFileCache } from '../../../src/rdf/sourcePreservation';
 
 const TEST_FIXTURES_DIR = join(__dirname, '../../fixtures');

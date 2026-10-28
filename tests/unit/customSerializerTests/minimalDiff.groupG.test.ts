@@ -12,12 +12,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  parseRdfToGraph,
-  storeToTurtle,
-  updateCommentInStore,
-  type SerializerType,
-} from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { updateCommentInStore } from '../../../src/ontology/editClasses';
+import type { SerializerType } from '../../../src/storage';
 import { changedLineCount } from './minimalDiff';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

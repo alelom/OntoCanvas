@@ -8,7 +8,8 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Parser, type Quad } from 'n3';
-import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OWL = 'http://www.w3.org/2002/07/owl#';
