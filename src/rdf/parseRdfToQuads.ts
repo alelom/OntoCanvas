@@ -10,6 +10,7 @@
 import { rdfParser } from 'rdf-parse';
 import type { ParseOptions } from 'rdf-parse';
 import { stringToStream } from './stringToStream';
+import { otherFormatPrefixes } from './otherFormatPrefixes';
 import type { Quad } from '@rdfjs/types';
 
 export interface ParseRdfOptions {
@@ -43,7 +44,8 @@ export interface ParsedQuads {
 /**
  * Like parseRdfToQuads, with the prefixes the parser itself used. Turtle reports its `@prefix`/`PREFIX` declarations, with a
  * relative namespace already resolved against `@base` (or `baseIRI`), so they agree with the quads; a later declaration of a
- * prefix wins. This version of rdf-parse reports none for RDF/XML (`xmlns`) or JSON-LD (`@context`).
+ * prefix wins. This version of rdf-parse reports none for RDF/XML (`xmlns`) or JSON-LD (`@context`), so those are read from
+ * the file (otherFormatPrefixes, #187); what the parser reports wins over what is read.
  */
 export async function parseRdfToQuadsWithPrefixes(
   content: string,
@@ -71,6 +73,6 @@ export async function parseRdfToQuadsWithPrefixes(
     quadStream.on('error', (err: Error) => {
       reject(new Error(`Failed to parse RDF: ${err.message}`));
     });
-    quadStream.on('end', () => resolve({ quads, prefixes }));
+    quadStream.on('end', () => resolve({ quads, prefixes: { ...otherFormatPrefixes(content, options), ...prefixes } }));
   });
 }

@@ -1,0 +1,15 @@
+{
+  "@context": {
+    "ex": "http://example.org/examples/jsonld-prefixes#",
+    "other": "http://example.org/examples/other/",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "label": "rdfs:label",
+    "subClassOf": { "@id": "rdfs:subClassOf", "@type": "@id" }
+  },
+  "@graph": [
+    { "@id": "http://example.org/examples/jsonld-prefixes", "@type": "owl:Ontology", "label": "JSON-LD prefixes example" },
+    { "@id": "ex:Room", "@type": "owl:Class", "label": "Room" },
+    { "@id": "ex:Hall", "@type": "owl:Class", "label": "Hall", "subClassOf": "ex:Room" }
+  ]
+}
