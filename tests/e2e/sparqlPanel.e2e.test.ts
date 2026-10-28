@@ -114,6 +114,34 @@ describe('SPARQL side panel', () => {
     expect(await page.locator('[data-query-error]').textContent()).toMatch(/read-only/i);
   });
 
+  it('keeps the queries run on a file for the next visit, and puts a chosen one in the editor without running it (#182)', async () => {
+    // The two queries above were run on this ontology: they are in the selector.
+    expect(await page.locator('[data-query-history] option').count()).toBe(3); // the placeholder and two queries
+
+    // A returning visit: a new context that starts with the local storage of this one, the same ontology opened again.
+    const returning = await browser.newContext({ storageState: await page.context().storageState() });
+    const next = await returning.newPage();
+    next.setDefaultTimeout(5000);
+    try {
+      await openEditorWithTtl(next, TTL);
+      await next.click('#queryPanelBtn');
+      await next.locator(EDITOR).waitFor();
+
+      const labels = await next.locator('[data-query-history] option').allTextContents();
+      expect(labels).toHaveLength(3);
+      expect(labels[1]).toContain('DELETE WHERE'); // the newest first
+      expect(labels[2]).toContain('SELECT ?c ?l WHERE');
+
+      await next.locator('[data-query-history]').selectOption({ index: 2 });
+
+      expect(await next.locator(EDITOR).innerText()).toContain('SELECT ?c ?l WHERE { ?c rdfs:label ?l } ORDER BY ?c');
+      expect(await next.locator('.query-results').count()).toBe(0); // choosing does not run it
+      expect(await next.locator('[data-query-history]').inputValue()).toBe('');
+    } finally {
+      await returning.close();
+    }
+  });
+
   it('closes, giving the room back to the graph', async () => {
     const open = await networkWidth();
 

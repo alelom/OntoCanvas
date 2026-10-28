@@ -9,6 +9,7 @@ import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
+import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
 
@@ -22,6 +23,10 @@ export interface QueryTabDeps {
   run?: RunQuery;
   /** Fetches the CodeMirror editor that replaces the plain textarea. Defaults to the lazily loaded one. */
   loadEditor?: LoadEditor;
+  /** Where the queries run on a file are kept (#182). Defaults to the browser's local storage. */
+  history?: HistoryStore;
+  /** What the open file's history is kept under (its ontology IRI); null, or absent, means nothing is recorded. */
+  getHistoryKey?: () => string | null;
 }
 
 export interface QueryTab extends SidePanelTab {
@@ -89,6 +94,48 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   /** The prefixes the query's text was written with (the starter's header); the note compares the open file's to them. */
   let headerPrefixes = JSON.stringify(deps.getPrefixes());
 
+  // The history of the open file (#182). `entries` is what is shown, newest first; it is also kept when the storage fails,
+  // so a history that cannot be saved still lasts for the session.
+  const history = deps.history ?? localStorageHistory();
+  let historyRow: HTMLElement | null = null;
+  let historySelect: HTMLSelectElement | null = null;
+  let entries: HistoryEntry[] = [];
+  let loadedKey: string | null | undefined;
+
+  /** Loads the history of the file that is open now, when it is not the one already loaded. */
+  function syncHistory(): string | null {
+    const key = deps.getHistoryKey?.() ?? null;
+    if (key !== loadedKey) {
+      loadedKey = key;
+      entries = key ? history.load(key) : [];
+    }
+    return key;
+  }
+
+  function renderHistory(): void {
+    if (!historyRow || !historySelect) return;
+    historyRow.hidden = entries.length === 0;
+    const placeholder = element('option', undefined, `History (${entries.length})`);
+    placeholder.value = '';
+    const items = entries.map((entry, index) => {
+      const option = element('option', undefined, historyLabel(entry));
+      option.value = String(index);
+      option.title = entry.query.slice(0, 500);
+      return option;
+    });
+    historySelect.replaceChildren(placeholder, ...items);
+  }
+
+  function recordRun(query: string): void {
+    const key = syncHistory();
+    if (!key) return;
+    const next = addToHistory(entries, query, Date.now());
+    if (next === entries) return;
+    entries = next;
+    history.save(key, entries);
+    renderHistory();
+  }
+
   const starterText = () => {
     headerPrefixes = JSON.stringify(deps.getPrefixes());
     const store = deps.getStore();
@@ -111,6 +158,35 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     );
     prefixNote.setAttribute('data-prefix-note', '');
     prefixNote.hidden = true;
+
+    // The queries run on this file: choosing one puts it in the editor (it does not run it, and counts as the user's own query).
+    historyRow = element('div', 'query-history');
+    historyRow.setAttribute('data-query-history-row', '');
+    historySelect = element('select');
+    historySelect.setAttribute('data-query-history', '');
+    historySelect.setAttribute('aria-label', 'Query history');
+    const clearHistory = element('button', undefined, 'Clear');
+    clearHistory.type = 'button';
+    clearHistory.title = 'Forget the queries run on this ontology';
+    clearHistory.setAttribute('data-query-history-clear', '');
+    historyRow.append(historySelect, clearHistory);
+    historySelect.addEventListener('change', () => {
+      const chosen = entries[Number(historySelect!.value)];
+      historySelect!.value = '';
+      if (!chosen || !editor) return;
+      edited = true;
+      editor.setText(chosen.query);
+      updatePrefixNote();
+      editor.focus();
+    });
+    clearHistory.addEventListener('click', () => {
+      const key = syncHistory();
+      if (key) history.clear(key);
+      entries = [];
+      renderHistory();
+    });
+    syncHistory();
+    renderHistory();
 
     const editorHost = element('div', 'query-editor');
     editorHost.setAttribute('data-query-editor', '');
@@ -169,6 +245,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         return;
       }
 
+      recordRun(editor!.getText());
       runButton.disabled = true;
       stopButton.hidden = false;
       status.textContent = 'Running…';
@@ -212,7 +289,12 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
 
     runButton.addEventListener('click', () => void execute());
     stopButton.addEventListener('click', () => stop?.());
-    container.append(note, prefixNote, editorHost, actions, result);
+    container.append(note, prefixNote, historyRow, editorHost, actions, result);
+  }
+
+  /** An edited query keeps its own PREFIX lines; say so when the open file's differ from them. */
+  function updatePrefixNote(): void {
+    if (prefixNote) prefixNote.hidden = !edited || JSON.stringify(deps.getPrefixes()) === headerPrefixes;
   }
 
   return {
@@ -222,8 +304,10 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     refresh() {
       if (!editor) return;
       if (!edited) editor.setText(starterText());
-      // An edited query keeps its own PREFIX lines; say so when the new file's differ from them.
-      if (prefixNote) prefixNote.hidden = !edited || JSON.stringify(deps.getPrefixes()) === headerPrefixes;
+      updatePrefixNote();
+      // Another ontology: its own queries.
+      syncHistory();
+      renderHistory();
     },
   };
 }

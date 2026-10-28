@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from 'n3';
 import { initSidePanel } from '../../src/ui/sidePanel/initSidePanel';
+import { localStorageHistory } from '../../src/sparql/queryHistory';
 
 const deps = (embedded = false) => ({ getStore: () => new Store(), getPrefixes: () => ({}), embedded });
 const panel = () => document.getElementById('sidePanel') as HTMLElement;
@@ -37,6 +38,20 @@ describe('initSidePanel', () => {
     button().click();
     expect(panel().hidden).toBe(true);
     expect(button().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('offers the queries kept for the open file, under the key it is given (#182)', async () => {
+    const key = 'ontology:http://example.org/history-test';
+    localStorage.clear();
+    localStorageHistory().save(key, [{ query: 'ASK { ?s ?p ?o }', at: 1 }]);
+    initSidePanel({ ...deps(), getHistoryKey: () => key });
+    await renderToolbar();
+
+    button().click();
+
+    const options = [...panel().querySelectorAll<HTMLOptionElement>('[data-query-history] option')];
+    expect(options).toHaveLength(2); // the placeholder and the one query
+    expect(options[1].title).toContain('ASK { ?s ?p ?o }');
   });
 
   it('draws nothing until the button is first pressed', () => {
