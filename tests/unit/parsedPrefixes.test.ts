@@ -63,12 +63,13 @@ prefix ex: <http://example.org/other/>`;
     expect(await prefixesOf(ttl, { contentType: 'text/turtle', baseIRI: 'http://example.org/files/o.ttl' })).toEqual({ '': 'http://example.org/files/o.ttl#' });
   });
 
-  it('gives an object for a file in another format too', async () => {
+  // A known limitation (#187): rdf-parse 5.x reports no prefixes for RDF/XML. When it, or the code of #187, starts to report
+  // the xmlns prefixes this fails, on purpose, so that the expectation is updated with it.
+  it('has no prefixes yet for an RDF/XML file, whose xmlns declarations rdf-parse does not report (#187)', async () => {
     const rdfXml = `<?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:ex="http://example.org/">
   <rdf:Description rdf:about="http://example.org/a"><rdf:type rdf:resource="http://example.org/C"/></rdf:Description>
 </rdf:RDF>`;
-    const prefixes = await prefixesOf(rdfXml, { contentType: 'application/rdf+xml' });
-    expect(prefixes).toEqual(expect.any(Object));
+    expect(await prefixesOf(rdfXml, { contentType: 'application/rdf+xml' })).toEqual({});
   });
 });
