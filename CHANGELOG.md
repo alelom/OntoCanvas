@@ -1,3 +1,19 @@
+# [1.38.0](https://github.com/alelom/OntoCanvas/compare/v1.37.0...v1.38.0) (2026-10-28)
+
+
+### Bug Fixes
+
+* Ctrl+Z and Ctrl+Y in a text field belong to the field, not to the ontology's undo ([#180](https://github.com/alelom/OntoCanvas/issues/180)) ([065fd05](https://github.com/alelom/OntoCanvas/commit/065fd05baccf8833a5c6dc6beaa59ff287f19bd9))
+* read only the rows shown from a query, add Stop, drop a stale result, note changed prefixes ([#180](https://github.com/alelom/OntoCanvas/issues/180)) ([f739eb8](https://github.com/alelom/OntoCanvas/commit/f739eb88600529038ed22295b3030739b3f8ce47))
+* review of [#179](https://github.com/alelom/OntoCanvas/issues/179): cap an ORDER BY query, narrower Ctrl+Z guard, keep cursor and undo history in the editor ([510bb68](https://github.com/alelom/OntoCanvas/commit/510bb68f1782dbc634b24c91e87628ff88e80e9a)), closes [#180](https://github.com/alelom/OntoCanvas/issues/180)
+* test what the engine is given for an ORDER BY query instead of measuring the heap ([#184](https://github.com/alelom/OntoCanvas/issues/184)) ([e822ade](https://github.com/alelom/OntoCanvas/commit/e822ade35a86441b3539035e6929e0c2faad3e83)), closes [#179](https://github.com/alelom/OntoCanvas/issues/179)
+
+
+### Features
+
+* a CodeMirror 6 editor with SPARQL highlighting in the query panel ([#178](https://github.com/alelom/OntoCanvas/issues/178)) ([e8c05a9](https://github.com/alelom/OntoCanvas/commit/e8c05a91efa1241cf4b645efa9dd2a548096dcc5))
+* say in the bottom bar that individuals are not drawn, and start the query panel with a query for them ([#181](https://github.com/alelom/OntoCanvas/issues/181)) ([91d110a](https://github.com/alelom/OntoCanvas/commit/91d110a1468d9b134c4907003fdc97314569c50a)), closes [#168](https://github.com/alelom/OntoCanvas/issues/168)
+
 # [1.37.0](https://github.com/alelom/OntoCanvas/compare/v1.36.1...v1.37.0) (2026-10-27)
 
 
