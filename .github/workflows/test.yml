@@ -96,7 +96,9 @@ jobs:
           echo "areas=$(node -p "JSON.stringify(JSON.parse(require('fs').readFileSync('selection.json','utf8')).areas)")" >> "$GITHUB_OUTPUT"
 
       # Which areas run, which are skipped, and which file selected each (shown on the run's summary page).
+      # Only information: a failure here must not skip every area and block the merge.
       - name: Explain the selection
+        continue-on-error: true
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             node scripts/e2eSelect.mjs --changed --base "${{ github.event.pull_request.base.sha }}" --no-worktree --summary >> "$GITHUB_STEP_SUMMARY"

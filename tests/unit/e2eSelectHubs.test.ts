@@ -58,6 +58,17 @@ describe('packageJsonChange: what a change to package.json can reach', () => {
     }
   });
 
+  it('reaches everything for the pre and post hooks npm runs around those scripts, and for the install hooks (#191 review)', () => {
+    for (const name of ['prebuild', 'postbuild', 'pretest:e2e:area', 'posttest:e2e', 'predev', 'preinstall', 'install', 'postinstall', 'prepare', 'prepublishOnly']) {
+      const scripts = { ...base.scripts, [name]: 'changed' };
+      expect(change({ scripts }), name).toMatchObject({ affects: 'everything' });
+    }
+  });
+
+  it('still reaches nothing for a hook of a script that is not one of those (pretypecheck)', () => {
+    expect(change({ scripts: { ...base.scripts, pretypecheck: 'echo' } })).toMatchObject({ affects: 'nothing' });
+  });
+
   it('names the packages of a changed dependency: added, removed or with another version', () => {
     expect(change({ dependencies: { ...base.dependencies, '@codemirror/view': '^6.0.0' } })).toMatchObject({ affects: 'packages', packages: ['@codemirror/view'] });
     expect(change({ dependencies: { n3: '^2.0.0' } })).toMatchObject({ affects: 'packages', packages: ['n3'] });

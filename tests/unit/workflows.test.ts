@@ -128,6 +128,11 @@ describe('the pull request checks (test.yml)', () => {
     expect(runs(wf.jobs['e2e-select'])).toContain('--changed');
   });
 
+  it('does not let the explanation of the selection fail the selection job: it is only information (#191 review)', () => {
+    const step = (wf.jobs['e2e-select'].steps ?? []).find((s) => /--summary/.test(s.run ?? '')) as { 'continue-on-error'?: boolean } | undefined;
+    expect(step?.['continue-on-error']).toBe(true);
+  });
+
   it('explains the selection in the summary of the selection job (#189)', () => {
     expect(runs(wf.jobs['e2e-select'])).toMatch(/--summary.*GITHUB_STEP_SUMMARY/);
   });

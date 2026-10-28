@@ -86,8 +86,11 @@ export function buildImporterGraph(root = ROOT) {
   return (file) => [...(importers.get(normalise(file)) ?? [])];
 }
 
-/** A script that builds the app or runs the E2E tests: changing it changes how they run, so it reaches every area. */
-const E2E_SCRIPT = /^(build|preview|dev|test:e2e(:.*)?)$/;
+/**
+ * A script that builds the app or runs the E2E tests, with the pre and post hooks npm runs around it, or that npm runs on install:
+ * changing it changes how they run, so it reaches every area.
+ */
+const E2E_SCRIPT = /^((pre|post)?(build|preview|dev|test:e2e(:.*)?)|preinstall|install|postinstall|prepare|prepublish|prepublishOnly)$/;
 
 /**
  * What a change to package.json can reach (#190), from the file before and after.
