@@ -30,13 +30,12 @@ const shown = async (query: string) => {
 };
 
 describe('examples/sparql/query-panel.ttl', () => {
-  // Loads the engine and the parser once, so the first test is not charged for it.
+  // The engine and the parser are loaded before this file runs, by tests/engineSetup.ts (#192).
   beforeAll(async () => {
     const parsed = await parseRdfToGraph(text, { path: EXAMPLE });
     store = parsed.store;
     declared = parsed.prefixes ?? {};
     HEADER = prefixHeader(declared);
-    await runQuery([store], 'ASK { ?s ?p ?o }');
   });
 
   it('declares the default prefix, so the panel\'s starting query can use it', () => {

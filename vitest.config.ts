@@ -28,6 +28,8 @@ export default defineConfig({
           name: 'engine',
           include: ENGINE_TESTS,
           sequence: { groupOrder: 0 },
+          // Builds the engine once, before the files run, outside the 10 s limit of a hook (#192).
+          setupFiles: ['tests/unitSetup.ts', 'tests/engineSetup.ts'],
           // One after the other, sharing the module context: the engine (a singleton in src/sparql/runQuery.ts) is built once,
           // by the first file's warm-up, instead of by both files at the same time in two workers, which on a busy machine
           // took longer than the 10 s hook limit (#192).

@@ -2,7 +2,7 @@
  * Unit tests for running SPARQL over the editor's N3 store (spike for #169).
  * Calls runQuery directly on stores produced by parseRdfToGraph or built by hand, no UI involved.
  */
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Store, Parser, DataFactory, type Term } from 'n3';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
@@ -47,15 +47,8 @@ async function bindingsOf(stores: Store[], query: string) {
 }
 
 describe('runQuery', () => {
-  // The first query loads the engine (hundreds of modules) and sets up its actors, and the first parse loads
-  // rdf-parse: keep those one-off costs out of the tests, which then measure the logic only.
-  // Two hooks, so each job has its own deadline and a slow machine has to be twice as slow to fail the file.
-  beforeAll(async () => {
-    await runQuery([new Store()], 'ASK { ?s ?p ?o }');
-  });
-  beforeAll(async () => {
-    await parseRdfToGraph(TTL_PREFIXES + ':A a owl:Class .', { contentType: 'text/turtle' });
-  });
+  // The engine and rdf-parse are loaded before this file runs, by tests/engineSetup.ts (#192): a hook that builds them is under
+  // the 10 s limit, which a cold or busy machine does not keep.
 
   it('SELECT returns the same classes as a direct store query', async () => {
     const store = await loadFixtureStore('aec_drawing_ontology.ttl');
