@@ -3,14 +3,12 @@
  * Calls runQuery directly on stores produced by parseRdfToGraph or built by hand, no UI involved.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import v8 from 'node:v8';
-import vm from 'node:vm';
 import { Store, Parser, DataFactory, type Term } from 'n3';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/parser';
-import { runQuery } from '../../src/sparql/runQuery';
+import { runQuery, prepare } from '../../src/sparql/runQuery';
 import { QueryStopped } from '../../src/sparql/readCapped';
 import { prefixHeader } from '../../src/sparql/prefixHeader';
 import { INDIVIDUALS_STARTER_QUERY } from '../../src/ui/sidePanel/queryTab';
@@ -284,21 +282,33 @@ describe('runQuery', () => {
     });
 
     describe('with ORDER BY, which must see every row before it can give the first', () => {
-      it("sorts only what is needed, so the memory stays below that of sorting the whole join", async () => {
-        const store = await loadFixtureStore("aec_drawing_ontology.ttl");
-        v8.setFlagsFromString("--expose-gc");
-        const collect = vm.runInNewContext("gc") as () => void;
-        collect();
-        const before = process.memoryUsage().heapUsed;
-        let peak = before;
-        const sampler = setInterval(() => (peak = Math.max(peak, process.memoryUsage().heapUsed)), 10);
+      // What the engine is given decides its memory: a slice right over the sort lets it keep only the best rows (measured on
+      // the 794-triple fixture: the sorted cross join peaked at about 525 MB without the slice, about 205 MB with it). Measuring
+      // the heap in a test depends on the machine (it timed out on CI, #184), so the test looks at the algebra instead.
+      const given = async (query: string, limit: number) => (await prepare(PREFIXES + query, limit)) as any;
 
-        const result = await runQuery([store], "SELECT * WHERE { ?a ?b ?c . ?d ?e ?f } ORDER BY ?a", { limit: 500 });
-        clearInterval(sampler);
+      it("hands the engine a slice of limit + 1 rows over the sort, so it keeps only the best rows", async () => {
+        const operation = await given("SELECT * WHERE { ?a ?b ?c . ?d ?e ?f } ORDER BY ?a", 500);
 
-        expect(result).toMatchObject({ kind: "bindings", truncated: true });
-        // Measured on this fixture: about 520 MB when the sort is given the whole join, about 205 MB with the cap pushed into it.
-        expect((peak - before) / 1e6).toBeLessThan(350);
+        expect(operation).toMatchObject({ type: "slice", start: 0, length: 501 });
+        expect(operation.input.type).toBe("project");
+        expect(JSON.stringify(operation.input)).toContain('"type":"orderby"');
+      });
+
+      it("takes the smaller of the query's own LIMIT and the cap, and keeps its OFFSET", async () => {
+        expect(await given("SELECT * WHERE { ?s ?p ?o } ORDER BY ?s LIMIT 2 OFFSET 1", 500)).toMatchObject({ type: "slice", start: 1, length: 2 });
+        expect(await given("SELECT * WHERE { ?s ?p ?o } ORDER BY ?s LIMIT 100", 2)).toMatchObject({ type: "slice", start: 0, length: 3 });
+      });
+
+      it("leaves ASK, CONSTRUCT and DESCRIBE as they are, and gives the query itself when there is no cap", async () => {
+        expect((await given("ASK { ?s ?p ?o }", 500)).type).toBe("ask");
+        expect((await given("CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }", 500)).type).toBe("construct");
+        expect((await given("DESCRIBE ?s WHERE { ?s ?p ?o }", 500)).type).toBe("describe");
+        expect(await prepare("SELECT * WHERE { ?s ?p ?o }", Infinity)).toBe("SELECT * WHERE { ?s ?p ?o }");
+      });
+
+      it("still rejects an update query", async () => {
+        await expect(prepare("DELETE WHERE { ?s ?p ?o }", 500)).rejects.toThrow(/read-only/);
       });
 
       it("still returns the first rows of the sorted result", async () => {

@@ -93,7 +93,7 @@ function capSolutions(operation: Operation, rows: number): Operation {
  * Parse with the parser Comunica itself uses, so a query that is not read-only is rejected before any store is handed
  * to the engine. Returns what to give the engine: the query itself, or its algebra with the result capped.
  */
-async function prepare(query: string, limit: number): Promise<string | Operation> {
+export async function prepare(query: string, limit: number): Promise<string | Operation> {
   const [{ Parser }, { toAlgebra }, { AstFactory }, { DataFactory: RdfDataFactory }] = await Promise.all([
     import('@traqula/parser-sparql-1-2'),
     import('@traqula/algebra-sparql-1-2'),
