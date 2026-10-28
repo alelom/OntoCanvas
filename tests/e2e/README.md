@@ -37,6 +37,14 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
   `everything` are not followed: a change to one of them selects **every** area, and a change below one does not go through it,
   since the whole suite runs after the merge. A file that no area lists, that nothing but a hub imports, and that `ignore` does not
   cover, selects every area.
+- **Two hubs are precise instead (#190).** `typeOnly` files (`src/types.ts`) hold only types, so only the type check can break on
+  them and they select nothing; a unit test checks that they hold no runtime code. `package.json` is compared with its version
+  on the base: a new dependency selects the areas of the modules that import it, a change to the version or to a script that is
+  not how the E2E tests are built or run selects nothing, and a dev dependency, a script like `build` or `test:e2e:*`, or any
+  other field selects every area. The lock file follows `package.json`, and selects every area when it changed alone.
+- **See why an area ran:** on a pull request, "Select E2E areas" writes a summary (every area, run or skipped, and the files that
+  selected it; for "every area", which file did it), and every area is a check, a skipped one shown as skipped (#189).
+  `node scripts/e2eSelect.mjs --changed --summary` prints the same locally.
 - **Adding an E2E test:** put its name (without `.e2e.test.ts`) in exactly one area. A unit test fails if a test file is in no
   area or in two, if a listed path no longer exists, or if the README's table of areas is out of date
   (`node scripts/e2eSelect.mjs --readme` prints the table to paste).

@@ -1,0 +1,40 @@
+name: E2E area
+
+# One E2E area of the pull request checks (test.yml calls it once per area, and skips the call for an area the change does
+# not touch, so every area shows on the pull request, run or skipped; #189).
+on:
+  workflow_call:
+    inputs:
+      area:
+        description: An area of tests/e2e/areas.json
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  area:
+    name: Playwright
+    # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # No --coverage: Vitest's v8 coverage instruments only the Node process running the test files, while
+      # the app under test runs in Chromium, so it measured a few imported modules, not the app (#96).
+      - name: Run the E2E tests of this area
+        run: npm run test:e2e:area -- ${{ inputs.area }}

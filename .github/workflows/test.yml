@@ -73,7 +73,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       areas: ${{ steps.pick.outputs.areas }}
-      any: ${{ steps.pick.outputs.any }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,54 +94,144 @@ jobs:
           fi
           cat selection.json
           echo "areas=$(node -p "JSON.stringify(JSON.parse(require('fs').readFileSync('selection.json','utf8')).areas)")" >> "$GITHUB_OUTPUT"
-          echo "any=$(node -p "JSON.parse(require('fs').readFileSync('selection.json','utf8')).areas.length > 0")" >> "$GITHUB_OUTPUT"
 
-  e2e-tests:
-    name: "E2E: ${{ matrix.area }}"
+      # Which areas run, which are skipped, and which file selected each (shown on the run's summary page).
+      # Only information: a failure here must not skip every area and block the merge.
+      - name: Explain the selection
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node scripts/e2eSelect.mjs --changed --base "${{ github.event.pull_request.base.sha }}" --no-worktree --summary >> "$GITHUB_STEP_SUMMARY"
+          else
+            node scripts/e2eSelect.mjs --all --summary >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # One job per area (a matrix cannot do this: a job's `if` cannot read the matrix), so every area shows on the pull request,
+  # run or skipped. A unit test keeps this list in step with tests/e2e/areas.json (#189).
+  e2e-loading:
+    name: "E2E: loading"
     needs: [e2e-select]
-    if: needs.e2e-select.outputs.any == 'true'
-    # Pinned: ubuntu-latest is now 26.04, which this Playwright cannot install Chromium on.
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        area: ${{ fromJSON(needs.e2e-select.outputs.areas) }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'loading')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: loading
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+  e2e-saving:
+    name: "E2E: saving"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'saving')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: saving
 
-      - name: Install dependencies
-        run: npm ci
+  e2e-layout:
+    name: "E2E: layout"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'layout')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: layout
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+  e2e-display-config:
+    name: "E2E: display-config"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'display-config')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: display-config
 
-      # No --coverage: Vitest's v8 coverage instruments only the Node process running the test files, while
-      # the app under test runs in Chromium, so it measured a few imported modules, not the app (#96).
-      - name: Run the E2E tests of this area
-        run: npm run test:e2e:area -- ${{ matrix.area }}
+  e2e-data-properties:
+    name: "E2E: data-properties"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'data-properties')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: data-properties
 
-  # The one check the ruleset on main requires. The E2E matrix has a different set of jobs on every pull request, so
-  # none of them can be required by name; this job is green when every job that ran passed (a skipped one, an area
-  # nothing touched, counts as passed), and red if any failed or was cancelled.
+  e2e-relationships:
+    name: "E2E: relationships"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'relationships')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: relationships
+
+  e2e-nodes:
+    name: "E2E: nodes"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'nodes')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: nodes
+
+  e2e-annotations:
+    name: "E2E: annotations"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'annotations')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: annotations
+
+  e2e-external-refs:
+    name: "E2E: external-refs"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'external-refs')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: external-refs
+
+  e2e-imports:
+    name: "E2E: imports"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'imports')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: imports
+
+  e2e-search:
+    name: "E2E: search"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'search')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: search
+
+  e2e-embed:
+    name: "E2E: embed"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'embed')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: embed
+
+  e2e-shell:
+    name: "E2E: shell"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'shell')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: shell
+
+  e2e-sparql:
+    name: "E2E: sparql"
+    needs: [e2e-select]
+    if: contains(fromJSON(needs.e2e-select.outputs.areas), 'sparql')
+    uses: ./.github/workflows/e2e-area.yml
+    with:
+      area: sparql
+
+  # The one check the ruleset on main requires. The E2E areas that run differ on every pull request, so none of them can
+  # be required by name; this job is green when every job that ran passed (a skipped one, an area nothing touched, counts
+  # as passed), and red if any failed or was cancelled. It reads every job's result, so a new job cannot be left out.
   ready-to-merge:
     name: Ready to merge
-    needs: [hygiene, unit-tests, e2e-select, e2e-tests]
+    needs: [hygiene, unit-tests, e2e-select, e2e-loading, e2e-saving, e2e-layout, e2e-display-config, e2e-data-properties, e2e-relationships, e2e-nodes, e2e-annotations, e2e-external-refs, e2e-imports, e2e-search, e2e-embed, e2e-shell, e2e-sparql]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Every job that ran passed
-        run: |
-          for result in "${{ needs.hygiene.result }}" "${{ needs.unit-tests.result }}" "${{ needs.e2e-select.result }}" "${{ needs.e2e-tests.result }}"; do
-            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
-              echo "A job did not pass ($result)."
-              exit 1
-            fi
-          done
-          echo "All the jobs that ran passed."
+        run: node scripts/ci/ready-to-merge.mjs
+        env:
+          NEEDS: ${{ toJSON(needs) }}

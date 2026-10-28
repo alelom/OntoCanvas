@@ -7,12 +7,13 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { parse } from 'yaml';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const DIR = join(ROOT, '.github', 'workflows');
 
-interface Job { needs?: string | string[]; if?: string; 'runs-on'?: string; steps?: { run?: string; uses?: string; if?: string }[]; [k: string]: unknown }
+interface Job { name?: string; uses?: string; with?: Record<string, string>; needs?: string | string[]; if?: string; 'runs-on'?: string; steps?: { run?: string; uses?: string; if?: string }[]; [k: string]: unknown }
 interface Workflow { name: string; on: Record<string, unknown>; jobs: Record<string, Job> }
 
 const files = readdirSync(DIR).filter((f) => f.endsWith('.yml'));
@@ -66,16 +67,74 @@ describe('the pull request checks (test.yml)', () => {
     expect(needsOf(gate).sort()).toEqual(Object.keys(wf.jobs).filter((j) => j !== 'ready-to-merge').sort());
   });
 
-  it('fails the gate for a failed or cancelled job, and lets a skipped one pass', () => {
-    const script = runs(wf.jobs['ready-to-merge']);
-    expect(script).toMatch(/failure/);
-    expect(script).toMatch(/cancelled/);
-    expect(script).not.toMatch(/skipped/);
+  describe('the gate script', () => {
+    const gate = (needs: Record<string, { result: string }>) =>
+      spawnSync('node', ['scripts/ci/ready-to-merge.mjs'], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, NEEDS: JSON.stringify(needs) } });
+
+    it('is what the gate runs, fed with the results of every job it waits for', () => {
+      const job = wf.jobs['ready-to-merge'];
+      expect(runs(job)).toContain('scripts/ci/ready-to-merge.mjs');
+      expect(JSON.stringify(job)).toContain('toJSON(needs)');
+    });
+
+    it('passes when every job that ran passed, and a skipped job (an area nothing touched) counts as passed', () => {
+      const r = gate({ hygiene: { result: 'success' }, 'e2e-search': { result: 'success' }, 'e2e-layout': { result: 'skipped' } });
+      expect(r.status).toBe(0);
+    });
+
+    it('fails when it is given no results at all, rather than passing on nothing', () => {
+      expect(gate({}).status).toBe(1);
+    });
+
+    it('fails for a failed job and for a cancelled one, and names it', () => {
+      const failed = gate({ hygiene: { result: 'success' }, 'e2e-search': { result: 'failure' } });
+      expect(failed.status).toBe(1);
+      expect(failed.stdout + failed.stderr).toContain('e2e-search');
+
+      const cancelled = gate({ 'unit-tests': { result: 'cancelled' } });
+      expect(cancelled.status).toBe(1);
+      expect(cancelled.stdout + cancelled.stderr).toContain('unit-tests');
+    });
+  });
+
+  describe('one check per E2E area (#189)', () => {
+    const AREA_WORKFLOW = './.github/workflows/e2e-area.yml';
+    const areas = Object.keys(JSON.parse(readFileSync(join(ROOT, 'tests/e2e/areas.json'), 'utf8')).areas as Record<string, unknown>);
+    const areaJobs = Object.entries(wf.jobs).filter(([, job]) => job.uses === AREA_WORKFLOW);
+
+    it('has a job for every area of tests/e2e/areas.json, and for nothing else, so a new area cannot be left out of the checks', () => {
+      expect(areaJobs.map(([, job]) => job.with?.area).sort()).toEqual([...areas].sort());
+    });
+
+    it.each(areas)('%s: runs when the selection holds the area, and is skipped otherwise', (area) => {
+      const [id, job] = areaJobs.find(([, j]) => j.with?.area === area)!;
+      expect(id).toBe(`e2e-${area}`);
+      expect(job.name).toBe(`E2E: ${area}`);
+      expect(needsOf(job)).toEqual(['e2e-select']);
+      expect(job.if).toBe(`contains(fromJSON(needs.e2e-select.outputs.areas), '${area}')`);
+    });
+
+    it('runs each area in the reusable workflow, which takes the area and installs and runs like the old matrix job', () => {
+      const area = workflows['e2e-area.yml'];
+      expect(area.on).toHaveProperty('workflow_call');
+      const job = Object.values(area.jobs)[0];
+      expect(job['runs-on']).toBe('ubuntu-24.04');
+      expect(runs(job)).toContain('npm run test:e2e:area -- ${{ inputs.area }}');
+    });
   });
 
   it('runs only the unit tests and the E2E areas the change touches on a pull request', () => {
     expect(runs(wf.jobs['unit-tests'])).toContain('test:affected');
     expect(runs(wf.jobs['e2e-select'])).toContain('--changed');
+  });
+
+  it('does not let the explanation of the selection fail the selection job: it is only information (#191 review)', () => {
+    const step = (wf.jobs['e2e-select'].steps ?? []).find((s) => /--summary/.test(s.run ?? '')) as { 'continue-on-error'?: boolean } | undefined;
+    expect(step?.['continue-on-error']).toBe(true);
+  });
+
+  it('explains the selection in the summary of the selection job (#189)', () => {
+    expect(runs(wf.jobs['e2e-select'])).toMatch(/--summary.*GITHUB_STEP_SUMMARY/);
   });
 });
 
