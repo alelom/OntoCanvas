@@ -174,3 +174,72 @@ describe('the prefixes of a parsed RDF/XML or JSON-LD file (#187)', () => {
     expect(result.prefixes?.ex).toBe('http://example.org/');
   });
 });
+
+describe('the formats the loader accepts (#195 review)', () => {
+  it.each(['onto.rdf', 'onto.owl', 'onto.xml', 'onto.rdfxml', 'https://example.org/files/onto.RDFXML?download=1'])('reads %s as RDF/XML', (path) => {
+    expect(formatOf({ path })).toBe('rdfxml');
+  });
+
+  it.each(['onto.jsonld', 'onto.json', 'https://example.org/data/onto.JSON#top'])('reads %s as JSON-LD', (path) => {
+    expect(formatOf({ path })).toBe('jsonld');
+  });
+
+  it.each(['application/rdf+xml', 'application/xml', 'text/xml', 'application/rdf+xml; charset=utf-8'])('reads the content type %s as RDF/XML', (contentType) => {
+    expect(formatOf({ contentType })).toBe('rdfxml');
+  });
+
+  it.each(['application/ld+json', 'application/json', 'application/json; charset=utf-8'])('reads the content type %s as JSON-LD', (contentType) => {
+    expect(formatOf({ contentType })).toBe('jsonld');
+  });
+
+  it('does not take other XML media types, which rdf-parse reads with other parsers, for RDF/XML', () => {
+    expect(formatOf({ contentType: 'application/xhtml+xml' })).toBeNull();
+    expect(formatOf({ contentType: 'image/svg+xml' })).toBeNull();
+  });
+});
+
+describe('rdfXmlPrefixes: entities and comments in the DOCTYPE (#195 review)', () => {
+  const doc = (subset: string, rootAttributes: string) => `<?xml version="1.0"?>\n<!DOCTYPE rdf:RDF [\n${subset}\n]>\n<rdf:RDF ${rootAttributes}></rdf:RDF>`;
+
+  it('expands an entity whose value uses another entity', () => {
+    const xml = doc('<!ENTITY base "http://x/"> <!ENTITY onto "&base;onto#">', 'xmlns="&onto;" xmlns:ex="&base;ex#"');
+
+    expect(rdfXmlPrefixes(xml)).toEqual({ '': 'http://x/onto#', ex: 'http://x/ex#' });
+  });
+
+  it('declares no prefix, rather than a wrong one, when an entity cannot be expanded', () => {
+    const xml = doc('<!ENTITY owl "http://www.w3.org/2002/07/owl#">', 'xmlns:owl="&owl;" xmlns:q="&unknown;" xmlns:r="http://x/&unknown;/"');
+
+    expect(rdfXmlPrefixes(xml)).toEqual({ owl: 'http://www.w3.org/2002/07/owl#' });
+  });
+
+  it('gives up on entities that refer to each other, instead of looping, and declares no prefix for them', () => {
+    const xml = doc('<!ENTITY a "&b;x"> <!ENTITY b "&a;y">', 'xmlns:p="&a;" xmlns:ok="http://example.org/ok#"');
+
+    expect(rdfXmlPrefixes(xml)).toEqual({ ok: 'http://example.org/ok#' });
+  });
+
+  it('keeps the five predefined entities working', () => {
+    expect(rdfXmlPrefixes('<rdf:RDF xmlns:a="http://x/?a=1&amp;b=2#"></rdf:RDF>')).toEqual({ a: 'http://x/?a=1&b=2#' });
+  });
+
+  it("is not thrown off by an apostrophe or a quote in a comment inside the DOCTYPE's subset", () => {
+    const xml = doc(`<!-- the owl's entity, a "quoted" word, and a > sign -->\n<!ENTITY owl "http://www.w3.org/2002/07/owl#">`, 'xmlns:owl="&owl;" xmlns:ex="http://example.org/ex#"');
+
+    expect(rdfXmlPrefixes(xml)).toEqual({ owl: 'http://www.w3.org/2002/07/owl#', ex: 'http://example.org/ex#' });
+  });
+});
+
+describe('jsonLdPrefixes: @prefix false and urn namespaces (#195 review)', () => {
+  it('does not take a term that says it is not a prefix, whatever its IRI ends with', () => {
+    const doc = JSON.stringify({ '@context': { a: { '@id': 'http://example.org/a#', '@prefix': false }, b: { '@id': 'http://example.org/b#' } } });
+
+    expect(jsonLdPrefixes(doc)).toEqual({ b: 'http://example.org/b#' });
+  });
+
+  it('takes a urn namespace, which ends with a colon', () => {
+    const doc = JSON.stringify({ '@context': { isbn: 'urn:isbn:', uuid: 'urn:uuid:', thing: 'urn:example:thing' } });
+
+    expect(jsonLdPrefixes(doc)).toEqual({ isbn: 'urn:isbn:', uuid: 'urn:uuid:' });
+  });
+});
