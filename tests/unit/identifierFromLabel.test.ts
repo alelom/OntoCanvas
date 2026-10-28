@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { labelToCamelCaseIdentifier } from '../../src/lib/identifierFromLabel';
-import { deriveNewNodeIdentifier } from '../../src/parser';
+import { deriveNewNodeIdentifier } from '../../src/ontology/editClasses';
 
 describe('labelToCamelCaseIdentifier', () => {
   it('derives camelCase from a prose label', () => {

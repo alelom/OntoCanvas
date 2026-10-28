@@ -4,7 +4,8 @@
  * is unknown, which would break round-trips for ontologies with other bases.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
 
 const WRONG_DEFAULT_PREFIX = /@prefix\s+:\s*<http:\/\/example\.org\/aec-drawing-ontology#>\s*\./;
 

@@ -3,7 +3,7 @@
  * add every property it found in a restriction to the object properties too, so it was listed in both menus.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 
 const PREFIXES = `@prefix : <http://example.org/m#> .
 @prefix ext: <http://example.org/ext#> .

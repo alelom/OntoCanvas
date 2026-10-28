@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { isUriFromExternalOntology } from '../../src/ui/externalRefs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
@@ -24,7 +24,7 @@ describe('External Property Detection', () => {
     expect(containsProperty?.uri).toBeDefined();
 
     // Get main ontology base
-    const { getMainOntologyBase } = await import('../../src/parser');
+    const { getMainOntologyBase } = await import('../../src/ontology/readOntology');
     const mainBase = getMainOntologyBase(store);
 
     // The main ontology base from the fixture: @prefix : <http://example.org/aec-drawing-ontology#>, :Ontology rdf:type owl:Ontology

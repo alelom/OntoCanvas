@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Store } from 'n3';
-import { parseRdfToGraph, getDataProperties } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getDataProperties } from '../../src/ontology/readOntology';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 

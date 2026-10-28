@@ -3,21 +3,13 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { describe, it, expect } from 'vitest';
 import type { Quad } from 'n3';
-import {
-  parseTtlToGraph,
-  parseRdfToGraph,
-  quadsToParseResult,
-  updateLabelInStore,
-  storeToTurtle,
-  extractLocalName,
-  getClassNamespace,
-  getMainOntologyBase,
-  addEdgeToStore,
-  addNodeToStore,
-  removeEdgeFromStore,
-  removeNodeFromStore,
-  addObjectPropertyToStore,
-} from './parser';
+import { parseTtlToGraph, parseRdfToGraph, quadsToParseResult } from './ontology/buildGraph';
+import { updateLabelInStore, addNodeToStore, removeNodeFromStore } from './ontology/editClasses';
+import { storeToTurtle } from './ontology/serialize';
+import { extractLocalName } from './utils/localName';
+import { getClassNamespace, getMainOntologyBase } from './ontology/readOntology';
+import { addEdgeToStore, removeEdgeFromStore } from './ontology/editEdges';
+import { addObjectPropertyToStore } from './ontology/editObjectProperties';
 import { setExampleImageUrisForClass, ensureExampleImageAnnotationProperty, getExampleImageUrisForClass } from './lib/exampleImageStore';
 import type { GraphData } from './types';
 

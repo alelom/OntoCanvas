@@ -8,7 +8,7 @@
  * next reparse.
  */
 import { describe, it, expect } from 'vitest';
-import { namesOwlThing } from '../../src/parser';
+import { namesOwlThing } from '../../src/ontology/editClasses';
 
 const OWL_THING_URI = 'http://www.w3.org/2002/07/owl#Thing';
 

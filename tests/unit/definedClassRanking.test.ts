@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { definitionParents } from '../../src/lib/definitionParents';
 import { buildLayeredModel } from '../../src/layouts/layeredModel';
 import type { GraphEdge } from '../../src/types';

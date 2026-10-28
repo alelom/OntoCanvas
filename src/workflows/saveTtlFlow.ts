@@ -3,7 +3,7 @@
  * Moved out of main.ts (#175).
  */
 import { loadOntologyFromContent } from '../lib/loadOntology';
-import { storeToTurtle } from '../parser';
+import { storeToTurtle } from '../ontology/serialize';
 import { session, fileState } from '../state/appState';
 import { updateSerializerDropdown, updateSaveButtonVisibility } from '../ui/fileBar';
 import { debugError, debugLog, debugWarn } from '../utils/debug';

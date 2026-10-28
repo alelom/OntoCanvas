@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
 
 describe('rdfs:comment attribution duplication prevention', () => {
   it.skip('should not add attribution to rdfs:comment, only as a comment at the top', async () => {

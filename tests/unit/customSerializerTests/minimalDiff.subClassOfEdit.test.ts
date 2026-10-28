@@ -4,16 +4,10 @@
  * reordering its items.
  */
 import { describe, it, expect } from 'vitest';
-import {
-  parseRdfToGraph,
-  storeToTurtle,
-  removeRestrictionFromStore,
-  addRestrictionToStore,
-  addDataPropertyRestrictionToClass,
-  removeDataPropertyRestrictionFromClass,
-  getDataPropertyRestrictionsForClass,
-  type SerializerType,
-} from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { removeRestrictionFromStore, addRestrictionToStore, addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../../../src/ontology/editRestrictions';
+import type { SerializerType } from '../../../src/storage';
 import { lineDiff, formatDiff } from './minimalDiff';
 
 const TTL = `@prefix : <http://example.org/sco#> .

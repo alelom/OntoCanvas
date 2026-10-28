@@ -2,14 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { DataFactory } from 'n3';
-import {
-  parseRdfToGraph,
-  addDataPropertyRestrictionToClass,
-  addObjectPropertyToStore,
-  getClassNamespace,
-  removeNodeFromStore,
-  updateLabelInStore,
-} from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { addDataPropertyRestrictionToClass } from '../../src/ontology/editRestrictions';
+import { addObjectPropertyToStore } from '../../src/ontology/editObjectProperties';
+import { getClassNamespace } from '../../src/ontology/readOntology';
+import { removeNodeFromStore, updateLabelInStore } from '../../src/ontology/editClasses';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import { validateOntologyStructure } from '../../src/lib/ontologyValidation';
 import type { ExternalOntologyReference } from '../../src/storage';

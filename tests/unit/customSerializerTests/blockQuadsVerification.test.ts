@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph, updateLabelInStore } from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { updateLabelInStore } from '../../../src/ontology/editClasses';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { DataFactory } from 'n3';

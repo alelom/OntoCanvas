@@ -6,7 +6,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph, updateLabelInStore, storeToTurtle } from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { updateLabelInStore } from '../../../src/ontology/editClasses';
+import { storeToTurtle } from '../../../src/ontology/serialize';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 

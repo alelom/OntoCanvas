@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph, getMainOntologyBase } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getMainOntologyBase } from '../../src/ontology/readOntology';
 import { isDefinedElsewhere } from '../../src/graph/definedElsewhere';
 
 describe('class node carries rdfs:isDefinedBy', () => {

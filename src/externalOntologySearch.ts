@@ -2,7 +2,7 @@ import { Store, DataFactory } from 'n3';
 import { RESERVED_VOCABULARY_NAMESPACES } from './rdf/reservedVocabulary';
 import type { Quad } from 'n3';
 import { parseRdfToQuads } from './rdf/parseRdfToQuads';
-import { extractLocalName, extractLocalNameFromUri } from './parser';
+import { extractLocalName, extractLocalName as extractLocalNameFromUri } from './utils/localName';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
 
 export interface ExternalClassInfo {

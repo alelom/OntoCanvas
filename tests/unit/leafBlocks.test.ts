@@ -12,7 +12,7 @@ import { buildLayeredModel } from '../../src/layouts/layeredModel';
 import { computeHierarchicalDag } from '../../src/layouts/hierarchicalDag';
 import { computeHierarchicalTiersSpring } from '../../src/layouts/hierarchicalTiersSpring';
 import { computeElkLayered } from '../../src/layouts/elkLayered';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { definitionParents } from '../../src/lib/definitionParents';
 import type { GraphEdge } from '../../src/types';
 

@@ -4,7 +4,7 @@
  */
 import { resolveLayoutMode, getEdgeTypes, getDefaultColor, getDefaultEdgeColors } from '../graph';
 import { searchScopeFromConfig } from '../lib/searchHighlight';
-import { extractLocalName } from '../parser';
+import { extractLocalName } from '../utils/localName';
 import { canvasState, session } from '../state/appState';
 import type { DisplayConfig, ExternalNodeLayout } from '../storage';
 import type { BorderLineType } from '../types';

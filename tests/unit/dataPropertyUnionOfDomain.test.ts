@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 
 const TTL = `
 @prefix : <http://example.org/aec-drawing-ontology#> .

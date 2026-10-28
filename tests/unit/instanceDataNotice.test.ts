@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { detectInstanceData, detectOntologyIssues } from '../../src/ui/ontologyIssues';
 import { initStatusBar, updateStatusBar } from '../../src/ui/statusBar';
 

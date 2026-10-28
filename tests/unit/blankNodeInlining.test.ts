@@ -2,7 +2,8 @@
  * Unit tests to ensure blank nodes are always inlined and never written as _:df_X_Y or _:n3-X format.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
 
 describe('Blank Node Inlining', () => {
   it('should never write blank nodes as _:df_X_Y format', async () => {

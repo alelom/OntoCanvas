@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import type { ClassExpressionGroup } from '../../src/types';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '../fixtures');

@@ -4,7 +4,7 @@
 
 import type { Store } from 'n3';
 import type { ObjectPropertyInfo } from '../types';
-import { extractLocalName } from '../parser';
+import { extractLocalName } from '../utils/localName';
 import { getDisplayBase } from '../lib/displayBase';
 import { labelToCamelCaseIdentifier, validateLabelForIdentifierWithUniqueness } from '../lib/identifierFromLabel';
 

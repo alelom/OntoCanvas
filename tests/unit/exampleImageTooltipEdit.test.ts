@@ -3,7 +3,7 @@
  * exampleImage, when the ontology declares or imports it, in display order.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { applyNodeFormToStore } from '../../src/ui/nodeModalForm';
 import { ADIRO_EXAMPLE_IMAGE } from '../../src/lib/exampleImages';
 import type { GraphNode } from '../../src/types';

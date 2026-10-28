@@ -3,7 +3,8 @@
  * Tests the core state management (hasUnsavedChanges, button visibility logic) without requiring browser automation.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseRdfToGraph, storeToTurtle } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
 
 describe('Save Button State Management Unit Tests', () => {
   const testTtl = `

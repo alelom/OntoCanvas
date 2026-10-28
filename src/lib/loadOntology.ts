@@ -2,8 +2,8 @@
  * Load ontology from RDF content (any supported format).
  * Parses content, extracts prefix map and external refs; caller applies state and UI.
  */
-import { parseRdfToGraph } from '../parser';
-import type { ParseResult } from '../parser';
+import { parseRdfToGraph } from '../ontology/buildGraph';
+import type { ParseResult } from '../ontology/buildGraph';
 import { extractExternalRefsFromStore, extractPrefixesFromTtl } from '../ui/externalRefs';
 import type { ExternalOntologyReference } from '../storage';
 

@@ -2,7 +2,7 @@
  * Which parts of the edit data property modal can be edited, depending on where the property is defined.
  * Moved out of main.ts (#175).
  */
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { session } from '../state/appState';
 import { getDefiningOntologyFromUri } from '../workflows/propertyLists';
 import { showWarningIconPopover, updateEditDataPropIdentifierAndValidation } from './dataPropertyForm';

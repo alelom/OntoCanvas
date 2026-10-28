@@ -4,7 +4,7 @@ import {
   validateAllRelationships,
 } from './ontologyValidator';
 import { Store, DataFactory } from 'n3';
-import { parseRdfToGraph } from '../parser';
+import { parseRdfToGraph } from '../ontology/buildGraph';
 import type { CopiedRelationship } from './relationshipClipboard';
 import type { GraphData } from '../types';
 

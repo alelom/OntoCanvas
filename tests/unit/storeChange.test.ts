@@ -4,7 +4,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DataFactory, type Store } from 'n3';
-import { parseRdfToGraph, removeNodeFromStore, removeRestrictionEdgeFromStore } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { removeNodeFromStore } from '../../src/ontology/editClasses';
+import { removeRestrictionEdgeFromStore } from '../../src/ontology/editRestrictions';
 import { snapshotStore, diffStore, revertStoreChange, reapplyStoreChange } from '../../src/lib/storeChange';
 
 const TTL = `@prefix : <http://example.org/u#> .

@@ -2,7 +2,7 @@
  * The add edge modal.
  * Moved out of main.ts (#175).
  */
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { editState, session } from '../state/appState';
 import { updateEditEdgeCommentDisplayLocal } from './edgeModalHelpers';
 import { showEditEdgeClassExpressionNotice } from './editEdgeClassExpressionNotice';

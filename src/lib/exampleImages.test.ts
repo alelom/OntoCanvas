@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
 import { exampleImagesOf, adiroExampleImageAvailable, sortExampleImages, resolveExampleImages, ADIRO_EXAMPLE_IMAGE } from './exampleImages';
-import { parseRdfToGraph } from '../parser';
+import { parseRdfToGraph } from '../ontology/buildGraph';
 
 function storeOf(ttl: string, baseIRI?: string): Store {
   const store = new Store();

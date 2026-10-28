@@ -7,7 +7,10 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'fs
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { parseTurtleWithPositions, reconstructFromOriginalText, type OriginalFileCache, type StatementBlock } from '../../src/rdf/sourcePreservation';
-import { parseTtlToGraph, storeToTurtle, updateLabelInStore, extractLocalName } from '../../src/parser';
+import { parseTtlToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
+import { updateLabelInStore } from '../../src/ontology/editClasses';
+import { extractLocalName } from '../../src/utils/localName';
 import { Store, DataFactory } from 'n3';
 import { debugLog } from '../../src/utils/debug';
 import { editNodeProperties } from '../../src/workflows/editNodeProperties';

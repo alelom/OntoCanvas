@@ -11,12 +11,9 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Store } from 'n3';
-import {
-  parseRdfToGraph,
-  getObjectProperties,
-  addObjectPropertyToStore,
-  updateObjectPropertyDomainRangeInStore,
-} from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getObjectProperties } from '../../src/ontology/readOntology';
+import { addObjectPropertyToStore, updateObjectPropertyDomainRangeInStore } from '../../src/ontology/editObjectProperties';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STUBS_FIXTURE = join(__dirname, '../fixtures/aec-provenance-typing-stubs.ttl');

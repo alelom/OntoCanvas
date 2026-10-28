@@ -8,7 +8,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { parseRdfToGraph, storeToTurtle, updateLabelInStore } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
+import { updateLabelInStore } from '../../src/ontology/editClasses';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

@@ -9,7 +9,7 @@ import type { Quad } from 'n3';
 import type { Quad as N3Quad } from '@rdfjs/types';
 import { buildInlineForms, replaceBlankRefs, convertBlanksToInline } from '../turtlePostProcess';
 import { debugLog, debugWarn, debugError } from '../utils/debug';
-import { quadsAreDifferent } from '../parser';
+import { quadsAreDifferent } from '../ontology/serialize';
 import { parsePropertyLinesWithStateMachine, type PropertyLineMatch } from './propertyLineParser';
 import { parseTurtlePrefixes } from './turtlePrefixes';
 import { findSubClassOfItems, formatLikeOriginal } from './subClassOfListText';

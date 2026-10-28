@@ -5,7 +5,10 @@
 import { getDefaultEdgeColors, getDefaultColor } from '../graph';
 import { getDisplayBase } from '../lib/displayBase';
 import { validateLabelForIdentifier, labelToCamelCaseIdentifier, validateLabelForIdentifierWithUniqueness } from '../lib/identifierFromLabel';
-import { extractLocalName, renameObjectPropertyInStore, updateObjectPropertyLabelInStore, updateObjectPropertyCommentInStore, updateObjectPropertyDomainRangeInStore, namesOwlThing, updateObjectPropertySubPropertyOfInStore, updateObjectPropertyIsDefinedByInStore, getMainOntologyBase, removeObjectPropertyFromStore, addObjectPropertyToStore } from '../parser';
+import { extractLocalName } from '../utils/localName';
+import { renameObjectPropertyInStore, updateObjectPropertyLabelInStore, updateObjectPropertyCommentInStore, updateObjectPropertyDomainRangeInStore, updateObjectPropertySubPropertyOfInStore, updateObjectPropertyIsDefinedByInStore, removeObjectPropertyFromStore, addObjectPropertyToStore } from '../ontology/editObjectProperties';
+import { namesOwlThing } from '../ontology/editClasses';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { actions } from '../state/actions';
 import { initFlags, session, fileState, canvasState } from '../state/appState';
 import type { ObjectPropertyInfo } from '../types';

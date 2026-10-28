@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { parseRdfToGraph } from '../../../src/parser';
-import { storeToTurtle } from '../../../src/parser';
-import { updateLabelInStore } from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { updateLabelInStore } from '../../../src/ontology/editClasses';
 import { DataFactory } from 'n3';
-import { RDFS } from '../../../src/parser';
+import { RDFS } from '../../../src/ontology/vocab';
 
 const TEST_FIXTURES_DIR = join(__dirname, '../../fixtures');
 const FIXTURES_DIR = join(__dirname, '../../fixtures/customSerializerFixtures');

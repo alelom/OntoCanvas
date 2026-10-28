@@ -3,7 +3,7 @@
  * Moved out of main.ts (#175).
  */
 import { isDefinedElsewhere } from '../graph/definedElsewhere';
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { session, editState, fileState } from '../state/appState';
 import { buildAnnotationPropsDeps } from '../workflows/propertyLists';
 import { isUriFromExternalOntology, getNodeOntologyUrl } from './externalRefs';

@@ -4,7 +4,7 @@
  */
 import { getLayoutAlgorithm } from '../graph';
 import { getAsyncLayoutAlgorithm } from '../layouts';
-import { removeEdgeFromStore, addEdgeToStore } from '../parser';
+import { removeEdgeFromStore, addEdgeToStore } from '../ontology/editEdges';
 import { canvasState, session, editState, fileState } from '../state/appState';
 import type { GraphData } from '../types';
 import { showAddEdgeModal } from '../ui/addEdgeModal';

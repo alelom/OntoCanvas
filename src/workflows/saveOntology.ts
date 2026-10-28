@@ -5,7 +5,7 @@
 
 import type { Store } from 'n3';
 import type { OriginalFileCache } from '../rdf/sourcePreservation';
-import { storeToTurtle } from '../parser';
+import { storeToTurtle } from '../ontology/serialize';
 import { debugLog } from '../utils/debug';
 
 export interface SaveOntologyParams {

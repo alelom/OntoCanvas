@@ -4,13 +4,9 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { DataFactory, Parser } from 'n3';
 import { lineDiff } from './customSerializerTests/minimalDiff';
-import {
-  parseRdfToGraph,
-  storeToTurtle,
-  addDataPropertyRestrictionToClass,
-  removeDataPropertyRestrictionFromClass,
-  getDataPropertyRestrictionsForClass,
-} from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { storeToTurtle } from '../../src/ontology/serialize';
+import { addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../../src/ontology/editRestrictions';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples');
 const OWL = 'http://www.w3.org/2002/07/owl#';

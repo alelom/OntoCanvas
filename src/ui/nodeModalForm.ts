@@ -4,17 +4,11 @@
  */
 
 import type { Store } from 'n3';
-import {
-  deriveNewNodeIdentifier,
-  getClassNamespace,
-  getMainOntologyBase,
-  BASE_IRI,
-  updateCommentInStore,
-  updateAnnotationPropertyValueInStore,
-  addDataPropertyRestrictionToClass,
-  removeDataPropertyRestrictionFromClass,
-  getDataPropertyRestrictionsForClass,
-} from '../parser';
+import { deriveNewNodeIdentifier, updateCommentInStore } from '../ontology/editClasses';
+import { getClassNamespace, getMainOntologyBase } from '../ontology/readOntology';
+import { BASE_IRI } from '../ontology/vocab';
+import { updateAnnotationPropertyValueInStore } from '../ontology/editAnnotationProperties';
+import { addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../ontology/editRestrictions';
 import { setAnnotationValuesForClass } from '../lib/annotationValues';
 import { exampleImagesOf } from '../lib/exampleImages';
 import type { GraphNode, DataPropertyRestriction, AnnotationPropertyInfo } from '../types';

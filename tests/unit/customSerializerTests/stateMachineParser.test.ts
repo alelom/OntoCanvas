@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { parseTurtleWithPositions, extractPropertyLines, PropertyLineExtractionError } from '../../../src/rdf/sourcePreservation';
-import { parseRdfToGraph } from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { DataFactory } from 'n3';
 
 const __filename = fileURLToPath(import.meta.url);

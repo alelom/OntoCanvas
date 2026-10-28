@@ -7,7 +7,7 @@ import { Store, Parser, DataFactory, type Term } from 'n3';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { runQuery, prepare } from '../../src/sparql/runQuery';
 import { QueryStopped } from '../../src/sparql/readCapped';
 import { prefixHeader } from '../../src/sparql/prefixHeader';

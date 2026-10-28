@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { getTransitiveChildIds, getTransitiveParentIds } from '../../src/lib/classGraphTraversal';
 
 // Reproduces the reported bug: right-clicking "Layout content type" in the ADIRO

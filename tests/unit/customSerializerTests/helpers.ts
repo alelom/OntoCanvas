@@ -4,7 +4,7 @@
  */
 
 import { Store, DataFactory } from 'n3';
-import { parseRdfToGraph } from '../../../src/parser';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { parseTurtleWithPositions, extractPropertyLines, type OriginalFileCache, type StatementBlock, type PropertyLine, type TextPosition } from '../../../src/rdf/sourcePreservation';
 import type { Quad as N3Quad } from 'n3';
 

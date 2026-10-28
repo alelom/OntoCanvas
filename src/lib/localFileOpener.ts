@@ -5,7 +5,7 @@
 
 import { storeLocalFileContent } from './localFileTokenStorage';
 import { loadOntologyFromContent } from './loadOntology';
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 
 export interface LocalFileMatch {
   content: string;

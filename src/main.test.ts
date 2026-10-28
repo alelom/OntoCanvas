@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock all the imports since main.ts has many dependencies
-vi.mock('./parser', () => ({
+vi.mock('./ontology/buildGraph', () => ({
   parseTtlToGraph: vi.fn(),
 }));
 

@@ -3,7 +3,7 @@
  * declared so that data written against an earlier release keeps its meaning; nothing else about them changes.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRdfToGraph } from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 
 const TTL = `@prefix : <http://example.org/o#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .

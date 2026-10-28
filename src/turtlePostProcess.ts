@@ -44,7 +44,7 @@ function undefinedBlankNodeRefs(ttl: string): Set<string> {
   return new Set([...referenced].filter((ref) => !defined.has(ref)));
 }
 
-// --- Constants (aligned with parser.ts) ---
+// --- Constants (aligned with src/ontology/vocab.ts) ---
 
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 

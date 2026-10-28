@@ -3,7 +3,7 @@
  * Moved out of main.ts (#175).
  */
 import { getReferencedExternalClassesFromStore, type ExternalClassInfo, getStubExternalClassForUri, searchExternalClasses } from '../externalOntologySearch';
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { editState, session } from '../state/appState';
 import { isDebugMode, debugLog } from '../utils/debug';
 import { buildAnnotationPropsDeps } from '../workflows/propertyLists';

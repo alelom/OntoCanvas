@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { parseTtlWithCache, modifyLabel, modifyComment, modifyLabellableRoot } from './helpers';
-import { storeToTurtle, parseRdfToGraph } from '../../../src/parser';
+import { storeToTurtle } from '../../../src/ontology/serialize';
+import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

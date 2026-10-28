@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import {
-  parseRdfToGraph,
-  removeAnnotationPropertyFromStore,
-  getAnnotationProperties,
-} from '../../src/parser';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { removeAnnotationPropertyFromStore } from '../../src/ontology/editAnnotationProperties';
+import { getAnnotationProperties } from '../../src/ontology/readOntology';
 
 // Ontology whose base is NOT the default BASE_IRI (http://example.org/aec-drawing-ontology#).
 // This is the realistic case: the delete used to fail because it built the URI as

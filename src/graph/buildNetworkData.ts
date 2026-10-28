@@ -11,7 +11,7 @@ import { definitionParents } from '../lib/definitionParents';
 import { resolveExampleImages } from '../lib/exampleImages';
 import { type SearchScope, scopeDimsGraph, computeSearchSets, scopeIncludesNeighbours, getNodeSearchOpacity as getSearchOpacity, getDataPropertySearchOpacity, getEdgeSearchOpacity } from '../lib/searchHighlight';
 import { readableTextColor } from '../lib/textContrast';
-import { getMainOntologyBase } from '../parser';
+import { getMainOntologyBase } from '../ontology/readOntology';
 import { fileState, session, canvasState } from '../state/appState';
 import type { GraphData, GraphEdge, GraphNode, BorderLineType } from '../types';
 import { type AnnotationStyleConfig, SPACING, DATA_PROPERTY_FILL, RELATIONSHIP_LABEL_BG_RGB } from '../ui/constants';

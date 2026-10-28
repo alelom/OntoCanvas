@@ -7,7 +7,9 @@
 import type { Store } from 'n3';
 import type { GraphNode, AnnotationPropertyInfo } from '../types';
 import type { NodeFormData } from '../ui/nodeModalForm';
-import { updateLabelInStore, getClassNamespace, getMainOntologyBase, BASE_IRI } from '../parser';
+import { updateLabelInStore } from '../ontology/editClasses';
+import { getClassNamespace, getMainOntologyBase } from '../ontology/readOntology';
+import { BASE_IRI } from '../ontology/vocab';
 import { applyNodeFormToStore, isDuplicateIdentifierForRename } from '../ui/nodeModalForm';
 import { debugLog, debugWarn } from '../utils/debug';
 

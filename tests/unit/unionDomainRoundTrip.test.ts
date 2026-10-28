@@ -4,7 +4,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { DataFactory, type Store } from 'n3';
 import { parseTtlWithCache, modifyLabel } from './customSerializerTests/helpers';
-import { storeToTurtle, parseRdfToGraph, getDataProperties } from '../../src/parser';
+import { storeToTurtle } from '../../src/ontology/serialize';
+import { parseRdfToGraph } from '../../src/ontology/buildGraph';
+import { getDataProperties } from '../../src/ontology/readOntology';
 
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '../fixtures');
 const OWL = 'http://www.w3.org/2002/07/owl#';
