@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+  An RDF/XML file, to see the SPARQL panel start with the file's own prefixes (issue #187).
+
+  Open it (by URL, or from disk), press "SPARQL query" next to "Add Edge" in the graph toolbar. The starting query's PREFIX lines
+  declare the namespaces of this file's root element, the default one included:
+    PREFIX : <http://example.org/examples/rdfxml-prefixes#>
+    PREFIX ex: <http://example.org/examples/other/>
+  (rdf-parse reports no prefixes for RDF/XML, so they are read from the xmlns attributes.) The graph shows two classes, Hall and
+  Room, Hall a subclass of Room. Try:   SELECT ?c WHERE { ?c rdfs:subClassOf :Room }   ->   :Hall
+-->
+<rdf:RDF xmlns="http://example.org/examples/rdfxml-prefixes#"
+         xmlns:ex="http://example.org/examples/other/"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xml:base="http://example.org/examples/rdfxml-prefixes">
+  <owl:Ontology rdf:about="http://example.org/examples/rdfxml-prefixes">
+    <rdfs:label>RDF/XML prefixes example</rdfs:label>
+  </owl:Ontology>
+  <owl:Class rdf:about="http://example.org/examples/rdfxml-prefixes#Room">
+    <rdfs:label>Room</rdfs:label>
+  </owl:Class>
+  <owl:Class rdf:about="http://example.org/examples/rdfxml-prefixes#Hall">
+    <rdfs:label>Hall</rdfs:label>
+    <rdfs:subClassOf rdf:resource="http://example.org/examples/rdfxml-prefixes#Room"/>
+  </owl:Class>
+</rdf:RDF>

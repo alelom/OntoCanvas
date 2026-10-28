@@ -10,6 +10,7 @@
 import { rdfParser } from 'rdf-parse';
 import type { ParseOptions } from 'rdf-parse';
 import { stringToStream } from './stringToStream';
+import { otherFormatPrefixes } from './otherFormatPrefixes';
 import type { Quad } from '@rdfjs/types';
 
 export interface ParseRdfOptions {
@@ -31,7 +32,7 @@ export async function parseRdfToQuads(
   content: string,
   options: ParseRdfOptions = {}
 ): Promise<Quad[]> {
-  return (await parseRdfToQuadsWithPrefixes(content, options)).quads;
+  return (await parse(content, options, false)).quads;
 }
 
 /** The quads of a file, and the prefixes the parser reported while reading it (prefix → namespace, `''` for the default). */
@@ -43,12 +44,18 @@ export interface ParsedQuads {
 /**
  * Like parseRdfToQuads, with the prefixes the parser itself used. Turtle reports its `@prefix`/`PREFIX` declarations, with a
  * relative namespace already resolved against `@base` (or `baseIRI`), so they agree with the quads; a later declaration of a
- * prefix wins. This version of rdf-parse reports none for RDF/XML (`xmlns`) or JSON-LD (`@context`).
+ * prefix wins. This version of rdf-parse reports none for RDF/XML (`xmlns`) or JSON-LD (`@context`), so those are read from
+ * the file (otherFormatPrefixes, #187); what the parser reports wins over what is read.
  */
-export async function parseRdfToQuadsWithPrefixes(
-  content: string,
-  options: ParseRdfOptions = {}
-): Promise<ParsedQuads> {
+export function parseRdfToQuadsWithPrefixes(content: string, options: ParseRdfOptions = {}): Promise<ParsedQuads> {
+  return parse(content, options, true);
+}
+
+/**
+ * `readOtherFormatPrefixes` is for the callers that use the prefixes: reading them is a second pass over the text (a second
+ * JSON.parse for a JSON-LD file), which parseRdfToQuads, throwing them away, does not pay for.
+ */
+async function parse(content: string, options: ParseRdfOptions, readOtherFormatPrefixes: boolean): Promise<ParsedQuads> {
   const { path, contentType, baseIRI } = options;
   const stream = stringToStream(content);
 
@@ -71,6 +78,6 @@ export async function parseRdfToQuadsWithPrefixes(
     quadStream.on('error', (err: Error) => {
       reject(new Error(`Failed to parse RDF: ${err.message}`));
     });
-    quadStream.on('end', () => resolve({ quads, prefixes }));
+    quadStream.on('end', () => resolve({ quads, prefixes: readOtherFormatPrefixes ? { ...otherFormatPrefixes(content, options), ...prefixes } : prefixes }));
   });
 }
