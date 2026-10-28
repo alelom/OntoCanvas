@@ -24,32 +24,27 @@ import {
 import { describeDataRange } from './rdf/dataRanges';
 import { removeBlankNodeClosure } from './rdf/blankNodes';
 import { isExternalPropertyUri } from './rdf/propertyNamespace';
+import {
+  BASE_IRI,
+  HAS_CARDINALITY_PROP,
+  OWL,
+  OWL_ON_DATA_RANGE,
+  OWL_THING_URI,
+  RDF,
+  RDFS,
+  XSD,
+  XSD_BOOLEAN,
+  XSD_NS,
+  isBlankNode,
+  namespaceFromUri,
+} from './ontology/vocab';
 
-const XSD = 'http://www.w3.org/2001/XMLSchema#';
-const XSD_BOOLEAN = XSD + 'boolean';
+// Re-exported so the modules that import them from here keep working until they import src/ontology/vocab directly (#193).
+export { BASE_IRI, namespaceFromUri };
 
-const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
-const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';
-const OWL = 'http://www.w3.org/2002/07/owl#';
-export const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
-const HAS_CARDINALITY_PROP = BASE_IRI + 'hasCardinality';
 
 // Re-export for convenience
 export { extractLocalName, extractLocalName as extractLocalNameFromUri };
-
-/**
- * Return the namespace of a URI: everything up to and including the last '#' (or '/'),
- * or null when the URI has no separator (so a caller can fall back to a default base).
- */
-export function namespaceFromUri(uri: string): string | null {
-  if (uri.includes('#')) return uri.slice(0, uri.lastIndexOf('#') + 1);
-  if (uri.includes('/')) return uri.slice(0, uri.lastIndexOf('/') + 1);
-  return null;
-}
-
-function isBlankNode(term: { termType: string }): boolean {
-  return term.termType === 'BlankNode';
-}
 
 function parseCardinalityFromRestriction(
   minQual: import('n3').Quad | undefined,
@@ -1057,7 +1052,6 @@ export async function parseRdfToGraph(
   return quadsToParseResult(quads as N3Quad[], undefined, prefixes);
 }
 
-const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';
 
 /**
  * Resolve an rdfs:range object to a datatype value string.
@@ -1646,7 +1640,6 @@ export function updateObjectPropertyCommentInStore(
   return true;
 }
 
-const OWL_THING_URI = OWL + 'Thing';
 
 /**
  * Resolve a class local name to full URI (from store or BASE_IRI).
@@ -2151,7 +2144,6 @@ export function removeDataPropertyFromStore(store: Store, propertyName: string):
   return true;
 }
 
-const OWL_ON_DATA_RANGE = OWL + 'onDataRange';
 
 /** Resolve class URI from store by local name (use actual subject from loaded ontology). */
 function getClassUriFromStore(store: Store, classLocalName: string): string {
