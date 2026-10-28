@@ -115,6 +115,11 @@ async function refreshIssues(): Promise<void> {
   renderIssuesPopup(issues);
 }
 
+/** A link of an issue, opened in a new tab. The URL and label come from the app itself, never from the ontology. */
+function issueLinkHtml(link: { label: string; url: string }): string {
+  return `<a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.label}</a>`;
+}
+
 /**
  * Render the issues popup content.
  */
@@ -136,7 +141,7 @@ function renderIssuesPopup(issues: OntologyIssue[]): void {
     for (const issue of typeIssues) {
       html += `<div style="padding: 6px 8px; margin-bottom: 4px; background: #fff3cd; border-left: 3px solid #f39c12; border-radius: 2px; font-size: 11px;">`;
       html += `<div style="font-weight: 500; color: #856404;">${issue.elementType}: ${issue.elementName}</div>`;
-      html += `<div style="color: #666; margin-top: 2px;">${issue.message}</div>`;
+      html += `<div style="color: #666; margin-top: 2px;">${issue.message}${issue.links ? ' ' + issue.links.map(issueLinkHtml).join(', ') + '.' : ''}</div>`;
       html += `</div>`;
     }
     

@@ -18,12 +18,14 @@ let store: Store | null;
 let currentPrefixes: Record<string, string>;
 let run: ReturnType<typeof vi.fn>;
 
+/** The CodeMirror chunk never arrives here, so the plain textarea is what is tested (the swap: queryTabEditorSwap.test.ts). */
+const neverLoads = () => new Promise<never>(() => {});
 const mount = () => {
-  const tab = createQueryTab({ getStore: () => store, getPrefixes: () => currentPrefixes, run: (...args) => run(...args) });
+  const tab = createQueryTab({ getStore: () => store, getPrefixes: () => currentPrefixes, run: (...args) => run(...args), loadEditor: neverLoads });
   tab.render(container);
   return tab;
 };
-const editor = () => container.querySelector<HTMLTextAreaElement>('[data-query-editor]')!;
+const editor = () => container.querySelector<HTMLTextAreaElement>('[data-query-editor] textarea')!;
 const runButton = () => container.querySelector<HTMLButtonElement>('[data-query-run]')!;
 const status = () => container.querySelector<HTMLElement>('[data-query-status]')!;
 const error = () => container.querySelector<HTMLElement>('[data-query-error]');
@@ -51,6 +53,35 @@ describe('query tab', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  describe('the starter query (#181)', () => {
+    const RDF_TYPE = namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type');
+
+    it('lists the classes of a file that has none of the individuals', () => {
+      store!.add(quad(iri('Room'), RDF_TYPE, namedNode('http://www.w3.org/2002/07/owl#Class')));
+      mount();
+      expect(editor().value).toContain('?class a owl:Class');
+      expect(editor().value).not.toContain('?individual');
+    });
+
+    it('lists the individuals of a file that has some, with their classes', () => {
+      store!.add(quad(iri('r1'), RDF_TYPE, iri('Room')));
+      mount();
+      expect(editor().value).toContain('?individual a ?class');
+      expect(editor().value).not.toContain('?class a owl:Class');
+      expect(editor().value).toContain('PREFIX : <http://example.org/o#>');
+    });
+
+    it('changes with the file, when the user has not edited the query', () => {
+      const tab = mount();
+      expect(editor().value).toContain('?class a owl:Class');
+
+      store = new Store([quad(iri('r1'), RDF_TYPE, iri('Room'))]);
+      tab.refresh();
+
+      expect(editor().value).toContain('?individual a ?class');
+    });
+  });
+
   it('says that external stub classes are not part of the data', () => {
     mount();
     expect(container.textContent).toMatch(/external/i);
@@ -67,7 +98,7 @@ describe('query tab', () => {
 
     await clickRun();
 
-    expect(run).toHaveBeenCalledWith([store], 'SELECT ?c ?l WHERE { ?c ?p ?l }');
+    expect(run).toHaveBeenCalledWith([store], 'SELECT ?c ?l WHERE { ?c ?p ?l }', expect.objectContaining({ limit: MAX_ROWS_SHOWN }));
     expect([...container.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['?c', '?l']);
     const cells = [...container.querySelectorAll('tbody td')].map((td) => td.textContent);
     expect(cells).toEqual([':A', '"Alpha"@en', ':B', '']);
@@ -109,16 +140,16 @@ describe('query tab', () => {
     expect(full.classList.contains('term-iri-full')).toBe(true);
   });
 
-  it('draws only the first rows of a big result and says so', async () => {
-    const rows = Array.from({ length: MAX_ROWS_SHOWN + 100 }, (_, i) => ({ c: iri(`C${i}`) }));
-    run.mockResolvedValue({ kind: 'bindings', variables: ['c'], rows } satisfies QueryResult);
+  it('draws the first rows of a big result and says there are more', async () => {
+    const rows = Array.from({ length: MAX_ROWS_SHOWN }, (_, i) => ({ c: iri(`C${i}`) }));
+    run.mockResolvedValue({ kind: 'bindings', variables: ['c'], rows, truncated: true } satisfies QueryResult);
     mount();
 
     await clickRun();
 
     expect(container.querySelectorAll('tbody tr')).toHaveLength(MAX_ROWS_SHOWN);
-    expect(status().textContent).toContain(String(MAX_ROWS_SHOWN + 100));
-    expect(status().textContent).toContain(String(MAX_ROWS_SHOWN));
+    expect(status().textContent).toContain(`first ${MAX_ROWS_SHOWN}`);
+    expect(status().textContent).toMatch(/more/);
   });
 
   it('shows the answer to an ASK query', async () => {

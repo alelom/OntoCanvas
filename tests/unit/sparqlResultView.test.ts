@@ -12,21 +12,21 @@ const iri = (s: string) => namedNode(`http://example.org/o#${s}`);
 describe('describeResult', () => {
   it('turns bindings into a table: columns, then one formatted cell per variable, empty for an unbound one', async () => {
     const view = await describeResult(
-      { kind: 'bindings', variables: ['c', 'l'], rows: [{ c: iri('A'), l: literal('Alpha', 'en') }, { c: iri('B') }] },
+      { kind: 'bindings', variables: ['c', 'l'], rows: [{ c: iri('A'), l: literal('Alpha', 'en') }, { c: iri('B') }], truncated: false },
       prefixes
     );
 
-    expect(view).toMatchObject({ kind: 'table', columns: ['c', 'l'], total: 2, truncated: false });
+    expect(view).toMatchObject({ kind: 'table', columns: ['c', 'l'], truncated: false });
     if (view.kind !== 'table') return;
     expect(view.rows[0].map((cell) => cell?.text)).toEqual([':A', '"Alpha"@en']);
     expect(view.rows[1].map((cell) => cell?.text)).toEqual([':B', undefined]);
   });
 
-  it('shows only the first rows of a big result, and says how many there are', async () => {
+  it('shows only the first rows of a result read without a cap, and says there are more', async () => {
     const rows = Array.from({ length: MAX_ROWS_SHOWN + 25 }, (_, i) => ({ c: iri(`C${i}`) }));
-    const view = await describeResult({ kind: 'bindings', variables: ['c'], rows }, prefixes);
+    const view = await describeResult({ kind: 'bindings', variables: ['c'], rows, truncated: false }, prefixes);
 
-    expect(view).toMatchObject({ kind: 'table', total: MAX_ROWS_SHOWN + 25, truncated: true });
+    expect(view).toMatchObject({ kind: 'table', truncated: true });
     if (view.kind !== 'table') return;
     expect(view.rows).toHaveLength(MAX_ROWS_SHOWN);
     expect(view.rows[MAX_ROWS_SHOWN - 1][0]?.text).toBe(`:C${MAX_ROWS_SHOWN - 1}`);
@@ -34,8 +34,15 @@ describe('describeResult', () => {
 
   it('keeps a result of exactly the limit whole', async () => {
     const rows = Array.from({ length: MAX_ROWS_SHOWN }, (_, i) => ({ c: iri(`C${i}`) }));
-    const view = await describeResult({ kind: 'bindings', variables: ['c'], rows }, prefixes);
-    expect(view).toMatchObject({ kind: 'table', total: MAX_ROWS_SHOWN, truncated: false });
+    const view = await describeResult({ kind: 'bindings', variables: ['c'], rows, truncated: false }, prefixes);
+    expect(view).toMatchObject({ kind: 'table', truncated: false });
+    if (view.kind === 'table') expect(view.rows).toHaveLength(MAX_ROWS_SHOWN);
+  });
+
+  it('says there are more when the engine stopped at the cap', async () => {
+    const rows = Array.from({ length: MAX_ROWS_SHOWN }, (_, i) => ({ c: iri(`C${i}`) }));
+    const view = await describeResult({ kind: 'bindings', variables: ['c'], rows, truncated: true }, prefixes);
+    expect(view).toMatchObject({ kind: 'table', truncated: true });
   });
 
   it('passes a boolean through', async () => {
@@ -44,7 +51,7 @@ describe('describeResult', () => {
 
   it('writes CONSTRUCT quads as Turtle with the file\'s prefixes, and counts them', async () => {
     const view = await describeResult(
-      { kind: 'quads', quads: [quad(iri('A'), namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'), iri('B'))] },
+      { kind: 'quads', quads: [quad(iri('A'), namedNode('http://www.w3.org/2000/01/rdf-schema#subClassOf'), iri('B'))], truncated: false },
       { ...prefixes, rdfs: 'http://www.w3.org/2000/01/rdf-schema#' }
     );
 
@@ -55,6 +62,6 @@ describe('describeResult', () => {
   });
 
   it('writes an empty CONSTRUCT as an empty text', async () => {
-    expect(await describeResult({ kind: 'quads', quads: [] }, prefixes)).toEqual({ kind: 'turtle', text: '', count: 0 });
+    expect(await describeResult({ kind: 'quads', quads: [], truncated: false }, prefixes)).toEqual({ kind: 'turtle', text: '', count: 0, truncated: false });
   });
 });

@@ -11,6 +11,7 @@ import type { ExternalOntologyReference } from '../storage';
 import { parseEdgeId } from '../utils/edgeId';
 import { isViewSettled } from '../ui/viewSettle';
 import { areImportsSettled } from '../ui/importsSettle';
+import { pushUndoable } from '../workflows/undoRedo';
 import { storeLocalFileContent, retrieveLocalFileContent } from '../lib/localFileTokenStorage';
 
 /** Use getters for state that is set after app init (e.g. when a file is loaded) so the hook always sees current values. */
@@ -151,6 +152,8 @@ export function attachEditorTestHook(deps: EditorTestDeps): void {
     getNodeCount: (): number => getRawData().nodes.length,
     getRawDataEdges: (): GraphEdge[] => getRawData().edges,
     getUndoStackLength: (): number => getUndoStack().length,
+    /** Records an undoable action as an edit would, for tests of what undo does and does not reach. */
+    pushUndoable: (undo: () => void, redo: () => void): void => pushUndoable(undo, redo),
     getVisibleNodeCount: (): number =>
       parseInt(document.getElementById('nodeCount')?.textContent ?? '0', 10) || 0,
     clearDisplayConfig: async (): Promise<void> => {

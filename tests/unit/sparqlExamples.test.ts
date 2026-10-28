@@ -11,6 +11,8 @@ import { runQuery } from '../../src/sparql/runQuery';
 import { declaredPrefixes } from '../../src/sparql/declaredPrefixes';
 import { prefixHeader, withStandardPrefixes } from '../../src/sparql/prefixHeader';
 import { describeResult } from '../../src/sparql/resultView';
+import { detectInstanceData } from '../../src/ui/ontologyIssues';
+import { INDIVIDUALS_STARTER_QUERY } from '../../src/ui/sidePanel/queryTab';
 
 const EXAMPLE = join(dirname(fileURLToPath(import.meta.url)), '../../examples/sparql/query-panel.ttl');
 const text = readFileSync(EXAMPLE, 'utf-8');
@@ -75,5 +77,44 @@ describe('examples/sparql/query-panel.ttl', () => {
 
   it('refuses the update the header ends with', async () => {
     await expect(runQuery([store], 'DELETE WHERE { ?s ?p ?o }')).rejects.toThrow(/read-only/i);
+  });
+});
+
+describe('examples/sparql/instance-data.ttl (#181)', () => {
+  const PATH = join(dirname(fileURLToPath(import.meta.url)), '../../examples/sparql/instance-data.ttl');
+  const ttl = readFileSync(PATH, 'utf-8');
+  let instanceStore: Store;
+  beforeAll(async () => {
+    instanceStore = (await parseRdfToGraph(ttl, { path: PATH })).store;
+  });
+
+  it('draws one class, and the bottom bar warns about the four individuals it does not draw', async () => {
+    const parsed = await parseRdfToGraph(ttl, { path: PATH });
+    expect(parsed.graphData.nodes).toHaveLength(1);
+    expect(detectInstanceData(instanceStore)).toMatchObject({ type: 'instance_data_not_drawn', elementName: '4 individuals' });
+  });
+
+  it("the panel's starting query lists the four individuals with their classes", async () => {
+    const header = prefixHeader(declaredPrefixes(ttl));
+    const result = await runQuery([instanceStore], `${header}\n\n${INDIVIDUALS_STARTER_QUERY}`);
+    if (result.kind !== 'bindings') throw new Error('expected bindings');
+    const view = await describeResult(result, withStandardPrefixes(declaredPrefixes(ttl)));
+    if (view.kind !== 'table') throw new Error('expected a table');
+    expect(view.rows.map((row) => row.map((cell) => cell?.text))).toEqual([
+      [':door1', ':Door'],
+      [':room1', ':Room'],
+      [':room2', ':Room'],
+      [':wallA', ':Wall'],
+    ]);
+  });
+
+  it('the links query returns the two hasDoor links, and not the rdf:type triples', async () => {
+    const header = prefixHeader(declaredPrefixes(ttl));
+    const result = await runQuery([instanceStore], `${header}\nSELECT ?a ?b WHERE { ?a :hasDoor ?b } ORDER BY ?a`);
+    if (result.kind !== 'bindings') throw new Error('expected bindings');
+    expect(result.rows.map((r) => [r.a.value, r.b.value])).toEqual([
+      ['http://example.org/examples/instance-data#room1', 'http://example.org/examples/instance-data#door1'],
+      ['http://example.org/examples/instance-data#room2', 'http://example.org/examples/instance-data#door1'],
+    ]);
   });
 });
