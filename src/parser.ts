@@ -4,7 +4,7 @@ import { exampleImagesOf } from './lib/exampleImages';
 import { labelToCamelCaseIdentifier } from './lib/identifierFromLabel';
 import type { GraphData, GraphEdge, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, DataPropertyRestriction } from './types';
 import { isDebugMode, debugLog, debugWarn, debugError } from './utils/debug';
-import { parseRdfToQuads } from './rdf/parseRdfToQuads';
+import { parseRdfToQuadsWithPrefixes } from './rdf/parseRdfToQuads';
 import { parseTurtleWithPositions, reconstructFromOriginalText, detectPropertyLevelChanges, performTargetedLineReplacement, isSimplePropertyChange, extractPropertyLines, type OriginalFileCache, type StatementBlock } from './rdf/sourcePreservation';
 import { parseTurtleBase, parseTurtlePrefixes, resolveTurtlePrefixedName } from './rdf/turtlePrefixes';
 import { serializeStoreWithRdflib } from './rdf/rdflibSerializer';
@@ -99,6 +99,8 @@ export interface ParseResult {
   dataProperties: DataPropertyInfo[];
   /** Original file cache for source preservation (idempotent round-trips) */
   originalFileCache?: OriginalFileCache;
+  /** The prefixes the file declares, as the parser read them (prefix → namespace, `''` for the default); see parseRdfToQuadsWithPrefixes. */
+  prefixes?: Record<string, string>;
 }
 
 /** Return the main ontology IRI with trailing # for prefix matching, or null if not found. */
@@ -977,8 +979,8 @@ function buildParseResultFromStore(
  * Build ParseResult from an array of quads (e.g. from N3 or rdf-parse).
  * RDF/JS quads from rdf-parse are compatible with N3 Store at runtime.
  */
-export function quadsToParseResult(quads: N3Quad[], originalFileCache?: OriginalFileCache): ParseResult {
-  return buildParseResultFromStore(new Store(quads), undefined, originalFileCache);
+export function quadsToParseResult(quads: N3Quad[], originalFileCache?: OriginalFileCache, prefixes?: Record<string, string>): ParseResult {
+  return { ...buildParseResultFromStore(new Store(quads), undefined, originalFileCache), prefixes };
 }
 
 /**
@@ -990,22 +992,22 @@ export async function parseTtlToGraph(ttlString: string): Promise<ParseResult> {
   // Use position-aware parsing for Turtle to enable source preservation
   try {
     // First parse with rdf-parse to get quads (handles prefixes correctly)
-    const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
+    const { quads, prefixes } = await parseRdfToQuadsWithPrefixes(ttlString, { contentType: 'text/turtle' });
     
       // Then do position-aware parsing to build cache
       try {
         const { cache } = await parseTurtleWithPositions(ttlString, quads as N3Quad[]);
-        return quadsToParseResult(quads as N3Quad[], cache);
+        return quadsToParseResult(quads as N3Quad[], cache, prefixes);
     } catch (cacheError) {
       // If position tracking fails, still return quads but without cache
       debugWarn('[parseTtlToGraph] Position-aware parsing failed, continuing without cache:', cacheError);
-      return quadsToParseResult(quads as N3Quad[]);
+      return quadsToParseResult(quads as N3Quad[], undefined, prefixes);
     }
   } catch (error) {
     // Fallback to standard parsing if everything fails
     debugWarn('[parseTtlToGraph] Parsing failed, falling back to standard parsing:', error);
-    const quads = await parseRdfToQuads(ttlString, { contentType: 'text/turtle' });
-    return quadsToParseResult(quads as N3Quad[]);
+    const { quads, prefixes } = await parseRdfToQuadsWithPrefixes(ttlString, { contentType: 'text/turtle' });
+    return quadsToParseResult(quads as N3Quad[], undefined, prefixes);
   }
 }
 
@@ -1033,16 +1035,16 @@ export async function parseRdfToGraph(
       (!contentType && !path && (content.trim().startsWith('@prefix') || content.trim().startsWith('@base')))) {
     // First parse with rdf-parse to get quads (handles prefixes correctly)
     try {
-      const quads = await parseRdfToQuads(content, options ?? {});
+      const { quads, prefixes } = await parseRdfToQuadsWithPrefixes(content, options ?? {});
       
       // Then do position-aware parsing to build cache
       try {
         const { cache } = await parseTurtleWithPositions(content, quads as N3Quad[]);
-        return quadsToParseResult(quads as N3Quad[], cache);
+        return quadsToParseResult(quads as N3Quad[], cache, prefixes);
       } catch (cacheError) {
         // If position tracking fails, still return quads but without cache
         debugWarn('[parseRdfToGraph] Position-aware parsing failed, continuing without cache:', cacheError);
-        return quadsToParseResult(quads as N3Quad[]);
+        return quadsToParseResult(quads as N3Quad[], undefined, prefixes);
       }
     } catch (error) {
       // Fallback to standard parsing if everything fails
@@ -1051,8 +1053,8 @@ export async function parseRdfToGraph(
   }
   
   // Standard parsing for other formats or fallback
-  const quads = await parseRdfToQuads(content, options ?? {});
-  return quadsToParseResult(quads as N3Quad[]);
+  const { quads, prefixes } = await parseRdfToQuadsWithPrefixes(content, options ?? {});
+  return quadsToParseResult(quads as N3Quad[], undefined, prefixes);
 }
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema#';

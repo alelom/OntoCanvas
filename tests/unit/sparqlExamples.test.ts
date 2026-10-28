@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 import type { Store, Term } from 'n3';
 import { parseRdfToGraph } from '../../src/parser';
 import { runQuery } from '../../src/sparql/runQuery';
-import { declaredPrefixes } from '../../src/sparql/declaredPrefixes';
 import { prefixHeader, withStandardPrefixes } from '../../src/sparql/prefixHeader';
 import { describeResult } from '../../src/sparql/resultView';
 import { detectInstanceData } from '../../src/ui/ontologyIssues';
@@ -16,16 +15,16 @@ import { INDIVIDUALS_STARTER_QUERY } from '../../src/ui/sidePanel/queryTab';
 
 const EXAMPLE = join(dirname(fileURLToPath(import.meta.url)), '../../examples/sparql/query-panel.ttl');
 const text = readFileSync(EXAMPLE, 'utf-8');
-const HEADER = prefixHeader(declaredPrefixes(text));
-
 let store: Store;
+let declared: Record<string, string>;
+let HEADER: string;
 const select = async (query: string) => {
   const result = await runQuery([store], `${HEADER}\n${query}`);
   if (result.kind !== 'bindings') throw new Error(`expected bindings, got ${result.kind}`);
   return result;
 };
 const shown = async (query: string) => {
-  const view = await describeResult(await runQuery([store], `${HEADER}\n${query}`), withStandardPrefixes(declaredPrefixes(text)));
+  const view = await describeResult(await runQuery([store], `${HEADER}\n${query}`), withStandardPrefixes(declared));
   if (view.kind !== 'table') throw new Error(`expected a table, got ${view.kind}`);
   return view.rows.map((row) => row.map((cell) => cell?.text));
 };
@@ -33,7 +32,10 @@ const shown = async (query: string) => {
 describe('examples/sparql/query-panel.ttl', () => {
   // Loads the engine and the parser once, so the first test is not charged for it.
   beforeAll(async () => {
-    store = (await parseRdfToGraph(text, { path: EXAMPLE })).store;
+    const parsed = await parseRdfToGraph(text, { path: EXAMPLE });
+    store = parsed.store;
+    declared = parsed.prefixes ?? {};
+    HEADER = prefixHeader(declared);
     await runQuery([store], 'ASK { ?s ?p ?o }');
   });
 
@@ -84,8 +86,11 @@ describe('examples/sparql/instance-data.ttl (#181)', () => {
   const PATH = join(dirname(fileURLToPath(import.meta.url)), '../../examples/sparql/instance-data.ttl');
   const ttl = readFileSync(PATH, 'utf-8');
   let instanceStore: Store;
+  let instancePrefixes: Record<string, string>;
   beforeAll(async () => {
-    instanceStore = (await parseRdfToGraph(ttl, { path: PATH })).store;
+    const parsed = await parseRdfToGraph(ttl, { path: PATH });
+    instanceStore = parsed.store;
+    instancePrefixes = parsed.prefixes ?? {};
   });
 
   it('draws one class, and the bottom bar warns about the four individuals it does not draw', async () => {
@@ -95,10 +100,10 @@ describe('examples/sparql/instance-data.ttl (#181)', () => {
   });
 
   it("the panel's starting query lists the four individuals with their classes", async () => {
-    const header = prefixHeader(declaredPrefixes(ttl));
+    const header = prefixHeader(instancePrefixes);
     const result = await runQuery([instanceStore], `${header}\n\n${INDIVIDUALS_STARTER_QUERY}`);
     if (result.kind !== 'bindings') throw new Error('expected bindings');
-    const view = await describeResult(result, withStandardPrefixes(declaredPrefixes(ttl)));
+    const view = await describeResult(result, withStandardPrefixes(instancePrefixes));
     if (view.kind !== 'table') throw new Error('expected a table');
     expect(view.rows.map((row) => row.map((cell) => cell?.text))).toEqual([
       [':door1', ':Door'],
@@ -109,7 +114,7 @@ describe('examples/sparql/instance-data.ttl (#181)', () => {
   });
 
   it('the links query returns the two hasDoor links, and not the rdf:type triples', async () => {
-    const header = prefixHeader(declaredPrefixes(ttl));
+    const header = prefixHeader(instancePrefixes);
     const result = await runQuery([instanceStore], `${header}\nSELECT ?a ?b WHERE { ?a :hasDoor ?b } ORDER BY ?a`);
     if (result.kind !== 'bindings') throw new Error('expected bindings');
     expect(result.rows.map((r) => [r.a.value, r.b.value])).toEqual([
