@@ -157,10 +157,10 @@ describe('the import graph of the real source tree', () => {
     expect(importers('src/lib/termUri.ts')).toContain('src/ui/selectionInfo.ts');
   });
 
-  it('selects, for every module, at least the areas of the modules that import it (hubs and tests aside)', () => {
+  it('selects, for every module, at least the areas of the modules that import it (hubs, type-only files and tests aside)', () => {
     const problems: string[] = [];
     for (const file of readdirRecursive(join(ROOT, 'src')).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))) {
-      if (isHub(file)) continue;
+      if (isHub(file) || matchesAny(file, config.typeOnly ?? [])) continue; // a type-only file selects nothing, on purpose (#190)
       const selected = selectAreas([file], config, importers);
       if (selected.all) continue;
       for (const importer of importers(file).filter((i) => !isHub(i))) {
