@@ -6,8 +6,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 const TEST_URL = 'https://example.test/ontology.ttl';
 
 /**

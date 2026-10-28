@@ -7,8 +7,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = 'http://localhost:5173/';
 
 const TTL = `@prefix : <http://example.org/main#> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .

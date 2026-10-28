@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const PAGES = 'https://pages.test/elk';
 const CORS = { 'access-control-allow-origin': '*' };
@@ -52,7 +53,7 @@ async function open(): Promise<void> {
       ? route.fulfill({ status: 200, contentType: 'text/turtle', headers: CORS, body: ontology })
       : route.fulfill({ status: 404, headers: CORS, body: '' });
   });
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${PAGES}/onto.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${PAGES}/onto.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await waitForAppReady(page);
   await page.keyboard.press('Escape');
 }

@@ -9,10 +9,10 @@ import { launchBrowser } from './browser';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { loadTestFile, waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../fixtures/undo-delete-class.ttl');
-const EDITOR_URL = 'http://localhost:5173/';
 
 let browser: Browser;
 let page: Page;

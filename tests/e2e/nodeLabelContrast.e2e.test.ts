@@ -13,11 +13,11 @@ import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { contrastRatio, MIN_CONTRAST_AA } from '../../src/lib/textContrast';
+import { EDITOR_URL } from './editorUrl';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const EDITOR_URL = 'http://localhost:5173/';
 const DARK_PALETTE_FIXTURE = join(__dirname, '../fixtures/dark-palette-annotation.ttl');
 const TWO_BOOL_FIXTURE = join(__dirname, '../fixtures/two-boolean-annotations.ttl');
 

@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const PAGES = 'https://pages.test/tiers';
 const CORS = { 'access-control-allow-origin': '*' };
@@ -51,7 +52,7 @@ async function open(config?: object): Promise<void> {
     }
     return route.fulfill({ status: 404, headers: CORS, body: '' });
   });
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${PAGES}/onto.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${PAGES}/onto.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await waitForAppReady(page);
   await page.keyboard.press('Escape');
   if (!(await page.locator('details#edgeStylesMenu').evaluate((el) => (el as HTMLDetailsElement).open))) {

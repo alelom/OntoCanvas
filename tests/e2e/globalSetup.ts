@@ -1,8 +1,12 @@
 /**
- * E2E global setup: ensure a server is running at EDITOR_URL before any e2e tests.
+ * E2E global setup: start a server of its own for the run, and stop it when the run is over (#183).
  *
- * A server that already answers is used as it is (a developer's `npm run dev`). Otherwise one is
- * started here and stopped when the run is over, and by default it serves the production build, not Vite's dev server:
+ * It is never a server that was already running: a developer's `npm run dev` on 5173 may serve another branch or a
+ * state from before an install, and tests that reused it tested that instead of the code in the working tree. The
+ * server gets a free port of its own (EDITOR_E2E_PORT asks for one), and the address is passed to the tests through
+ * EDITOR_E2E_URL, set here before the workers start (see editorUrl.ts).
+ *
+ * By default it serves the production build, not Vite's dev server:
  * every test opens its own page, and with up to 8 browsers at once the dev server's hundreds of unbundled
  * module requests per page load made loads take about 2.5 s (worst 2.9 s) where the bundle takes about 1.0 s
  * (worst 1.6 s); page loads timing out was the commonest flake (#116). The bundle is built when a source is newer
@@ -11,16 +15,28 @@
  * module cache and avoid cold-start timeouts in the tests' beforeAll hooks).
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { chromium } from 'playwright';
 import { isDistFresh, writeStamp } from './buildFreshness';
 
-const EDITOR_URL = process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 const POLL_MS = 500;
 const STARTUP_TIMEOUT_MS = 10000; // server startup; max 10s per project rule
 // Building the bundle is a one-off step before any test runs, not a test or a wait: it takes 15 to 50 s.
 const BUILD_TIMEOUT_MS = 120000;
 const SERVER_KIND = process.env.EDITOR_E2E_SERVER === 'dev' ? 'dev' : 'preview';
 const WARMUP_TIMEOUT_MS = 8000;   // Vite module cache warmup via headless browser
+
+/** A port nothing is listening on, taken from the system. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, 'localhost', () => {
+      const { port } = probe.address() as { port: number };
+      probe.close(() => resolve(port));
+    });
+  });
+}
 
 async function isServerUp(url: string): Promise<boolean> {
   try {
@@ -69,15 +85,17 @@ function killTree(pid: number): void {
 
 /**
  * Vitest runs the function a global setup returns when the run is over (it has no separate teardown option), so
- * the server this started is stopped here. Nothing is returned when a server was already running: that one is
- * not ours to stop.
+ * the server this started is stopped here.
  */
-export default async function globalSetup(): Promise<(() => void) | void> {
-  if (await isServerUp(EDITOR_URL)) {
-    // Server was already running (e.g., a manual start).
-    // Assume it is already warm; no warmup needed.
-    return;
+export default async function globalSetup(): Promise<() => void> {
+  const requested = process.env.EDITOR_E2E_PORT;
+  const port = requested ? Number(requested) : await freePort();
+  const editorUrl = `http://localhost:${port}/`;
+  if (requested && (await isServerUp(editorUrl))) {
+    throw new Error(`E2E globalSetup: something already answers on port ${port} (EDITOR_E2E_PORT). The E2E tests start a server of their own and never reuse one; stop it or ask for another port.`);
   }
+  process.env.EDITOR_E2E_URL = editorUrl;
+
   const root = process.cwd();
   const isWindows = process.platform === 'win32';
   const npm = isWindows ? 'npm.cmd' : 'npm';
@@ -96,8 +114,7 @@ export default async function globalSetup(): Promise<(() => void) | void> {
       writeStamp(root, startedAt);
     }
   }
-  const port = new URL(EDITOR_URL).port || '80';
-  const serverArgs = SERVER_KIND === 'dev' ? ['run', 'dev'] : ['run', 'preview', '--', '--port', port, '--strictPort'];
+  const serverArgs = SERVER_KIND === 'dev' ? ['run', 'dev', '--', '--port', String(port), '--strictPort'] : ['run', 'preview', '--', '--port', String(port), '--strictPort'];
   const child = spawn(npm, serverArgs, {
     cwd: root,
     detached: true,
@@ -112,12 +129,12 @@ export default async function globalSetup(): Promise<(() => void) | void> {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, POLL_MS));
-    if (await isServerUp(EDITOR_URL)) {
-      // A dev server was just started — warm it up so test beforeAll hooks don't hit cold-start timeouts.
-      if (SERVER_KIND === 'dev') await warmupServer(EDITOR_URL);
+    if (await isServerUp(editorUrl)) {
+      // A dev server was just started: warm it up so test beforeAll hooks don't hit cold-start timeouts.
+      if (SERVER_KIND === 'dev') await warmupServer(editorUrl);
       return stop;
     }
   }
   stop();
-  throw new Error(`E2E globalSetup: the ${SERVER_KIND} server did not become ready at ${EDITOR_URL} within ${STARTUP_TIMEOUT_MS / 1000}s`);
+  throw new Error(`E2E globalSetup: the ${SERVER_KIND} server did not become ready at ${editorUrl} within ${STARTUP_TIMEOUT_MS / 1000}s`);
 }

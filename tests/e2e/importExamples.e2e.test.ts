@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { waitForAppReady, waitForImportsSettled } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples/imports');
 const WHERE = 'https://examples.test/imports/';
@@ -54,7 +55,7 @@ describe('waitForAppReady and imports (#116)', () => {
       if (url.endsWith('fetchable-parent.ttl')) await new Promise((resolve) => setTimeout(resolve, 1500));
       return route.fulfill({ status: 200, contentType: 'text/turtle', headers: { 'access-control-allow-origin': '*' }, body: served[url] });
     });
-    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
 
     await waitForAppReady(page);
 
@@ -66,7 +67,7 @@ describe('waitForAppReady and imports (#116)', () => {
 
 describe('fetchable-child.ttl (#104)', () => {
   it("lists what the parent declares in the menus, without drawing it, once the import has been read", async () => {
-    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await waitForAppReady(page);
     await waitForImportsSettled(page);
 
@@ -87,7 +88,7 @@ describe('fetchable-child.ttl (#104)', () => {
   });
 
   it('names the version the parent declares under its address in the imports dialog (#131)', async () => {
-    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${WHERE}fetchable-child.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await waitForAppReady(page);
     await page.click('#manageExternalRefs');
     const lines = await page.evaluate(() => [...document.querySelectorAll('#externalRefsList .external-ref-version')].map((el) => el.textContent));

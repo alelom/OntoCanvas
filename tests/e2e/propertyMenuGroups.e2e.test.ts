@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples/display');
 const WHERE = 'https://examples.test/display/';
@@ -47,7 +48,7 @@ beforeAll(async () => {
       ? route.fulfill({ status: 200, contentType: 'text/turtle', headers: CORS, body: readFileSync(join(EXAMPLES, file), 'utf-8') })
       : route.fulfill({ status: 404, headers: CORS, body: '' });
   });
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}menu-groups.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${WHERE}menu-groups.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await waitForAppReady(page);
 });
 afterAll(async () => {

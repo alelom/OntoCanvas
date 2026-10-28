@@ -11,10 +11,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { loadTestFile, waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../fixtures/thing-data-properties.ttl');
-const EDITOR_URL = 'http://localhost:5173/';
 const THING = 'http://www.w3.org/2002/07/owl#Thing';
 const NAME = 'http://example.org/thingdp#name';
 

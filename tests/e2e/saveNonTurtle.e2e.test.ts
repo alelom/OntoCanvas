@@ -12,10 +12,10 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { Parser } from 'n3';
 import { loadTestFile } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(__dirname, '../fixtures/rdfxml-with-imports.rdf');
-const EDITOR_URL = 'http://localhost:5173/';
 const OWL = 'http://www.w3.org/2002/07/owl#';
 
 let browser: Browser;

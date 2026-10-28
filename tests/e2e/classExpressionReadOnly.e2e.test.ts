@@ -12,8 +12,8 @@ import { fileURLToPath } from 'url';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = 'http://localhost:5173/';
 const TTL = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../fixtures/unionDomain.ttl'), 'utf-8');
 const SECTION_EDGE = 'Section->OrientationValue:hasOrientation';
 const DETAIL_EDGE = 'Detail->OrientationValue:hasOrientation';

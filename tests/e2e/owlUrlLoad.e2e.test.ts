@@ -4,8 +4,8 @@
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 
 const MINIMAL_OWL = `<?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"

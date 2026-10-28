@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const URL_ = 'https://examples.test/annotations.ttl';
 const NS = 'http://example.org/ann#';
@@ -33,7 +34,7 @@ beforeEach(async () => {
   page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.setDefaultTimeout(5000);
   await page.route(URL_, (route) => route.fulfill({ status: 200, contentType: 'text/turtle', headers: { 'access-control-allow-origin': '*' }, body: TTL }));
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(URL_)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(URL_)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await waitForAppReady(page);
 });
 afterEach(async () => {

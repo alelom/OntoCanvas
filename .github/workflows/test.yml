@@ -127,8 +127,6 @@ jobs:
       # the app under test runs in Chromium, so it measured a few imported modules, not the app (#96).
       - name: Run the E2E tests of this area
         run: npm run test:e2e:area -- ${{ matrix.area }}
-        env:
-          EDITOR_E2E_URL: http://localhost:5173/
 
   # The one check the ruleset on main requires. The E2E matrix has a different set of jobs on every pull request, so
   # none of them can be required by name; this job is green when every job that ran passed (a skipped one, an area

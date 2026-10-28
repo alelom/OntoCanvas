@@ -9,8 +9,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { type Browser, type Page, type Route } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 
 const TTL = `@prefix : <http://example.org/served#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .

@@ -6,6 +6,7 @@
 import type { Page } from 'playwright';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { EDITOR_URL } from './editorUrl';
 
 /**
  * Wait until the app is ready for a test to act on (#93): an ontology is loaded, no loading or "Open
@@ -30,7 +31,7 @@ export async function waitForAppReady(page: Page, timeout = 5000): Promise<void>
  * Open the editor in `page` and load `ttl` straight into it, then wait until it is ready. Replaces the
  * goto + loadTtlDirectly + "close the Open ontology dialog" + Escape steps tests used to repeat.
  */
-export async function openEditorWithTtl(page: Page, ttl: string, url = 'http://localhost:5173/'): Promise<void> {
+export async function openEditorWithTtl(page: Page, ttl: string, url = EDITOR_URL): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.loadTtlDirectly !== undefined, undefined, { timeout: 5000 });
   await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), ttl);

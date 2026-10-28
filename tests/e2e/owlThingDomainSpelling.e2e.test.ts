@@ -13,10 +13,10 @@ import { launchBrowser } from './browser';
 import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const EDITOR_URL = 'http://localhost:5173/';
 const FIXTURE = join(__dirname, '../fixtures/owl-thing-domain.ttl');
 const OWL_THING_URI = 'http://www.w3.org/2002/07/owl#Thing';
 let browser: Browser;

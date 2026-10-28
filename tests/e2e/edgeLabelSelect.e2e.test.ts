@@ -8,8 +8,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = 'http://localhost:5173/';
 
 const TTL = `@prefix : <http://example.org/o#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
