@@ -6,8 +6,8 @@
 import { describe, it, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = process.env.EDITOR_URL || process.env.EDITOR_E2E_URL || 'http://localhost:5173/';
 
 const TTL_WITH_IMPORTS = `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .

@@ -10,13 +10,11 @@
  * the world looks like; the default is just that there is no world.
  */
 import { chromium, type Browser, type BrowserContext, type LaunchOptions } from 'playwright';
-
-/** The editor the tests drive: the same URL globalSetup serves (or EDITOR_E2E_URL). */
-const editorOrigin = (): string => new URL(process.env.EDITOR_E2E_URL || 'http://localhost:5173/').origin;
+import { EDITOR_ORIGIN } from './editorUrl';
 
 /** http(s) requests to anything but the editor's origin (scheme, host and port). Another service on localhost
  * is as external as another host. (data:, blob: and the like never reach the network.) */
-export const isExternalRequest = (url: URL, origin: string = editorOrigin()): boolean =>
+export const isExternalRequest = (url: URL, origin: string = EDITOR_ORIGIN): boolean =>
   (url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin;
 
 /** Abort every request to anywhere but the dev server, in every page of `context`. Routes the test adds

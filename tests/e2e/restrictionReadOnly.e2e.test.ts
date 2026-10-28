@@ -11,8 +11,8 @@ import { fileURLToPath } from 'url';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = 'http://localhost:5173/';
 const TTL = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../fixtures/restrictionKinds.ttl'), 'utf-8');
 
 describe('Read-only restriction kinds E2E (#63)', () => {

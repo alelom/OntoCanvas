@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const TTL = `@prefix : <http://example.org/o#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
@@ -69,7 +70,7 @@ describe('Embedded mode E2E', () => {
   });
 
   it('is compact and read-only with ?embed=1', async () => {
-    const page = await open(browser, 'http://localhost:5173/?embed=1');
+    const page = await open(browser, `${EDITOR_URL}?embed=1`);
     const snap = await snapshot(page);
     expect(snap.embeddedClass).toBe(true);
     expect(snap.openBtnVisible).toBe(true);
@@ -87,7 +88,7 @@ describe('Embedded mode E2E', () => {
   });
 
   it('keeps the legend, hides the button, and allows editing when not embedded', async () => {
-    const page = await open(browser, 'http://localhost:5173/');
+    const page = await open(browser, EDITOR_URL);
     const snap = await snapshot(page);
     expect(snap.embeddedClass).toBe(false);
     expect(snap.openBtnVisible).toBe(false);

@@ -13,10 +13,10 @@ import { launchBrowser } from './browser';
 import { loadTestFile, plainLabel } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const EDITOR_URL = 'http://localhost:5173/';
 const FIXTURE = join(__dirname, '../fixtures/aec-provenance-typing-stubs.ttl');
 
 let browser: Browser;

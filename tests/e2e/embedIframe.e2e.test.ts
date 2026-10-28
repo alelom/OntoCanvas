@@ -14,10 +14,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page, type Frame } from 'playwright';
 import { launchBrowser } from './browser';
 import { defaultMaxFontSize } from '../../src/ui/fontSizeDefaults';
+import { EDITOR_ORIGIN } from './editorUrl';
 
-const ORIGIN = 'http://localhost:5173';
-const HOST_URL = `${ORIGIN}/__embed_iframe_host__.html`;
-const ONTO_URL = `${ORIGIN}/__embed_repro_onto__.ttl`;
+const HOST_URL = `${EDITOR_ORIGIN}/__embed_iframe_host__.html`;
+const ONTO_URL = `${EDITOR_ORIGIN}/__embed_repro_onto__.ttl`;
 const N_CLASSES = 15;
 
 let TTL =
@@ -30,7 +30,7 @@ for (let i = 0; i < N_CLASSES; i++) {
   TTL += `:C${i} rdf:type owl:Class ; rdfs:label "C${i}"${i > 0 ? ` ; rdfs:subClassOf :C${i - 1}` : ''} .\n`;
 }
 
-const IFRAME_SRC = `${ORIGIN}/?onto=${encodeURIComponent(ONTO_URL)}`;
+const IFRAME_SRC = `${EDITOR_ORIGIN}/?onto=${encodeURIComponent(ONTO_URL)}`;
 const HOST_HTML = `<!doctype html><html><body style="margin:0"><iframe id="f" src="${IFRAME_SRC}" style="width:1200px;height:760px;border:0"></iframe></body></html>`;
 
 describe('Embedded in a real iframe E2E', () => {

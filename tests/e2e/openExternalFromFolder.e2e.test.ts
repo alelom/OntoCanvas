@@ -12,10 +12,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { loadTestFile } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(__dirname, '../fixtures/imported-ontology');
-const EDITOR_URL = 'http://localhost:5173/';
 const BASE_CLASS_ID = 'http://example.org/base#BaseClass';
 
 let browser: Browser;

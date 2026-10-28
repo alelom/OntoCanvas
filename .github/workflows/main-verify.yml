@@ -64,8 +64,6 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:full
-        env:
-          EDITOR_E2E_URL: http://localhost:5173/
       - name: Record the result
         if: always()
         run: |

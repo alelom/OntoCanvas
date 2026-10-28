@@ -8,11 +8,11 @@ import { loadTestFile, waitForGraphRender } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
+import { EDITOR_URL } from './editorUrl';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
 describe('Data Property Display E2E Tests', () => {

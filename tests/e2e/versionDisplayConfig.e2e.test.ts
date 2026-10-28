@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const W3ID = 'https://w3id.test/onto';
 const PAGES = 'https://pages.test/onto';
@@ -69,7 +70,7 @@ afterEach(async () => {
 });
 
 const open = async (url: string) => {
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(url)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(url)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await waitForAppReady(page);
 };
 const wrapChars = () => page.evaluate(() => (document.getElementById('wrapChars') as HTMLInputElement).value);

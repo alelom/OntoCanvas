@@ -38,8 +38,10 @@ moment (a redraw between selecting a node and deleting it broke `deleteUndoRelat
 
 ## The server
 
-`tests/e2e/globalSetup.ts` uses a server that already answers on 5173 (e.g. your `npm run dev`). Otherwise it **builds
-the production bundle and serves it** (`vite preview`), because with 8 browsers loading at once the dev server's hundreds
+`tests/e2e/globalSetup.ts` starts a server of its own on a free port, every run, and never reuses one that is already
+running (your `npm run dev` on 5173 is left alone). The tests read the address from `tests/e2e/editorUrl.ts` (`EDITOR_URL`,
+`EDITOR_ORIGIN`): never write a port in a test (a unit test fails if you do). It **builds the production bundle and serves
+it** (`vite preview`), because with 8 browsers loading at once the dev server's hundreds
 of unbundled module requests per page made a load take about 2.5 s (worst 2.9) against about 1.0 s (worst 1.6): page
 loads timing out was the commonest flake. `EDITOR_E2E_SERVER=dev` starts the dev server instead.
 
@@ -48,8 +50,8 @@ loads timing out was the commonest flake. `EDITOR_E2E_SERVER=dev` starts the dev
   (`window.__EDITOR_TEST__`, `src/e2e/editorTestHook.ts`, which is in the bundle). Values a test needs from `src/` in the
   *Node* side of the test (`import { X } from '../../src/…'`) are fine.
 - **Vitest has no `globalTeardown` option** (that is Jest's). A global setup *returns* its teardown function. The old
-  teardown file never ran, so servers lingered. A server left on 5173 is silently reused by the next run, with whatever
-  build it had: if a run behaves strangely, check what is listening on 5173 first.
+  teardown file never ran, so servers lingered. Each run now starts on a free port, so a leftover server cannot be reused;
+  it only holds a port and a process, so look for stray `vite preview` processes if the machine slows down.
 - On Windows, killing the recorded `npm` process leaves the server child running: kill the tree (`taskkill /T /F`).
 - Don't pipe a test run into `head`: closing the pipe kills Vitest before it runs the teardown.
 - Editing `src/` or `tests/` while a run is going changes what that run tests (the dev server reloads pages, Vitest

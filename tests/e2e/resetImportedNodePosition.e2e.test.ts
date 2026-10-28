@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const PAGES = 'https://pages.test/onto';
 const CORS = { 'access-control-allow-origin': '*' };
@@ -65,7 +66,7 @@ beforeEach(async () => {
       ? route.fulfill({ status: 200, contentType: file.type, headers: CORS, body: file.body })
       : route.fulfill({ status: 404, headers: CORS, body: '' });
   });
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${PAGES}/child.ttl`)}`, {
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${PAGES}/child.ttl`)}`, {
     waitUntil: 'domcontentloaded',
     timeout: 5000,
   });

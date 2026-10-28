@@ -13,11 +13,11 @@ import { loadTestFile } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'node:fs';
+import { EDITOR_URL } from './editorUrl';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const EDITOR_URL = 'http://localhost:5173/';
 const TEST_FIXTURES_DIR = join(__dirname, '../fixtures/imported-ontology');
 
 /** properties-child.ttl subclasses base:BaseClass from the imported ontology <http://example.org/base>. */

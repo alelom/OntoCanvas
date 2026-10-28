@@ -15,11 +15,11 @@ import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync, readFileSync } from 'node:fs';
+import { EDITOR_URL } from './editorUrl';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const EDITOR_URL = 'http://localhost:5173/';
 const IMPORTED_FIXTURES_DIR = join(__dirname, '../fixtures/imported-ontology');
 
 /** object-props-child-child.ttl imports this ontology, whose IRI has a hyphen. */

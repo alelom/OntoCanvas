@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXAMPLE_DIR = join(__dirname, '../../examples/display');
@@ -44,7 +45,7 @@ async function open(viewport = { width: 1200, height: 800 }, query = ''): Promis
       return route.fulfill({ status: 200, contentType, headers: { 'access-control-allow-origin': '*' }, body: readFileSync(file) });
     }
   );
-  await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(ONTOLOGY_URL)}${query}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+  await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(ONTOLOGY_URL)}${query}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
   await waitForAppReady(page);
 }
 

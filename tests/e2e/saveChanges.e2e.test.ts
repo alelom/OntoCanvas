@@ -11,8 +11,8 @@ import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { readFileSync } from 'node:fs';
 import { waitForAppReady } from './testHelpers';
+import { EDITOR_URL } from './editorUrl';
 
-const EDITOR_URL = 'http://localhost:5173/';
 
 let browser: Browser;
 let page: Page;

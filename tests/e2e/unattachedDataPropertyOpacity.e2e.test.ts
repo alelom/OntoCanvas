@@ -13,10 +13,10 @@ import { loadTestFile, waitForAppReady } from './testHelpers';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { OPACITY_DIM } from '../../src/lib/searchHighlight';
+import { EDITOR_URL } from './editorUrl';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const EDITOR_URL = 'http://localhost:5173/';
 const FIXTURE = join(__dirname, '../fixtures/aec-provenance-typing-stubs.ttl');
 
 /** prov:generatedAtTime is a typing stub: no rdfs:range and no rdfs:domain. */

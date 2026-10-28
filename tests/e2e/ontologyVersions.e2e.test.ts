@@ -10,6 +10,7 @@ import { waitForAppReady } from './testHelpers';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { EDITOR_URL } from './editorUrl';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples/versions');
 const WHERE = 'https://examples.test/versions/';
@@ -70,7 +71,7 @@ describe('versions of the open ontology (#132, #133)', () => {
         ? route.fulfill({ status: 200, contentType: 'text/turtle', headers: CORS, body: readFileSync(join(EXAMPLES, file), 'utf-8') })
         : route.abort();
     });
-    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(`${WHERE}building-2.0.0.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(`${WHERE}building-2.0.0.ttl`)}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await waitForAppReady(page);
     await page.locator('#ontologyVersionsBtn').waitFor();
     await page.locator('#ontologyVersionsBtn').click();
@@ -82,7 +83,7 @@ describe('versions of the open ontology (#132, #133)', () => {
   });
 
   it('says a newer GitHub tag exists, lists the versions, and opens the one chosen', async () => {
-    await page.goto(`http://localhost:5173/?onto=${encodeURIComponent(raw('v1.0.0'))}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
+    await page.goto(`${EDITOR_URL}?onto=${encodeURIComponent(raw('v1.0.0'))}`, { waitUntil: 'domcontentloaded', timeout: 5000 });
     await waitForAppReady(page);
     const button = page.locator('#ontologyVersionsBtn');
     await expect.poll(() => page.locator('#ontologyNewer').textContent(), { timeout: 5000 }).toBe(' (v2.0.0 available)');

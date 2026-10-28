@@ -5,9 +5,11 @@ only the tests that cover it.
 
 ## Running them
 
-No server needs to be started: the global setup (`globalSetup.ts`) builds the app, serves it on `http://localhost:5173/`
-and stops it when the run is over. A server that already answers on that port (a developer's `npm run dev`) is used as it
-is, and then the tests run against the dev server, not a build.
+No server needs to be started: the global setup (`globalSetup.ts`) builds the app, serves it on a free port of its own and
+stops it when the run is over. It never reuses a server that is already running, so a developer's `npm run dev` (on 5173 or
+any port) is left alone and is not what the tests drive. The address reaches the tests through `EDITOR_E2E_URL`, set by the
+setup and read in one place, `editorUrl.ts` (`EDITOR_URL`, `EDITOR_ORIGIN`); a test never spells a port (a unit test checks
+it). `EDITOR_E2E_PORT` asks for a given port, and fails if something already answers on it.
 
 ```bash
 npm run test:e2e:affected            # the areas your changes touch, against origin/main (and your uncommitted files)
@@ -20,7 +22,7 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
 - **The build is reused** when no source is newer than the last build the setup made (`dist/.e2e-build.json`), so a small
   run starts in seconds instead of after a 40 to 50 s build. `EDITOR_E2E_REBUILD=1` forces a build. A `dist/` that
   the setup did not build is never trusted.
-- **Two runs cannot overlap** on one machine: the tests use port 5173.
+- **Two runs can overlap** on one machine: each starts its own server on its own port (they share `dist/`, so a build by one while the other runs can disturb it).
 - **Pull requests run only the selected areas**, and when they pass (with the unit tests they select) the pull request can
   merge. **The whole suite runs after the merge**, on `main`; green releases and deploys, red opens an issue
   automatically. See `.github/workflows/test.yml` and `main-verify.yml`.
