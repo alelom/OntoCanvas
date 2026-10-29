@@ -40,6 +40,8 @@ export interface QueryTabDeps {
 }
 
 export interface QueryTab extends SidePanelTab {
+  /** Adds the data files an address names (?data=<url>, #205), one after the other, through the Data block. Needs the tab drawn. */
+  addDataUrls(urls: string[]): Promise<void>;
   /** Another ontology was opened: refresh the prefixes of a query the user has not edited. */
   refresh(): void;
 }
@@ -103,6 +105,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   let stop: (() => void) | null = null;
   /** The data being read, if any; one at a time. */
   let loadingData: AbortController | null = null;
+  let addDataUrlsInBlock: ((urls: string[]) => Promise<void>) | null = null;
   /** The prefixes the query's text was written with (the starter's header); the note compares the open file's to them. */
   let headerPrefixes = JSON.stringify(deps.getPrefixes());
 
@@ -230,11 +233,12 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     renderList();
 
     const ask = deps.confirm ?? ((message: string) => Promise.resolve(window.confirm(message)));
-    async function load(label: string, add: (options: { signal: AbortSignal; confirm: (message: string) => Promise<boolean>; onProgress: (triples: number) => void }) => Promise<unknown>): Promise<void> {
-      if (loadingData) return;
+    /** Returns what is left in the status line: '' when the data was added or the user said no. */
+    async function load(label: string, add: (options: { signal: AbortSignal; confirm: (message: string) => Promise<boolean>; onProgress: (triples: number) => void }) => Promise<unknown>): Promise<string> {
+      if (loadingData) return '';
       if (!deps.getStore()) {
         status.textContent = 'Open an ontology first: the data is added to it.';
-        return;
+        return status.textContent;
       }
       const controller = new AbortController();
       loadingData = controller;
@@ -251,7 +255,18 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         loadingData = null;
         cancel.hidden = true;
       }
+      return status.textContent ?? '';
     }
+
+    // The data files an address names: one after the other, a failure shown at the end with the others' results kept.
+    addDataUrlsInBlock = async (urls) => {
+      const failures: string[] = [];
+      for (const url of urls) {
+        const left = await load(url, (options) => sources.addUrl(url, options));
+        if (left) failures.push(`${url}: ${left}`);
+      }
+      status.textContent = failures.join('  ');
+    };
 
     addFile.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
@@ -434,6 +449,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     id: 'query',
     title: 'Query',
     render,
+    async addDataUrls(urls) {
+      await addDataUrlsInBlock?.(urls);
+    },
     refresh() {
       // The data belongs to the ontology it was added to.
       loadingData?.abort();

@@ -1,7 +1,8 @@
 # Individuals for examples/sparql/query-panel.ttl (issue #205): a data file to ADD to that ontology, not to open on its own.
 #
 # Open query-panel.ttl, then in the SPARQL panel press "Add data file..." and choose this file (or paste its raw URL in the
-# field and press Add). The file is listed with its triples and a Remove button. Then run:
+# field and press Add), or open the ontology with `&data=<raw URL of this file>` after `?onto=<raw URL of query-panel.ttl>`: the panel
+# then opens with this file already listed. The file is listed with its triples and a Remove button. Then run:
 #
 #   SELECT ?i ?c WHERE { ?i a ?c . ?c rdfs:subClassOf* :Space } ORDER BY ?i ?c
 #     -> three rows: :room101 :Room, :room102 :Bedroom, :room102 :Room. The data says what is a :Room; only the ontology says

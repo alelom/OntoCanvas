@@ -8,6 +8,7 @@ import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
 import { createDataSources } from './sparql/dataSources';
+import { getDataUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
 import { isDebugMode, debugLog } from './utils/debug';
@@ -149,16 +150,22 @@ if (isDebugMode()) {
 // Load the ontology named by the URL parameter, otherwise show the "Open ontology" dialog — unless an
 // ontology was loaded meanwhile, which the dialog would otherwise cover.
 setTimeout(() => {
+  // The data files named next to the ontology (?data=<url>, #205), read before the load rewrites the address bar.
+  const dataUrls = getDataUrlsFromParams();
   void openOnStartup({
-    loadFromUrlParameter: () =>
-      handleUrlParameterLoad(
+    loadFromUrlParameter: async () => {
+      const loaded = await handleUrlParameterLoad(
         loadFromUrl,
         async (content: string, fileName: string, pathHint: string) => {
           await loadTtlAndRender(content, fileName, null, pathHint);
         },
         showOpenOntologyModal,
         hideOpenOntologyModal
-      ),
+      );
+      // The data is added to the ontology that was just opened, so only once it is.
+      if (loaded && session.ttlStore) await session.sidePanel?.addDataUrls(dataUrls);
+      return loaded;
+    },
     hasOntology: () => session.ttlStore !== null,
     showOpenOntologyModal,
   });

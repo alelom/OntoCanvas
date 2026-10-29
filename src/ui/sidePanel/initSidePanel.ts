@@ -26,14 +26,20 @@ export interface SidePanelDeps {
   embedded: boolean;
 }
 
-export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
+export interface SidePanel {
+  refresh(): void;
+  /** Opens the panel on the query tab and adds the data files an address names (?data=<url>, #205). */
+  addDataUrls(urls: string[]): Promise<void>;
+}
+
+export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const root = document.getElementById('sidePanel');
   const wrapper = document.getElementById('networkWrapper');
-  if (!root || !wrapper) return { refresh: () => {} };
+  if (!root || !wrapper) return { refresh: () => {}, addDataUrls: async () => {} };
 
   if (deps.embedded) {
     root.hidden = true;
-    return { refresh: () => {} };
+    return { refresh: () => {}, addDataUrls: async () => {} };
   }
 
   const host = createSidePanelHost(root);
@@ -50,5 +56,12 @@ export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
   const button = mountQueryButton(wrapper, () => host.toggle(queryTab.id));
   host.onChange((activeId) => button.setPressed(activeId === queryTab.id));
 
-  return { refresh: () => queryTab.refresh() };
+  return {
+    refresh: () => queryTab.refresh(),
+    async addDataUrls(urls) {
+      if (!urls.length) return;
+      host.open(queryTab.id);
+      await queryTab.addDataUrls(urls);
+    },
+  };
 }
