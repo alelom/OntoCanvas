@@ -56,7 +56,7 @@
       "description": "Opening an ontology: from a file, a URL, a folder or the start-up dialog, and the failures.",
       "tests": ["00_urlLoadFailureCors", "corruptOntology", "localFileOpening", "networkIsolation", "noClassesOntology", "openExternalFromFolder", "owlUrlLoad", "publicOntologyUrlLoad"],
       "sources": [
-        "src/workflows/loadOntologyFlow.ts", "src/workflows/openExternalTab.ts",
+        "src/workflows/loadOntologyFlow.ts", "src/ui/listeners/openFileListeners.ts", "src/workflows/openExternalTab.ts",
         "src/lib/loadOntology.ts", "src/lib/ontologyUrlLoader.ts", "src/lib/urlParamLoader.ts", "src/lib/urlLoadFailureHandler.ts",
         "src/lib/localFileOpener.ts", "src/lib/localFileTokenStorage.ts", "src/lib/ontologyDirectory.ts", "src/lib/indexedDb.ts",
         "src/lib/ontologyValidation.ts", "src/lib/ontologyValidator.ts",
@@ -68,13 +68,13 @@
     "saving": {
       "description": "Saving to Turtle, and what the saved file keeps of the original.",
       "tests": ["roundTrip", "saveChanges", "saveNonTurtle"],
-      "sources": ["src/workflows/saveTtlFlow.ts", "src/workflows/saveOntology.ts", "src/ui/fileBar.ts", "src/turtlePostProcess.ts", "src/rdf/"]
+      "sources": ["src/workflows/saveTtlFlow.ts", "src/ui/listeners/saveListeners.ts", "src/workflows/saveOntology.ts", "src/ui/fileBar.ts", "src/turtlePostProcess.ts", "src/rdf/"]
     },
     "layout": {
       "description": "Layouts, saved positions and the free-standing data property band.",
       "tests": ["elkLayout", "hierarchyTiers", "stackLeaves", "unattachedBandLayout", "autosavedPositions", "restorePositions", "resetImportedNodePosition"],
       "sources": [
-        "src/layouts/", "src/graph.ts", "src/graph/asyncLayout.ts", "src/graph/persistNodePositions.ts", "src/graph/nodeClip.ts",
+        "src/layouts/", "src/ui/listeners/displayOptionListeners.ts", "src/graph.ts", "src/graph/asyncLayout.ts", "src/graph/persistNodePositions.ts", "src/graph/nodeClip.ts",
         "src/graph/unattachedDataPropertyLayout.ts", "src/graph/visibleSpan.ts",
         "src/workflows/nodePositions.ts", "src/workflows/layoutOptions.ts", "src/ui/layoutModeHint.ts", "src/ui/edgeNodeClipping.ts"
       ]
@@ -83,7 +83,7 @@
       "description": "The display config: options, edge styles, and loading one with an ontology.",
       "tests": ["displayConfig", "displayConfigAutoLoad", "versionDisplayConfig", "edgeStyleCheckboxes"],
       "sources": [
-        "src/workflows/displayConfigApply.ts", "src/workflows/displayConfigFiles.ts", "src/workflows/displayConfigSave.ts",
+        "src/workflows/displayConfigApply.ts", "src/ui/listeners/displayConfigListeners.ts", "src/ui/listeners/displayOptionListeners.ts", "src/workflows/displayConfigFiles.ts", "src/workflows/displayConfigSave.ts",
         "src/lib/displayConfigFallback.ts", "src/lib/displayBase.ts", "src/ui/edgeStyleUtils.ts", "src/ui/networkConfig.ts", "src/ui/fontSizeDefaults.ts"
       ]
     },
@@ -102,7 +102,7 @@
       "description": "Relationships between classes: object properties, restrictions, class expressions, editing and deleting edges.",
       "tests": ["objectPropertyAddEdit", "editEdgeModal", "editEdgeConfirmClick", "editPropertyNoSpuriousRename", "importedObjectPropertyEditModal", "edgeLabelSelect", "restrictionReadOnly", "classExpressionReadOnly", "deleteUndoRelationshipCount", "propertyMenuGroups", "owlThingDomainSpelling", "unassertedRangeDomain"],
       "sources": [
-        "src/ui/relationshipTypeModal.ts", "src/ui/relationshipTypeForm.ts", "src/ui/editModals.ts", "src/ui/editEdgeConfirm.ts", "src/ui/editEdgeTypeSearch.ts",
+        "src/ui/relationshipTypeModal.ts", "src/ui/listeners/editEdgeListeners.ts", "src/ui/relationshipTypeForm.ts", "src/ui/editModals.ts", "src/ui/editEdgeConfirm.ts", "src/ui/editEdgeTypeSearch.ts",
         "src/ui/addEdgeModal.ts", "src/ui/edgeModalHelpers.ts", "src/ui/objectPropertyModal.ts", "src/ui/relationshipUtils.ts",
         "src/ui/editEdgeClassExpressionNotice.ts", "src/ui/editEdgeRestrictionNotice.ts",
         "src/ui/propertyMenuFacts.ts", "src/ui/propertyMenuGroups.ts", "src/ui/propertyMenuGroupsDom.ts",
@@ -116,7 +116,7 @@
       "description": "Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu.",
       "tests": ["addNodeMode", "undoDeleteClass", "canvasTooltip", "exampleImageTooltip", "nodeLabelContrast", "contextMenuSelectChildrenParents"],
       "sources": [
-        "src/ui/addNodeModal.ts", "src/ui/renameModal.ts", "src/ui/nodeConfirms.ts", "src/ui/nodeModalHelpers.ts", "src/ui/nodeModalForm.ts", "src/ui/nodeModalFormUi.ts",
+        "src/ui/addNodeModal.ts", "src/ui/listeners/nodeModalListeners.ts", "src/ui/listeners/toolbarListeners.ts", "src/ui/renameModal.ts", "src/ui/nodeConfirms.ts", "src/ui/nodeModalHelpers.ts", "src/ui/nodeModalForm.ts", "src/ui/nodeModalFormUi.ts",
         "src/ui/renameModalHeaderIcons.ts", "src/ui/canvasTooltip.ts", "src/ui/contextMenu.ts",
         "src/workflows/deleteSelection.ts", "src/workflows/undoRedo.ts", "src/workflows/editNodeProperties.ts",
         "src/lib/undo.ts", "src/lib/exampleImageFiles.ts", "src/lib/exampleImageStore.ts", "src/lib/exampleImageUrlValidation.ts", "src/lib/exampleImages.ts",
@@ -135,7 +135,7 @@
       "description": "References to other ontologies: the references modal, prefixes, and the external nodes drawn at half opacity.",
       "tests": ["externalNodeUrl", "externalOntologyUrlConversion", "externalRefPrefixUpdate", "externalRefsModal", "externalRefsVisualization"],
       "sources": [
-        "src/ui/externalRefs.ts", "src/graph/externalExpansion.ts", "src/graph/removeExternalReferences.ts", "src/graph/definedElsewhere.ts",
+        "src/ui/externalRefs.ts", "src/ui/listeners/externalRefsListeners.ts", "src/graph/externalExpansion.ts", "src/graph/removeExternalReferences.ts", "src/graph/definedElsewhere.ts",
         "src/externalOntologySearch.ts", "src/lib/openExternalOntology.ts"
       ]
     },
@@ -152,7 +152,7 @@
       "description": "The search box: suggestions, scope and the outline around the matches.",
       "tests": ["searchOutline", "searchScope", "searchSuggestions"],
       "sources": [
-        "src/ui/searchOptions.ts", "src/ui/searchOutlineOverlay.ts", "src/ui/searchVocabulary.ts", "src/ui/searchAutocomplete.ts",
+        "src/ui/searchOptions.ts", "src/ui/listeners/searchListeners.ts", "src/ui/searchOutlineOverlay.ts", "src/ui/searchVocabulary.ts", "src/ui/searchAutocomplete.ts",
         "src/graph/searchOutline.ts", "src/lib/searchHighlight.ts", "src/lib/searchSuggestions.ts"
       ]
     },
@@ -164,7 +164,7 @@
     "shell": {
       "description": "The bottom bar and what it shows about the selection.",
       "tests": ["statusBar"],
-      "sources": ["src/ui/statusBar.ts", "src/ui/selectionInfo.ts"]
+      "sources": ["src/ui/statusBar.ts", "src/ui/listeners/toolbarListeners.ts", "src/ui/listeners/globalShortcuts.ts", "src/ui/selectionInfo.ts"]
     },
     "sparql": {
       "description": "SPARQL queries over the loaded ontology.",

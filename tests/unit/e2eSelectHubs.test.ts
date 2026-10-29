@@ -3,7 +3,7 @@
  * change to it can reach depends on what changed in it). The general selection is in e2eSelect.test.ts.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -275,5 +275,32 @@ describe('the loader core, cut by job (#198)', () => {
   it('runs only the area of what the graph builder hands off: object property edges and data property restrictions', () => {
     expect(selectAreas(['src/ontology/objectPropertyEdges.ts'], config, importers)).toMatchObject({ all: false, areas: ['relationships'] });
     expect(selectAreas(['src/ontology/dataPropertyRestrictions.ts'], config, importers)).toMatchObject({ all: false, areas: ['data-properties'] });
+  });
+});
+
+describe('the event listeners, one file per feature (#198)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+  const areasOf = (file: string) => selectAreas([file], config, importers);
+
+  it('keeps the list of calls a hub, since it decides what the whole page responds to', () => {
+    expect(areasOf('src/ui/eventListeners.ts').all).toBe(true);
+  });
+
+  it.each([
+    ['openFileListeners', ['loading']],
+    ['externalRefsListeners', ['external-refs']],
+    ['editEdgeListeners', ['relationships']],
+    ['saveListeners', ['saving']],
+    ['searchListeners', ['search']],
+    ['globalShortcuts', ['shell']],
+  ])('%s selects only %j', (file, areas) => {
+    expect(areasOf(`src/ui/listeners/${file}.ts`)).toMatchObject({ all: false, areas });
+  });
+
+  it('calls every listener file, so none is left unwired', () => {
+    const main = readFileSync(join(ROOT, 'src/ui/eventListeners.ts'), 'utf-8');
+    const files = readdirSync(join(ROOT, 'src/ui/listeners')).filter((f) => f.endsWith('.ts'));
+    for (const file of files) expect(main, file).toContain(`./listeners/${file.replace(/\.ts$/, '')}'`);
   });
 });
