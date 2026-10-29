@@ -17,7 +17,7 @@ import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, BORDER_LINE_OPTIONS, DEFAULT_N
 import { renderLineTypeDropdown, renderLineTypeSvg } from './edgeStyleUtils';
 import { getMainOntologyBase } from '../ontology/readOntology';
 import { removeAnnotationPropertyFromStore, getAnnotationPropertyUriFromStore } from '../ontology/editAnnotationProperties';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotationStyle';
 import { groupMenuEntries, menuGroupKey, sortByMenuGroup, type MenuEntry } from './propertyMenuGroups';
 import { renderMenuGroups } from './propertyMenuGroupsDom';

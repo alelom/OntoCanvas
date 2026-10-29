@@ -3,7 +3,8 @@
  * found. Moved out of main.ts (#175).
  */
 import { fileState, canvasState } from '../state/appState';
-import { saveDisplayConfigToIndexedDB, type DisplayConfig } from '../storage';
+import { saveDisplayConfigToIndexedDB } from '../storage/displayConfigStore';
+import { type DisplayConfig } from '../storage/types';
 import { collectDisplayConfig, loadDisplayConfigFromUrl } from './displayConfigFiles';
 
 export function scheduleDisplayConfigSave(): void {

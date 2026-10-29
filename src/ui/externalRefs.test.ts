@@ -17,7 +17,7 @@ import {
   setImportedPrefixes,
 } from './externalRefs';
 import type { GraphNode } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 
 describe('externalRefs', () => {
   describe('getPrefixForUri: prefixes the imports declare (#137)', () => {

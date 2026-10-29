@@ -1,8 +1,8 @@
 import { Store, DataFactory } from 'n3';
 import { RESERVED_VOCABULARY_NAMESPACES } from '../rdf/reservedVocabulary';
 import type { GraphNode } from '../types';
-import type { ExternalOntologyReference } from '../storage';
-import { saveExternalRefsToIndexedDB } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
+import { saveExternalRefsToIndexedDB } from '../storage/externalRefsStore';
 import { debugLog } from '../utils/debug';
 import { extractLocalName } from '../utils/localName';
 import { escapeHtml } from '../utils/escapeHtml';

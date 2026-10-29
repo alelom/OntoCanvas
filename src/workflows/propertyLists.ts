@@ -10,7 +10,7 @@ import { browserVersionSources } from '../lib/versionSources';
 import { getObjectProperties, getDataProperties, getMainOntologyBase } from '../ontology/readOntology';
 import { BASE_IRI } from '../ontology/vocab';
 import { session } from '../state/appState';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import type { ObjectPropertyInfo, DataPropertyInfo } from '../types';
 import { refreshExternalRefsList } from '../ui/externalRefs';
 import * as nodeModalFormUi from '../ui/nodeModalFormUi';

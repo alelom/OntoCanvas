@@ -9,7 +9,7 @@ import { getClassNamespace } from '../../src/ontology/readOntology';
 import { removeNodeFromStore, updateLabelInStore } from '../../src/ontology/editClasses';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import { validateOntologyStructure } from '../../src/lib/ontologyValidation';
-import type { ExternalOntologyReference } from '../../src/storage';
+import type { ExternalOntologyReference } from '../../src/storage/types';
 import { detectOntologyIssues } from '../../src/ui/ontologyIssues';
 
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#';

@@ -1,5 +1,5 @@
 import type { GraphEdge, GraphData, ObjectPropertyInfo } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
 import { extractLocalName } from '../utils/localName';

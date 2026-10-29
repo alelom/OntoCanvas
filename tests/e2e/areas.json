@@ -4,7 +4,6 @@
     "src/main.ts",
     "src/state/",
     "src/state.ts",
-    "src/storage.ts",
     "src/ontology/vocab.ts",
     "src/ontology/readOntology.ts",
     "src/ontology/buildGraph.ts",
@@ -26,7 +25,8 @@
     "tests/e2e/globalSetup.ts"
   ],
   "typeOnly": [
-    "src/types.ts"
+    "src/types.ts",
+    "src/storage/types.ts"
   ],
   "packageFiles": [
     "package.json",

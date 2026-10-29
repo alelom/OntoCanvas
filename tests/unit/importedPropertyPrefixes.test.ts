@@ -14,7 +14,7 @@ import {
 } from '../../src/ui/externalRefs';
 import { getMainOntologyBase } from '../../src/ontology/readOntology';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
-import type { ExternalOntologyReference } from '../../src/storage';
+import type { ExternalOntologyReference } from '../../src/storage/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

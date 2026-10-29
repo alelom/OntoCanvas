@@ -220,3 +220,27 @@ describe('the core of loading an ontology stays a hub (#194 review)', () => {
     expect(s.areas.length).toBeLessThan(Object.keys(config.areas).length);
   });
 });
+
+describe('storage, split by job, is no longer a hub (#198)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+  const areasOf = (file: string) => selectAreas([file], config, importers);
+
+  it('is not listed in `everything`, and the single file it was is gone', () => {
+    expect(config.everything).not.toContain('src/storage.ts');
+    expect(() => readFileSync(join(ROOT, 'src/storage.ts'))).toThrow();
+  });
+
+  it('keeps its types in a file that selects no area', () => {
+    expect(areasOf('src/storage/types.ts')).toMatchObject({ all: false, areas: [] });
+  });
+
+  it('selects only the areas that use a store: what to reopen reaches loading, not every area', () => {
+    for (const file of ['src/storage/lastOpened.ts', 'src/storage/serializerConfigStore.ts', 'src/storage/displayConfigStore.ts']) {
+      const s = areasOf(file);
+      expect(s.all, file).toBe(false);
+      expect(s.areas.length, file).toBeGreaterThan(0);
+      expect(s.areas.length, file).toBeLessThan(Object.keys(config.areas).length - 5);
+    }
+  });
+});

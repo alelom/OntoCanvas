@@ -1,5 +1,5 @@
 import type { GraphData, GraphEdge, BorderLineType, ObjectPropertyInfo } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import { getAllRelationshipTypes, getRelationshipLabel, colourableRelationshipTypes } from './relationshipUtils';
 import { getDefaultEdgeColors, getDefaultColor, getEdgeTypes } from '../graph';
 

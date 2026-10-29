@@ -12,7 +12,7 @@
  * `ital` font (`<i>`), so that part stands out in italics. The label's own text is escaped.
  */
 import type { DataPropertyInfo, GraphNode, ObjectPropertyInfo } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import { getNodeOntologyUrl, getNodePrefix, getPrefixForUri, isUriFromExternalOntology } from './externalRefs';
 import { isDefinedElsewhere } from '../graph/definedElsewhere';
 import { isReservedNamespace, isReservedVocabularyUri } from '../rdf/reservedVocabulary';

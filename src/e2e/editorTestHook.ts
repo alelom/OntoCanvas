@@ -7,7 +7,7 @@ import type { Network } from 'vis-network/esnext';
 import type { Store } from 'n3';
 import type { StoreTerm } from '../sparql/runQuery';
 import type { GraphData, GraphEdge, ObjectPropertyInfo, DataPropertyInfo, AnnotationPropertyInfo } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import { parseEdgeId } from '../utils/edgeId';
 import { isViewSettled } from '../ui/viewSettle';
 import { areImportsSettled } from '../ui/importsSettle';

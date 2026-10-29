@@ -14,7 +14,7 @@ import {
   SUBCLASSOF_COMMENT,
 } from './relationshipUtils';
 import type { GraphData, GraphEdge } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 
 describe('relationshipUtils', () => {

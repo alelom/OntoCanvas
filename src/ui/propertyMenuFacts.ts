@@ -4,7 +4,7 @@
  * cannot style anything). Pure.
  */
 import type { Store } from 'n3';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import { getPrefixForUri, isUriFromExternalOntology } from './externalRefs';
 import { namespaceOf, ontologyDisplayName } from './importedNote';
 

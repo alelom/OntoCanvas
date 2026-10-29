@@ -8,7 +8,7 @@ vi.mock('./ontology/buildGraph', () => ({
   parseTtlToGraph: vi.fn(),
 }));
 
-vi.mock('./storage', () => ({
+vi.mock('./storage/lastOpened', () => ({
   getLastFileFromIndexedDB: vi.fn(),
   saveLastFileToIndexedDB: vi.fn(),
 }));

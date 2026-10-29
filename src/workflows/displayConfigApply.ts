@@ -6,7 +6,7 @@ import { resolveLayoutMode, getEdgeTypes, getDefaultColor, getDefaultEdgeColors 
 import { searchScopeFromConfig } from '../lib/searchHighlight';
 import { extractLocalName } from '../utils/localName';
 import { canvasState, session } from '../state/appState';
-import type { DisplayConfig, ExternalNodeLayout } from '../storage';
+import type { DisplayConfig, ExternalNodeLayout } from '../storage/types';
 import type { BorderLineType } from '../types';
 import { updateEdgeColorsLegend } from '../ui/edgeStyleUtils';
 import { defaultMaxFontSize } from '../ui/fontSizeDefaults';

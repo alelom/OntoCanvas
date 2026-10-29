@@ -20,7 +20,7 @@ import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { storeToTurtle } from '../../../src/ontology/serialize';
 import { updateLabelInStore, updateCommentInStore, addNodeToStore, removeNodeFromStore } from '../../../src/ontology/editClasses';
 import { addEdgeToStore, removeEdgeFromStore } from '../../../src/ontology/editEdges';
-import type { SerializerType } from '../../../src/storage';
+import type { SerializerType } from '../../../src/storage/types';
 import { changedLineCount, formatDiff, isAttributionOnlyChange, blockUnchanged } from './minimalDiff';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

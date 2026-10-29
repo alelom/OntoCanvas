@@ -3,7 +3,8 @@
  * Moved out of main.ts (#175).
  */
 import { session, canvasState } from '../state/appState';
-import { type DisplayConfig, DISPLAY_CONFIG_VERSION, type ExternalNodeLayout } from '../storage';
+import { type DisplayConfig, type ExternalNodeLayout } from '../storage/types';
+import { DISPLAY_CONFIG_VERSION } from '../storage/displayConfigStore';
 import { getAnnotationStyleConfig } from '../ui/annotationPropertiesMenu';
 import { getEdgeStyleConfig } from '../ui/edgeStyleUtils';
 import { getSearchScope } from '../ui/searchOptions';

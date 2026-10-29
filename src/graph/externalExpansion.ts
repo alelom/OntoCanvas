@@ -6,8 +6,8 @@
 
 import { DataFactory, type Store } from 'n3';
 import type { GraphData, GraphEdge, GraphNode } from '../types';
-import type { ExternalOntologyReference } from '../storage';
-import type { ExternalNodeLayout } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
+import type { ExternalNodeLayout } from '../storage/types';
 import { getMainOntologyBase, getObjectProperties } from '../ontology/readOntology';
 import { extractLocalName } from '../utils/localName';
 import { findRestrictionBlank } from '../ontology/editRestrictions';

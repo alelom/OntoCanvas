@@ -11,7 +11,7 @@ import { Store, DataFactory } from 'n3';
 import { getAnnotationProperties, getMainOntologyBase } from '../../src/ontology/readOntology';
 import { isUriFromExternalOntology } from '../../src/ui/externalRefs';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
-import type { ExternalOntologyReference } from '../../src/storage';
+import type { ExternalOntologyReference } from '../../src/storage/types';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
