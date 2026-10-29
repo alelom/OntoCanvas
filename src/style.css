@@ -633,6 +633,9 @@ body.embed-no-menu #ontologyIssuesPopup {
 .query-result {
   overflow: auto;
 }
+.query-result > button {
+  margin-bottom: 8px;
+}
 .query-results {
   border-collapse: collapse;
   font-family: Consolas, monospace;

@@ -21,6 +21,12 @@
 #   CONSTRUCT { ?c rdfs:subClassOf ?p } WHERE { ?c rdfs:subClassOf ?p . ?p a owl:Class }
 #     -> Turtle text with the two subclass triples
 #
+#   SELECT ?c WHERE { ?c rdfs:subClassOf+ :Space }   then "Show in graph (2 classes)" under the table (issue #203)
+#     -> :Bedroom and :Room are selected in the graph and brought into view
+#
+#   SELECT ?p WHERE { ?p a owl:ObjectProperty }   then "Show in graph (1 relationship)"
+#     -> the :Room to :Wall relationship (has part) is selected; a result with no class or property (a COUNT) has no button
+#
 #   DELETE WHERE { ?s ?p ?o }
 #     -> an error: queries are read-only
 @prefix : <http://example.org/examples/sparql-queries#> .

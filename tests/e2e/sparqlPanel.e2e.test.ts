@@ -181,6 +181,30 @@ describe('SPARQL side panel', () => {
     await load(TTL);
   });
 
+  it('selects the classes and the relationships a result names in the graph, and offers nothing for a result that names none (#203)', async () => {
+    const selected = () => page.evaluate(() => ({ nodes: (window as any).__EDITOR_TEST__.getSelectedNodes(), edges: (window as any).__EDITOR_TEST__.getSelectedEdges() }));
+    const query = async (text: string) => {
+      await page.locator(EDITOR).fill(text);
+      await page.click('[data-query-run]');
+      await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('[data-query-run]')!.disabled);
+    };
+
+    await query('PREFIX owl: <http://www.w3.org/2002/07/owl#> SELECT ?c WHERE { ?c a owl:Class } ORDER BY ?c');
+    expect(await page.locator('[data-query-show-in-graph]').textContent()).toContain('2 classes');
+    await page.click('[data-query-show-in-graph]');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getSelectedNodes().length === 2);
+    expect((await selected()).nodes.sort()).toEqual(['Person', 'Student']);
+
+    await query('PREFIX : <http://example.org/o#> SELECT DISTINCT ?p WHERE { :Student ?p :Person }');
+    expect(await page.locator('[data-query-show-in-graph]').textContent()).toContain('1 relationship');
+    await page.click('[data-query-show-in-graph]');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getSelectedEdges().length === 1);
+    expect(await selected()).toEqual({ nodes: [], edges: ['Student->Person:subClassOf'] });
+
+    await query('SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }');
+    expect(await page.locator('[data-query-show-in-graph]').count()).toBe(0);
+  });
+
   it('closes, giving the room back to the graph', async () => {
     const open = await networkWidth();
 
