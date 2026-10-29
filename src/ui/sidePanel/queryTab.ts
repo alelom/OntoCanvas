@@ -9,6 +9,7 @@ import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
+import { describeMatch, irisInTable, matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
@@ -27,6 +28,10 @@ export interface QueryTabDeps {
   history?: HistoryStore;
   /** What the open file's history is kept under (its ontology IRI); null, or absent, means nothing is recorded. */
   getHistoryKey?: () => string | null;
+  /** What the graph draws now, to match a result against (#203); null when nothing is drawn. Without it, no "Show in graph". */
+  getGraph?: () => GraphIndex | null;
+  /** Selects these nodes and edges in the graph and brings them into view. */
+  showInGraph?: (match: GraphMatch) => void;
 }
 
 export interface QueryTab extends SidePanelTab {
@@ -142,6 +147,20 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     const starter = store && individualsOf(store).size > 0 ? INDIVIDUALS_STARTER_QUERY : CLASSES_STARTER_QUERY;
     return `${prefixHeader(deps.getPrefixes())}\n\n${starter}`;
   };
+
+  /** The "Show in graph" button above a table that names drawn classes or relationships; nothing when it names none (#203). */
+  function showInGraphRow(view: Extract<ResultView, { kind: 'table' }>): HTMLElement[] {
+    const graph = deps.getGraph?.();
+    if (!graph || !deps.showInGraph) return [];
+    const match = matchIrisToGraph(irisInTable(view), graph);
+    if (!match.nodeIds.length && !match.edgeIds.length) return [];
+    const button = element('button', undefined, `Show in graph (${describeMatch(match)})`);
+    button.type = 'button';
+    button.title = 'Select these in the graph and bring them into view';
+    button.setAttribute('data-query-show-in-graph', '');
+    button.addEventListener('click', () => deps.showInGraph!(match));
+    return [button];
+  }
 
   function render(container: HTMLElement): void {
     container.classList.add('query-tab');
@@ -264,7 +283,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
-          result.replaceChildren(renderTable(view));
+          result.replaceChildren(...showInGraphRow(view), renderTable(view));
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;

@@ -9,7 +9,8 @@ import type { Store, Term } from 'n3';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { runQuery } from '../../src/sparql/runQuery';
 import { prefixHeader, withStandardPrefixes } from '../../src/sparql/prefixHeader';
-import { describeResult } from '../../src/sparql/resultView';
+import { describeResult, type ResultView } from '../../src/sparql/resultView';
+import { irisInTable, matchIrisToGraph } from '../../src/sparql/graphMatches';
 import { detectInstanceData } from '../../src/ui/ontologyIssues';
 import { INDIVIDUALS_STARTER_QUERY } from '../../src/ui/sidePanel/queryTab';
 
@@ -60,6 +61,17 @@ describe('examples/sparql/query-panel.ttl', () => {
 
   it('counts five classes', async () => {
     expect(await shown('SELECT (COUNT(?c) AS ?n) WHERE { ?c a owl:Class }')).toEqual([['"5"^^xsd:integer']]);
+  });
+
+  it('names classes and a relationship that "Show in graph" finds in the drawn graph (#203)', async () => {
+    const parsed = await parseRdfToGraph(text, { path: EXAMPLE });
+    const graph = { nodes: parsed.graphData.nodes, edges: parsed.graphData.edges, objectProperties: parsed.objectProperties };
+    const iris = async (query: string) => irisInTable((await describeResult(await runQuery([store], `${HEADER}
+${query}`), declared)) as Extract<ResultView, { kind: 'table' }>);
+
+    expect(matchIrisToGraph(await iris('SELECT ?c WHERE { ?c rdfs:subClassOf+ :Space }'), graph).nodeIds.sort()).toEqual(['Bedroom', 'Room']);
+    expect(matchIrisToGraph(await iris('SELECT ?p WHERE { ?p a owl:ObjectProperty }'), graph)).toEqual({ nodeIds: [], edgeIds: ['Room->Wall:hasPart'] });
+    expect(matchIrisToGraph(await iris('SELECT (COUNT(?c) AS ?n) WHERE { ?c a owl:Class }'), graph)).toEqual({ nodeIds: [], edgeIds: [] });
   });
 
   it('answers an ASK query', async () => {

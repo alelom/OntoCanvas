@@ -6,6 +6,8 @@ import { installTestLogCapture } from './e2e/testLogCapture';
 import { renderApp } from './ui/appShell';
 import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
+import { selectInGraph } from './graph/selectResults';
+import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
 import { isDebugMode, debugLog } from './utils/debug';
 import {
@@ -113,6 +115,16 @@ session.sidePanel = initSidePanel({
   getStore: () => session.ttlStore,
   getPrefixes: () => session.currentPrefixMap,
   getHistoryKey: () => historyKeyOf(session.ttlStore, fileState.loadedFilePath ?? fileState.loadedFileName),
+  getGraph: () => {
+    const drawn = session.currentGraphDataForBuild;
+    return drawn ? { nodes: drawn.nodes, edges: drawn.edges, objectProperties: session.objectProperties } : null;
+  },
+  showInGraph: (match) => {
+    const network = canvasState.network;
+    if (!network) return;
+    selectInGraph(network, match);
+    updateSelectionInfoDisplay(network);
+  },
   embedded: isEmbedded(),
 });
 const appEl = document.getElementById('app');
