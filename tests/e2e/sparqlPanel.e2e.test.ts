@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
-import { openEditorWithTtl } from './testHelpers';
+import { openEditorWithTtl, waitForAppReady } from './testHelpers';
 
 const TTL = `
 @prefix : <http://example.org/o#> .
@@ -15,6 +15,14 @@ const TTL = `
 <http://example.org/o> a owl:Ontology .
 :Person a owl:Class ; rdfs:label "Person" .
 :Student a owl:Class ; rdfs:label "Student"@en ; rdfs:subClassOf :Person .
+`;
+// Another ontology, with an IRI of its own: its history is kept apart from that of TTL (#182).
+const OTHER_TTL = `
+@prefix : <http://example.org/other#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/other> a owl:Ontology .
+:Room a owl:Class ; rdfs:label "Room" .
 `;
 const isEngineRequest = (u: string) => /index-browser|comunica|runQuery/i.test(u);
 const isEditorRequest = (u: string) => /codeMirrorEditor/i.test(u);
@@ -112,6 +120,65 @@ describe('SPARQL side panel', () => {
     await page.click('[data-query-run]');
 
     expect(await page.locator('[data-query-error]').textContent()).toMatch(/read-only/i);
+  });
+
+  it('keeps the queries run on a file for the next visit, and puts a chosen one in the editor without running it (#182)', async () => {
+    // The two queries above were run on this ontology: they are in the selector.
+    expect(await page.locator('[data-query-history] option').count()).toBe(3); // the placeholder and two queries
+
+    // A returning visit: a new context that starts with the local storage of this one, the same ontology opened again.
+    const returning = await browser.newContext({ storageState: await page.context().storageState() });
+    const next = await returning.newPage();
+    next.setDefaultTimeout(5000);
+    try {
+      await openEditorWithTtl(next, TTL);
+      await next.click('#queryPanelBtn');
+      await next.locator(EDITOR).waitFor();
+
+      const labels = await next.locator('[data-query-history] option').allTextContents();
+      expect(labels).toHaveLength(3);
+      expect(labels[1]).toContain('DELETE WHERE'); // the newest first
+      expect(labels[2]).toContain('SELECT ?c ?l WHERE');
+
+      await next.locator('[data-query-history]').selectOption({ index: 2 });
+
+      expect(await next.locator(EDITOR).innerText()).toContain('SELECT ?c ?l WHERE { ?c rdfs:label ?l } ORDER BY ?c');
+      expect(await next.locator('.query-results').count()).toBe(0); // choosing does not run it
+      expect(await next.locator('[data-query-history]').inputValue()).toBe('');
+    } finally {
+      await returning.close();
+    }
+  });
+
+  it('shows the history of the ontology that is open when another is opened with the panel showing, and Clear clears only that one (#196 review)', async () => {
+    const load = async (ttl: string) => {
+      await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), ttl);
+      await waitForAppReady(page);
+    };
+    const labels = () => page.locator('[data-query-history] option').allTextContents();
+
+    // Another ontology: none of the first one's queries, and one of its own after a run.
+    await load(OTHER_TTL);
+    expect(await page.locator('[data-query-history-row]').isHidden()).toBe(true);
+    await page.locator(EDITOR).fill('ASK { ?s ?p ?o }');
+    await page.click('[data-query-run]');
+    await page.waitForFunction(() => document.querySelectorAll('[data-query-history] option').length === 2);
+
+    // Back to the first: its own queries (the newest is the DELETE of an earlier test), not the other's ASK.
+    await load(TTL);
+    const first = await labels();
+    expect(first).toHaveLength(3);
+    expect(first[1]).toContain('DELETE WHERE');
+
+    await page.click('[data-query-history-clear]');
+    expect(await page.locator('[data-query-history-row]').isHidden()).toBe(true);
+
+    // The other ontology's history is untouched by that Clear.
+    await load(OTHER_TTL);
+    const other = await labels();
+    expect(other).toHaveLength(2);
+    expect(other[1]).toContain('ASK');
+    await load(TTL);
   });
 
   it('closes, giving the room back to the graph', async () => {

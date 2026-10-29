@@ -12,6 +12,8 @@ export interface SidePanelDeps {
   getStore: () => Store | null;
   /** The prefixes the open file declares. */
   getPrefixes: () => Record<string, string>;
+  /** What the open file's query history is kept under (its ontology IRI, or its name); null when neither is known. */
+  getHistoryKey?: () => string | null;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
@@ -27,7 +29,7 @@ export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
   }
 
   const host = createSidePanelHost(root);
-  const queryTab = createQueryTab({ getStore: deps.getStore, getPrefixes: deps.getPrefixes });
+  const queryTab = createQueryTab({ getStore: deps.getStore, getPrefixes: deps.getPrefixes, getHistoryKey: deps.getHistoryKey });
   host.registerTab(queryTab);
 
   const button = mountQueryButton(wrapper, () => host.toggle(queryTab.id));

@@ -571,6 +571,19 @@ body.embed-no-menu #ontologyIssuesPopup {
   color: #666;
   font-size: 11px;
 }
+.query-history {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.query-history[hidden] {
+  display: none;
+}
+.query-history select {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+}
 .query-editor {
   width: 100%;
   min-width: 0;
