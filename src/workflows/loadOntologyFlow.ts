@@ -16,7 +16,7 @@ import { findVersions } from '../lib/ontologyVersions';
 import { recallSeenVersions, rememberSeenVersions } from '../lib/seenVersions';
 import { handleUrlLoadFailure } from '../lib/urlLoadFailureHandler';
 import { browserVersionSources } from '../lib/versionSources';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { extractLocalName } from '../utils/localName';
 import { actions } from '../state/actions';
 import { session, canvasState, fileState } from '../state/appState';

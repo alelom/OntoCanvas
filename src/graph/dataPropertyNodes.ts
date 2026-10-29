@@ -7,7 +7,7 @@
 import { domainAttachment, appliesToClass, describeRange, UNATTACHED_DOMAIN_NOTE, unattachedDataPropertyNodeId } from '../lib/dataPropertyDisplay';
 import { computeSearchSets, getDataPropertySearchOpacity } from '../lib/searchHighlight';
 import { readableTextColor } from '../lib/textContrast';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { session, canvasState } from '../state/appState';
 import type { GraphNode } from '../types';
 import { DATA_PROPERTY_FILL } from '../ui/constants';

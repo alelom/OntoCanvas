@@ -4,7 +4,7 @@
  */
 import { findShownEdge } from '../graph/canvasHelpers';
 import { edgeLock } from '../lib/edgeEditability';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { addEdgeToStore, removeEdgeFromStore } from '../ontology/editEdges';
 import { removeDataPropertyRestrictionFromClass, addDataPropertyRestrictionToClass, getDataPropertyRestrictionsForClass, removeRestrictionFromStore, addRestrictionToStore } from '../ontology/editRestrictions';
 import { actions } from '../state/actions';

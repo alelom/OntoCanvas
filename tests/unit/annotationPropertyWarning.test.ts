@@ -8,7 +8,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Store, DataFactory } from 'n3';
-import { getAnnotationProperties, getMainOntologyBase } from '../../src/ontology/readOntology';
+import { getAnnotationProperties } from '../../src/ontology/readAnnotationProperties';
+import { getMainOntologyBase } from '../../src/ontology/ontologyBase';
 import { isUriFromExternalOntology } from '../../src/ui/externalRefs';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 import type { ExternalOntologyReference } from '../../src/storage/types';

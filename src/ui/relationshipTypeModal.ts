@@ -8,7 +8,7 @@ import { validateLabelForIdentifier, labelToCamelCaseIdentifier, validateLabelFo
 import { extractLocalName } from '../utils/localName';
 import { renameObjectPropertyInStore, updateObjectPropertyLabelInStore, updateObjectPropertyCommentInStore, updateObjectPropertyDomainRangeInStore, updateObjectPropertySubPropertyOfInStore, updateObjectPropertyIsDefinedByInStore, removeObjectPropertyFromStore, addObjectPropertyToStore } from '../ontology/editObjectProperties';
 import { namesOwlThing } from '../ontology/editClasses';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { actions } from '../state/actions';
 import { initFlags, session, fileState, canvasState } from '../state/appState';
 import type { ObjectPropertyInfo } from '../types';

@@ -8,7 +8,8 @@ import type { RdfTerm } from '../rdf/classExpressions';
 import { classUriForName } from '../graph/classNodeIds';
 import { debugWarn } from '../utils/debug';
 import { extractLocalName } from '../utils/localName';
-import { getClassNamespace, getDataProperties, getMainOntologyBase } from './readOntology';
+import { getClassNamespace, getMainOntologyBase } from './ontologyBase';
+import { getDataProperties } from './readDataProperties';
 import { labelToCamelCaseIdentifier } from '../lib/identifierFromLabel';
 import { removeBlankNodeClosure } from '../rdf/blankNodes';
 

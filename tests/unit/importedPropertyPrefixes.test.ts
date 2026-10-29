@@ -12,7 +12,7 @@ import {
   getPrefixForUri,
   isUriFromExternalOntology 
 } from '../../src/ui/externalRefs';
-import { getMainOntologyBase } from '../../src/ontology/readOntology';
+import { getMainOntologyBase } from '../../src/ontology/ontologyBase';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 import type { ExternalOntologyReference } from '../../src/storage/types';
 

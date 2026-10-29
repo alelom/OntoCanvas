@@ -5,7 +5,7 @@ import { DataFactory } from 'n3';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { addDataPropertyRestrictionToClass } from '../../src/ontology/editRestrictions';
 import { addObjectPropertyToStore } from '../../src/ontology/editObjectProperties';
-import { getClassNamespace } from '../../src/ontology/readOntology';
+import { getClassNamespace } from '../../src/ontology/ontologyBase';
 import { removeNodeFromStore, updateLabelInStore } from '../../src/ontology/editClasses';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import { validateOntologyStructure } from '../../src/lib/ontologyValidation';

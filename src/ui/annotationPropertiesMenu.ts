@@ -15,7 +15,7 @@ import type { AnnotationPropertyInfo, BorderLineType } from '../types';
 import type { AnnotationStyleConfig } from './constants';
 import { DEFAULT_BOOL_COLORS, DEFAULT_TEXT_COLOR, BORDER_LINE_OPTIONS, DEFAULT_NODE_FALLBACK } from './constants';
 import { renderLineTypeDropdown, renderLineTypeSvg } from './edgeStyleUtils';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { removeAnnotationPropertyFromStore, getAnnotationPropertyUriFromStore } from '../ontology/editAnnotationProperties';
 import type { ExternalOntologyReference } from '../storage/types';
 import { reorderAnnotationProperty, defaultAnnotationFill } from '../lib/annotationStyle';

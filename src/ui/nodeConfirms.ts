@@ -4,7 +4,7 @@
  */
 import { getAnnotationValuesForClass } from '../lib/annotationValues';
 import { addNodeToStore, removeNodeFromStore, updateCommentInStore, updateLabelInStore } from '../ontology/editClasses';
-import { getClassNamespace, getMainOntologyBase } from '../ontology/readOntology';
+import { getClassNamespace, getMainOntologyBase } from '../ontology/ontologyBase';
 import { BASE_IRI } from '../ontology/vocab';
 import { removeDataPropertyRestrictionFromClass } from '../ontology/editRestrictions';
 import { actions } from '../state/actions';

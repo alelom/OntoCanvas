@@ -6,7 +6,7 @@ import { BASE_IRI, HAS_CARDINALITY_PROP, OWL, RDF, RDFS, XSD, XSD_BOOLEAN } from
 import { DataFactory, Store } from 'n3';
 import { classUriForName } from '../graph/classNodeIds';
 import { extractLocalName } from '../utils/localName';
-import { getAnnotationProperties } from './readOntology';
+import { getAnnotationProperties } from './readAnnotationProperties';
 
 /**
  * Update an annotation property value for a class node in the store.

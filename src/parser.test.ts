@@ -7,7 +7,7 @@ import { parseTtlToGraph, parseRdfToGraph, quadsToParseResult } from './ontology
 import { updateLabelInStore, addNodeToStore, removeNodeFromStore } from './ontology/editClasses';
 import { storeToTurtle } from './ontology/serialize';
 import { extractLocalName } from './utils/localName';
-import { getClassNamespace, getMainOntologyBase } from './ontology/readOntology';
+import { getClassNamespace, getMainOntologyBase } from './ontology/ontologyBase';
 import { addEdgeToStore, removeEdgeFromStore } from './ontology/editEdges';
 import { addObjectPropertyToStore } from './ontology/editObjectProperties';
 import { setExampleImageUrisForClass, ensureExampleImageAnnotationProperty, getExampleImageUrisForClass } from './lib/exampleImageStore';

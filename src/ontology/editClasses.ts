@@ -6,7 +6,7 @@ import { BASE_IRI, OWL, OWL_THING_URI, RDF, RDFS } from './vocab';
 import { DataFactory, Store } from 'n3';
 import { classUriForName } from '../graph/classNodeIds';
 import { extractLocalName } from '../utils/localName';
-import { getClassNamespace, getMainOntologyBase } from './readOntology';
+import { getClassNamespace, getMainOntologyBase } from './ontologyBase';
 import { labelToCamelCaseIdentifier } from '../lib/identifierFromLabel';
 
 /**

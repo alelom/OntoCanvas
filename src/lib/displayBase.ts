@@ -4,7 +4,7 @@
  */
 
 import type { Store } from 'n3';
-import { getClassNamespace, getMainOntologyBase } from '../ontology/readOntology';
+import { getClassNamespace, getMainOntologyBase } from '../ontology/ontologyBase';
 
 export const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 

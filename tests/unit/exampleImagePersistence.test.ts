@@ -37,7 +37,7 @@ describe('Example Image Persistence', () => {
     const nodeId = testClassNode.id; // Use the actual node ID from the parsed graph
 
     // Get the base IRI (should use class namespace, not ontology base)
-    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/readOntology');
+    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/ontologyBase');
     const classNs = getClassNamespace(store);
     const mainBase = getMainOntologyBase(store);
     const baseIri = classNs ?? mainBase ?? 'http://example.org/test#';
@@ -86,7 +86,7 @@ describe('Example Image Persistence', () => {
     if (!reparseNode) return;
     
     // Get the base IRI for the reparsed store
-    const { getClassNamespace: getClassNs2, getMainOntologyBase: getMainBase2 } = await import('../../src/ontology/readOntology');
+    const { getClassNamespace: getClassNs2, getMainOntologyBase: getMainBase2 } = await import('../../src/ontology/ontologyBase');
     const classNs2 = getClassNs2(reparseResult.store);
     const mainBase2 = getMainBase2(reparseResult.store);
     const baseIri2 = classNs2 ?? mainBase2 ?? 'http://example.org/test#';
@@ -123,7 +123,7 @@ describe('Example Image Persistence', () => {
     const nodeId = myClassNode.id; // Use the actual node ID from the parsed graph
 
     // Get the base IRI
-    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/readOntology');
+    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/ontologyBase');
     const classNs = getClassNamespace(store);
     const mainBase = getMainOntologyBase(store);
     const baseIri = classNs ?? mainBase ?? 'http://example.org/test#';
@@ -198,7 +198,7 @@ describe('Example Image Persistence', () => {
     const nodeId = classNode.id; // Use the actual node ID from the parsed graph
 
     // Get the base IRI
-    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/readOntology');
+    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/ontologyBase');
     const classNs = getClassNamespace(store);
     const mainBase = getMainOntologyBase(store);
     const baseIri = classNs ?? mainBase ?? 'http://example.org/test#';
@@ -255,7 +255,7 @@ describe('Example Image Persistence', () => {
     if (!testClassNode) return;
 
     const nodeId = testClassNode.id;
-    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/readOntology');
+    const { getClassNamespace, getMainOntologyBase } = await import('../../src/ontology/ontologyBase');
     const classNs = getClassNamespace(store);
     const mainBase = getMainOntologyBase(store);
     const baseIri = classNs ?? mainBase ?? 'http://example.org/test#';
