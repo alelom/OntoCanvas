@@ -40,6 +40,13 @@ describe('the engine project', () => {
     expect(engine.sequence?.groupOrder).toBe(0);
   });
 
+  it('has its setup file in the `full` list of unitSelect.json, since no test imports it and an edit would select nothing', () => {
+    const select = JSON.parse(readFileSync(join(ROOT, 'tests/unitSelect.json'), 'utf-8')) as { full: string[] };
+    const setupFiles = (engine as { setupFiles?: string[] }).setupFiles ?? [];
+    expect(setupFiles).toContain('tests/engineSetup.ts');
+    for (const file of setupFiles) expect(select.full).toContain(file);
+  });
+
   it('lists every test that calls the real engine, so a new one cannot be left to build it beside the others', () => {
     const files = readdirSync(join(ROOT, 'tests/unit')).filter((f) => f.endsWith('.test.ts'));
     // A value import of runQuery (not `import type`) that does not replace the engine with a mock.
