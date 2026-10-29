@@ -126,10 +126,12 @@ export function createDataSources(): DataSources {
         }
       }
       const text = await response.text();
+      // The size to judge by is the larger of the two: Content-Length is that of the body as sent (compressed, in a browser) and a
+      // lower bound, while the text is what is decoded and held in memory (Turtle is commonly five to ten times its gzip).
       // The end of the address tells the format when the server's type is a generic one, as the main loader does.
       const announcedType = (response.headers.get('content-type') ?? '').split(';')[0].trim();
       const contentType = GENERIC_CONTENT_TYPE.test(announcedType) ? undefined : announcedType;
-      return self.addText(nameOfUrl(url), text, { ...options, path: options.path ?? url, contentType: options.contentType ?? contentType, byteLength: announced > 0 ? announced : text.length });
+      return self.addText(nameOfUrl(url), text, { ...options, path: options.path ?? url, contentType: options.contentType ?? contentType, byteLength: Math.max(announced > 0 ? announced : 0, text.length) });
     },
     remove(id) {
       const next = sources.filter((s) => s.id !== id);

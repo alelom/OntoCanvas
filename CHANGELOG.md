@@ -1,3 +1,15 @@
+# [1.41.0](https://github.com/alelom/OntoCanvas/compare/v1.40.2...v1.41.0) (2026-10-29)
+
+
+### Bug Fixes
+
+* review of [#204](https://github.com/alelom/OntoCanvas/issues/204): a row naming the two ends of an edge selects that edge alone; a property alone says it selects all its edges ([1c4339e](https://github.com/alelom/OntoCanvas/commit/1c4339e0af9bb5882e050b6b12bbb5e3e1fcd72e))
+
+
+### Features
+
+* show the classes and relationships a SPARQL result names in the graph ([#203](https://github.com/alelom/OntoCanvas/issues/203)) ([7e2a8e1](https://github.com/alelom/OntoCanvas/commit/7e2a8e1a00406544a128b8679e9edad77621789f))
+
 ## [1.40.2](https://github.com/alelom/OntoCanvas/compare/v1.40.1...v1.40.2) (2026-10-29)
 
 
