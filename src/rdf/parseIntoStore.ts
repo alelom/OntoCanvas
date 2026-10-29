@@ -26,6 +26,14 @@ export interface SlicedParseOptions extends ParseRdfOptions {
   yieldToEventLoop?: () => Promise<void>;
 }
 
+/** rdf-parse's message for a format it cannot tell is a template that was never filled in; say what is wrong and what to do. */
+function describeParseError(error: Error): string {
+  if (/none of the configured parsers|no valid extension could be detected/i.test(error.message)) {
+    return 'The format of this file could not be told from its name or its content type. Use a name that ends in .ttl, .rdf, .owl, .jsonld, .nt or .trig.';
+  }
+  return `Failed to parse RDF: ${error.message}`;
+}
+
 const defaultYield = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 export async function parseIntoStoreInSlices(
@@ -58,7 +66,14 @@ export async function parseIntoStoreInSlices(
   }
 
   const input = Readable.from(slices());
-  const quadStream = rdfParser.parse(input as never, parseOptions as ParseOptions);
+  let quadStream: ReturnType<typeof rdfParser.parse>;
+  try {
+    quadStream = rdfParser.parse(input as never, parseOptions as ParseOptions);
+  } catch (error) {
+    // Thrown at once, before any stream exists, when neither the name nor the content type says what the format is.
+    input.destroy();
+    throw new Error(describeParseError(error instanceof Error ? error : new Error(String(error))));
+  }
 
   return new Promise((resolve, reject) => {
     const cancel = () => {
@@ -75,7 +90,7 @@ export async function parseIntoStoreInSlices(
     quadStream.on('prefix', (prefix: string, iri: { value: string } | string) => {
       prefixes[prefix] = typeof iri === 'string' ? iri : iri.value;
     });
-    quadStream.on('error', (error: Error) => reject(new Error(`Failed to parse RDF: ${error.message}`)));
+    quadStream.on('error', (error: Error) => reject(new Error(describeParseError(error))));
     quadStream.on('end', () => {
       if (signal?.aborted) return reject(new Error('Cancelled'));
       if (read !== reportedAt) options.onProgress?.(read);

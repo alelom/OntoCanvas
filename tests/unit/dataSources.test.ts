@@ -167,6 +167,35 @@ describe('addUrl', () => {
     expect(fetchFn).toHaveBeenCalledWith('https://example.org/data/people.ttl', expect.anything());
   });
 
+  it.each(['text/plain', 'text/plain; charset=utf-8', 'application/octet-stream', ''])(
+    'reads a .ttl address by its name when the server calls it %j, as raw.githubusercontent.com does (#205)',
+    async (type) => {
+      const sources = createDataSources();
+      const headers: Record<string, string> = type ? { 'content-type': type } : {};
+
+      const added = await sources.addUrl('https://raw.githubusercontent.com/o/r/main/data/people.ttl', { fetch: (async () => response(ttl(4), headers)) as never });
+
+      expect(added.triples).toBe(8);
+    }
+  );
+
+  it('still believes a content type that names an RDF format over the end of the address', async () => {
+    const sources = createDataSources();
+    const rdfXml = '<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:d="http://example.org/d#"><rdf:Description rdf:about="http://example.org/d#a"><d:p>x</d:p></rdf:Description></rdf:RDF>';
+
+    const added = await sources.addUrl('https://example.org/export?id=7', { fetch: (async () => response(rdfXml, { 'content-type': 'application/rdf+xml' })) as never });
+
+    expect(added.triples).toBe(1);
+  });
+
+  it('says what to do when the format cannot be told from the address or the content type', async () => {
+    const sources = createDataSources();
+
+    await expect(sources.addUrl('https://example.org/export?id=7', { fetch: (async () => response(ttl(2), { 'content-type': 'text/plain' })) as never })).rejects.toThrow(
+      /format of this file could not be told.*.ttl/is
+    );
+  });
+
   it('refuses a download whose Content-Length is above the limit without reading its body', async () => {
     const sources = createDataSources();
     const huge = response('x', { 'content-type': 'text/turtle', 'content-length': String(11 * MB) });

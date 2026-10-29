@@ -71,6 +71,9 @@ export interface DataSources {
   onChange(listener: () => void): void;
 }
 
+/** Types a server gives to any text or file (raw.githubusercontent.com says text/plain for a .ttl): no information about the format. */
+const GENERIC_CONTENT_TYPE = /^(text\/plain|application\/octet-stream|binary\/octet-stream)?$/i;
+
 const nameOfUrl = (url: string): string => {
   const path = new URL(url).pathname;
   return decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)) || new URL(url).host;
@@ -123,8 +126,10 @@ export function createDataSources(): DataSources {
         }
       }
       const text = await response.text();
-      const contentType = response.headers.get('content-type') ?? undefined;
-      return self.addText(nameOfUrl(url), text, { ...options, path: options.path ?? url, contentType: options.contentType ?? contentType?.split(';')[0], byteLength: announced > 0 ? announced : text.length });
+      // The end of the address tells the format when the server's type is a generic one, as the main loader does.
+      const announcedType = (response.headers.get('content-type') ?? '').split(';')[0].trim();
+      const contentType = GENERIC_CONTENT_TYPE.test(announcedType) ? undefined : announcedType;
+      return self.addText(nameOfUrl(url), text, { ...options, path: options.path ?? url, contentType: options.contentType ?? contentType, byteLength: announced > 0 ? announced : text.length });
     },
     remove(id) {
       const next = sources.filter((s) => s.id !== id);
