@@ -7,6 +7,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "tests/unitSetup.ts",
+    "tests/engineSetup.ts",
     "tests/unitGlobalSetup.ts",
     "tests/storageShim.ts",
     "tests/fixtures/",
