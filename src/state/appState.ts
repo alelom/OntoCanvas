@@ -10,7 +10,7 @@ import { DEFAULT_HIERARCHY_TYPES } from '../layouts/hierarchyRules';
 import type { PropertyLists, ImportedOntology } from '../lib/importedDeclarations';
 import type { SuggestionSource } from '../lib/searchSuggestions';
 import type { OriginalFileCache } from '../rdf/sourcePreservation';
-import type { ExternalOntologyReference, SerializerType, ExternalNodeLayout } from '../storage';
+import type { ExternalOntologyReference, SerializerType, ExternalNodeLayout } from '../storage/types';
 import type { GraphData, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, BorderLineType, DataPropertyRestriction } from '../types';
 import type { Network } from 'vis-network/esnext';
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import { edgeLock } from '../../src/lib/edgeEditability';
-import { getMainOntologyBase } from '../../src/ontology/readOntology';
+import { getMainOntologyBase } from '../../src/ontology/ontologyBase';
 import { importedIdentifier } from '../../src/ui/externalRefs';
 import { getImportUrls, loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations } from '../../src/lib/importedDeclarations';
 

@@ -3,7 +3,7 @@
  * Moved out of main.ts (#175).
  */
 import { edgeLock } from '../lib/edgeEditability';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { session, editState } from '../state/appState';
 import type { GraphEdge } from '../types';
 import { debugWarn, debugError, debugLog } from '../utils/debug';

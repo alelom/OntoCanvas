@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getDataProperties } from '../../src/ontology/readOntology';
+import { getDataProperties } from '../../src/ontology/readDataProperties';
 import { XSD_NS, RDFS_NS } from '../../src/lib/dataPropertyDisplay';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

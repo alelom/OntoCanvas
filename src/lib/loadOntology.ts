@@ -5,7 +5,7 @@
 import { parseRdfToGraph } from '../ontology/buildGraph';
 import type { ParseResult } from '../ontology/buildGraph';
 import { extractExternalRefsFromStore, extractPrefixesFromTtl } from '../ui/externalRefs';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 
 export interface LoadOntologyResult {
   parseResult: ParseResult;

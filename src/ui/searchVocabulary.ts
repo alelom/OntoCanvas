@@ -5,7 +5,7 @@
  * dropdown offers is exactly what search then finds. Kept out of main.ts.
  */
 import type { DataPropertyInfo, GraphNode, ObjectPropertyInfo } from '../types';
-import type { ExternalOntologyReference } from '../storage';
+import type { ExternalOntologyReference } from '../storage/types';
 import type { SearchExtras, SearchableDataProperty } from '../lib/searchHighlight';
 import { prefixedName, type SuggestionSource } from '../lib/searchSuggestions';
 import { appliesToClass } from '../lib/dataPropertyDisplay';

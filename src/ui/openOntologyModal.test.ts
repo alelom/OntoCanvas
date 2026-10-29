@@ -11,7 +11,7 @@ import {
 // Mock storage (default: no last file, no history)
 const mockGetLastFile = vi.fn().mockResolvedValue(null);
 const mockGetRecentlyOpened = vi.fn().mockResolvedValue([]);
-vi.mock('../storage', () => ({
+vi.mock('../storage/lastOpened', () => ({
   getLastFileFromIndexedDB: (...args: unknown[]) => mockGetLastFile(...args),
   getLastUrlFromIndexedDB: vi.fn().mockResolvedValue(null),
   getRecentlyOpenedFromIndexedDB: (...args: unknown[]) => mockGetRecentlyOpened(...args),

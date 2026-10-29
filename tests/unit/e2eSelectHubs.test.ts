@@ -203,10 +203,10 @@ describe('the core of loading an ontology stays a hub (#194 review)', () => {
   const config = loadConfig();
   const importers = buildImporterGraph(ROOT);
 
-  // Every E2E test loads an ontology through parseRdfToGraph (buildGraph), which reads the store with readOntology and the
+  // Every E2E test loads an ontology through parseRdfToGraph (buildGraph), which reads the store with the ontology base (ontologyBase) and the
   // vocabulary: a regression there reaches every area, so a change to it must run them all and not wait for the run after
   // the merge. The modules that edit the store keep their precision: only the areas of their importers run.
-  it.each(['src/ontology/buildGraph.ts', 'src/ontology/readOntology.ts', 'src/ontology/vocab.ts'])('%s selects every area', (file) => {
+  it.each(['src/ontology/buildGraph.ts', 'src/ontology/ontologyBase.ts', 'src/ontology/vocab.ts'])('%s selects every area', (file) => {
     const s = selectAreas([file], config, importers);
 
     expect(s.all).toBe(true);
@@ -218,5 +218,62 @@ describe('the core of loading an ontology stays a hub (#194 review)', () => {
 
     expect(s.all).toBe(false);
     expect(s.areas.length).toBeLessThan(Object.keys(config.areas).length);
+  });
+});
+
+describe('storage, split by job, is no longer a hub (#198)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+  const areasOf = (file: string) => selectAreas([file], config, importers);
+
+  it('is not listed in `everything`, and the single file it was is gone', () => {
+    expect(config.everything).not.toContain('src/storage.ts');
+    expect(() => readFileSync(join(ROOT, 'src/storage.ts'))).toThrow();
+  });
+
+  it('keeps its types in a file that selects no area', () => {
+    expect(areasOf('src/storage/types.ts')).toMatchObject({ all: false, areas: [] });
+  });
+
+  it('selects only the areas that use a store: what to reopen reaches loading, not every area', () => {
+    for (const file of ['src/storage/lastOpened.ts', 'src/storage/serializerConfigStore.ts', 'src/storage/displayConfigStore.ts']) {
+      const s = areasOf(file);
+      expect(s.all, file).toBe(false);
+      expect(s.areas.length, file).toBeGreaterThan(0);
+      expect(s.areas.length, file).toBeLessThan(Object.keys(config.areas).length - 5);
+    }
+  });
+});
+
+describe('buildNetworkData, cut by feature (#198)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+
+  it('stays a hub: it draws every node and edge, so a change to it runs every area', () => {
+    expect(selectAreas(['src/graph/buildNetworkData.ts'], config, importers).all).toBe(true);
+  });
+
+  it('puts the data property nodes in the data-properties area and the edge spacing in relationships', () => {
+    expect(selectAreas(['src/graph/dataPropertyNodes.ts'], config, importers)).toMatchObject({ all: false, areas: expect.arrayContaining(['data-properties']) });
+    expect(selectAreas(['src/graph/edgeFinishing.ts'], config, importers)).toMatchObject({ all: false, areas: expect.arrayContaining(['relationships']) });
+  });
+});
+
+describe('the loader core, cut by job (#198)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+
+  it('keeps readOntology.ts out: its jobs are in files of their own, and the single file is gone', () => {
+    expect(config.everything).not.toContain('src/ontology/readOntology.ts');
+    expect(() => readFileSync(join(ROOT, 'src/ontology/readOntology.ts'))).toThrow();
+  });
+
+  it('keeps the base IRI of the ontology a hub, since every load reads it', () => {
+    expect(selectAreas(['src/ontology/ontologyBase.ts'], config, importers).all).toBe(true);
+  });
+
+  it('runs only the area of what the graph builder hands off: object property edges and data property restrictions', () => {
+    expect(selectAreas(['src/ontology/objectPropertyEdges.ts'], config, importers)).toMatchObject({ all: false, areas: ['relationships'] });
+    expect(selectAreas(['src/ontology/dataPropertyRestrictions.ts'], config, importers)).toMatchObject({ all: false, areas: ['data-properties'] });
   });
 });

@@ -4,7 +4,7 @@
  */
 import { annotationUsages } from '../lib/annotationUsages';
 import { XSD_RANGE_OPTIONS } from '../lib/dataPropertyDisplay';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { extractLocalName } from '../utils/localName';
 import { updateAnnotationPropertyLabelInStore, updateAnnotationPropertyCommentInStore, updateAnnotationPropertyRangeInStore, addAnnotationPropertyToStore } from '../ontology/editAnnotationProperties';
 import { actions } from '../state/actions';

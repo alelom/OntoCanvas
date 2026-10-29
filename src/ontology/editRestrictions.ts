@@ -9,7 +9,7 @@ import type { RdfTerm } from '../rdf/classExpressions';
 import { classUriForName } from '../graph/classNodeIds';
 import { extractLocalName } from '../utils/localName';
 import { findRestrictionBlanks, readRestrictionCardinality, removeRestrictionBlank } from '../rdf/restrictions';
-import { getDataProperties } from './readOntology';
+import { getDataProperties } from './readDataProperties';
 import { getObjectPropertyUriFromStore } from './editObjectProperties';
 import { resolveClassBase, toClassUri } from './editClasses';
 

@@ -12,7 +12,7 @@ import {
   currentObjectProperties,
   getDefiningOntologyFromUri,
 } from '../../src/workflows/propertyLists';
-import type { ExternalOntologyReference } from '../../src/storage';
+import type { ExternalOntologyReference } from '../../src/storage/types';
 
 const ref = (url: string) => ({ url, usePrefix: '', prefix: 'x' }) as unknown as ExternalOntologyReference;
 

@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { storeToTurtle } from '../../../src/ontology/serialize';
 import { removeRestrictionFromStore, addRestrictionToStore, addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../../../src/ontology/editRestrictions';
-import type { SerializerType } from '../../../src/storage';
+import type { SerializerType } from '../../../src/storage/types';
 import { lineDiff, formatDiff } from './minimalDiff';
 
 const TTL = `@prefix : <http://example.org/sco#> .

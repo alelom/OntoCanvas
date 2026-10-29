@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
-import type { ExternalOntologyReference } from '../../src/storage';
+import type { ExternalOntologyReference } from '../../src/storage/types';
 
 /**
  * Regression: an external-namespace class that is *also* declared locally as an

@@ -3,7 +3,7 @@
  * Moved out of main.ts (#175).
  */
 import { type ExternalObjectPropertyInfo, searchExternalObjectProperties } from '../externalOntologySearch';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { editState, session } from '../state/appState';
 import { isDebugMode, debugLog } from '../utils/debug';
 import { updateEditEdgeCommentDisplayLocal } from './edgeModalHelpers';

@@ -1,4 +1,4 @@
-import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB, getRecentlyOpenedFromIndexedDB, type RecentlyOpenedEntry } from '../storage';
+import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB, getRecentlyOpenedFromIndexedDB, type RecentlyOpenedEntry } from '../storage/lastOpened';
 import { EXAMPLE_ONTOLOGIES } from './exampleOntologies';
 
 /**

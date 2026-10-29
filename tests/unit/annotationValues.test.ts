@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getAnnotationProperties } from '../../src/ontology/readOntology';
+import { getAnnotationProperties } from '../../src/ontology/readAnnotationProperties';
 import {
   isUrlLikeValue,
   getAnnotationValuesForClass,

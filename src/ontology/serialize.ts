@@ -5,7 +5,7 @@
 import { DataFactory, type Quad as N3Quad, Store } from 'n3';
 import { OWL, RDF, RDFS } from './vocab';
 import { type OriginalFileCache, type StatementBlock, detectPropertyLevelChanges, extractPropertyLines, isSimplePropertyChange, performTargetedLineReplacement, reconstructFromOriginalText } from '../rdf/sourcePreservation';
-import type { SerializerType } from '../storage';
+import type { SerializerType } from '../storage/types';
 import { blankNodeClosureQuads, blockStructurallyChanged } from '../rdf/blankNodes';
 import { currentSplitShares } from '../rdf/splitSubjects';
 import { debugLog, debugWarn } from '../utils/debug';

@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Store } from 'n3';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getDataProperties } from '../../src/ontology/readOntology';
+import { getDataProperties } from '../../src/ontology/readDataProperties';
 
 const XSD = 'http://www.w3.org/2001/XMLSchema#';
 

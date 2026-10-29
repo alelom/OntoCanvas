@@ -6,7 +6,7 @@ import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { appliesToClass } from '../../src/lib/dataPropertyDisplay';
 import { OWL_THING_URI } from '../../src/graph/thingNode';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
-import { getMainOntologyBase } from '../../src/ontology/readOntology';
+import { getMainOntologyBase } from '../../src/ontology/ontologyBase';
 import { importedNoteForNode, importedNoteForRelationship } from '../../src/ui/importedNote';
 import { expandWithExternalRefs } from '../../src/graph/externalExpansion';
 import { annotationUsedOnClass, annotationUsedAnywhere } from '../../src/ui/propertyMenuFacts';

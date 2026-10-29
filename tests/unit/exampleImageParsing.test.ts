@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getMainOntologyBase, getClassNamespace } from '../../src/ontology/readOntology';
+import { getMainOntologyBase, getClassNamespace } from '../../src/ontology/ontologyBase';
 import { storeToTurtle } from '../../src/ontology/serialize';
 import { getExampleImageUrisForClass, setExampleImageUrisForClass } from '../../src/lib/exampleImageStore';
-import type { SerializerType } from '../../src/storage';
+import type { SerializerType } from '../../src/storage/types';
 
 // Mirrors the ADIRO format: a "#" class namespace, a separate "@base" for relative IRIs, and :exampleImage triples
 // whose objects are (relative) IRIs. The namespace is ADIRO's, so :exampleImage is the property shown in tooltips (#142).

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DataFactory, type Store } from 'n3';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getDataProperties } from '../../src/ontology/readOntology';
+import { getDataProperties } from '../../src/ontology/readDataProperties';
 import { updateDataPropertyRangeInStore } from '../../src/ontology/editDataProperties';
 import { describeDataRange } from '../../src/rdf/dataRanges';
 

@@ -4,7 +4,7 @@
  */
 import { getDisplayBase } from '../lib/displayBase';
 import { labelToCamelCaseIdentifier, validateLabelForIdentifier } from '../lib/identifierFromLabel';
-import { getMainOntologyBase } from '../ontology/readOntology';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { session } from '../state/appState';
 import { formatRelationshipLabelWithPrefix, isUriFromExternalOntology, importedIdentifier } from './externalRefs';
 import { updateAddRelTypeIdentifierAndValidation as updateAddRelTypeIdentifierAndValidationFromModal } from './objectPropertyModal';

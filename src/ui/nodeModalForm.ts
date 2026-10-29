@@ -5,7 +5,7 @@
 
 import type { Store } from 'n3';
 import { deriveNewNodeIdentifier, updateCommentInStore } from '../ontology/editClasses';
-import { getClassNamespace, getMainOntologyBase } from '../ontology/readOntology';
+import { getClassNamespace, getMainOntologyBase } from '../ontology/ontologyBase';
 import { BASE_IRI } from '../ontology/vocab';
 import { updateAnnotationPropertyValueInStore } from '../ontology/editAnnotationProperties';
 import { addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass, getDataPropertyRestrictionsForClass } from '../ontology/editRestrictions';

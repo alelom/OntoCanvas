@@ -11,7 +11,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Store } from 'n3';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getDataProperties } from '../../src/ontology/readOntology';
+import { getDataProperties } from '../../src/ontology/readDataProperties';
 import { addDataPropertyToStore } from '../../src/ontology/editDataProperties';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

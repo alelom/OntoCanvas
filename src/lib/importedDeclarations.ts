@@ -9,7 +9,10 @@
  * writes exactly what it wrote before. Pure apart from the fetch and parse calls (the fetch is injected).
  */
 import type { Store } from 'n3';
-import { getAnnotationProperties, getDataProperties, getMainOntologyBase, getObjectProperties } from '../ontology/readOntology';
+import { getAnnotationProperties } from '../ontology/readAnnotationProperties';
+import { getDataProperties } from '../ontology/readDataProperties';
+import { getMainOntologyBase } from '../ontology/ontologyBase';
+import { getObjectProperties } from '../ontology/readObjectProperties';
 import { loadOntologyFromContent } from './loadOntology';
 import { getOntologyInfo } from '../ui/ontologyInfo';
 import { extractLocalName } from '../utils/localName';

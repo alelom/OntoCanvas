@@ -12,7 +12,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { Store } from 'n3';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getObjectProperties } from '../../src/ontology/readOntology';
+import { getObjectProperties } from '../../src/ontology/readObjectProperties';
 import { addObjectPropertyToStore, updateObjectPropertyDomainRangeInStore } from '../../src/ontology/editObjectProperties';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

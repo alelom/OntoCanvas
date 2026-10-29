@@ -6,7 +6,7 @@ import { DataFactory, type Store } from 'n3';
 import { parseTtlWithCache, modifyLabel } from './customSerializerTests/helpers';
 import { storeToTurtle } from '../../src/ontology/serialize';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
-import { getDataProperties } from '../../src/ontology/readOntology';
+import { getDataProperties } from '../../src/ontology/readDataProperties';
 
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), '../fixtures');
 const OWL = 'http://www.w3.org/2002/07/owl#';

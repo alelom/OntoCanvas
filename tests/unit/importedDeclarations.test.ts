@@ -11,7 +11,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { loadOntologyFromContent } from '../../src/lib/loadOntology';
-import { getMainOntologyBase } from '../../src/ontology/readOntology';
+import { getMainOntologyBase } from '../../src/ontology/ontologyBase';
 import {
   getImportUrls,
   loadImportedOntologies,

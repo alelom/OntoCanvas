@@ -18,7 +18,7 @@ import { storeToTurtle } from '../../../src/ontology/serialize';
 import { updateAnnotationPropertyValueInStore } from '../../../src/ontology/editAnnotationProperties';
 import { updateCommentInStore } from '../../../src/ontology/editClasses';
 import { addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromClass } from '../../../src/ontology/editRestrictions';
-import type { SerializerType } from '../../../src/storage';
+import type { SerializerType } from '../../../src/storage/types';
 import { setExampleImageUrisForClass } from '../../../src/lib/exampleImageStore';
 import { meaningfulLineDiff, changedLineCount, formatDiff, blockUnchanged } from './minimalDiff';
 

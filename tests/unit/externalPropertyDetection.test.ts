@@ -24,7 +24,7 @@ describe('External Property Detection', () => {
     expect(containsProperty?.uri).toBeDefined();
 
     // Get main ontology base
-    const { getMainOntologyBase } = await import('../../src/ontology/readOntology');
+    const { getMainOntologyBase } = await import('../../src/ontology/ontologyBase');
     const mainBase = getMainOntologyBase(store);
 
     // The main ontology base from the fixture: @prefix : <http://example.org/aec-drawing-ontology#>, :Ontology rdf:type owl:Ontology

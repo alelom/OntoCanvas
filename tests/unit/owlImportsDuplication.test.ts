@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { storeToTurtle } from '../../src/ontology/serialize';
-import type { ExternalOntologyReference } from '../../src/storage';
+import type { ExternalOntologyReference } from '../../src/storage/types';
 import { Parser } from 'n3';
 
 /** The owl:imports objects in saved Turtle, read from the parsed triples (rdflib may write them as

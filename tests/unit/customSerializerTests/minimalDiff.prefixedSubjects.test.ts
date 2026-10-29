@@ -16,7 +16,7 @@ import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { storeToTurtle } from '../../../src/ontology/serialize';
 import { updateCommentInStore } from '../../../src/ontology/editClasses';
-import type { SerializerType } from '../../../src/storage';
+import type { SerializerType } from '../../../src/storage/types';
 import { meaningfulLineDiff, changedLineCount, formatDiff } from './minimalDiff';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../../src/ontology/buildGraph';
 import { storeToTurtle } from '../../../src/ontology/serialize';
 import { updateLabelInStore, updateCommentInStore, addNodeToStore } from '../../../src/ontology/editClasses';
-import type { SerializerType } from '../../../src/storage';
+import type { SerializerType } from '../../../src/storage/types';
 import {
   meaningfulLineDiff,
   changedLineCount,

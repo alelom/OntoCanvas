@@ -6,7 +6,8 @@ import { BASE_IRI, HAS_CARDINALITY_PROP, OWL, OWL_THING_URI, RDF, RDFS, XSD } fr
 import { DataFactory, Store } from 'n3';
 import { ensureHasCardinalityAnnotationProperty } from './editAnnotationProperties';
 import { extractLocalName } from '../utils/localName';
-import { getClassNamespace, getMainOntologyBase, getObjectProperties } from './readOntology';
+import { getClassNamespace, getMainOntologyBase } from './ontologyBase';
+import { getObjectProperties } from './readObjectProperties';
 import { labelToCamelCaseIdentifier } from '../lib/identifierFromLabel';
 import { namesOwlThing, resolveClassUri } from './editClasses';
 
