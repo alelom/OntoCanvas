@@ -206,6 +206,58 @@ describe('addUrl', () => {
     expect(text).not.toHaveBeenCalled();
   });
 
+  describe('a server that compresses: Content-Length is the size of the compressed body, the text is the decoded one (#206 review)', () => {
+    const bigTurtle = (triples: number) =>
+      '@prefix : <http://example.org/d#> .\n' + Array.from({ length: triples / 2 }, (_, i) => `:subject${i} a :Thing ; :next :object${i} .`).join('\n');
+
+    it('asks before loading text over 2 MB though the announced size is far below it, as it does for the same text from a file', async () => {
+      const sources = createDataSources();
+      const text = bigTurtle(100_000);
+      expect(text.length).toBeGreaterThan(2 * MB);
+      const confirm = vi.fn().mockResolvedValue(true);
+
+      const added = await sources.addUrl('https://example.org/big.ttl', {
+        fetch: (async () => response(text, { 'content-type': 'text/turtle', 'content-length': '200000' })) as never,
+        confirm,
+      });
+
+      expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/MB/));
+      expect(added.bytes).toBe(text.length);
+    });
+
+    it('does not load it when the answer is no', async () => {
+      const sources = createDataSources();
+
+      await expect(
+        sources.addUrl('https://example.org/big.ttl', {
+          fetch: (async () => response(bigTurtle(100_000), { 'content-type': 'text/turtle', 'content-length': '200000' })) as never,
+          confirm: async () => false,
+        })
+      ).rejects.toThrow('Cancelled');
+
+      expect(sources.list()).toEqual([]);
+    });
+
+    it('refuses text over 10 MB though the announced size is small, without parsing it', async () => {
+      const sources = createDataSources();
+      const text = '#'.repeat(10 * MB + 1);
+
+      await expect(
+        sources.addUrl('https://example.org/huge.ttl', { fetch: (async () => response(text, { 'content-type': 'text/turtle', 'content-length': '300000' })) as never })
+      ).rejects.toThrow(/too large/i);
+
+      expect(sources.list()).toEqual([]);
+    });
+
+    it('keeps the announced size when it is the larger, as for a server that sends the text as it is', async () => {
+      const sources = createDataSources();
+
+      const added = await sources.addUrl('https://example.org/a.ttl', { fetch: (async () => response(ttl(2), { 'content-type': 'text/turtle', 'content-length': String(1 * MB) })) as never });
+
+      expect(added.bytes).toBe(1 * MB);
+    });
+  });
+
   it('says so when the server answers with an error', async () => {
     const sources = createDataSources();
 
