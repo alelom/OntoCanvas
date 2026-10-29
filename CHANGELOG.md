@@ -1,3 +1,15 @@
+# [1.40.0](https://github.com/alelom/OntoCanvas/compare/v1.39.0...v1.40.0) (2026-10-29)
+
+
+### Bug Fixes
+
+* review of [#196](https://github.com/alelom/OntoCanvas/issues/196): refresh the query panel once the new ontology is set, keep the history for the session when storage fails, cap what is stored ([ef5ce45](https://github.com/alelom/OntoCanvas/commit/ef5ce4548d1ef7b8a48bab43495079eed842b145)), closes [#182](https://github.com/alelom/OntoCanvas/issues/182)
+
+
+### Features
+
+* keep a history of the queries run on a file, with a selector to bring one back ([#182](https://github.com/alelom/OntoCanvas/issues/182)) ([260303b](https://github.com/alelom/OntoCanvas/commit/260303bc21090ffb2024233b1536bfb5408449e4))
+
 # [1.39.0](https://github.com/alelom/OntoCanvas/compare/v1.38.0...v1.39.0) (2026-10-28)
 
 
