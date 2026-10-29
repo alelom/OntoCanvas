@@ -1,3 +1,11 @@
+## [1.40.2](https://github.com/alelom/OntoCanvas/compare/v1.40.1...v1.40.2) (2026-10-29)
+
+
+### Bug Fixes
+
+* edit dialogs show the real IRI of a term, new classes are UpperCamelCase ([#146](https://github.com/alelom/OntoCanvas/issues/146)); edges carry their type, so a relationship drawn twice is found between IRI nodes ([#200](https://github.com/alelom/OntoCanvas/issues/200)); review of [#199](https://github.com/alelom/OntoCanvas/issues/199): the edge and data property stages are hubs ([f2d7d1a](https://github.com/alelom/OntoCanvas/commit/f2d7d1a0a8ded0e841c3569df5e89a6019ee872d))
+* review of [#202](https://github.com/alelom/OntoCanvas/issues/202): renaming an object property keeps its own namespace, as the Edit dialog shows ([9081549](https://github.com/alelom/OntoCanvas/commit/9081549d4b3dd5924320a43b1aa9e6725f1b6ccc))
+
 ## [1.40.1](https://github.com/alelom/OntoCanvas/compare/v1.40.0...v1.40.1) (2026-10-29)
 
 
