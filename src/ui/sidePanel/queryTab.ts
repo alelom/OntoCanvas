@@ -9,7 +9,7 @@ import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
-import { describeMatch, irisInTable, matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
+import { describeMatch, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
@@ -152,11 +152,13 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   function showInGraphRow(view: Extract<ResultView, { kind: 'table' }>): HTMLElement[] {
     const graph = deps.getGraph?.();
     if (!graph || !deps.showInGraph) return [];
-    const match = matchIrisToGraph(irisInTable(view), graph);
+    const match = matchTableToGraph(view, graph);
     if (!match.nodeIds.length && !match.edgeIds.length) return [];
     const button = element('button', undefined, `Show in graph (${describeMatch(match)})`);
     button.type = 'button';
-    button.title = 'Select these in the graph and bring them into view';
+    button.title = match.allEdgesOfAProperty
+      ? 'Select these in the graph and bring them into view. A property named without the two ends of an edge selects every edge that uses it.'
+      : 'Select these in the graph and bring them into view';
     button.setAttribute('data-query-show-in-graph', '');
     button.addEventListener('click', () => deps.showInGraph!(match));
     return [button];

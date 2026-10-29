@@ -3,7 +3,7 @@
  * and rdfs:subClassOf by its own IRI. Pure.
  */
 import { describe, it, expect } from 'vitest';
-import { matchIrisToGraph, irisInTable, describeMatch, type GraphIndex } from '../../src/sparql/graphMatches';
+import { matchIrisToGraph, matchTableToGraph, irisInTable, describeMatch, type GraphIndex } from '../../src/sparql/graphMatches';
 import type { ResultView } from '../../src/sparql/resultView';
 
 const NS = 'http://example.org/o#';
@@ -82,5 +82,56 @@ describe('describeMatch', () => {
     expect(describeMatch({ nodeIds: ['a', 'b'], edgeIds: ['x'] })).toBe('2 classes, 1 relationship');
     expect(describeMatch({ nodeIds: ['a'], edgeIds: [] })).toBe('1 class');
     expect(describeMatch({ nodeIds: [], edgeIds: ['x', 'y'] })).toBe('2 relationships');
+  });
+});
+
+describe('matchTableToGraph: the edges the rows are about (#204 review)', () => {
+  const NSX = 'http://example.org/h#';
+  const hierarchy: GraphIndex = {
+    nodes: ['A', 'B', 'C', 'D'].map((id) => ({ id, uri: NSX + id })),
+    edges: [
+      { from: 'B', to: 'A', type: 'subClassOf' },
+      { from: 'C', to: 'A', type: 'subClassOf' },
+      { from: 'D', to: 'A', type: 'subClassOf' },
+      { from: 'B', to: 'C', type: 'knows' },
+    ],
+    objectProperties: [{ name: 'knows', uri: NSX + 'knows' }],
+  };
+  const iri = (value: string) => ({ kind: 'iri' as const, text: value, title: value });
+  const table = (...rows: string[][]): Extract<ResultView, { kind: 'table' }> => ({
+    kind: 'table',
+    columns: rows[0].map((_, i) => `v${i}`),
+    rows: rows.map((r) => r.map(iri)),
+    truncated: false,
+  });
+
+  it('selects only the edge a row names both ends of, when the row also names its property', () => {
+    const match = matchTableToGraph(table([NSX + 'B', SUBCLASS, NSX + 'A']), hierarchy);
+
+    expect(match.nodeIds.sort()).toEqual(['A', 'B']);
+    expect(match.edgeIds).toEqual(['B->A:subClassOf']);
+  });
+
+  it('selects one edge per row, for the rows of a result about pairs', () => {
+    const match = matchTableToGraph(table([NSX + 'B', SUBCLASS, NSX + 'A'], [NSX + 'D', SUBCLASS, NSX + 'A']), hierarchy);
+
+    expect(match.edgeIds.sort()).toEqual(['B->A:subClassOf', 'D->A:subClassOf']);
+  });
+
+  it('selects every edge of a property when the rows list only properties', () => {
+    expect(matchTableToGraph(table([SUBCLASS]), hierarchy).edgeIds).toHaveLength(3);
+  });
+
+  it('selects every edge of a property when a row names only one end', () => {
+    expect(matchTableToGraph(table([SUBCLASS, NSX + 'A']), hierarchy).edgeIds).toHaveLength(3);
+  });
+
+  it('selects no edge for a row whose two ends and property are not an edge of the graph', () => {
+    expect(matchTableToGraph(table([NSX + 'B', NSX + 'knows', NSX + 'D']), hierarchy).edgeIds).toEqual([]);
+  });
+
+  it('says whether a property alone selected all its edges, for the button', () => {
+    expect(matchTableToGraph(table([SUBCLASS]), hierarchy).allEdgesOfAProperty).toBe(true);
+    expect(matchTableToGraph(table([NSX + 'B', SUBCLASS, NSX + 'A']), hierarchy).allEdgesOfAProperty).toBe(false);
   });
 });

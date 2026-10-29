@@ -76,7 +76,7 @@ describe('Show in graph', () => {
 
     showButton()!.click();
 
-    expect(show).toHaveBeenCalledWith({ nodeIds: ['Floor'], edgeIds: ['Building->Floor:hasFloor'] });
+    expect(show).toHaveBeenCalledWith(expect.objectContaining({ nodeIds: ['Floor'], edgeIds: ['Building->Floor:hasFloor'] }));
   });
 
   it('is absent when the result names nothing that is drawn (an IRI the graph does not have, a count, a literal)', async () => {
@@ -111,5 +111,46 @@ describe('Show in graph', () => {
     await runQuery();
 
     expect(showButton()).toBeNull();
+  });
+});
+
+describe('Show in graph, a property with several edges (#204 review)', () => {
+  beforeEach(() => {
+    graph = {
+      nodes: ['A', 'B', 'C'].map((id) => ({ id, uri: NS + id })),
+      edges: [
+        { from: 'B', to: 'A', type: 'subClassOf' },
+        { from: 'C', to: 'A', type: 'subClassOf' },
+      ],
+      objectProperties: [],
+    };
+  });
+  const SUBCLASS = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+
+  it('selects the one edge of a row that names both its ends', async () => {
+    run.mockResolvedValue(bindings(['s', 'p', 'o'], [{ s: namedNode(NS + 'B'), p: namedNode(SUBCLASS), o: namedNode(NS + 'A') }]));
+    mount();
+    await runQuery();
+
+    showButton()!.click();
+
+    expect(show.mock.calls[0][0].edgeIds).toEqual(['B->A:subClassOf']);
+  });
+
+  it('says in the title that a property alone selects every edge that uses it', async () => {
+    run.mockResolvedValue(bindings(['p'], [{ p: namedNode(SUBCLASS) }]));
+    mount();
+    await runQuery();
+
+    expect(showButton()!.textContent).toContain('2 relationships');
+    expect(showButton()!.title).toContain('every edge that uses it');
+  });
+
+  it('does not say it when the rows name the ends', async () => {
+    run.mockResolvedValue(bindings(['s', 'p', 'o'], [{ s: namedNode(NS + 'B'), p: namedNode(SUBCLASS), o: namedNode(NS + 'A') }]));
+    mount();
+    await runQuery();
+
+    expect(showButton()!.title).not.toContain('every edge that uses it');
   });
 });

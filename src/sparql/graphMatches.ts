@@ -18,6 +18,8 @@ export interface GraphIndex {
 export interface GraphMatch {
   nodeIds: string[];
   edgeIds: string[];
+  /** True when some property was named without the two ends of an edge, so all the edges of that property are selected. */
+  allEdgesOfAProperty?: boolean;
 }
 
 const isIri = (value: string): boolean => /^[a-z][a-z\d+.-]*:\/\//i.test(value);
@@ -40,6 +42,37 @@ export function matchIrisToGraph(iris: Iterable<string>, graph: GraphIndex): Gra
     })
     .map((e) => `${e.from}->${e.to}:${e.type}`);
   return { nodeIds: [...new Set(nodeIds)], edgeIds: [...new Set(edgeIds)] };
+}
+
+/**
+ * What a result table names, row by row. A row that names a property and the two ends of an edge of it is about that edge,
+ * and selects it alone; a property named without both ends (a column of properties, a row with one end) selects every edge
+ * of the property, which `allEdgesOfAProperty` tells. Classes are matched by IRI, as in matchIrisToGraph.
+ */
+export function matchTableToGraph(view: Extract<ResultView, { kind: 'table' }>, graph: GraphIndex): GraphMatch {
+  const uriOfNode = new Map(graph.nodes.map((n) => [n.id, n.uri] as const));
+  const nodeIds = new Set<string>();
+  const edgeIds = new Set<string>();
+  let allEdgesOfAProperty = false;
+  for (const row of view.rows) {
+    const iris = new Set<string>();
+    for (const cell of row) if (cell?.kind === 'iri') iris.add(cell.title);
+    for (const id of matchIrisToGraph(iris, graph).nodeIds) nodeIds.add(id);
+    const endsNamed = graph.nodes.filter((n) => n.uri && iris.has(n.uri)).length;
+    for (const edge of graph.edges) {
+      const property = edgeIri(edge.type, graph.objectProperties);
+      if (property === null || !iris.has(property)) continue;
+      const from = uriOfNode.get(edge.from);
+      const to = uriOfNode.get(edge.to);
+      if (endsNamed >= 2) {
+        if (from && to && iris.has(from) && iris.has(to)) edgeIds.add(`${edge.from}->${edge.to}:${edge.type}`);
+      } else {
+        edgeIds.add(`${edge.from}->${edge.to}:${edge.type}`);
+        allEdgesOfAProperty = true;
+      }
+    }
+  }
+  return { nodeIds: [...nodeIds], edgeIds: [...edgeIds], allEdgesOfAProperty };
 }
 
 /** The IRIs in the cells of a result table, once each (literals and blank nodes are not IRIs). */
