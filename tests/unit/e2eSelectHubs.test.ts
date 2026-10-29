@@ -244,3 +244,17 @@ describe('storage, split by job, is no longer a hub (#198)', () => {
     }
   });
 });
+
+describe('buildNetworkData, cut by feature (#198)', () => {
+  const config = loadConfig();
+  const importers = buildImporterGraph(ROOT);
+
+  it('stays a hub: it draws every node and edge, so a change to it runs every area', () => {
+    expect(selectAreas(['src/graph/buildNetworkData.ts'], config, importers).all).toBe(true);
+  });
+
+  it('puts the data property nodes in the data-properties area and the edge spacing in relationships', () => {
+    expect(selectAreas(['src/graph/dataPropertyNodes.ts'], config, importers)).toMatchObject({ all: false, areas: expect.arrayContaining(['data-properties']) });
+    expect(selectAreas(['src/graph/edgeFinishing.ts'], config, importers)).toMatchObject({ all: false, areas: expect.arrayContaining(['relationships']) });
+  });
+});
