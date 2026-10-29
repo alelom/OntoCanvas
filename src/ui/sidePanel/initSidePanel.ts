@@ -6,6 +6,7 @@
 import type { Store } from 'n3';
 import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
+import { createInstancesTab } from './instancesTab';
 import { mountQueryButton } from './queryButton';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
@@ -22,6 +23,8 @@ export interface SidePanelDeps {
   showInGraph?: (match: GraphMatch) => void;
   /** The data added to the open ontology, queried with it (#205). */
   dataSources?: DataSources;
+  /** The label a class has in the graph, for the Instances tab (#208). */
+  getClassLabel?: (classIri: string) => string | null;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
@@ -53,11 +56,26 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   });
   host.registerTab(queryTab);
 
+  // The Instances tab (#208) reads the ontology's store and the data added to it.
+  const instancesTab = createInstancesTab({
+    getStores: () => {
+      const store = deps.getStore();
+      return store ? [store, ...(deps.dataSources?.stores() ?? [])] : [];
+    },
+    getPrefixes: deps.getPrefixes,
+    getClassLabel: deps.getClassLabel,
+  });
+  host.registerTab(instancesTab);
+  deps.dataSources?.onChange(() => instancesTab.refresh());
+
   const button = mountQueryButton(wrapper, () => host.toggle(queryTab.id));
   host.onChange((activeId) => button.setPressed(activeId === queryTab.id));
 
   return {
-    refresh: () => queryTab.refresh(),
+    refresh: () => {
+      queryTab.refresh();
+      instancesTab.refresh();
+    },
     async addDataUrls(urls) {
       if (!urls.length) return;
       host.open(queryTab.id);

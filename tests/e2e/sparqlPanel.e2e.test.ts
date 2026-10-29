@@ -230,6 +230,33 @@ describe('SPARQL side panel', () => {
     expect(await rowsOf()).toEqual([]);
   });
 
+  it('browses the individuals of the ontology and of the data added to it in the Instances tab, without drawing them (#208)', async () => {
+    const DATA = '@prefix : <http://example.org/o#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:alice a :Student ; rdfs:label "Alice" ; :knows :bob .\n:bob a :Person ; rdfs:label "Bob" .\n';
+    await page.setInputFiles('[data-add-file-input]', { name: 'people.ttl', mimeType: 'text/turtle', buffer: Buffer.from(DATA) });
+    await page.locator('[data-data-list] li').waitFor();
+
+    await page.click('[data-tab-button="instances"]');
+    await page.locator('[data-instances-class]').waitFor();
+    expect(await page.locator('[data-instances-class] option').allTextContents()).toEqual(['All (2)', 'Person (1)', 'Student (1)']);
+
+    await page.selectOption('[data-instances-class]', 'http://example.org/o#Student');
+    expect(await page.locator('[data-instances-list] li').count()).toBe(1);
+    await page.click('[data-instances-item]');
+    const detail = await page.locator('[data-instances-detail]').innerText();
+    expect(detail).toContain('Alice');
+    expect(detail).toContain('http://example.org/o#alice');
+    await page.click('[data-instances-outgoing] [data-instances-follow]');
+    expect(await page.locator('[data-instances-detail] h4').innerText()).toBe('Bob');
+
+    // The individuals are not drawn: the graph still shows the two classes only.
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds().length)).toBe(2);
+
+    await page.click('[data-tab-button="query"]');
+    await page.click('[data-data-remove]');
+    await page.click('[data-tab-button="instances"]');
+    await page.waitForFunction(() => /no individuals/i.test(document.querySelector('[data-instances-empty]')?.textContent ?? ''));
+  });
+
   it('refuses a data file that is too large without reading it, and says why (#205)', async () => {
     await page.setInputFiles('[data-add-file-input]', { name: 'huge.ttl', mimeType: 'text/turtle', buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 'a') });
 

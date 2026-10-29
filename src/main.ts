@@ -128,6 +128,7 @@ session.sidePanel = initSidePanel({
     updateSelectionInfoDisplay(network);
   },
   dataSources: createDataSources(),
+  getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? null,
   embedded: isEmbedded(),
 });
 const appEl = document.getElementById('app');

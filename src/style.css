@@ -566,6 +566,89 @@ body.embed-no-menu #ontologyIssuesPopup {
   gap: 8px;
   padding: 10px 12px;
 }
+.instances-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.instances-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.instances-controls[hidden],
+.instances-detail[hidden],
+.instances-tab [hidden] {
+  display: none;
+}
+.instances-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.instances-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #ddd;
+}
+.instances-list li button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-bottom: 1px solid #eee;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.instances-list li button:hover {
+  background: #eef5fb;
+}
+.instance-name,
+.instance-predicate {
+  color: #666;
+  font-family: Consolas, monospace;
+}
+.instances-detail h4 {
+  margin: 0 0 4px;
+}
+.instance-iri {
+  margin: 0 0 4px;
+  font-family: Consolas, monospace;
+  word-break: break-all;
+  color: #333;
+}
+.instance-links h5 {
+  margin: 8px 0 2px;
+}
+.instance-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.instance-links li {
+  padding: 1px 0;
+}
+.instance-follow {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #1a5fb4;
+  cursor: pointer;
+  font-family: Consolas, monospace;
+  text-decoration: underline;
+}
+.instance-more {
+  color: #666;
+}
 .query-note {
   margin: 0;
   color: #666;
