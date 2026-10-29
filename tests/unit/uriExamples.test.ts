@@ -6,6 +6,8 @@ import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { resolveEdgeTerm, resolveNodeTerm, type TermLookup } from '../../src/lib/termUri';
 import { versionPinnedUri } from '../../src/lib/versionPinnedUri';
 import { readOntologyVersion } from '../../src/lib/ontologyVersion';
+import { classIdentifierLine, propertyIdentifierLine } from '../../src/lib/identifierDisplay';
+import { deriveNewNodeIdentifier } from '../../src/ontology/editClasses';
 
 const EXAMPLES = join(dirname(fileURLToPath(import.meta.url)), '../../examples');
 
@@ -37,5 +39,34 @@ describe('examples/uris', () => {
   it('version-from-version-info.ttl: the version IRI is built from owl:versionInfo 1.4.0 (#128)', async () => {
     const { node } = await pinner('uris/version-from-version-info.ttl');
     expect(node('Sensor')).toEqual({ uri: 'http://example.org/examples/version-from-version-info/1.4.0#Sensor', version: '1.4.0', derived: true });
+  });
+});
+
+describe('examples/uris/label-differs-from-name.ttl (#146)', () => {
+  const NS = 'http://example.org/examples/label-differs-from-name#';
+  const load = async () => parseRdfToGraph(readFileSync(join(EXAMPLES, 'uris/label-differs-from-name.ttl'), 'utf-8'), { path: 'label-differs-from-name.ttl' });
+
+  it('has classes whose label is not their name, and the dialog names their real IRI', async () => {
+    const { graphData, store } = await load();
+    const layout = graphData.nodes.find((n) => n.id === 'LayoutNoMention')!;
+
+    expect(layout.label).toBe('Layout number mention');
+    expect(classIdentifierLine(store, 'LayoutNoMention').text).toBe(`${NS}LayoutNoMention`);
+    expect(classIdentifierLine(store, 'DrawingElement').text).toBe(`${NS}DrawingElement`);
+  });
+
+  it('shows the property IRI until its label changes, then the name the new label gives', async () => {
+    const { objectProperties } = await load();
+    const includes = objectProperties.find((p) => p.name === 'includes')!;
+
+    expect(propertyIdentifierLine({ iri: includes.uri!, originalLabel: includes.label, newLabel: 'Includes' }).text).toBe(`${NS}includes`);
+    expect(propertyIdentifierLine({ iri: includes.uri!, originalLabel: includes.label, newLabel: 'Contains part' })).toEqual({
+      caption: 'Identifier (will become):',
+      text: `${NS}containsPart`,
+    });
+  });
+
+  it('derives an UpperCamelCase name for the new class the header describes', () => {
+    expect(deriveNewNodeIdentifier('Wall segment')).toBe('WallSegment');
   });
 });

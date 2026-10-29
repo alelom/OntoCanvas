@@ -1,0 +1,19 @@
+# Classes and a property whose label is not their name camelCased (issue #146).
+# Open Edit class (double-click a class) and Edit object property (double-click the edge). Expected:
+#   LayoutNoMention  "Layout number mention"  Identifier: http://example.org/examples/label-differs-from-name#LayoutNoMention
+#   DrawingElement   "Drawing element"        Identifier: http://example.org/examples/label-differs-from-name#DrawingElement
+#   the edge "includes" ("Includes")          Identifier: http://example.org/examples/label-differs-from-name#includes
+# The dialog names the IRI the term has, never one made up from its label. Edit the property's label to "Contains part":
+# the line becomes "Identifier (will become): ...#containsPart". Adding a class labelled "Wall segment" derives WallSegment.
+@prefix : <http://example.org/examples/label-differs-from-name#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/label-differs-from-name> a owl:Ontology ;
+    rdfs:label "Label differs from name" .
+
+:DrawingElement a owl:Class ; rdfs:label "Drawing element" .
+:LayoutNoMention a owl:Class ; rdfs:label "Layout number mention" ; rdfs:subClassOf :DrawingElement .
+:SheetNoMention a owl:Class ; rdfs:label "Sheet number mention" ; rdfs:subClassOf :DrawingElement .
+
+:includes a owl:ObjectProperty ; rdfs:label "Includes" ; rdfs:domain :DrawingElement ; rdfs:range :LayoutNoMention .
