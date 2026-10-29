@@ -205,6 +205,38 @@ describe('SPARQL side panel', () => {
     expect(await page.locator('[data-query-show-in-graph]').count()).toBe(0);
   });
 
+  it('queries a data file added to the ontology together with it, lists it, and forgets it on Remove (#205)', async () => {
+    const DATA = '@prefix : <http://example.org/o#> .\n:alice a :Student .\n:bob a :Person .\n';
+    const query = 'PREFIX : <http://example.org/o#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT ?p WHERE { ?p a ?c . ?c rdfs:subClassOf* :Student } ORDER BY ?p';
+    const rowsOf = async () => {
+      await page.locator(EDITOR).fill(query);
+      await page.click('[data-query-run]');
+      await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('[data-query-run]')!.disabled);
+      return page.locator('.query-results tbody td').allTextContents();
+    };
+
+    expect(await rowsOf()).toEqual([]);
+
+    await page.setInputFiles('[data-add-file-input]', { name: 'people.ttl', mimeType: 'text/turtle', buffer: Buffer.from(DATA) });
+    await page.locator('[data-data-list] li').waitFor();
+    expect(await page.locator('[data-data-list] li').first().innerText()).toContain('people.ttl');
+    expect(await page.locator('[data-data-list] li').first().innerText()).toContain('2 triples');
+    expect(await rowsOf()).toEqual([':alice']);
+    // The individuals are not drawn: the graph still shows the two classes only.
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds().length)).toBe(2);
+
+    await page.click('[data-data-remove]');
+    await page.waitForFunction(() => document.querySelectorAll('[data-data-list] li').length === 0);
+    expect(await rowsOf()).toEqual([]);
+  });
+
+  it('refuses a data file that is too large without reading it, and says why (#205)', async () => {
+    await page.setInputFiles('[data-add-file-input]', { name: 'huge.ttl', mimeType: 'text/turtle', buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 'a') });
+
+    await page.waitForFunction(() => /too large/i.test(document.querySelector('[data-data-status]')?.textContent ?? ''));
+    expect(await page.locator('[data-data-list] li').count()).toBe(0);
+  });
+
   it('closes, giving the room back to the graph', async () => {
     const open = await networkWidth();
 

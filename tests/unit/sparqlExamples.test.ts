@@ -30,6 +30,40 @@ const shown = async (query: string) => {
   return view.rows.map((row) => row.map((cell) => cell?.text));
 };
 
+describe('examples/sparql/query-panel-data.ttl, added to query-panel.ttl (#205)', () => {
+  const DATA = join(dirname(fileURLToPath(import.meta.url)), '../../examples/sparql/query-panel-data.ttl');
+
+  it('answers over the ontology and the data together, and not over either alone', async () => {
+    const { parseIntoStoreInSlices } = await import('../../src/rdf/parseIntoStore');
+    const ontology = (await parseRdfToGraph(readFileSync(EXAMPLE, 'utf-8'), { path: EXAMPLE })).store;
+    const data = (await parseIntoStoreInSlices(readFileSync(DATA, 'utf-8'), { path: DATA })).store;
+    const header = prefixHeader({ '': 'http://example.org/examples/sparql-queries#' });
+    const rows = async (stores: Store[], query: string) => {
+      const result = await runQuery(stores, `${header}
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+${query}`);
+      return result.kind === 'bindings' ? result.rows.map((r) => Object.values(r).map((t) => t.value.split('#').pop())) : result;
+    };
+    const query = 'SELECT ?i ?c WHERE { ?i a ?c . ?c rdfs:subClassOf* :Space } ORDER BY ?i ?c';
+
+    expect(await rows([ontology, data], query)).toEqual([['room101', 'Room'], ['room102', 'Bedroom'], ['room102', 'Room']]);
+    expect(await rows([ontology], query)).toEqual([]);
+    expect(await rows([data], query)).toEqual([]);
+    expect(await rows([ontology, data], 'SELECT (COUNT(?i) AS ?n) WHERE { ?i a :Room }')).toEqual([['2']]);
+  });
+
+  it('adds nothing to the ontology store, so Save has nothing of it to write', async () => {
+    const { createDataSources } = await import('../../src/sparql/dataSources');
+    const ontology = (await parseRdfToGraph(readFileSync(EXAMPLE, 'utf-8'), { path: EXAMPLE })).store;
+    const before = ontology.size;
+
+    await createDataSources().addText('query-panel-data.ttl', readFileSync(DATA, 'utf-8'), { path: DATA });
+
+    expect(ontology.size).toBe(before);
+  });
+});
+
 describe('examples/sparql/query-panel.ttl', () => {
   // The engine and the parser are loaded before this file runs, by tests/engineSetup.ts (#192).
   beforeAll(async () => {

@@ -8,6 +8,7 @@ import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
 import { mountQueryButton } from './queryButton';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
+import type { DataSources } from '../../sparql/dataSources';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -19,6 +20,8 @@ export interface SidePanelDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects what a query result names in the graph and brings it into view (#203). */
   showInGraph?: (match: GraphMatch) => void;
+  /** The data added to the open ontology, queried with it (#205). */
+  dataSources?: DataSources;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
@@ -40,6 +43,7 @@ export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
     getHistoryKey: deps.getHistoryKey,
     getGraph: deps.getGraph,
     showInGraph: deps.showInGraph,
+    dataSources: deps.dataSources,
   });
   host.registerTab(queryTab);
 

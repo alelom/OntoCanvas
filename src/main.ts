@@ -7,6 +7,7 @@ import { renderApp } from './ui/appShell';
 import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
+import { createDataSources } from './sparql/dataSources';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
 import { isDebugMode, debugLog } from './utils/debug';
@@ -125,6 +126,7 @@ session.sidePanel = initSidePanel({
     selectInGraph(network, match);
     updateSelectionInfoDisplay(network);
   },
+  dataSources: createDataSources(),
   embedded: isEmbedded(),
 });
 const appEl = document.getElementById('app');
