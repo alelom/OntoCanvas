@@ -52,7 +52,7 @@ export function refreshRenameModalFromInput(): void {
   if (!modal || (modal as HTMLElement).style.display === 'none') return;
   const input = document.getElementById('renameInput') as HTMLInputElement;
   const nodeId = input?.dataset.nodeId ?? '';
-  nodeModalFormUi.syncRenameModal({ store: session.ttlStore, nodeId, label: input?.value?.trim() ?? '', existingIds: new Set(session.rawData.nodes.map((n) => n.id)) });
+  nodeModalFormUi.syncRenameModal({ store: session.ttlStore, nodeId, label: input?.value?.trim() ?? '' });
 }
 
 export function refreshAddNodeOkButton(): void {

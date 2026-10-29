@@ -566,6 +566,7 @@ export function buildNetworkData(
       id: `${e.from}->${e.to}:${e.type}`,
       from: e.from,
       to: e.to,
+      type: e.type,
       arrows: 'to',
       label: importedEdgeNote ? labelWithImportedNote(edgeLabelText, importedEdgeNote) : edgeLabelText,
       font: {

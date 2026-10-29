@@ -4,6 +4,7 @@
  */
 import { getDefaultEdgeColors, getDefaultColor } from '../graph';
 import { getDisplayBase } from '../lib/displayBase';
+import { IDENTIFIER_CAPTION } from '../lib/identifierDisplay';
 import { validateLabelForIdentifier, labelToCamelCaseIdentifier, validateLabelForIdentifierWithUniqueness } from '../lib/identifierFromLabel';
 import { extractLocalName } from '../utils/localName';
 import { renameObjectPropertyInStore, updateObjectPropertyLabelInStore, updateObjectPropertyCommentInStore, updateObjectPropertyDomainRangeInStore, updateObjectPropertySubPropertyOfInStore, updateObjectPropertyIsDefinedByInStore, removeObjectPropertyFromStore, addObjectPropertyToStore } from '../ontology/editObjectProperties';
@@ -263,7 +264,7 @@ export function showEditRelationshipTypeModal(type: string, edgeStylesContent: H
   const identifierEl = document.getElementById('editRelTypeIdentifier') as HTMLElement;
   const labelValidationEl = document.getElementById('editRelTypeLabelValidation') as HTMLElement;
   const baseWithHash = getDisplayBase(session.ttlStore);
-  if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
+  if (nameEl) nameEl.textContent = IDENTIFIER_CAPTION;
   if (identifierEl) {
     if (isImported && op) {
       // For imported properties, show with prefix format (e.g., "base:connectsTo")

@@ -4,6 +4,7 @@
  */
 import { revealNodeInView } from '../graph/canvasHelpers';
 import { DATA_PROPERTY_RANGE_OPTIONS, domainAttachment, unattachedDataPropertyNodeId, describeRange } from '../lib/dataPropertyDisplay';
+import { IDENTIFIER_CAPTION } from '../lib/identifierDisplay';
 import { validateLabelForIdentifier, labelToCamelCaseIdentifier } from '../lib/identifierFromLabel';
 import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { extractLocalName } from '../utils/localName';
@@ -385,7 +386,7 @@ export function showEditDataPropertyModal(name: string): void {
     warningIcon.classList.remove('warning-icon-pulse');
   }
   
-  if (nameEl) nameEl.textContent = 'Identifier (derived from label):';
+  if (nameEl) nameEl.textContent = IDENTIFIER_CAPTION;
   if (labelValidationEl) {
     labelValidationEl.style.display = 'none';
     labelValidationEl.textContent = '';

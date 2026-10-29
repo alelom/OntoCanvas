@@ -146,7 +146,7 @@ export function renderApp(): void {
           <span style="font-size: 12px;">Label:</span>
           <input type="text" id="renameInput" style="flex: 1;" />
         </label>
-        <p id="renameIdentifierLabel" style="font-size: 11px; color: #666; margin-bottom: 4px;">Identifier (derived from label):</p>
+        <p id="renameIdentifierLabel" style="font-size: 11px; color: #666; margin-bottom: 4px;">Identifier:</p>
         <p id="renameIdentifier" style="font-size: 11px; color: #333; font-family: Consolas, monospace; word-break: break-all; margin-bottom: 8px;"></p>
         <p id="renameDuplicateError" style="display: none; color: #c00; font-size: 12px; margin: 6px 0 0 0;"></p>
         <label style="display: block; margin-top: 10px;">

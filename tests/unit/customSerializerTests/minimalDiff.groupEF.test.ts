@@ -145,8 +145,8 @@ describe('Group F — round-trip idempotency', () => {
   it('F4: add a class then delete it reproduces the original file', async () => {
     const original = readFileSync(MDF, 'utf-8');
     const out1 = await reSerialize(original, MDF, (s) => { addNodeToStore(s, 'Corridor'); });
-    // deriveNewNodeIdentifier camelCases "Corridor" -> "corridor".
-    const out2 = await reSerialize(out1, MDF, (s) => { removeNodeFromStore(s, 'corridor'); });
+    // deriveNewNodeIdentifier makes the class name UpperCamelCase: "Corridor" -> "Corridor".
+    const out2 = await reSerialize(out1, MDF, (s) => { removeNodeFromStore(s, 'Corridor'); });
     expect(
       isAttributionOnlyChange(original, out2) || changedLineCount(original, out2) === 0,
       `add/remove class round-trip drifted:\n${formatDiff(original, out2)}`

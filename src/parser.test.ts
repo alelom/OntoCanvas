@@ -307,9 +307,9 @@ describe('updateLabelInStore (edit)', () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
     const fromId = addNodeToStore(store, 'CardinalityTestContainer');
-    // A single-token label keeps its internal capitals (only the initial is lowercased), so the
+    // A single-token label keeps its internal capitals (a class name starts upper-case, #146), so the
     // derived identifier round-trips and matches the space-separated form (issue #33).
-    expect(fromId).toBe('cardinalityTestContainer');
+    expect(fromId).toBe('CardinalityTestContainer');
     const ok = addEdgeToStore(store, fromId!, 'Layout', 'contains', {
       minCardinality: 0,
       maxCardinality: 3,
@@ -385,7 +385,7 @@ describe('updateLabelInStore (edit)', () => {
     const ttl = loadOntologyAsString();
     const { store } = await parseTtlToGraph(ttl);
     const id1 = addNodeToStore(store, 'Axis Line');
-    expect(id1).toBe('axisLine');
+    expect(id1).toBe('AxisLine');
     const id2 = addNodeToStore(store, 'axis line');
     expect(id2).toBeNull();
   });

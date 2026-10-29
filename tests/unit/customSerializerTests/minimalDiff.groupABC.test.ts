@@ -210,9 +210,9 @@ describe('Group C — add a new class (minimal diff)', () => {
     expect(newId).toBeTruthy();
     const out = await serialize();
 
-    // New class present. Identifier derivation camelCases the label (":corridor"),
+    // New class present. The identifier is the label in UpperCamelCase (":Corridor", #146),
     // matching the app's Add-node behaviour; it must land in the file's own namespace.
-    expect(out).toMatch(/:corridor\s+(rdf:type|a)\s+owl:Class/);
+    expect(out).toMatch(/:Corridor\s+(rdf:type|a)\s+owl:Class/);
     expect(out).toContain('rdfs:label "Corridor"');
 
     // Every pre-existing block is byte-identical.
@@ -239,6 +239,6 @@ describe('Group C — add a new class (minimal diff)', () => {
     // and the file's own namespace (mdf#), not a full URI or the hardcoded default.
     expect(out).not.toMatch(/<http:\/\/example\.org\/[^>]*corridor>/i);
     expect(out).not.toContain('aec-drawing-ontology');
-    expect(extractBlock(out, ':corridor'), 'new :corridor block should exist').toBeTruthy();
+    expect(extractBlock(out, ":Corridor"), "new :Corridor block should exist").toBeTruthy();
   });
 });

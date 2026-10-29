@@ -7,6 +7,7 @@
 import { debugWarn } from '../utils/debug';
 import type { ObjectPropertyInfo } from '../types';
 
+/** An edge as buildNetworkData maps it for the graph: `type` is the relationship the id is made from. */
 type EdgeObject = Record<string, unknown>;
 
 /** The edges without the duplicates: the same relationship between the same nodes, by any spelling of its name or theirs. */
@@ -20,15 +21,8 @@ export function dedupeEdges(edges: EdgeObject[], objectProperties: ObjectPropert
     const edgeId = edgeObj.id as string;
     const from = edgeObj.from as string;
     const to = edgeObj.to as string;
-    // Extract type from edge ID if not present in edge object
-    // Edge ID format: `${from}->${to}:${type}`
-    let type = (edgeObj as { type?: string }).type as string;
-    if (!type && edgeId.includes(':')) {
-      const parts = edgeId.split(':');
-      if (parts.length > 1) {
-        type = parts.slice(1).join(':'); // Handle types that contain colons
-      }
-    }
+    // The relationship, as the edge carries it: the id cannot give it back, since a node id may hold colons (an IRI, #200).
+    const type = edgeObj.type as string;
     
     // Build all possible keys for this edge (accounting for URI/local name variations)
     const keys = new Set<string>();
