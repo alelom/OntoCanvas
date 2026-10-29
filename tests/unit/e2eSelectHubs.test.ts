@@ -245,7 +245,7 @@ describe('storage, split by job, is no longer a hub (#198)', () => {
   });
 });
 
-describe('buildNetworkData, cut by feature (#198)', () => {
+describe('buildNetworkData, cut into stages (#198)', () => {
   const config = loadConfig();
   const importers = buildImporterGraph(ROOT);
 
@@ -253,9 +253,10 @@ describe('buildNetworkData, cut by feature (#198)', () => {
     expect(selectAreas(['src/graph/buildNetworkData.ts'], config, importers).all).toBe(true);
   });
 
-  it('puts the data property nodes in the data-properties area and the edge spacing in relationships', () => {
-    expect(selectAreas(['src/graph/dataPropertyNodes.ts'], config, importers)).toMatchObject({ all: false, areas: expect.arrayContaining(['data-properties']) });
-    expect(selectAreas(['src/graph/edgeFinishing.ts'], config, importers)).toMatchObject({ all: false, areas: expect.arrayContaining(['relationships']) });
+  it('keeps the stages it hands off hubs too: every area loads and draws edges and data properties through them (#199 review)', () => {
+    for (const file of ['src/graph/dataPropertyNodes.ts', 'src/graph/edgeFinishing.ts']) {
+      expect(selectAreas([file], config, importers).all, file).toBe(true);
+    }
   });
 });
 
@@ -272,8 +273,9 @@ describe('the loader core, cut by job (#198)', () => {
     expect(selectAreas(['src/ontology/ontologyBase.ts'], config, importers).all).toBe(true);
   });
 
-  it('runs only the area of what the graph builder hands off: object property edges and data property restrictions', () => {
-    expect(selectAreas(['src/ontology/objectPropertyEdges.ts'], config, importers)).toMatchObject({ all: false, areas: ['relationships'] });
-    expect(selectAreas(['src/ontology/dataPropertyRestrictions.ts'], config, importers)).toMatchObject({ all: false, areas: ['data-properties'] });
+  it('keeps the stages the graph builder hands off hubs: object property edges and data property restrictions are built for every ontology loaded (#199 review)', () => {
+    for (const file of ['src/ontology/objectPropertyEdges.ts', 'src/ontology/dataPropertyRestrictions.ts']) {
+      expect(selectAreas([file], config, importers).all, file).toBe(true);
+    }
   });
 });

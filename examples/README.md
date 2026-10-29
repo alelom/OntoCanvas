@@ -85,6 +85,7 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 |---|---|---|---|
 | [version-pinned-uris.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Furis%2Fversion-pinned-uris.ttl) | Right-click → **Copy version-pinned URI (2.1.0)** copies a term URI in the loaded release (`…/2.1.0#Building`), from `owl:versionIRI`; greyed out for `rdfs:subClassOf`; also in embedded mode | #128 | [TTL](uris/version-pinned-uris.ttl) |
 | [version-from-version-info.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Furis%2Fversion-from-version-info.ttl) | With only `owl:versionInfo "1.4.0"`, the version-pinned URI is built as `<ontology IRI>/1.4.0#Term`, and its tooltip says so | #128 | [TTL](uris/version-from-version-info.ttl) |
+| [label-differs-from-name.ttl](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Furis%2Flabel-differs-from-name.ttl) | Classes and a property whose label is not their name: the edit dialogs show the term's real IRI, and "will become" only once a property label is changed | #146 | [TTL](uris/label-differs-from-name.ttl) |
 
 ## Versions
 

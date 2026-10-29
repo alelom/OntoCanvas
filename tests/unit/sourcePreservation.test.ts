@@ -1079,8 +1079,7 @@ describe('sourcePreservation', () => {
           node: drawingElementNode,
           newLabel,
           formData,
-          annotationProperties: parseResult.annotationProperties,
-          existingNodeIds: new Set(parseResult.graphData.nodes.map(n => n.id))
+          annotationProperties: parseResult.annotationProperties
         });
         
         expect(editResult.success).toBe(true);
@@ -1408,8 +1407,7 @@ describe('sourcePreservation', () => {
           node: drawingSheetNode,
           newLabel,
           formData,
-          annotationProperties: parseResult.parseResult.annotationProperties,
-          existingNodeIds: new Set(parseResult.parseResult.graphData.nodes.map(n => extractLocalName(n.id)))
+          annotationProperties: parseResult.parseResult.annotationProperties
         });
         
         expect(result.success).toBe(true);

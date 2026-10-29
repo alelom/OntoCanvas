@@ -7,7 +7,6 @@ import type { Store } from 'n3';
 import {
   updateIdentifierDisplay,
   isDuplicateIdentifier,
-  isDuplicateIdentifierForRename,
   ADD_NODE_DUPLICATE_MESSAGE,
 } from './nodeModalForm';
 import type { DataPropertyRestriction, DataPropertyInfo, AnnotationPropertyInfo, GraphNode } from '../types';
@@ -227,12 +226,11 @@ export interface SyncRenameModalParams {
   store: Store | null | undefined;
   nodeId: string;
   label: string;
-  existingIds: Set<string>;
 }
 
-/** Update rename modal identifier display and duplicate check. Only runs when modal is visible in single mode. */
+/** Update the rename modal: the class's real IRI, and no duplicate error: a label never changes the IRI (#146). Only runs when modal is visible in single mode. */
 export function syncRenameModal(params: SyncRenameModalParams): void {
-  const { store, nodeId, label, existingIds } = params;
+  const { store, nodeId, label } = params;
   const modal = document.getElementById('renameModal');
   if (!modal || (modal as HTMLElement).style.display === 'none') return;
   if (modal.dataset.mode !== 'single') return;
@@ -244,18 +242,6 @@ export function syncRenameModal(params: SyncRenameModalParams): void {
   if (dupErr) {
     dupErr.style.display = 'none';
     dupErr.textContent = '';
-  }
-  if (!label) {
-    if (okBtn) okBtn.disabled = false;
-    return;
-  }
-  if (isDuplicateIdentifierForRename(label, existingIds, nodeId)) {
-    if (dupErr) {
-      dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
-      dupErr.style.display = 'block';
-    }
-    if (okBtn) okBtn.disabled = true;
-    return;
   }
   if (okBtn) okBtn.disabled = false;
 }

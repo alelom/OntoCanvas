@@ -10,7 +10,7 @@ import type { NodeFormData } from '../ui/nodeModalForm';
 import { updateLabelInStore } from '../ontology/editClasses';
 import { getClassNamespace, getMainOntologyBase } from '../ontology/ontologyBase';
 import { BASE_IRI } from '../ontology/vocab';
-import { applyNodeFormToStore, isDuplicateIdentifierForRename } from '../ui/nodeModalForm';
+import { applyNodeFormToStore } from '../ui/nodeModalForm';
 import { debugLog, debugWarn } from '../utils/debug';
 
 export interface EditNodePropertiesParams {
@@ -20,7 +20,6 @@ export interface EditNodePropertiesParams {
   newLabel: string;
   formData: NodeFormData; // comment, annotations, dataPropertyRestrictions, exampleImages
   annotationProperties: AnnotationPropertyInfo[];
-  existingNodeIds: Set<string>; // For duplicate validation
 }
 
 export interface EditNodePropertiesResult {
@@ -34,23 +33,13 @@ export interface EditNodePropertiesResult {
  * Mutates store and node in-place
  */
 export function editNodeProperties(params: EditNodePropertiesParams): EditNodePropertiesResult {
-  const { store, nodeId, node, newLabel, formData, annotationProperties, existingNodeIds } = params;
+  const { store, nodeId, node, newLabel, formData, annotationProperties } = params;
   
   debugLog('[editNodeProperties] Starting edit for node:', nodeId, 'new label:', newLabel);
   
-  // 1. Validation: Check for duplicate identifier
+  // A label edit never changes the IRI of a class, so it cannot clash with another class (#146).
   const labelChanged = node.label !== newLabel;
-  if (labelChanged) {
-    const isDuplicate = isDuplicateIdentifierForRename(newLabel, existingNodeIds, nodeId);
-    if (isDuplicate) {
-      debugWarn('[editNodeProperties] Duplicate identifier detected:', newLabel);
-      return {
-        success: false,
-        error: 'A node with this identifier already exists'
-      };
-    }
-  }
-  
+
   // 2. Calculate baseIri (same logic as GUI)
   const baseIri = getClassNamespace(store) ?? getMainOntologyBase(store) ?? BASE_IRI;
   debugLog('[editNodeProperties] Using baseIri:', baseIri);

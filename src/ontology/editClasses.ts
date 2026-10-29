@@ -136,7 +136,9 @@ export function resolveClassBase(store: Store): string {
  * Used by the editor to validate before adding. Must stay in sync with addNodeToStore.
  */
 export function deriveNewNodeIdentifier(label: string): string {
-  const raw = labelToCamelCaseIdentifier(label) || extractLocalName(label) || 'NewClass';
+  // Class names are UpperCamelCase in OWL ("Drawing element" -> DrawingElement); properties are lowerCamelCase (#146).
+  const camel = labelToCamelCaseIdentifier(label);
+  const raw = (camel ? camel.charAt(0).toUpperCase() + camel.slice(1) : '') || extractLocalName(label) || 'NewClass';
   return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(raw) ? raw : 'NewClass';
 }
 

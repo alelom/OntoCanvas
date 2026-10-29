@@ -38,8 +38,8 @@ describe('labelToCamelCaseIdentifier', () => {
   });
 });
 
-describe('deriveNewNodeIdentifier (class labels share the same derivation)', () => {
+describe('deriveNewNodeIdentifier (class labels share the same derivation, with an upper-case first letter)', () => {
   it('does not destroy internal capitals of an already-identifier label', () => {
-    expect(deriveNewNodeIdentifier('assertedBy')).toBe('assertedBy');
+    expect(deriveNewNodeIdentifier('assertedBy')).toBe('AssertedBy');
   });
 });

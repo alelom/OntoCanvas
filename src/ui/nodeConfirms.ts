@@ -14,7 +14,7 @@ import { editNodeProperties } from '../workflows/editNodeProperties';
 import { pushUndoable } from '../workflows/undoRedo';
 import { updateSaveButtonVisibility } from './fileBar';
 import { hideRenameModal } from './modals';
-import { ADD_NODE_DUPLICATE_MESSAGE, type NodeFormData, applyNodeFormToStore, isDuplicateIdentifierForRename } from './nodeModalForm';
+import { ADD_NODE_DUPLICATE_MESSAGE, type NodeFormData, applyNodeFormToStore } from './nodeModalForm';
 import { hideAddNodeModalWithCleanup } from './nodeModalHelpers';
 
 export function confirmAddNode(): void {
@@ -184,18 +184,6 @@ export function confirmRename(): void {
   const newLabel = input.value.trim();
   if (!nodeId || !newLabel) return;
 
-  const existingIds = new Set(session.rawData.nodes.map((n) => n.id));
-  if (isDuplicateIdentifierForRename(newLabel, existingIds, nodeId)) {
-    const dupErr = document.getElementById('renameDuplicateError') as HTMLElement;
-    if (dupErr) {
-      dupErr.textContent = ADD_NODE_DUPLICATE_MESSAGE;
-      dupErr.style.display = 'block';
-    }
-    const okBtn = document.getElementById('renameConfirm') as HTMLButtonElement;
-    if (okBtn) okBtn.disabled = true;
-    return;
-  }
-
   const nodeIndex = session.rawData.nodes.findIndex((n) => n.id === nodeId);
   if (nodeIndex < 0) {
     hideRenameModal();
@@ -289,7 +277,6 @@ export function confirmRename(): void {
       newLabel,
       formData: newFormData,
       annotationProperties: session.annotationProperties,
-      existingNodeIds: new Set(session.rawData.nodes.map(n => n.id))
     });
 
     if (!result.success) {

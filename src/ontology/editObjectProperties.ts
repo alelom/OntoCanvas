@@ -2,7 +2,7 @@
  * Editing object properties in the store: adding, removing, renaming and changing them. Moved out of src/parser.ts unchanged (#193, step 4d).
  */
 
-import { BASE_IRI, HAS_CARDINALITY_PROP, OWL, OWL_THING_URI, RDF, RDFS, XSD } from './vocab';
+import { BASE_IRI, HAS_CARDINALITY_PROP, OWL, OWL_THING_URI, RDF, RDFS, XSD, namespaceFromUri } from './vocab';
 import { DataFactory, Store } from 'n3';
 import { ensureHasCardinalityAnnotationProperty } from './editAnnotationProperties';
 import { extractLocalName } from '../utils/localName';
@@ -250,8 +250,11 @@ export function renameObjectPropertyInStore(
   newLocalName: string
 ): boolean {
   if (!newLocalName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newLocalName)) return false;
-  const mainBase = getMainOntologyBase(store) ?? BASE_IRI;
-  const base = mainBase.endsWith('#') ? mainBase : mainBase + '#';
+  // A rename changes only the local name, never the namespace: keep the term's own, as renaming a data property does (#33).
+  // The ontology's base is only for a URI with no namespace, and it is not the namespace of every term: an ontology IRI
+  // without the term namespace is common, and the Edit dialog shows the IRI the rename will give (#202).
+  const ns = namespaceFromUri(oldSubjectUri) ?? getMainOntologyBase(store) ?? BASE_IRI;
+  const base = ns.endsWith('#') || ns.endsWith('/') ? ns : ns + '#';
   const newUri = base + newLocalName;
   if (oldSubjectUri === newUri) return true;
   const oldSubject = DataFactory.namedNode(oldSubjectUri);

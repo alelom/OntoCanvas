@@ -6,6 +6,10 @@
     "src/state.ts",
     "src/ontology/vocab.ts",
     "src/ontology/ontologyBase.ts",
+    "src/ontology/objectPropertyEdges.ts",
+    "src/ontology/dataPropertyRestrictions.ts",
+    "src/graph/edgeFinishing.ts",
+    "src/graph/dataPropertyNodes.ts",
     "src/ontology/buildGraph.ts",
     "src/style.css",
     "src/ui/appShell.ts",
@@ -94,7 +98,7 @@
         "src/ui/dataPropertyModals.ts", "src/ui/dataPropertyForm.ts", "src/ui/dataPropertyEditable.ts", "src/ui/dataPropertyModal.ts",
         "src/ui/addDataPropertyHandlers.ts", "src/ui/dataRangeNotice.ts",
         "src/graph/dataPropertyDragCoupling.ts",
-        "src/graph/dataPropertyNodes.ts", "src/ontology/dataPropertyRestrictions.ts", "src/graph/dataPropertyRows.ts", "src/graph/thingNode.ts", "src/graph/unattachedDataPropertyLayout.ts",
+        "src/graph/dataPropertyRows.ts", "src/graph/thingNode.ts", "src/graph/unattachedDataPropertyLayout.ts",
         "src/lib/dataPropertyDisplay.ts", "src/rdf/dataRanges.ts"
       ]
     },
@@ -107,7 +111,7 @@
         "src/ui/editEdgeClassExpressionNotice.ts", "src/ui/editEdgeRestrictionNotice.ts",
         "src/ui/propertyMenuFacts.ts", "src/ui/propertyMenuGroups.ts", "src/ui/propertyMenuGroupsDom.ts",
         "src/ui/classExpressionCanvas.ts", "src/ui/classExpressionInteraction.ts", "src/ui/classExpressionModal.ts", "src/ui/classExpressionOverlayRenderer.ts",
-        "src/graph/classExpressionOverlay.ts", "src/graph/classNodeIds.ts", "src/graph/edgeFinishing.ts", "src/ontology/objectPropertyEdges.ts",
+        "src/graph/classExpressionOverlay.ts", "src/graph/classNodeIds.ts",
         "src/graph/edgeLabelHit.ts",
         "src/lib/edgeEditability.ts", "src/lib/relationshipClipboard.ts", "src/rdf/"
       ]

@@ -3,7 +3,8 @@
  * warning icon popover. Moved out of main.ts (#175).
  */
 import { getDisplayBase } from '../lib/displayBase';
-import { labelToCamelCaseIdentifier, validateLabelForIdentifier } from '../lib/identifierFromLabel';
+import { validateLabelForIdentifier } from '../lib/identifierFromLabel';
+import { propertyIdentifierLine } from '../lib/identifierDisplay';
 import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { session } from '../state/appState';
 import { updateAddDataPropIdentifierAndValidation as updateAddDataPropIdentifierAndValidationFromModal } from './dataPropertyModal';
@@ -78,8 +79,11 @@ export function updateEditDataPropIdentifierAndValidation(): void {
         ? importedIdentifier(dp.uri, newDefinedBy ?? dp.isDefinedBy, session.externalOntologyReferences, mainBase)
         : baseWithHash + (dp?.name ?? name);
     } else {
-      const derived = labelToCamelCaseIdentifier(lbl) || (dp?.name ?? name);
-      identifierEl.textContent = derived.startsWith('http') ? derived : baseWithHash + derived;
+      // The property's real IRI, until a changed label gives it another name (#146).
+      const line = propertyIdentifierLine({ iri: dp?.uri ?? baseWithHash + (dp?.name ?? name), originalLabel: dp?.label, newLabel: lbl });
+      identifierEl.textContent = line.text;
+      const captionEl = document.getElementById('editDataPropName');
+      if (captionEl) captionEl.textContent = line.caption;
     }
   }
   if (labelValidationEl && okBtn) {

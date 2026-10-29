@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { dedupeEdges, spaceEdges } from '../../src/graph/edgeFinishing';
 import type { ObjectPropertyInfo } from '../../src/types';
 
-const edge = (from: string, to: string, type: string) => ({ id: `${from}->${to}:${type}`, from, to });
+const edge = (from: string, to: string, type: string) => ({ id: `${from}->${to}:${type}`, from, to, type });
 const property = (name: string, uri: string) => ({ name, uri }) as ObjectPropertyInfo;
 
 describe('dedupeEdges', () => {
@@ -18,6 +18,14 @@ describe('dedupeEdges', () => {
     const kept = dedupeEdges(edges, [property('hasPart', 'http://example.org/o#hasPart')]);
 
     expect(kept.map((e) => e.id)).toEqual(['A->B:hasPart']);
+  });
+
+  it('does the same when the nodes are IRIs, which hold colons of their own (#200)', () => {
+    const a = 'http://example.org/o#A';
+    const b = 'http://example.org/o#B';
+    const edges = [edge(a, b, 'hasPart'), edge(a, b, 'http://example.org/o#hasPart')];
+
+    expect(dedupeEdges(edges, [property('hasPart', 'http://example.org/o#hasPart')])).toHaveLength(1);
   });
 });
 
