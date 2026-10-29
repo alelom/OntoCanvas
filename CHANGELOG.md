@@ -1,3 +1,17 @@
+# [1.42.0](https://github.com/alelom/OntoCanvas/compare/v1.41.0...v1.42.0) (2026-10-29)
+
+
+### Bug Fixes
+
+* a data URL served as text/plain (raw.githubusercontent.com) is read by the end of its address; say what to do when the format cannot be told ([#205](https://github.com/alelom/OntoCanvas/issues/205)) ([89d5f88](https://github.com/alelom/OntoCanvas/commit/89d5f8891d597c451aed323ae0b3a0898d59f255))
+* review of [#206](https://github.com/alelom/OntoCanvas/issues/206): the size tier of a download is judged by the larger of Content-Length and the decoded text ([a8b528d](https://github.com/alelom/OntoCanvas/commit/a8b528ddfd90a55c3b1253916ac306a79ad36f5f))
+
+
+### Features
+
+* ?data=<url> adds a data file to the ontology at start-up, next to ?onto= ([#205](https://github.com/alelom/OntoCanvas/issues/205)) ([336ebb8](https://github.com/alelom/OntoCanvas/commit/336ebb8c3a3e90fd6bb99fe45912cddc3f97250e))
+* add a data file or URL to the open ontology and query it together ([#205](https://github.com/alelom/OntoCanvas/issues/205)) ([ca546c5](https://github.com/alelom/OntoCanvas/commit/ca546c578d7ed8e7981ffe31d50ae6ddf7c4b965))
+
 # [1.41.0](https://github.com/alelom/OntoCanvas/compare/v1.40.2...v1.41.0) (2026-10-29)
 
 
