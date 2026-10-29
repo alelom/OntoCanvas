@@ -8,6 +8,7 @@ import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
 import { mountQueryButton } from './queryButton';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
+import type { DataSources } from '../../sparql/dataSources';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -19,18 +20,26 @@ export interface SidePanelDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects what a query result names in the graph and brings it into view (#203). */
   showInGraph?: (match: GraphMatch) => void;
+  /** The data added to the open ontology, queried with it (#205). */
+  dataSources?: DataSources;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
 
-export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
+export interface SidePanel {
+  refresh(): void;
+  /** Opens the panel on the query tab and adds the data files an address names (?data=<url>, #205). */
+  addDataUrls(urls: string[]): Promise<void>;
+}
+
+export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const root = document.getElementById('sidePanel');
   const wrapper = document.getElementById('networkWrapper');
-  if (!root || !wrapper) return { refresh: () => {} };
+  if (!root || !wrapper) return { refresh: () => {}, addDataUrls: async () => {} };
 
   if (deps.embedded) {
     root.hidden = true;
-    return { refresh: () => {} };
+    return { refresh: () => {}, addDataUrls: async () => {} };
   }
 
   const host = createSidePanelHost(root);
@@ -40,11 +49,19 @@ export function initSidePanel(deps: SidePanelDeps): { refresh(): void } {
     getHistoryKey: deps.getHistoryKey,
     getGraph: deps.getGraph,
     showInGraph: deps.showInGraph,
+    dataSources: deps.dataSources,
   });
   host.registerTab(queryTab);
 
   const button = mountQueryButton(wrapper, () => host.toggle(queryTab.id));
   host.onChange((activeId) => button.setPressed(activeId === queryTab.id));
 
-  return { refresh: () => queryTab.refresh() };
+  return {
+    refresh: () => queryTab.refresh(),
+    async addDataUrls(urls) {
+      if (!urls.length) return;
+      host.open(queryTab.id);
+      await queryTab.addDataUrls(urls);
+    },
+  };
 }

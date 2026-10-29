@@ -1,0 +1,20 @@
+# Individuals for examples/sparql/query-panel.ttl (issue #205): a data file to ADD to that ontology, not to open on its own.
+#
+# Open query-panel.ttl, then in the SPARQL panel press "Add data file..." and choose this file (or paste its raw URL in the
+# field and press Add), or open the ontology with `&data=<raw URL of this file>` after `?onto=<raw URL of query-panel.ttl>`: the panel
+# then opens with this file already listed. The file is listed with its triples and a Remove button. Then run:
+#
+#   SELECT ?i ?c WHERE { ?i a ?c . ?c rdfs:subClassOf* :Space } ORDER BY ?i ?c
+#     -> three rows: :room101 :Room, :room102 :Bedroom, :room102 :Room. The data says what is a :Room; only the ontology says
+#        that a :Room is a :Space, so the answer needs both, and :wall1 and :door1 are not in it
+#   SELECT (COUNT(?i) AS ?n) WHERE { ?i a :Room }
+#     -> "2"^^xsd:integer. The individuals are not drawn: the graph still shows the five classes
+#   After Remove, the first query gives no rows, and Save still writes only the ontology: added data is never saved.
+@prefix : <http://example.org/examples/sparql-queries#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:room101 a :Room ; rdfs:label "Room 101" .
+:room102 a :Room , :Bedroom ; rdfs:label "Room 102" .
+:wall1 a :Wall ; rdfs:label "North wall" .
+:door1 a :Door ; rdfs:label "Front door" .

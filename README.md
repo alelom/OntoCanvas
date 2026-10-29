@@ -53,6 +53,13 @@ OntoCanvas treats such terms as **belonging elsewhere**, exactly like imported/e
 A class counts as *defined elsewhere* when it carries an `rdfs:isDefinedBy` pointing outside this ontology, **or** when its own URI simply lives in a different namespace. Terms in this ontology's own namespace stay fully editable.
 
 
+## Opening by link
+
+- `?onto=<url>` opens the ontology at that address (any format OntoCanvas reads).
+- `?data=<url>` adds a data file (individuals) to that ontology, for the SPARQL panel: repeat it for several files. The panel opens with the data listed, and queries run over the ontology and the data together. The data is not drawn and never saved. It needs `?onto=`, is ignored in an embedded view, and is dropped from the address when another ontology is opened. A file over 2 MB is asked about first, one over 10 MB is refused.
+
+For example `https://alelom.github.io/OntoCanvas/?onto=<ONTOLOGY_URL>&data=<DATA_URL>`, with both addresses percent-encoded.
+
 ## Embedding
 
 OntoCanvas can be embedded in an `<iframe>` (e.g. on an ontology's documentation page) for a compact, **read-only** view. When embedded — automatically inside an iframe, or by adding `?embed=1` to the URL — OntoCanvas:
@@ -188,7 +195,7 @@ imports it**; a file nothing places selects every area, and docs select none. Th
 | `search` | The search box: suggestions, scope and the outline around the matches. | 3 |
 | `embed` | The app embedded in an iframe: the compact, read-only view. | 2 |
 | `shell` | The bottom bar and what it shows about the selection. | 1 |
-| `sparql` | SPARQL queries over the loaded ontology. | 2 |
+| `sparql` | SPARQL queries over the loaded ontology. | 3 |
 <!-- e2e-areas:end -->
 ## Repository hygiene
 

@@ -335,3 +335,54 @@ describe('urlParams', () => {
     });
   });
 });
+
+describe('the data parameter (#205): ?data=<url>, once per data file, next to ?onto=', () => {
+  const at = (search: string) => window.history.replaceState(null, '', '/' + search);
+  afterEach(() => at(''));
+
+  it('is none when the address has none', async () => {
+    const { getDataUrlsFromParams } = await import('../../src/utils/urlParams');
+    at('?onto=https://example.org/o.ttl');
+
+    expect(getDataUrlsFromParams()).toEqual([]);
+  });
+
+  it('lists every data parameter, in order, plain or percent-encoded', async () => {
+    const { getDataUrlsFromParams } = await import('../../src/utils/urlParams');
+    at('?onto=https://example.org/o.ttl&data=https://example.org/a.ttl&data=' + encodeURIComponent('https://example.org/b c.ttl?x=1&y=2'));
+
+    expect(getDataUrlsFromParams()).toEqual(['https://example.org/a.ttl', 'https://example.org/b c.ttl?x=1&y=2']);
+  });
+
+  it('takes only http and https addresses: the rest is dropped, not loaded', async () => {
+    const { getDataUrlsFromParams } = await import('../../src/utils/urlParams');
+    at('?data=javascript:alert(1)&data=file:///etc/passwd&data=notaurl&data=&data=https://example.org/ok.ttl');
+
+    expect(getDataUrlsFromParams()).toEqual(['https://example.org/ok.ttl']);
+  });
+
+  it('is dropped from the address bar when a local file is opened', async () => {
+    at('?onto=https://example.org/o.ttl&data=https://example.org/a.ttl');
+
+    clearOntologyParamsFromAddressBar();
+
+    expect(window.location.search).toBe('');
+  });
+
+  it('stays in the address bar when the ontology it came with is the one loaded, so the link still shares both', () => {
+    at('?onto=https://example.org/o.ttl&data=https://example.org/a.ttl');
+
+    setOntologyUrlParamInAddressBar('https://example.org/o.ttl');
+
+    expect(new URLSearchParams(window.location.search).getAll('data')).toEqual(['https://example.org/a.ttl']);
+  });
+
+  it('is dropped when another ontology is opened, since the data belonged to the one before', () => {
+    at('?onto=https://example.org/o.ttl&data=https://example.org/a.ttl');
+
+    setOntologyUrlParamInAddressBar('https://example.org/other.ttl');
+
+    expect(new URLSearchParams(window.location.search).getAll('data')).toEqual([]);
+    expect(new URLSearchParams(window.location.search).get('onto')).toBe('https://example.org/other.ttl');
+  });
+});

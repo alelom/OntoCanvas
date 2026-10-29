@@ -15,6 +15,8 @@ export function clearOntologyParamsFromAddressBar(): void {
   }
   url.searchParams.delete('onto');
   url.searchParams.delete('localFile');
+  // The data files named next to that ontology belonged to it (#205).
+  url.searchParams.delete('data');
   const newUrl = url.pathname + url.search + url.hash;
   window.history.replaceState(null, '', newUrl);
 }
@@ -28,6 +30,8 @@ export function clearOntologyParamsFromAddressBar(): void {
 export function setOntologyUrlParamInAddressBar(ontologyUrl: string): void {
   const url = new URL(window.location.href);
   url.searchParams.delete('localFile');
+  // Data files named next to the ontology stay while it is the one loaded, so the link still shares both; another ontology drops them (#205).
+  if (url.searchParams.has('onto') && url.searchParams.get('onto') !== ontologyUrl) url.searchParams.delete('data');
   url.searchParams.set('onto', ontologyUrl);
   const newUrl = url.pathname + url.search + url.hash;
   window.history.replaceState(null, '', newUrl);
@@ -42,6 +46,35 @@ export function getLocalFileTokenFromParams(): string | null {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('localFile');
   return token || null;
+}
+
+/**
+ * The data files named by `?data=<url>` (once for each file, in order), to be added to the ontology (#205). Only http and
+ * https addresses are taken; a value that is not one is dropped. Plain or percent-encoded, as `?onto=` is.
+ */
+export function getDataUrlsFromParams(): string[] {
+  const urls: string[] = [];
+  for (const value of new URLSearchParams(window.location.search).getAll('data')) {
+    for (const candidate of [value, safeDecode(value)]) {
+      if (!/^https?:\/\//i.test(candidate)) continue;
+      try {
+        new URL(candidate);
+        urls.push(candidate);
+        break;
+      } catch {
+        // not an address: try the decoded form, then drop it
+      }
+    }
+  }
+  return urls;
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 /**

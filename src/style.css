@@ -636,6 +636,39 @@ body.embed-no-menu #ontologyIssuesPopup {
 .query-result > button {
   margin-bottom: 8px;
 }
+.query-data {
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+.query-data-add {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.query-data-add input[type='url'] {
+  flex: 1;
+  min-width: 0;
+}
+.query-data-status {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 16px;
+}
+.query-data-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.query-data-list[hidden] {
+  display: none;
+}
+.query-data-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  align-items: center;
+}
 .query-results {
   border-collapse: collapse;
   font-family: Consolas, monospace;
