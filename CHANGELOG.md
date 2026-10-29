@@ -1,3 +1,10 @@
+## [1.40.1](https://github.com/alelom/OntoCanvas/compare/v1.40.0...v1.40.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* review of [#197](https://github.com/alelom/OntoCanvas/issues/197): an edit to the engine setup file selects the unit tests, as no test imports it ([e438e0a](https://github.com/alelom/OntoCanvas/commit/e438e0a3d192f260a075d0839b8eb76e4173cca3))
+
 # [1.40.0](https://github.com/alelom/OntoCanvas/compare/v1.39.0...v1.40.0) (2026-10-29)
 
 
