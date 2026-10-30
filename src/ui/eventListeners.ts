@@ -440,6 +440,8 @@ export function setupEventListeners(): void {
     window.open(url, '_blank', 'noopener');
   });
   document.getElementById('resetView')?.addEventListener('click', () => {
+    // The individuals drawn on request go too (#209); the layout is redrawn below.
+    session.individualsLayer?.clear();
     (document.getElementById('layoutMode') as HTMLSelectElement).value = 'hierarchical-dag';
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';
     (document.getElementById('minFontSize') as HTMLInputElement).value = '20';

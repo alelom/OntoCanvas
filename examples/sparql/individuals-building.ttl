@@ -10,7 +10,7 @@
 #   - hover Door 3: its fire rating; hover Server room: its area (values are in the tooltip, not drawn as nodes)
 #   - choose Door 3 in the tab and read its detail: it points to Corridor 1 and the server room (connects), is hosted by Wall 3,
 #     supplied by Acme, and is pointed to by Ana (responsible for) and the report (describes). Follow a link in the detail to go to that individual
-#   - Clear individuals hides them all; Show in graph on Ana draws her, the server room, Door 3 and Acme
+#   - Clear individuals hides them all; The button on Ana's row draws her, the server room, Door 3 and Acme
 @prefix : <http://example.org/examples/individuals-building#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .

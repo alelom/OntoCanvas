@@ -64,6 +64,8 @@ export interface IndividualsLayer {
   /** Another ontology was opened: forgets what was asked for and the clearing, without telling the listeners (a redraw follows). */
   reset(): void;
   isEmpty(): boolean;
+  /** Of the neighbours of this individual: `total`, how many are `displayed` now, and how many the next request `adds` (up to the cap). `shown` is whether the individual itself is drawn. */
+  preview(iri: string): { shown: boolean; adds: number; displayed: number; total: number };
   /** The data changed (another ontology, data added or removed): what is drawn is read again, and what is gone is dropped. */
   invalidate(): void;
   /** `classNodeByUri`: the node id of each class that is drawn, by the class's IRI. */
@@ -106,8 +108,14 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     return extractLocalName(iri);
   };
 
-  /** The individuals linked to this one by an object property, either way, sorted by what is shown for them. */
+  /** The individuals linked to this one by an object property, either way, sorted by what is shown for them; kept until the data changes. */
+  const neighbourCache = new Map<string, string[]>();
   const neighboursOf = (iri: string): string[] => {
+    let cached = neighbourCache.get(iri);
+    if (!cached) neighbourCache.set(iri, (cached = findNeighbours(iri)));
+    return cached;
+  };
+  const findNeighbours = (iri: string): string[] => {
     const all = known();
     const found = new Set<string>();
     for (const store of getStores()) {
@@ -160,10 +168,22 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       roots.clear();
       hidden = false;
       individuals = null;
+      neighbourCache.clear();
+    },
+    preview(iri) {
+      const total = neighboursOf(iri).length;
+      const count = roots.get(iri);
+      if (count === undefined) {
+        if (auto()) return { shown: true, adds: 0, displayed: total, total };
+        return { shown: false, adds: Math.min(total, maxPerExpansion), displayed: 0, total };
+      }
+      const displayed = Math.min(total, count);
+      return { shown: true, adds: Math.min(total - displayed, maxPerExpansion), displayed, total };
     },
     isEmpty: () => roots.size === 0 && !auto(),
     invalidate() {
       individuals = null;
+      neighbourCache.clear();
       hidden = false;
       for (const iri of [...roots.keys()]) if (!known().has(iri)) roots.delete(iri);
       if (roots.size > 0 || auto()) changed();

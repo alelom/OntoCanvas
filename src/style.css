@@ -599,6 +599,29 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   overflow: auto;
   border: 1px solid #ddd;
 }
+.individuals-list li {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #eee;
+}
+.individuals-list li button.individual-graph {
+  flex: none;
+  width: auto;
+  margin: 2px 4px;
+  padding: 1px 6px;
+  border: 1px solid #b5bcc4;
+  border-radius: 3px;
+  background: #f4f6f8;
+  white-space: nowrap;
+}
+.individuals-list li button.individual-graph:disabled {
+  color: #888;
+  cursor: default;
+}
+.individuals-list li button[data-individuals-item] {
+  flex: 1;
+  min-width: 0;
+}
 .individuals-list li button {
   display: flex;
   justify-content: space-between;

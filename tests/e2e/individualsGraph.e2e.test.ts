@@ -58,8 +58,7 @@ describe('individuals in the graph', () => {
     const classesOnly = await nodeIds();
     const edgesBefore = await edgeCount();
 
-    await page.click('[data-individuals-item][title$="#alice"]');
-    await page.click('[data-individuals-show-in-graph]');
+    await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
 
     const drawn = (await nodeIds()).filter((id) => id.startsWith('__individual__')).sort();
@@ -105,8 +104,7 @@ describe('individuals in the graph', () => {
     await page.click('[data-individuals-clear]').catch(() => {});
     await page.click('#relaxIndividuals');
     await page.click('#relaxIndividuals');
-    await page.click('[data-individuals-item][title$="#alice"]');
-    await page.click('[data-individuals-show-in-graph]');
+    await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#alice'));
     expect(await overlaps()).toEqual([]);
 
@@ -139,10 +137,21 @@ describe('individuals in the graph', () => {
     await page.click('#individualsPanelBtn');
   });
 
+  it('is cleared by Reset view, and the button of the row offers to show the individual again', async () => {
+    await page.click('[data-individuals-clear]').catch(() => {});
+    await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#alice'));
+    expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('All 1 displayed');
+
+    await page.click('#resetView');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+
+    expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('Show 1 (0 displayed/1 total)');
+  });
+
   it('has no Edit button while an edge between individuals is selected, and has it, before the panel buttons, for a class edge', async () => {
     await page.click('[data-individuals-clear]').catch(() => {});
-    await page.click('[data-individuals-item][title$="#alice"]');
-    await page.click('[data-individuals-show-in-graph]');
+    await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#alice'));
 
     await clickEdge("e.id.startsWith('__individual_edge__') && e.label === 'memberOf'");
@@ -155,8 +164,7 @@ describe('individuals in the graph', () => {
   });
 
   it('leaves a drawn individual alone on Delete, and the ontology unchanged', async () => {
-    await page.click('[data-individuals-item][title$="#carol"]');
-    await page.click('[data-individuals-show-in-graph]');
+    await page.click('[data-individuals-list] li:has([title$="#carol"]) [data-individuals-show-in-graph]');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#carol'));
     const classCount = (await nodeIds()).filter((id) => !id.startsWith('__individual__')).length;
 

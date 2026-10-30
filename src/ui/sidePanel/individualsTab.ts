@@ -115,7 +115,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
         button.title = item.iri;
         button.addEventListener('click', () => select(item.iri));
         const li = element('li');
-        li.append(button);
+        li.append(button, ...(deps.layer ? [graphButton(deps.layer, item.iri)] : []));
         return li;
       })
     );
@@ -177,22 +177,33 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       iri,
       types,
       ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
-      ...(deps.layer ? [showInGraphButton(selected)] : []),
       renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
       renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
     );
   }
 
-  function showInGraphButton(iri: string): HTMLElement {
-    const button = element('button', undefined, 'Show in graph');
+  /** Next to an individual's row: how many of its neighbours the next click draws, and how many are drawn of all of them. */
+  function graphButton(layer: IndividualsLayer, iri: string): HTMLButtonElement {
+    const { shown, adds, displayed, total } = layer.preview(iri);
+    const button = element('button', 'individual-graph');
     button.type = 'button';
-    button.title = 'Draw this individual and the individuals linked to it in the graph';
     button.setAttribute('data-individuals-show-in-graph', '');
-    button.addEventListener('click', () => deps.layer?.show(iri));
+    if (displayed < total) {
+      button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
+      button.title = shown ? `Draw ${adds} more of the neighbours of this individual` : `Draw this individual and ${adds} of its ${total} neighbours`;
+      button.addEventListener('click', () => (shown ? layer.showMore(iri) : layer.show(iri)));
+    } else if (!shown) {
+      button.textContent = 'Show in graph';
+      button.title = 'Draw this individual in the graph';
+      button.addEventListener('click', () => layer.show(iri));
+    } else {
+      button.textContent = total > 0 ? `All ${total} displayed` : 'Shown in graph';
+      button.disabled = true;
+    }
     return button;
   }
 
-  /** What is drawn in the graph: how many individuals, a way to draw the rest of an individual's neighbours, and Clear. */
+  /** What is drawn in the graph: how many individuals, and Clear. */
   function renderDrawn(): void {
     const layer = deps.layer;
     if (!layer || layer.isEmpty()) {
@@ -209,14 +220,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     drawnLine.hidden = false;
     drawnLine.replaceChildren(
       text,
-      clear,
-      ...view.more.map((entry) => {
-        const more = element('button', undefined, `Show ${Math.min(entry.hidden, 50)} more of ${entry.label} (${entry.hidden} left)`);
-        more.type = 'button';
-        more.setAttribute('data-individuals-more', '');
-        more.addEventListener('click', () => layer.showMore(entry.iri));
-        return more;
-      })
+      clear
     );
   }
 
@@ -233,7 +237,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   function render(container: HTMLElement): void {
     container.classList.add('individuals-tab');
-    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; choose one and use Show in graph to draw it.');
+    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; use the button on a row to draw that individual.');
 
     classSelect = element('select');
     classSelect.setAttribute('data-individuals-class', '');
@@ -269,7 +273,10 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     drawnLine = element('div', 'individuals-drawn');
     drawnLine.setAttribute('data-individuals-drawn', '');
     drawnLine.hidden = true;
-    deps.layer?.onChange(renderDrawn);
+    deps.layer?.onChange(() => {
+      renderDrawn();
+      renderList();
+    });
 
     classSelect.addEventListener('change', () => {
       classIri = classSelect.value === '' ? null : classSelect.value;

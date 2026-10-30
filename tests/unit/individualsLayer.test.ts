@@ -205,3 +205,30 @@ describe('few individuals are drawn without being asked', () => {
     expect(layer.build(classNodes).nodes.map((n) => n.iri).sort()).toEqual([ex('a'), ex('b')]);
   });
 });
+
+describe('preview(): what asking for an individual would draw', () => {
+  it('counts the neighbours a first request draws before it is shown, at most 50 of them', () => {
+    const layer = createIndividualsLayer({ getStores: () => [hub(120)], autoMax: 0 });
+
+    expect(layer.preview(ex('h'))).toEqual({ shown: false, adds: 50, displayed: 0, total: 120 });
+    expect(layer.preview(ex('p000'))).toEqual({ shown: false, adds: 1, displayed: 0, total: 1 });
+  });
+
+  it('counts the neighbours a show more would add, and what is left, once it is shown', () => {
+    const layer = createIndividualsLayer({ getStores: () => [hub(120)], autoMax: 0 });
+    layer.show(ex('h'));
+    expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 50, displayed: 50, total: 120 });
+
+    layer.showMore(ex('h'));
+    expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 20, displayed: 100, total: 120 });
+
+    layer.showMore(ex('h'));
+    expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 0, displayed: 120, total: 120 });
+  });
+
+  it('says there is nothing to add for an individual drawn by itself', () => {
+    const layer = createIndividualsLayer({ getStores: () => [hub(3)], autoMax: 30 });
+
+    expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 0, displayed: 3, total: 3 });
+  });
+});

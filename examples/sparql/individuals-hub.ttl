@@ -1,10 +1,12 @@
 # A hub: one building with many individuals linked to it, to see the limits on drawing individuals (issue #209). The file has 135
 # individuals, more than the 30 that are drawn by themselves, so on opening the graph shows only the four classes. Then:
-#   - open the Individuals tab (the toolbar says "Individuals (135)"), search "Head office", choose it and press "Show in graph":
+#   - open the Individuals tab (the toolbar says "Individuals (135)"), search "Head office" and press its row's "Show 50 (0 displayed/122 total)":
 #     Head office is drawn with its first 50 neighbours (the two floors and 48 sensors, in label order)
-#   - the tab says "Drawn in the graph: 51 individuals." and offers "Show 50 more of Head office (72 left)"; press it once for
-#     101 individuals, and again for all 123 (Head office and its 122 neighbours), the offer going when none is left
-#   - choose Floor 1 and press "Show in graph" too: its six rooms are added, the individuals already drawn stay
+#   - the tab says "Drawn in the graph: 51 individuals." and the row's button now reads "Show 50 (50 displayed/122 total)";
+#     press it for 101 individuals, then "Show 22 (100 displayed/122 total)" for all 123 (Head office and its 122 neighbours),
+#     after which it reads "All 122 displayed"
+#   - search "Floor 1" and press its button too: its six rooms are added, the individuals already drawn stay
+#   - "Reset view" in the graph also clears the individuals
 #   - each sensor's "reading" is in its tooltip; "Clear individuals" removes everything
 #   - the same file with more than 300 individuals asked for would show the first 300 with a warning
 @prefix : <http://example.org/examples/individuals-hub#> .

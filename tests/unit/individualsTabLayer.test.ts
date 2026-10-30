@@ -24,6 +24,9 @@ function mount(turtle: string): void {
 }
 const open = (name: string) =>
   [...container.querySelectorAll<HTMLButtonElement>('[data-individuals-item]')].find((b) => b.title === `${NS}${name}`)!.click();
+/** The button next to the row of an individual. */
+const row = (name: string) =>
+  [...container.querySelectorAll<HTMLElement>('[data-individuals-list] li')].find((li) => li.querySelector<HTMLElement>('[data-individuals-item]')!.title === `${NS}${name}`)!.querySelector<HTMLButtonElement>('[data-individuals-show-in-graph]')!;
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -32,11 +35,12 @@ beforeEach(() => {
 });
 
 describe('"Show in graph"', () => {
-  it('is offered on the individual chosen, and draws it with its neighbours', () => {
-    mount(':a a :Room ; :next :b . :b a :Room .');
-    open('a');
+  it('is next to the row of each individual, says how many it draws, and draws the individual with its neighbours', () => {
+    mount(':a a :Room ; :next :b . :b a :Room . :c a :Room .');
+    expect(row('a').textContent).toBe('Show 1 (0 displayed/1 total)');
+    expect(row('c').textContent).toBe('Show in graph');
 
-    q<HTMLButtonElement>('[data-individuals-show-in-graph]').click();
+    row('a').click();
 
     expect(layer.build(new Map()).nodes.map((n) => n.iri).sort()).toEqual([`${NS}a`, `${NS}b`]);
     expect(drawn().hidden).toBe(false);
@@ -46,7 +50,6 @@ describe('"Show in graph"', () => {
   it('is not there without a layer (an ontology alone)', () => {
     const stores = [store(':a a :Room .')];
     createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({}) }).render(container);
-    open('a');
 
     expect(container.querySelector('[data-individuals-show-in-graph]')).toBeNull();
   });
@@ -61,8 +64,7 @@ describe('what is drawn', () => {
 
   it('can be cleared, and the line goes with it', () => {
     mount(':a a :Room .');
-    open('a');
-    q<HTMLButtonElement>('[data-individuals-show-in-graph]').click();
+    row('a').click();
 
     q<HTMLButtonElement>('[data-individuals-clear]').click();
 
@@ -70,27 +72,28 @@ describe('what is drawn', () => {
     expect(drawn().hidden).toBe(true);
   });
 
-  it('offers "show more" for an individual with more neighbours than the cap, and draws them', () => {
+  it('says how many the next click draws and how many are drawn of the total, until all are', () => {
     mount(links(120));
-    open('h');
-    q<HTMLButtonElement>('[data-individuals-show-in-graph]').click();
+    expect(row('h').textContent).toBe('Show 50 (0 displayed/120 total)');
+    row('h').click();
 
-    const more = q<HTMLButtonElement>('[data-individuals-more]');
-    expect(more.textContent).toContain('70');
-
-    more.click();
-
+    expect(row('h').textContent).toBe('Show 50 (50 displayed/120 total)');
+    row('h').click();
     expect(layer.build(new Map()).nodes).toHaveLength(101);
-    expect(q<HTMLButtonElement>('[data-individuals-more]').textContent).toContain('20');
+    expect(row('h').textContent).toBe('Show 20 (100 displayed/120 total)');
+
+    row('h').click();
+
+    expect(layer.build(new Map()).nodes).toHaveLength(121);
+    expect(row('h').textContent).toBe('All 120 displayed');
+    expect(row('h').disabled).toBe(true);
   });
 
   it('says when the total cap cut what was asked for', () => {
     const stores = [store(links(120))];
     layer = createIndividualsLayer({ autoMax: 0, getStores: () => stores, maxTotal: 10 });
     createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({}), layer }).render(container);
-    open('h');
-
-    q<HTMLButtonElement>('[data-individuals-show-in-graph]').click();
+    row('h').click();
 
     expect(drawn().textContent).toContain('10');
     expect(drawn().textContent).toMatch(/first 10/);
