@@ -10,7 +10,6 @@ import { selectInGraph } from './graph/selectResults';
 import { createDataSources } from './sparql/dataSources';
 import { createIndividualsLayer } from './abox/individualsLayer';
 import { getDataUrlsFromParams } from './utils/urlParams';
-import { setIssueActionHandler } from './ui/statusBar';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
 import { isDebugMode, debugLog } from './utils/debug';
@@ -139,10 +138,6 @@ session.sidePanel = initSidePanel({
   individualsLayer: session.individualsLayer,
   getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? null,
   embedded: isEmbedded(),
-});
-// The notice about instance data has a button that opens the Individuals tab (#211); an embedded view has no panel.
-setIssueActionHandler((id) => {
-  if (id === 'open-individuals') session.sidePanel?.openIndividuals();
 });
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {

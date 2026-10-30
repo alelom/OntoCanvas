@@ -1,9 +1,9 @@
 # A file of instance data (an A-box), and what OntoCanvas shows for it (issues #181 and #168).
 #
-# The graph draws classes, so it shows one node here, :Room, the only class the file declares. The four individuals,
-# and the classes :Door and :Wall that they use without declaring them, are not drawn. Expected:
-#   - the bottom bar shows "issues (1)"; its popup says "4 individuals" are not drawn, and links the issues that track
-#     drawing instance data;
+# The graph draws one class node, :Room, the only class the file declares, and the four individuals as orange ellipses (few
+# enough to be drawn by themselves, issue #209): the two rooms with a dashed edge to :Room, and the links :hasDoor between
+# them; the door and the wall are typed with :Door and :Wall, classes the file never declares, so they have no dashed edge.
+# There is no warning in the bottom bar: the toolbar button reads "Individuals (4)". Expected:
 #   - the SPARQL panel's starting query lists the individuals with their classes (it lists classes for a file without
 #     individuals): four rows, :door1 :Door / :room1 :Room / :room2 :Room / :wallA :Wall;
 #   - this query shows the links between them: SELECT ?a ?b WHERE { ?a :hasDoor ?b } ORDER BY ?a -> :room1 :door1 and :room2 :door1.
