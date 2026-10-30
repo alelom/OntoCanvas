@@ -1,13 +1,17 @@
 # A hub: one building with many individuals linked to it, to see the limits on drawing individuals (issue #209). The file has 135
 # individuals, more than the 30 that are drawn by themselves, so on opening the graph shows only the four classes. Then:
-#   - open the Individuals tab (the toolbar says "Individuals (135)"), search "Head office" and press its row's "Show 50 (0 displayed/123 total)":
-#     Head office is drawn with its first 49 neighbours (the two floors and 47 sensors, in label order)
-#   - the tab says "Drawn in the graph: 50 individuals." and the row's button now reads "Show 50 (50 displayed/123 total)";
-#     press it for 100 individuals, then "Show 23 (100 displayed/123 total)" for all 123 (Head office and its 122 neighbours),
-#     after which it reads "All 123 displayed"; the button of a sensor drawn by then reads "All 2 displayed"
-#   - search "Floor 1" and press its button too: its six rooms are added, the individuals already drawn stay
-#   - "Reset view" in the graph also clears the individuals
-#   - each sensor's "reading" is in its tooltip; "Clear individuals" removes everything
+#   - open the Individuals tab (the toolbar says "Individuals (135)"): the individuals are listed by type (filter them by label or name above), each type a closed row,
+#     the biggest first: Sensor (120), Room (12), Floor (2), Building (1)
+#   - press the button on the Sensor row, "Show 50 (0 displayed/120 total)": 50 sensors are drawn, beside the classes, and it reads
+#     "Show 50 more (50 displayed/120 total)" for the next 50, then "Show 20 more (100 displayed/120 total)", then "All 120 displayed"
+#   - open a type (its arrow) to list its individuals: each row has its own button, "Show 1 (0 displayed/1 total)", that draws that
+#     individual alone, and reads "All 1 displayed" once it is drawn, however it was drawn (the sensors above, for one); drawn rows
+#     are marked with an orange dot and background
+#   - open Building and choose Head office (click its name): its detail has "Show 50 neighbours (0 displayed/122 total)" for its
+#     two floors and 120 sensors, 50 at a time: "Show 50 more neighbours (50 displayed/122 total)", "Show 22 more neighbours (100 displayed/122 total)", then
+#     "All 122 neighbours displayed"
+#   - "Reset view" in the graph also clears the individuals; "Clear individuals" in the tab does too
+#   - each sensor's "reading" is in its tooltip
 #   - the same file with more than 300 individuals asked for would show the first 300 with a warning
 @prefix : <http://example.org/examples/individuals-hub#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .

@@ -22,7 +22,7 @@ export interface IndividualsTabDeps {
   getPrefixes: () => Record<string, string>;
   /** The label a class has in the graph, or null. */
   getClassLabel?: (classIri: string) => string | null;
-  /** Individuals to a page; 50 by default. */
+  /** Rows listed at a time in a group, and drawn at a time with a button; 50 by default. */
   pageSize?: number;
   /** With these, the tab has the controls to add a file or a URL of individuals, and what was added (#211). */
   dataSources?: DataSources;
@@ -60,19 +60,18 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   const pageSize = deps.pageSize ?? DEFAULT_PAGE_SIZE;
   let index: IndividualIndex = createIndividualIndex([]);
   let drawn = false;
-  let classIri: string | null = null;
   let search = '';
-  let offset = 0;
   let selected: string | null = null;
+  /** The groups the user opened or closed; the others are closed, unless a filter is typed. */
+  let toggled = new Map<string, boolean>();
+  /** How many rows of each group are listed; a page more at a time. */
+  let rowLimits = new Map<string, number>();
 
   // The parts of the tab, set when it is drawn.
   let controls!: HTMLElement;
-  let classSelect!: HTMLSelectElement;
   let searchInput!: HTMLInputElement;
   let list!: HTMLUListElement;
   let empty!: HTMLElement;
-  let prevButton!: HTMLButtonElement;
-  let nextButton!: HTMLButtonElement;
   let rangeText!: HTMLElement;
   let detail!: HTMLElement;
   let drawnLine!: HTMLElement;
@@ -81,17 +80,6 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   const prefixes = () => withStandardPrefixes(deps.getPrefixes());
   const nameOf = (iri: string): string => formatTerm(DataFactory.namedNode(iri), prefixes()).text;
   const classTitle = (iri: string): string => deps.getClassLabel?.(iri) ?? nameOf(iri);
-
-  function renderClasses(): void {
-    const { total, classes, withoutClass } = index.classCounts();
-    const options = [new Option(`All (${total})`, '')];
-    for (const entry of classes) options.push(new Option(`${classTitle(entry.classIri)} (${entry.count})`, entry.classIri));
-    if (withoutClass > 0) options.push(new Option(`No class (${withoutClass})`, NO_CLASS));
-    classSelect.replaceChildren(...options);
-    // The class chosen stays while it has individuals; otherwise every individual.
-    if (classIri !== null && !options.some((o) => o.value === classIri)) classIri = null;
-    classSelect.value = classIri ?? '';
-  }
 
   function renderList(): void {
     const { total: allTotal } = index.classCounts();
@@ -103,45 +91,74 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
         : 'There are no individuals in this ontology. Open a file that has them.';
       empty.hidden = false;
       rangeText.textContent = '';
-      prevButton.disabled = nextButton.disabled = true;
       return;
     }
-    const { items, total, groupTotals } = index.list({ classIri, search, offset, limit: pageSize, grouped: true });
+    const groups = index.groups({ search });
+    const total = groups.reduce((sum, g) => sum + g.total, 0);
     empty.hidden = total > 0;
     if (total === 0) empty.textContent = 'No individual matches.';
-    let previousGroup: string | null = null;
-    list.replaceChildren(
-      ...items.flatMap((item) => {
-        const header = item.group !== previousGroup ? [groupHeader(item.group, groupTotals.get(item.group) ?? 0)] : [];
-        previousGroup = item.group;
-        const button = element('button');
-        button.type = 'button';
-        button.setAttribute('data-individuals-item', '');
-        button.append(element('span', 'individual-label', item.label ?? nameOf(item.iri)), element('span', 'individual-name', nameOf(item.iri)));
-        button.title = item.iri;
-        button.addEventListener('click', () => select(item.iri));
-        const li = element('li');
-        if (deps.layer) {
-          const preview = deps.layer.preview(item.iri);
-          // Marks the individuals that are drawn, however they came to be (their type's button, another individual's, by themselves).
-          li.classList.toggle('individual-drawn', preview.shown);
-          li.append(button, graphButton(deps.layer, item.iri, preview));
-        } else {
-          li.append(button);
-        }
-        return [...header, li];
-      })
-    );
-    rangeText.textContent = total === 0 ? '' : `${offset + 1}–${offset + items.length} of ${total}`;
-    prevButton.disabled = offset === 0;
-    nextButton.disabled = offset + pageSize >= total;
+    rangeText.textContent = total === 0 ? '' : `${total.toLocaleString('en')} ${search.trim() ? 'matching ' : ''}in ${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`;
+    list.replaceChildren(...groups.flatMap(({ group, total: count }) => [groupHeader(group, count), ...(isOpen(group) ? groupRows(group, count) : [])]));
   }
 
-  /** The row above the individuals of a type: its name and how many are listed, and a button to draw them in batches. */
+  /** A group is open when the user opened it, or when a filter is typed (what matches is shown). */
+  function isOpen(group: string): boolean {
+    return toggled.get(group) ?? search.trim() !== '';
+  }
+
+  /** The rows of an open group, up to its limit, and a row to list more. */
+  function groupRows(group: string, count: number): HTMLElement[] {
+    const limit = rowLimits.get(group) ?? pageSize;
+    const { items } = index.listGroup({ search, group, offset: 0, limit });
+    const rows = items.map((item) => {
+      const button = element('button');
+      button.type = 'button';
+      button.setAttribute('data-individuals-item', '');
+      button.append(element('span', 'individual-label', item.label ?? nameOf(item.iri)), element('span', 'individual-name', nameOf(item.iri)));
+      button.title = item.iri;
+      button.addEventListener('click', () => select(item.iri));
+      const li = element('li');
+      if (deps.layer) {
+        const preview = deps.layer.preview(item.iri);
+        // Marks the individuals that are drawn, however they came to be (their type's button, another individual's, by themselves).
+        li.classList.toggle('individual-drawn', preview.shown);
+        li.append(button, graphButton(deps.layer, item.iri, preview));
+      } else {
+        li.append(button);
+      }
+      return li;
+    });
+    if (count > items.length) {
+      const more = element('button', undefined, `Show ${Math.min(pageSize, count - items.length)} more rows (${items.length} of ${count})`);
+      more.type = 'button';
+      more.setAttribute('data-individuals-more-rows', '');
+      more.addEventListener('click', () => {
+        rowLimits.set(group, limit + pageSize);
+        renderList();
+      });
+      const li = element('li', 'individuals-more-rows');
+      li.append(more);
+      rows.push(li);
+    }
+    return rows;
+  }
+
+  /** The row above the individuals of a type: its name and how many there are, to open or close it, and a button to draw them in batches. */
   function groupHeader(group: string, count: number): HTMLElement {
     const li = element('li', 'individuals-group');
     li.setAttribute('data-individuals-group', group);
-    li.append(element('span', 'individuals-group-title', `${group === NO_CLASS ? 'No class' : classTitle(group)} (${count})`));
+    const open = isOpen(group);
+    const toggle = element('button', 'individuals-group-toggle');
+    toggle.type = 'button';
+    toggle.setAttribute('data-individuals-group-toggle', '');
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.title = open ? 'Hide the individuals of this type' : 'List the individuals of this type';
+    toggle.append(element('span', 'individuals-group-caret', open ? '▾' : '▸'), element('span', 'individuals-group-title', `${group === NO_CLASS ? 'No class' : classTitle(group)} (${count})`));
+    toggle.addEventListener('click', () => {
+      toggled.set(group, !open);
+      renderList();
+    });
+    li.append(toggle);
     if (deps.layer && group !== NO_CLASS) li.append(classButton(deps.layer, group));
     return li;
   }
@@ -153,8 +170,8 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     button.type = 'button';
     button.setAttribute('data-individuals-show-class', '');
     if (displayed < total) {
-      button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
-      button.title = `Draw ${adds} more of the individuals of this type in the graph`;
+      button.textContent = `Show ${adds}${displayed > 0 ? ' more' : ''} (${displayed} displayed/${total} total)`;
+      button.title = `Draw ${adds}${displayed > 0 ? ' more' : ''} of the individuals of this type in the graph`;
       button.addEventListener('click', () => layer.showClass(classIri));
     } else {
       button.textContent = `All ${total} displayed`;
@@ -216,27 +233,46 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       iri,
       types,
       ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
+      ...(deps.layer ? neighboursButton(deps.layer, selected) : []),
       renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
       renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
     );
   }
 
-  /** Next to an individual's row: how many of it and its neighbours the next click draws, and how many are drawn of all of them. */
+  /** Next to an individual's row: draws that individual alone, and says whether it is drawn. */
   function graphButton(layer: IndividualsLayer, iri: string, preview: ReturnType<IndividualsLayer['preview']>): HTMLButtonElement {
-    const { shown, adds, displayed, total } = preview;
+    const { adds, displayed, total } = preview;
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-in-graph', '');
     if (displayed < total) {
       button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
-      button.title = shown ? `This individual is drawn. Draw ${adds} more of it and its neighbours` : `Draw ${adds} of this individual and its neighbours`;
+      button.title = 'Draw this individual in the graph';
       button.addEventListener('click', () => layer.show(iri));
     } else {
       button.textContent = `All ${total} displayed`;
-      button.title = 'This individual and its neighbours are drawn';
+      button.title = 'This individual is drawn';
       button.disabled = true;
     }
     return button;
+  }
+
+  /** In the detail of an individual: draws its neighbours, a batch at a time, with how many are drawn of all of them. */
+  function neighboursButton(layer: IndividualsLayer, iri: string): HTMLElement[] {
+    const { adds, displayed, total } = layer.previewNeighbours(iri);
+    if (total === 0) return [];
+    const button = element('button', 'individual-graph');
+    button.type = 'button';
+    button.setAttribute('data-individuals-show-neighbours', '');
+    if (displayed < total) {
+      button.textContent = `Show ${adds}${displayed > 0 ? ' more' : ''} ${adds === 1 ? 'neighbour' : 'neighbours'} (${displayed} displayed/${total} total)`;
+      button.title = 'Draw this individual and the individuals linked to it, both ways, in the graph';
+      button.addEventListener('click', () => layer.showNeighbours(iri));
+    } else {
+      button.textContent = `All ${total} ${total === 1 ? 'neighbour' : 'neighbours'} displayed`;
+      button.disabled = true;
+    }
+    return [button];
   }
 
   /** What is drawn in the graph: how many individuals, and Clear. */
@@ -276,41 +312,36 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     renderDetail();
   }
 
+  /** A new filter starts the groups over: closed, or open where something matches. */
+  function resetGroups(): void {
+    toggled = new Map();
+    rowLimits = new Map();
+  }
+
   const filter = debounced(() => {
     search = searchInput.value;
-    offset = 0;
+    resetGroups();
     renderList();
   }, SEARCH_DELAY_MS);
 
   function render(container: HTMLElement): void {
     container.classList.add('individuals-tab');
-    const note = element('p', 'query-note panel-description', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; use the button on a row to draw that individual.');
+    const note = element('p', 'query-note panel-description', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; open a type to list its individuals, and use the buttons to draw a type, or one individual and its neighbours.');
 
-    classSelect = element('select');
-    classSelect.setAttribute('data-individuals-class', '');
-    classSelect.setAttribute('aria-label', 'Class');
     searchInput = element('input');
     searchInput.type = 'search';
-    searchInput.placeholder = 'Search by label or name';
-    searchInput.setAttribute('aria-label', 'Search the individuals');
+    searchInput.placeholder = 'Filter individuals by label or name';
+    searchInput.setAttribute('aria-label', 'Filter individuals by label or name');
     searchInput.setAttribute('data-individuals-search', '');
 
-    prevButton = element('button', undefined, 'Previous');
-    prevButton.type = 'button';
-    prevButton.setAttribute('data-individuals-prev', '');
-    nextButton = element('button', undefined, 'Next');
-    nextButton.type = 'button';
-    nextButton.setAttribute('data-individuals-next', '');
     rangeText = element('span', 'individuals-range');
     rangeText.setAttribute('data-individuals-range', '');
-    const pager = element('div', 'individuals-pager');
-    pager.append(prevButton, rangeText, nextButton);
 
     list = element('ul', 'individuals-list');
     list.setAttribute('data-individuals-list', '');
     controls = element('div', 'individuals-controls');
     controls.setAttribute('data-individuals-controls', '');
-    controls.append(classSelect, searchInput, pager, list);
+    controls.append(searchInput, rangeText, list);
 
     empty = element('p', 'query-note');
     empty.setAttribute('data-individuals-empty', '');
@@ -326,22 +357,10 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     deps.layer?.onChange(() => {
       renderDrawn();
       renderList();
+      renderDetail();
     });
 
-    classSelect.addEventListener('change', () => {
-      classIri = classSelect.value === '' ? null : classSelect.value;
-      offset = 0;
-      renderList();
-    });
     searchInput.addEventListener('input', () => filter.schedule());
-    prevButton.addEventListener('click', () => {
-      offset = Math.max(0, offset - pageSize);
-      renderList();
-    });
-    nextButton.addEventListener('click', () => {
-      offset += pageSize;
-      renderList();
-    });
 
     const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader }) : null;
     container.append(note, originLine, ...(dataBlock ? [dataBlock] : []), drawnLine, controls, empty, detail);
@@ -352,8 +371,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   function refresh(): void {
     if (!drawn) return;
     index = createIndividualIndex(deps.getStores());
-    renderClasses();
-    offset = 0;
+    resetGroups();
     renderList();
     if (selected !== null) {
       // The individual chosen is gone when nothing is known of it any more.

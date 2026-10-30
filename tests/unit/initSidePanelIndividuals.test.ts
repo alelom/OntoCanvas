@@ -15,7 +15,8 @@ const store = (turtle: string) => new Store(new Parser().parse(PREFIXES + turtle
 let ontology: Store | null;
 
 const tabButton = () => document.querySelector<HTMLButtonElement>('[data-tab-button="individuals"]');
-const options = () => [...document.querySelectorAll<HTMLOptionElement>('[data-individuals-class] option')].map((o) => o.textContent);
+/** What the tab says it holds: a row for each type, with how many individuals it has. */
+const options = () => [...document.querySelectorAll('[data-individuals-group-toggle] .individuals-group-title')].map((o) => o.textContent);
 const toolbarButton = () => document.getElementById('individualsPanelBtn') as HTMLButtonElement;
 const queryButton = () => document.getElementById('queryPanelBtn') as HTMLButtonElement;
 const panelEl = () => document.getElementById('sidePanel') as HTMLElement;
@@ -43,11 +44,11 @@ describe('initSidePanel with the Individuals tab', () => {
   it('has an Individuals tab beside Query, drawn when it is first opened', () => {
     mount();
     expect(tabButton()).not.toBeNull();
-    expect(document.querySelector('[data-individuals-class]')).toBeNull();
+    expect(document.querySelector('[data-individuals-search]')).toBeNull();
 
     tabButton()!.click();
 
-    expect(options()).toEqual(['All (1)', ':Room (1)']);
+    expect(options()).toEqual([':Room (1)']);
   });
 
   it('recounts when data is added to the ontology, and when it is removed', async () => {
@@ -55,10 +56,10 @@ describe('initSidePanel with the Individuals tab', () => {
     tabButton()!.click();
 
     const added = await dataSources.addText('more.ttl', PREFIXES + ':room2 a :Room . :room3 a :Room .', { path: 'more.ttl' });
-    expect(options()).toEqual(['All (3)', ':Room (3)']);
+    expect(options()).toEqual([':Room (3)']);
 
     dataSources.remove(added.id);
-    expect(options()).toEqual(['All (1)', ':Room (1)']);
+    expect(options()).toEqual([':Room (1)']);
   });
 
   it('recounts when another ontology is opened', () => {
@@ -68,7 +69,7 @@ describe('initSidePanel with the Individuals tab', () => {
     ontology = store(':Wall a owl:Class .');
     panel.refresh();
 
-    expect(options()).toEqual(['All (0)']);
+    expect(options()).toEqual([]);
     expect(document.querySelector('[data-individuals-empty]')!.textContent).toMatch(/no individuals/i);
   });
 
@@ -78,7 +79,7 @@ describe('initSidePanel with the Individuals tab', () => {
 
     tabButton()!.click();
 
-    expect(options()).toEqual(['All (0)']);
+    expect(options()).toEqual([]);
   });
 
   it('has the controls to add individuals in the tab', () => {

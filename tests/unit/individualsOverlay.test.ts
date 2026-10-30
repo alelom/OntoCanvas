@@ -25,7 +25,7 @@ describe('addIndividualsToNetworkData', () => {
 
   it('adds ellipse nodes for the individuals and edges to their class, around the class node', () => {
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [store] });
-    layer.show(`${NS}a`);
+    layer.showNeighbours(`${NS}a`);
     const data = network();
 
     addIndividualsToNetworkData(data, layer, classNodesByUri(classNodes));

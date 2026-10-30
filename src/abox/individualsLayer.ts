@@ -53,8 +53,10 @@ export interface LayerView {
 }
 
 export interface IndividualsLayer {
-  /** Draws up to the cap of the individual and its neighbours that are not drawn yet (the individual first); asked again, the next ones. */
+  /** Draws the individual, on its own. */
   show(iri: string): void;
+  /** Draws up to the cap of the neighbours of the individual that are not drawn yet, and the individual with them; asked again, the next ones. */
+  showNeighbours(iri: string): void;
   /** Hides what is drawn, what was drawn by itself included, until the data changes. */
   clear(): void;
   /** Another ontology was opened: forgets what was asked for and the clearing, without telling the listeners (a redraw follows). */
@@ -64,8 +66,10 @@ export interface IndividualsLayer {
   showClass(classIri: string): void;
   /** Of the individuals of a class: `total`, how many are `displayed` now (however they came to be drawn), and how many the next request `adds` (up to the cap). */
   previewClass(classIri: string): { adds: number; displayed: number; total: number };
-  /** Of the individual and its neighbours: `total`, how many are `displayed` now (however they came to be drawn), and how many the next request `adds` (up to the cap). `shown` is whether the individual itself is drawn. */
+  /** Whether the individual is drawn now, however it came to be. */
   preview(iri: string): { shown: boolean; adds: number; displayed: number; total: number };
+  /** Of the neighbours of the individual: `total`, how many are `displayed` now, and how many the next request `adds` (up to the cap). */
+  previewNeighbours(iri: string): { adds: number; displayed: number; total: number };
   /** The data changed (another ontology, data added or removed): what is drawn is read again, and what is gone is dropped. */
   invalidate(): void;
   /** `classNodeByUri`: the node id of each class that is drawn, by the class's IRI. */
@@ -184,7 +188,12 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
 
   return {
     show(iri) {
-      for (const item of [iri, ...neighboursOf(iri)].filter((n) => !picked.has(n)).slice(0, maxPerExpansion)) picked.add(item);
+      picked.add(iri);
+      changed();
+    },
+    showNeighbours(iri) {
+      picked.add(iri);
+      for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, maxPerExpansion)) picked.add(neighbour);
       changed();
     },
     clear() {
@@ -213,10 +222,14 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       return { adds: Math.min(members.length - displayed, maxPerExpansion), displayed, total: members.length };
     },
     preview(iri) {
-      const items = [iri, ...neighboursOf(iri)];
+      const shown = computeShown().shown.has(iri);
+      return { shown, adds: shown ? 0 : 1, displayed: shown ? 1 : 0, total: 1 };
+    },
+    previewNeighbours(iri) {
+      const neighbours = neighboursOf(iri);
       const { shown } = computeShown();
-      const displayed = items.filter((n) => shown.has(n)).length;
-      return { shown: shown.has(iri), adds: Math.min(items.length - displayed, maxPerExpansion), displayed, total: items.length };
+      const displayed = neighbours.filter((n) => shown.has(n)).length;
+      return { adds: Math.min(neighbours.length - displayed, maxPerExpansion), displayed, total: neighbours.length };
     },
     isEmpty: () => picked.size === 0 && !auto(),
     invalidate() {

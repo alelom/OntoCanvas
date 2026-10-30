@@ -12,7 +12,7 @@
 #     -> "2"^^xsd:integer. The individuals are not drawn until asked: the graph still shows the five classes
 #   The Individuals tab (issues #208, #211) lists them: All (4), then :Room (2), :Bedroom (1), :Door (1), :Wall (1). Choose :Room
 #     -> "Room 101" and "Room 102"; choose one to see its class and label, and that :room102 is a :Room and a :Bedroom
-#   Press "Show in graph" on the :room102 row of the tab (issue #209): an orange ellipse "Room 102" appears beside the classes, with a dashed
+#   In the tab, open the Room group and press the button on the :room102 row (issue #209): an orange ellipse "Room 102" appears beside the classes, with a dashed
 #     edge to Room and one to Bedroom. "Clear individuals" in the tab takes it away; double-click, Delete and the right-click menu do
 #     nothing on it, as it is not part of the ontology
 #   After Remove, the first query gives no rows, and Save still writes only the ontology: added data is never saved.

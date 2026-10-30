@@ -237,3 +237,34 @@ describe('list(), grouped by class', () => {
     expect(one.groupTotals.get(all.items[0].group)).toBe(one.total);
   });
 });
+
+describe('groups() and listGroup()', () => {
+  const index = () => createIndividualIndex([ONTOLOGY, DATA]);
+
+  it('lists every group with how many individuals it has, the biggest first, those with no class last', () => {
+    expect(index().groups({})).toEqual([
+      { group: NS + 'Room', total: 2 },
+      { group: NS + 'Wall', total: 2 },
+      { group: NO_CLASS, total: 1 },
+    ]);
+  });
+
+  it('counts only the matches of a search, and leaves out the groups with none', () => {
+    expect(index().groups({ search: 'wall' })).toEqual([{ group: NS + 'Wall', total: 2 }]);
+    expect(index().groups({ search: 'zzz' })).toEqual([]);
+  });
+
+  it('lists the rows of one group, by label, a page at a time', () => {
+    const first = index().listGroup({ group: NS + 'Wall', offset: 0, limit: 1 });
+    const second = index().listGroup({ group: NS + 'Wall', offset: 1, limit: 1 });
+
+    expect(first.total).toBe(2);
+    expect(first.items.map((i) => i.iri)).toEqual([NS + 'wall1']);
+    expect(second.items.map((i) => i.iri)).toEqual([NS + 'wall2']);
+  });
+
+  it('lists an individual of two classes only in the group it is under', () => {
+    expect(index().listGroup({ group: NS + 'Room', offset: 0, limit: 10 }).items.map((i) => i.iri)).toEqual([NS + 'room101', NS + 'room102']);
+    expect(index().listGroup({ group: NO_CLASS, offset: 0, limit: 10 }).items.map((i) => i.iri)).toEqual([NS + 'loose']);
+  });
+});

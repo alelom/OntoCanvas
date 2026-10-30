@@ -250,10 +250,12 @@ describe('SPARQL side panel', () => {
     await page.setInputFiles('[data-add-file-input]', { name: 'people.ttl', mimeType: 'text/turtle', buffer: Buffer.from(DATA) });
     await page.locator('[data-data-list] li').waitFor();
 
-    await page.locator('[data-individuals-class]').waitFor();
-    expect(await page.locator('[data-individuals-class] option').allTextContents()).toEqual(['All (2)', 'Person (1)', 'Student (1)']);
+    await page.locator('[data-individuals-search]').waitFor();
+    expect(await page.locator('[data-individuals-group-toggle] .individuals-group-title').allTextContents()).toEqual(['Person (1)', 'Student (1)']);
 
-    await page.selectOption('[data-individuals-class]', 'http://example.org/o#Student');
+    // The groups are closed until opened.
+    expect(await page.locator('[data-individuals-item]').count()).toBe(0);
+    await page.click('[data-individuals-group="http://example.org/o#Student"] [data-individuals-group-toggle]');
     expect(await page.locator('[data-individuals-list] li:not([data-individuals-group])').count()).toBe(1);
     await page.click('[data-individuals-item]');
     const detail = await page.locator('[data-individuals-detail]').innerText();
@@ -270,7 +272,7 @@ describe('SPARQL side panel', () => {
     await page.click('#individualsPanelBtn');
     expect(await page.locator('#sidePanel').isHidden()).toBe(true);
     await page.click('#individualsPanelBtn');
-    await page.locator('[data-individuals-class]').waitFor({ state: 'visible' });
+    await page.locator('[data-individuals-search]').waitFor({ state: 'visible' });
 
     await page.click('[data-data-remove]');
     await page.waitForFunction(() => /no individuals/i.test(document.querySelector('[data-individuals-empty]')?.textContent ?? ''));

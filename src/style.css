@@ -585,12 +585,6 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .individuals-tab [hidden] {
   display: none;
 }
-.individuals-pager {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
 .individuals-list {
   margin: 0;
   padding: 0;
@@ -603,6 +597,35 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   display: flex;
   align-items: stretch;
   border-bottom: 1px solid #eee;
+}
+.individuals-list li.individuals-group button.individuals-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: bold;
+  text-align: left;
+  cursor: pointer;
+}
+.individuals-group-caret {
+  width: 1em;
+  color: #555;
+}
+.individuals-more-rows button {
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
+  color: #1a5fb4;
+  text-align: left;
+  cursor: pointer;
 }
 .individuals-list li.individuals-group {
   justify-content: space-between;

@@ -70,6 +70,10 @@ export interface IndividualIndex {
   /** `groupTotals`: how many matches each group has (all of them, not just this page); empty unless `grouped`. */
   list(options: ListOptions): { items: IndividualItem[]; total: number; groupTotals: Map<string, number> };
   describe(iri: string, options?: { maxRows?: number }): IndividualDetail;
+  /** The groups the matches fall in, in the order of `list` with `grouped`: the biggest class first, those with no class last. */
+  groups(options: { search?: string }): Array<{ group: string; total: number }>;
+  /** The rows of one group, by label, a page at a time. */
+  listGroup(options: { search?: string; group: string; offset: number; limit: number }): { items: IndividualItem[]; total: number };
 }
 
 const DEFAULT_MAX_ROWS = 100;
@@ -176,6 +180,13 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
     return grouped;
   };
 
+  /** The grouped individuals that match a search, in the order of the groups. */
+  const matchesOf = (search: string | undefined): SortedItem[] => {
+    const grouped = groupedFor(null);
+    const needle = search?.trim().toLowerCase();
+    return needle ? grouped.filter((item) => item.haystack.includes(needle)) : grouped;
+  };
+
   return {
     classCounts() {
       const classes = [...members].map(([classIri, set]) => ({ classIri, count: set.size })).sort((a, b) => b.count - a.count || byText(a.classIri, b.classIri));
@@ -190,6 +201,17 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
       const groupTotals = new Map<string, number>();
       if (grouped) for (const item of matching) groupTotals.set(item.group, (groupTotals.get(item.group) ?? 0) + 1);
       return { items: matching.slice(offset, offset + limit).map(({ iri, label, group }) => ({ iri, label, group })), total: matching.length, groupTotals };
+    },
+
+    groups({ search }) {
+      const totals = new Map<string, number>();
+      for (const item of matchesOf(search)) totals.set(item.group, (totals.get(item.group) ?? 0) + 1);
+      return [...totals].map(([group, total]) => ({ group, total }));
+    },
+
+    listGroup({ search, group, offset, limit }) {
+      const inGroup = matchesOf(search).filter((item) => item.group === group);
+      return { items: inGroup.slice(offset, offset + limit).map(({ iri, label, group: g }) => ({ iri, label, group: g })), total: inGroup.length };
     },
 
     describe(iri, { maxRows = DEFAULT_MAX_ROWS } = {}) {
