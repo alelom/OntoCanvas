@@ -141,12 +141,12 @@ describe('individuals in the graph', () => {
     await page.click('[data-individuals-clear]').catch(() => {});
     await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#alice'));
-    expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('All 1 displayed');
+    expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('All 2 displayed');
 
     await page.click('#resetView');
     await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
 
-    expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('Show 1 (0 displayed/1 total)');
+    expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('Show 2 (0 displayed/2 total)');
   });
 
   it('says in the Individuals tab where the individuals are: the ontology file that holds some itself, and the data added to it', async () => {

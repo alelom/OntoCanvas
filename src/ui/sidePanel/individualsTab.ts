@@ -221,7 +221,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     );
   }
 
-  /** Next to an individual's row: how many of its neighbours the next click draws, and how many are drawn of all of them. */
+  /** Next to an individual's row: how many of it and its neighbours the next click draws, and how many are drawn of all of them. */
   function graphButton(layer: IndividualsLayer, iri: string, preview: ReturnType<IndividualsLayer['preview']>): HTMLButtonElement {
     const { shown, adds, displayed, total } = preview;
     const button = element('button', 'individual-graph');
@@ -229,14 +229,10 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     button.setAttribute('data-individuals-show-in-graph', '');
     if (displayed < total) {
       button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
-      button.title = shown ? `This individual is drawn. Draw ${adds} more of its ${total} neighbours` : `Draw this individual and ${adds} of its ${total} neighbours`;
-      button.addEventListener('click', () => layer.show(iri));
-    } else if (!shown) {
-      button.textContent = 'Show in graph';
-      button.title = 'Draw this individual in the graph';
+      button.title = shown ? `This individual is drawn. Draw ${adds} more of it and its neighbours` : `Draw ${adds} of this individual and its neighbours`;
       button.addEventListener('click', () => layer.show(iri));
     } else {
-      button.textContent = total > 0 ? `All ${total} displayed` : 'Shown in graph';
+      button.textContent = `All ${total} displayed`;
       button.title = 'This individual and its neighbours are drawn';
       button.disabled = true;
     }

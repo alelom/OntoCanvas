@@ -5,7 +5,7 @@
 #     Red team and Blue team both worksOn Apollo (Blue team also on Gemini); Alice also manages Dan
 #   - Frank has no links and floats alone, joined only to Person
 #   - hover Alice: her IRI, "Class: Person" and her values (email, age); labels come from rdfs:label
-#   - "Individuals (10)" in the toolbar; in the tab, "Clear individuals" removes them all, the button on a row ("Show 2 (0 displayed/2 total)" for Alice) brings back
+#   - "Individuals (10)" in the toolbar; in the tab, "Clear individuals" removes them all, the button on a row ("Show 3 (0 displayed/3 total)" for Alice) brings back
 #     that individual with its neighbours; double-click, Delete and the right-click menu do nothing on an individual
 @prefix : <http://example.org/examples/individuals-small#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .

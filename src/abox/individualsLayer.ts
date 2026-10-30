@@ -53,7 +53,7 @@ export interface LayerView {
 }
 
 export interface IndividualsLayer {
-  /** Draws the individual and up to the cap of its neighbours that are not drawn yet; asked again, the next ones. */
+  /** Draws up to the cap of the individual and its neighbours that are not drawn yet (the individual first); asked again, the next ones. */
   show(iri: string): void;
   /** Hides what is drawn, what was drawn by itself included, until the data changes. */
   clear(): void;
@@ -64,7 +64,7 @@ export interface IndividualsLayer {
   showClass(classIri: string): void;
   /** Of the individuals of a class: `total`, how many are `displayed` now (however they came to be drawn), and how many the next request `adds` (up to the cap). */
   previewClass(classIri: string): { adds: number; displayed: number; total: number };
-  /** Of the neighbours of this individual: `total`, how many are `displayed` now, and how many the next request `adds` (up to the cap). `shown` is whether the individual itself is drawn, however it came to be. */
+  /** Of the individual and its neighbours: `total`, how many are `displayed` now (however they came to be drawn), and how many the next request `adds` (up to the cap). `shown` is whether the individual itself is drawn. */
   preview(iri: string): { shown: boolean; adds: number; displayed: number; total: number };
   /** The data changed (another ontology, data added or removed): what is drawn is read again, and what is gone is dropped. */
   invalidate(): void;
@@ -184,8 +184,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
 
   return {
     show(iri) {
-      picked.add(iri);
-      for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, maxPerExpansion)) picked.add(neighbour);
+      for (const item of [iri, ...neighboursOf(iri)].filter((n) => !picked.has(n)).slice(0, maxPerExpansion)) picked.add(item);
       changed();
     },
     clear() {
@@ -214,10 +213,10 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       return { adds: Math.min(members.length - displayed, maxPerExpansion), displayed, total: members.length };
     },
     preview(iri) {
-      const neighbours = neighboursOf(iri);
+      const items = [iri, ...neighboursOf(iri)];
       const { shown } = computeShown();
-      const displayed = neighbours.filter((n) => shown.has(n)).length;
-      return { shown: shown.has(iri), adds: Math.min(neighbours.length - displayed, maxPerExpansion), displayed, total: neighbours.length };
+      const displayed = items.filter((n) => shown.has(n)).length;
+      return { shown: shown.has(iri), adds: Math.min(items.length - displayed, maxPerExpansion), displayed, total: items.length };
     },
     isEmpty: () => picked.size === 0 && !auto(),
     invalidate() {

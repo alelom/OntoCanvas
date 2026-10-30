@@ -43,8 +43,8 @@ beforeEach(() => {
 describe('"Show in graph"', () => {
   it('is next to the row of each individual, says how many it draws, and draws the individual with its neighbours', () => {
     mount(':a a :Room ; :next :b . :b a :Room . :c a :Room .');
-    expect(row('a').textContent).toBe('Show 1 (0 displayed/1 total)');
-    expect(row('c').textContent).toBe('Show in graph');
+    expect(row('a').textContent).toBe('Show 2 (0 displayed/2 total)');
+    expect(row('c').textContent).toBe('Show 1 (0 displayed/1 total)');
 
     row('a').click();
 
@@ -81,18 +81,18 @@ describe('what is drawn', () => {
   it('says how many the next click draws and how many are drawn of the total, until all are', () => {
     mount(links(120));
     chooseRooms();
-    expect(row('h').textContent).toBe('Show 50 (0 displayed/120 total)');
+    expect(row('h').textContent).toBe('Show 50 (0 displayed/121 total)');
     row('h').click();
 
-    expect(row('h').textContent).toBe('Show 50 (50 displayed/120 total)');
+    expect(row('h').textContent).toBe('Show 50 (50 displayed/121 total)');
     row('h').click();
-    expect(layer.build(new Map()).nodes).toHaveLength(101);
-    expect(row('h').textContent).toBe('Show 20 (100 displayed/120 total)');
+    expect(layer.build(new Map()).nodes).toHaveLength(100);
+    expect(row('h').textContent).toBe('Show 21 (100 displayed/121 total)');
 
     row('h').click();
 
     expect(layer.build(new Map()).nodes).toHaveLength(121);
-    expect(row('h').textContent).toBe('All 120 displayed');
+    expect(row('h').textContent).toBe('All 121 displayed');
     expect(row('h').disabled).toBe(true);
   });
 
@@ -152,25 +152,25 @@ describe('the rows after a type header is pressed', () => {
 
   it('say that the individuals the header drew are all displayed, with their neighbours', () => {
     mount(':a a :Room ; :next :b . :b a :Room . :c a :Room .');
-    expect(row('a').textContent).toBe('Show 1 (0 displayed/1 total)');
+    expect(row('a').textContent).toBe('Show 2 (0 displayed/2 total)');
     expect(rowItem('a').classList.contains('individual-drawn')).toBe(false);
 
     header().click();
 
     expect(rowItem('a').classList.contains('individual-drawn')).toBe(true);
-    expect(row('a').textContent).toBe('All 1 displayed');
+    expect(row('a').textContent).toBe('All 2 displayed');
     expect(row('a').disabled).toBe(true);
-    expect(row('b').textContent).toBe('All 1 displayed');
-    expect(row('c').textContent).toBe('Shown in graph');
+    expect(row('b').textContent).toBe('All 2 displayed');
+    expect(row('c').textContent).toBe('All 1 displayed');
   });
 
   it('count a neighbour the header drew as displayed, and mark the individuals that are drawn', () => {
     mount(links(120));
     header().click();
 
-    // The hub is a room, not drawn by the persons' header; each of the 50 persons drawn has the hub as its one neighbour, not drawn.
+    // The hub is a room, not drawn by the header of the persons: each person drawn counts itself as displayed, its neighbour the hub as not.
     expect(rowItem('p000').classList.contains('individual-drawn')).toBe(true);
-    expect(row('p000').textContent).toBe('Show 1 (0 displayed/1 total)');
+    expect(row('p000').textContent).toBe('Show 1 (1 displayed/2 total)');
     expect(row('p000').title).toContain('This individual is drawn');
     expect(rowItem('p049').classList.contains('individual-drawn')).toBe(true);
   });
@@ -179,6 +179,6 @@ describe('the rows after a type header is pressed', () => {
     mount(':a a :Room ; :next :b , :c . :b a :Room . :c a :Room .');
     // Header draws the three rooms; the row of a then has nothing left to draw.
     header().click();
-    expect(layer.preview(`${NS}a`)).toEqual({ shown: true, adds: 0, displayed: 2, total: 2 });
+    expect(layer.preview(`${NS}a`)).toEqual({ shown: true, adds: 0, displayed: 3, total: 3 });
   });
 });
