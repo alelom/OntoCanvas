@@ -53,6 +53,22 @@ ${query}`);
     expect(await rows([ontology, data], 'SELECT (COUNT(?i) AS ?n) WHERE { ?i a :Room }')).toEqual([['2']]);
   });
 
+  it('is what the Individuals tab lists: four individuals, Room twice, and room102 of two classes (#208)', async () => {
+    const { parseIntoStoreInSlices } = await import('../../src/rdf/parseIntoStore');
+    const { createIndividualIndex } = await import('../../src/abox/individualIndex');
+    const ontology = (await parseRdfToGraph(readFileSync(EXAMPLE, 'utf-8'), { path: EXAMPLE })).store;
+    const data = (await parseIntoStoreInSlices(readFileSync(DATA, 'utf-8'), { path: DATA })).store;
+    const index = createIndividualIndex([ontology, data]);
+    const NS = 'http://example.org/examples/sparql-queries#';
+
+    expect(index.classCounts().total).toBe(4);
+    expect(index.classCounts().classes.map((c) => [c.classIri.split('#')[1], c.count])).toEqual([['Room', 2], ['Bedroom', 1], ['Door', 1], ['Wall', 1]]);
+    expect(index.list({ classIri: NS + 'Room', offset: 0, limit: 10 }).items.map((i) => i.label)).toEqual(['Room 101', 'Room 102']);
+    expect(index.describe(NS + 'room102').types.sort()).toEqual([NS + 'Bedroom', NS + 'Room']);
+    // The ontology alone has none: the tab says so.
+    expect(createIndividualIndex([ontology]).classCounts().total).toBe(0);
+  });
+
   it('adds nothing to the ontology store, so Save has nothing of it to write', async () => {
     const { createDataSources } = await import('../../src/sparql/dataSources');
     const ontology = (await parseRdfToGraph(readFileSync(EXAMPLE, 'utf-8'), { path: EXAMPLE })).store;

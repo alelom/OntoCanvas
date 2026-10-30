@@ -18,6 +18,8 @@ export interface OntologyIssue {
   elementType: string;
   /** Links shown after the message. */
   links?: { label: string; url: string }[];
+  /** A button the notice shows, for something the app can do about it (#211). */
+  action?: { id: 'open-individuals'; label: string };
 }
 
 const REPO_ISSUES = 'https://github.com/alelom/OntoCanvas/issues';
@@ -184,7 +186,8 @@ export function detectInstanceData(store: Store): OntologyIssue | null {
     elementType: 'Instance data',
     elementName: `${count} ${count === 1 ? 'individual' : 'individuals'}`,
     message:
-      'The graph draws classes, so the individuals of this file are not drawn. Query them with the SPARQL query button. Drawing instance data is work in progress, see',
+      'The graph draws classes, so the individuals of this file are not drawn. Browse them in the Individuals tab, or query them with SPARQL. Drawing individuals is work in progress, see',
+    action: { id: 'open-individuals', label: 'Open the Individuals tab' },
     links: [
       { label: '#168', url: `${REPO_ISSUES}/168` },
       { label: '#181', url: `${REPO_ISSUES}/181` },

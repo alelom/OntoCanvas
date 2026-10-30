@@ -566,6 +566,89 @@ body.embed-no-menu #ontologyIssuesPopup {
   gap: 8px;
   padding: 10px 12px;
 }
+.individuals-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.individuals-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.individuals-controls[hidden],
+.individuals-detail[hidden],
+.individuals-tab [hidden] {
+  display: none;
+}
+.individuals-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.individuals-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #ddd;
+}
+.individuals-list li button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-bottom: 1px solid #eee;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.individuals-list li button:hover {
+  background: #eef5fb;
+}
+.individual-name,
+.individual-predicate {
+  color: #666;
+  font-family: Consolas, monospace;
+}
+.individuals-detail h4 {
+  margin: 0 0 4px;
+}
+.individual-iri {
+  margin: 0 0 4px;
+  font-family: Consolas, monospace;
+  word-break: break-all;
+  color: #333;
+}
+.individual-links h5 {
+  margin: 8px 0 2px;
+}
+.individual-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.individual-links li {
+  padding: 1px 0;
+}
+.individual-follow {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #1a5fb4;
+  cursor: pointer;
+  font-family: Consolas, monospace;
+  text-decoration: underline;
+}
+.individual-more {
+  color: #666;
+}
 .query-note {
   margin: 0;
   color: #666;

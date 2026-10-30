@@ -205,10 +205,11 @@ describe('SPARQL side panel', () => {
     expect(await page.locator('[data-query-show-in-graph]').count()).toBe(0);
   });
 
-  it('queries a data file added to the ontology together with it, lists it, and forgets it on Remove (#205)', async () => {
+  it('adds a data file in the Individuals tab, queries it with the ontology from the Query tab, and forgets it on Remove (#205, #211)', async () => {
     const DATA = '@prefix : <http://example.org/o#> .\n:alice a :Student .\n:bob a :Person .\n';
     const query = 'PREFIX : <http://example.org/o#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT ?p WHERE { ?p a ?c . ?c rdfs:subClassOf* :Student } ORDER BY ?p';
     const rowsOf = async () => {
+      await page.click('[data-tab-button="query"]');
       await page.locator(EDITOR).fill(query);
       await page.click('[data-query-run]');
       await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('[data-query-run]')!.disabled);
@@ -216,25 +217,90 @@ describe('SPARQL side panel', () => {
     };
 
     expect(await rowsOf()).toEqual([]);
+    // Nothing is added: the button invites adding, and the Query tab has no line about data.
+    expect(await page.locator('#individualsPanelBtn').innerText()).toBe('Add individuals');
+    expect(await page.locator('[data-query-data-summary]').isHidden()).toBe(true);
 
+    await page.click('[data-tab-button="individuals"]');
     await page.setInputFiles('[data-add-file-input]', { name: 'people.ttl', mimeType: 'text/turtle', buffer: Buffer.from(DATA) });
     await page.locator('[data-data-list] li').waitFor();
     expect(await page.locator('[data-data-list] li').first().innerText()).toContain('people.ttl');
     expect(await page.locator('[data-data-list] li').first().innerText()).toContain('2 triples');
+    expect(await page.locator('#individualsPanelBtn').innerText()).toBe('Individuals (2)');
+
     expect(await rowsOf()).toEqual([':alice']);
+    expect(await page.locator('[data-query-data-summary]').innerText()).toContain('Querying the ontology and 1 data file');
     // The individuals are not drawn: the graph still shows the two classes only.
     expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds().length)).toBe(2);
 
+    // The line in the Query tab leads to where the data is managed.
+    await page.click('[data-query-data-manage]');
+    await page.locator('[data-data-list] li').waitFor({ state: 'visible' });
     await page.click('[data-data-remove]');
     await page.waitForFunction(() => document.querySelectorAll('[data-data-list] li').length === 0);
+    expect(await page.locator('#individualsPanelBtn').innerText()).toBe('Add individuals');
     expect(await rowsOf()).toEqual([]);
+    expect(await page.locator('[data-query-data-summary]').isHidden()).toBe(true);
+  });
+
+  it('opens the Individuals tab from its toolbar button, next to the SPARQL one, and browses what is added (#208, #211)', async () => {
+    const DATA = '@prefix : <http://example.org/o#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:alice a :Student ; rdfs:label "Alice" ; :knows :bob .\n:bob a :Person ; rdfs:label "Bob" .\n';
+    expect(await page.locator('.vis-manipulation > #queryPanelBtn + #individualsPanelBtn').count()).toBe(1);
+    await page.click('[data-tab-button="individuals"]');
+    await page.setInputFiles('[data-add-file-input]', { name: 'people.ttl', mimeType: 'text/turtle', buffer: Buffer.from(DATA) });
+    await page.locator('[data-data-list] li').waitFor();
+
+    await page.locator('[data-individuals-class]').waitFor();
+    expect(await page.locator('[data-individuals-class] option').allTextContents()).toEqual(['All (2)', 'Person (1)', 'Student (1)']);
+
+    await page.selectOption('[data-individuals-class]', 'http://example.org/o#Student');
+    expect(await page.locator('[data-individuals-list] li').count()).toBe(1);
+    await page.click('[data-individuals-item]');
+    const detail = await page.locator('[data-individuals-detail]').innerText();
+    expect(detail).toContain('Alice');
+    expect(detail).toContain('http://example.org/o#alice');
+    await page.click('[data-individuals-outgoing] [data-individuals-follow]');
+    expect(await page.locator('[data-individuals-detail] h4').innerText()).toBe('Bob');
+
+    // The individuals are not drawn: the graph still shows the two classes only.
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds().length)).toBe(2);
+
+    // The toolbar button closes the panel when its own tab is the one showing, and opens it again on that tab.
+    expect(await page.locator('#individualsPanelBtn').getAttribute('aria-pressed')).toBe('true');
+    await page.click('#individualsPanelBtn');
+    expect(await page.locator('#sidePanel').isHidden()).toBe(true);
+    await page.click('#individualsPanelBtn');
+    await page.locator('[data-individuals-class]').waitFor({ state: 'visible' });
+
+    await page.click('[data-data-remove]');
+    await page.waitForFunction(() => /no individuals/i.test(document.querySelector('[data-individuals-empty]')?.textContent ?? ''));
   });
 
   it('refuses a data file that is too large without reading it, and says why (#205)', async () => {
+    await page.click('[data-tab-button="individuals"]');
     await page.setInputFiles('[data-add-file-input]', { name: 'huge.ttl', mimeType: 'text/turtle', buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 'a') });
 
     await page.waitForFunction(() => /too large/i.test(document.querySelector('[data-data-status]')?.textContent ?? ''));
     expect(await page.locator('[data-data-list] li').count()).toBe(0);
+  });
+
+  it('opens the Individuals tab from the button of the notice about individuals that are not drawn (#211)', async () => {
+    const WITH_INDIVIDUALS = '@prefix : <http://example.org/n#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n<http://example.org/n> a owl:Ontology .\n:Room a owl:Class .\n:r1 a :Room ; rdfs:label "Room one" .\n';
+    await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), WITH_INDIVIDUALS);
+    await waitForAppReady(page);
+    await page.click('[data-side-panel-close]');
+    expect(await page.locator('#sidePanel').isHidden()).toBe(true);
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('ontologyIssuesBtn')!).display !== 'none');
+
+    await page.click('#ontologyIssuesBtn');
+    await page.click('[data-issue-action="open-individuals"]');
+
+    await page.locator('[data-individuals-class]').waitFor({ state: 'visible' });
+    expect(await page.locator('#sidePanel').isVisible()).toBe(true);
+    expect(await page.locator('[data-individuals-list] li').first().innerText()).toContain('Room one');
+    expect(await page.locator('#ontologyIssuesPopup').isHidden()).toBe(true);
+    await page.evaluate((t) => (window as any).__EDITOR_TEST__.loadTtlDirectly(t), TTL);
+    await waitForAppReady(page);
   });
 
   it('closes, giving the room back to the graph', async () => {

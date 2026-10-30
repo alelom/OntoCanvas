@@ -14,6 +14,9 @@ const SCHEMA_NAMESPACES = ['http://www.w3.org/1999/02/22-rdf-syntax-ns#', 'http:
 
 const isSchemaType = (iri: string): boolean => iri !== OWL_NAMED_INDIVIDUAL && SCHEMA_NAMESPACES.some((ns) => iri.startsWith(ns));
 
+/** Whether a type names a class individuals can belong to: not a term of the RDF, RDFS or OWL vocabularies (owl:NamedIndividual included). */
+export const isClassOfIndividuals = (iri: string): boolean => !SCHEMA_NAMESPACES.some((ns) => iri.startsWith(ns));
+
 /** The members of every owl:oneOf list: the graph shows them in the class expression, so they are not instance data. */
 function oneOfMembers(store: Store): Set<string> {
   const members = new Set<string>();

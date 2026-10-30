@@ -9,7 +9,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseRdfToGraph } from '../../src/ontology/buildGraph';
 import { detectInstanceData, detectOntologyIssues } from '../../src/ui/ontologyIssues';
-import { initStatusBar, updateStatusBar } from '../../src/ui/statusBar';
+import { initStatusBar, updateStatusBar, setIssueActionHandler } from '../../src/ui/statusBar';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PREFIXES = `
@@ -73,12 +73,14 @@ describe('instance data the graph does not draw (#181)', () => {
     expect(detectInstanceData(store)).toBeNull();
   });
 
-  it('points to the SPARQL panel and links the issues that track the wider work', async () => {
+  it('points to the Individuals tab and the SPARQL panel, and links the issues that track the wider work', async () => {
     const store = await storeOf(':Room a owl:Class . :r1 a :Room .');
 
     const issue = detectInstanceData(store)!;
 
+    expect(issue.message).toMatch(/Individuals tab/);
     expect(issue.message).toMatch(/SPARQL/);
+    expect(issue.action).toEqual({ id: 'open-individuals', label: 'Open the Individuals tab' });
     expect(issue.message).toMatch(/work in progress/i);
     expect(issue.links).toEqual([
       { label: '#168', url: 'https://github.com/alelom/OntoCanvas/issues/168' },
@@ -120,6 +122,37 @@ describe('the bottom bar warning', () => {
       expect(a.getAttribute('target')).toBe('_blank');
       expect(a.getAttribute('rel')).toContain('noopener');
     }
+  });
+
+  async function openPopup(body: string): Promise<HTMLElement> {
+    updateStatusBar(await storeOf(body));
+    const button = document.getElementById('ontologyIssuesBtn')!;
+    await new Promise<void>((resolve) => {
+      const check = () => (button.style.display === 'none' ? setTimeout(check, 5) : resolve());
+      check();
+    });
+    button.click();
+    return document.getElementById('ontologyIssuesPopup')!;
+  }
+
+  it('has a button in the notice that opens the Individuals tab, and closes the popup', async () => {
+    const opened: string[] = [];
+    setIssueActionHandler((id) => opened.push(id));
+    const popup = await openPopup(':Room a owl:Class . :r1 a :Room .');
+
+    const action = popup.querySelector<HTMLButtonElement>('[data-issue-action="open-individuals"]')!;
+    expect(action.textContent).toBe('Open the Individuals tab');
+    action.click();
+
+    expect(opened).toEqual(['open-individuals']);
+    expect(popup.style.display).toBe('none');
+  });
+
+  it('does nothing about the button when no handler is set (an embedded view)', async () => {
+    setIssueActionHandler(null);
+    const popup = await openPopup(':Room a owl:Class . :r1 a :Room .');
+
+    expect(() => popup.querySelector<HTMLButtonElement>('[data-issue-action]')!.click()).not.toThrow();
   });
 
   it('shows no warning for a file of classes only', async () => {
