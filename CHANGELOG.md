@@ -1,3 +1,33 @@
+# [2.0.0](https://github.com/alelom/OntoCanvas/compare/v1.43.0...v2.0.0) (2026-10-30)
+
+
+### Bug Fixes
+
+* no Edit button for a selection of individuals, panel buttons after Edit, clearer and centred panel buttons ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([5d0fb5b](https://github.com/alelom/OntoCanvas/commit/5d0fb5bdf8b610a285266cc62b10a8738a540814))
+* review of [#213](https://github.com/alelom/OntoCanvas/issues/213): at the total cap, the buttons stop offering more and nothing is added past it ([b52884a](https://github.com/alelom/OntoCanvas/commit/b52884af2d5930e2ee5482827f34e2fdfea34cae))
+* the row buttons count the individual itself, so they follow a type header's press ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([f0130bc](https://github.com/alelom/OntoCanvas/commit/f0130bcb60b7aaa3ce38753003efae0e9c4368e9))
+
+
+### Features
+
+* a search hides the individuals it does not concern ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([fdd48da](https://github.com/alelom/OntoCanvas/commit/fdd48daf8bc1957864595372de8bc152c232d356))
+* draw an individual and its neighbours in the graph, on demand ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([b9c04ac](https://github.com/alelom/OntoCanvas/commit/b9c04ac09b20a83616ea6c87aebdacb6d4f514a2))
+* draw every individual by itself when there are 30 or fewer; examples for individuals ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([644f1e8](https://github.com/alelom/OntoCanvas/commit/644f1e8a12f72b4dde300a5d2203bb824c5bde3a))
+* individuals listed per type with a header button; rows show what is drawn however it came to be ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([296e40f](https://github.com/alelom/OntoCanvas/commit/296e40f04ca01a069ff29852d3b572ab84273445))
+* lay individuals out by force relaxation anchored to the classes, with a toggle shown when individuals are loaded ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([fceeaf6](https://github.com/alelom/OntoCanvas/commit/fceeaf61a83a4c6a46e8f0562fcc3c0ce173b44b))
+* release the individuals in the graph as version 2.0.0 ([b223a0f](https://github.com/alelom/OntoCanvas/commit/b223a0fb896b11f8197aeaebd558fc080f00e3f0))
+* remove the bottom-bar warning that individuals are not drawn ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([ce2b5e7](https://github.com/alelom/OntoCanvas/commit/ce2b5e70dba2a75cf5ddbf9eb7c125bee43e9730))
+* Reset view clears the individuals; a button on each individual's row says how many it draws and how many are displayed of the total ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([9056ca3](https://github.com/alelom/OntoCanvas/commit/9056ca35da951e77e7a302afd8a8449db2a51ffa))
+* the Individuals tab lists individuals in closed groups by type, without a class dropdown; the row button draws one individual, its neighbours go in the detail ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([0c2c067](https://github.com/alelom/OntoCanvas/commit/0c2c06778d43f96905d98c0b97289124d853b5fd))
+* the Individuals tab says how many individuals the ontology file holds itself ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([ff5c2f7](https://github.com/alelom/OntoCanvas/commit/ff5c2f73dced2538179d510ea2e904a1f60de3a9))
+
+
+### BREAKING CHANGES
+
+* none for users. Version 2.0.0 marks the A-box (individuals) feature as a major release.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
 # [1.43.0](https://github.com/alelom/OntoCanvas/compare/v1.42.0...v1.43.0) (2026-10-30)
 
 
