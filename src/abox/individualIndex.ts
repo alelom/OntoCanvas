@@ -73,6 +73,13 @@ const DEFAULT_MAX_ROWS = 100;
 const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
 const byText = (a: string, b: string): number => collator.compare(a, b);
 
+/** How many individuals there are over the stores, without building the index: for a label that follows the data. */
+export function countIndividuals(stores: Store[]): number {
+  const individuals = new Set<string>();
+  for (const store of stores) for (const iri of individualsOf(store)) individuals.add(iri);
+  return individuals.size;
+}
+
 export function createIndividualIndex(stores: Store[]): IndividualIndex {
   const individuals = new Set<string>();
   for (const store of stores) for (const iri of individualsOf(store)) individuals.add(iri);

@@ -81,6 +81,13 @@ function createIssuesUI(): void {
     overflow-y: auto;
     padding: 12px;
   `;
+  // A notice's button: what it does is the page's (the panel is not this module's), and the popup closes after it.
+  issuesPopup.addEventListener('click', (event) => {
+    const action = (event.target as HTMLElement).closest<HTMLElement>('[data-issue-action]');
+    if (!action) return;
+    issueActionHandler?.(action.dataset.issueAction!);
+    hideIssuesPopup();
+  });
   document.body.appendChild(issuesPopup);
 }
 
@@ -115,6 +122,12 @@ async function refreshIssues(): Promise<void> {
   renderIssuesPopup(issues);
 }
 
+/** What a notice's button does, set by the page that has the panel (#211); none in an embedded view. */
+let issueActionHandler: ((id: string) => void) | null = null;
+export function setIssueActionHandler(handler: ((id: string) => void) | null): void {
+  issueActionHandler = handler;
+}
+
 /** A link of an issue, opened in a new tab. The URL and label come from the app itself, never from the ontology. */
 function issueLinkHtml(link: { label: string; url: string }): string {
   return `<a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.label}</a>`;
@@ -142,6 +155,7 @@ function renderIssuesPopup(issues: OntologyIssue[]): void {
       html += `<div style="padding: 6px 8px; margin-bottom: 4px; background: #fff3cd; border-left: 3px solid #f39c12; border-radius: 2px; font-size: 11px;">`;
       html += `<div style="font-weight: 500; color: #856404;">${issue.elementType}: ${issue.elementName}</div>`;
       html += `<div style="color: #666; margin-top: 2px;">${issue.message}${issue.links ? ' ' + issue.links.map(issueLinkHtml).join(', ') + '.' : ''}</div>`;
+      if (issue.action) html += `<div style="margin-top: 4px;"><button type="button" data-issue-action="${issue.action.id}">${issue.action.label}</button></div>`;
       html += `</div>`;
     }
     

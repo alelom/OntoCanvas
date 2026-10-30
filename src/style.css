@@ -566,30 +566,30 @@ body.embed-no-menu #ontologyIssuesPopup {
   gap: 8px;
   padding: 10px 12px;
 }
-.instances-tab {
+.individuals-tab {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
   font-size: 11px;
 }
-.instances-controls {
+.individuals-controls {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.instances-controls[hidden],
-.instances-detail[hidden],
-.instances-tab [hidden] {
+.individuals-controls[hidden],
+.individuals-detail[hidden],
+.individuals-tab [hidden] {
   display: none;
 }
-.instances-pager {
+.individuals-pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
 }
-.instances-list {
+.individuals-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -597,7 +597,7 @@ body.embed-no-menu #ontologyIssuesPopup {
   overflow: auto;
   border: 1px solid #ddd;
 }
-.instances-list li button {
+.individuals-list li button {
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -609,35 +609,35 @@ body.embed-no-menu #ontologyIssuesPopup {
   text-align: left;
   cursor: pointer;
 }
-.instances-list li button:hover {
+.individuals-list li button:hover {
   background: #eef5fb;
 }
-.instance-name,
-.instance-predicate {
+.individual-name,
+.individual-predicate {
   color: #666;
   font-family: Consolas, monospace;
 }
-.instances-detail h4 {
+.individuals-detail h4 {
   margin: 0 0 4px;
 }
-.instance-iri {
+.individual-iri {
   margin: 0 0 4px;
   font-family: Consolas, monospace;
   word-break: break-all;
   color: #333;
 }
-.instance-links h5 {
+.individual-links h5 {
   margin: 8px 0 2px;
 }
-.instance-links ul {
+.individual-links ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.instance-links li {
+.individual-links li {
   padding: 1px 0;
 }
-.instance-follow {
+.individual-follow {
   border: 0;
   background: none;
   padding: 0;
@@ -646,7 +646,7 @@ body.embed-no-menu #ontologyIssuesPopup {
   font-family: Consolas, monospace;
   text-decoration: underline;
 }
-.instance-more {
+.individual-more {
   color: #666;
 }
 .query-note {

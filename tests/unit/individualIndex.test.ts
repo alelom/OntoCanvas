@@ -192,3 +192,19 @@ describe('on a large file', () => {
     expect(searched.items.map((i) => i.label)[0]).toBe('Item 1999');
   });
 });
+
+describe('countIndividuals', () => {
+  it('counts the individuals over all the stores, one for an individual typed in two', async () => {
+    const { countIndividuals } = await import('../../src/abox/individualIndex');
+
+    expect(countIndividuals([ONTOLOGY, DATA])).toBe(5);
+    expect(countIndividuals([DATA, store(':room101 a :Room . :extra a :Wall .')])).toBe(6);
+  });
+
+  it('is nothing for an ontology without individuals, and for no stores', async () => {
+    const { countIndividuals } = await import('../../src/abox/individualIndex');
+
+    expect(countIndividuals([ONTOLOGY])).toBe(0);
+    expect(countIndividuals([])).toBe(0);
+  });
+});

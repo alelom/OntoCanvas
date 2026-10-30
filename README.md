@@ -56,7 +56,7 @@ A class counts as *defined elsewhere* when it carries an `rdfs:isDefinedBy` poin
 ## Opening by link
 
 - `?onto=<url>` opens the ontology at that address (any format OntoCanvas reads).
-- `?data=<url>` adds a data file (individuals) to that ontology, for the SPARQL panel: repeat it for several files. The panel opens with the data listed, and queries run over the ontology and the data together. The data is not drawn and never saved. It needs `?onto=`, is ignored in an embedded view, and is dropped from the address when another ontology is opened. A file over 2 MB is asked about first, one over 10 MB is refused.
+- `?data=<url>` adds a data file (individuals) to that ontology: repeat it for several files. The SPARQL panel opens with a line saying the data is queried (and the progress, or why a file could not be added), the file is listed in the Individuals tab, and queries run over the ontology and the data together. The data is not drawn and never saved. It needs `?onto=`, is ignored in an embedded view, and is dropped from the address when another ontology is opened. A file over 2 MB is asked about first, one over 10 MB is refused.
 
 For example `https://alelom.github.io/OntoCanvas/?onto=<ONTOLOGY_URL>&data=<DATA_URL>`, with both addresses percent-encoded.
 
