@@ -1,3 +1,16 @@
+# [1.43.0](https://github.com/alelom/OntoCanvas/compare/v1.42.0...v1.43.0) (2026-10-30)
+
+
+### Bug Fixes
+
+* review of [#210](https://github.com/alelom/OntoCanvas/issues/210): opening another ontology resets the data loader, so no stale status is left in the Query tab ([5332c2a](https://github.com/alelom/OntoCanvas/commit/5332c2aa0dd1f72ab2dcfd177f4dae2da5863f24))
+
+
+### Features
+
+* a toolbar button for the Individuals tab, and the controls to add individuals in the tab ([#211](https://github.com/alelom/OntoCanvas/issues/211)) ([30ffb10](https://github.com/alelom/OntoCanvas/commit/30ffb10a165db7b688f9d41a6ca3c45507e45a93))
+* an Instances tab to browse the individuals of the ontology and of the data added to it ([#208](https://github.com/alelom/OntoCanvas/issues/208)) ([da480c1](https://github.com/alelom/OntoCanvas/commit/da480c157d35847fffb41f3333ed5341d443df7a))
+
 # [1.42.0](https://github.com/alelom/OntoCanvas/compare/v1.41.0...v1.42.0) (2026-10-29)
 
 
