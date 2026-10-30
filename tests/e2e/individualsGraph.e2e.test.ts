@@ -117,6 +117,28 @@ describe('individuals in the graph', () => {
     await page.click('#relaxIndividuals');
   });
 
+  const drawnIndividuals = () => nodeIds().then((ids) => ids.filter((id) => id.startsWith('__individual__')).map((id) => id.replace('__individual__http://example.org/o#', '')).sort());
+
+  it('hides the individuals the search does not concern: those without a searched relationship, those of other classes, those not named', async () => {
+    // A fresh start: the four individuals are few, so all are drawn by themselves.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.getNetwork()?.body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 4);
+    expect(await drawnIndividuals()).toEqual(['alice', 'bob', 'carol', 'red']);
+
+    await page.fill('#searchQuery', 'memberOf');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#carol'));
+    expect(await drawnIndividuals()).toEqual(['alice', 'bob', 'red']);
+
+    await page.fill('#searchQuery', 'Carol');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 1);
+    expect(await drawnIndividuals()).toEqual(['carol']);
+
+    await page.fill('#searchQuery', '');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 4);
+    // The reload closed the panel; the tests after this one use it.
+    await page.click('#individualsPanelBtn');
+  });
+
   it('has no Edit button while an edge between individuals is selected, and has it, before the panel buttons, for a class edge', async () => {
     await page.click('[data-individuals-clear]').catch(() => {});
     await page.click('[data-individuals-item][title$="#alice"]');

@@ -7,6 +7,7 @@ import type { DataSet } from 'vis-data';
 import type { IndividualsLayer } from '../abox/individualsLayer';
 import { extractLocalName } from '../utils/localName';
 import { relaxIndividuals, type FixedBox } from './individualsRelax';
+import { filterIndividualsBySearch, type IndividualSearchFilter } from '../abox/individualSearch';
 
 interface NetworkData {
   nodes: DataSet<any>;
@@ -30,9 +31,9 @@ function boxOf(node: { id: string; x: number; y: number; label?: string; font?: 
   return { id: String(node.id), x: node.x, y: node.y, width: Math.max(80, Math.max(...lines.map((l) => l.length)) * size * 0.55 + 24), height: lines.length * size * 1.3 + 20 };
 }
 
-export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean } = {}): void {
+export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean; search?: IndividualSearchFilter | null } = {}): void {
   if (layer.isEmpty()) return;
-  const view = layer.build(classNodes);
+  const view = filterIndividualsBySearch(layer.build(classNodes), options.search ?? null);
 
   // Each individual goes on a ring around its first drawn class that has a position; the others are left to the layout.
   const classOf = new Map<string, string>();

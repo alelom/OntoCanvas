@@ -29,6 +29,7 @@ import { DataSet } from 'vis-data/esnext';
 
 import { buildDataPropertyNodes } from './dataPropertyNodes';
 import { dedupeEdges, spaceEdges } from './edgeFinishing';
+import { individualSearchFilter } from '../abox/individualSearch';
 
 
 /**
@@ -145,6 +146,10 @@ export function buildNetworkData(
     { ...searchVocabulary.extras, dataProperties: searchVocabulary.dataProperties }
   );
   const { matchingNodeIds, neighborNodeIds } = searchSets;
+  // Individuals are added after this, so what they keep of the search is worked out here, from the class graph's sets (#209).
+  canvasState.individualSearch = searchQuery
+    ? individualSearchFilter(searchSets, filteredEdges, session.objectProperties, { query: matchQuery, exactMatch: filter.exactMatch })
+    : null;
   // What the pulsing search outline surrounds: direct matches only (#84).
   canvasState.searchOutlineTargets = outlineTargets(searchSets, matchQuery);
 

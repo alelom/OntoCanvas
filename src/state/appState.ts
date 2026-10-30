@@ -90,6 +90,8 @@ export const canvasState = {
   /** What the search bar can suggest: the terms the last render drew (set in buildNetworkData, #81). */
   searchSuggestionSources: [] as SuggestionSource[],
   /** What the search outline surrounds after the last render (set in buildNetworkData, #84). */
+  /** What the active search keeps of the individuals drawn in the graph; null when it hides none (#209). */
+  individualSearch: null as import('../abox/individualSearch').IndividualSearchFilter | null,
   searchOutlineTargets: { nodeIds: [], dataPropertyNames: [], edgeIds: [] } as OutlineTargets,
   /** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
   classExpressionFontRatios: { node: 1, relationship: 1, dataProperty: 1 } as BadgeFontRatios,
