@@ -2,6 +2,7 @@
  * Deleting what is selected on the canvas: nodes, edges and data properties, with the checks that lock some of them.
  * Moved out of main.ts (#175).
  */
+import { isIndividualNodeId, isIndividualEdgeId } from '../abox/individualsLayer';
 import { isFieldElement } from '../utils/textEditing';
 import { findShownEdge } from '../graph/canvasHelpers';
 import { removeExternalClassReferencesFromStore } from '../graph/removeExternalReferences';
@@ -34,8 +35,9 @@ export function performDeleteSelection(): boolean {
     debugLog(`[DELETE] Early return: active element is input/textarea/contentEditable:`, activeEl.tagName);
     return false;
   }
-  const selectedNodeIds = canvasState.network.getSelectedNodes().map(String);
-  const selectedEdgeIds = canvasState.network.getSelectedEdges().map(String);
+  // Individuals drawn in the graph (#209) are not in the ontology: Delete leaves them, and what they are joined to, alone.
+  const selectedNodeIds = canvasState.network.getSelectedNodes().map(String).filter((id) => !isIndividualNodeId(id));
+  const selectedEdgeIds = canvasState.network.getSelectedEdges().map(String).filter((id) => !isIndividualEdgeId(id));
   debugLog(`[DELETE] Selected nodes: ${selectedNodeIds.length}, Selected edges: ${selectedEdgeIds.length}`);
   debugLog(`[DELETE] Selected edge IDs:`, selectedEdgeIds);
   if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {

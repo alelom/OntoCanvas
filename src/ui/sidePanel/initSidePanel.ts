@@ -13,6 +13,7 @@ import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
+import type { IndividualsLayer } from '../../abox/individualsLayer';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -28,6 +29,12 @@ export interface SidePanelDeps {
   dataSources?: DataSources;
   /** The label a class has in the graph, for the Individuals tab (#208). */
   getClassLabel?: (classIri: string) => string | null;
+  /** What is drawn of the individuals in the graph (#209): the Individuals tab draws into it and clears it. */
+  individualsLayer?: IndividualsLayer;
+  /** The open ontology file's name, and where it was opened from (#209): the Individuals tab says how many individuals it holds itself. */
+  getOntologySource?: () => { name: string; title?: string } | null;
+  /** True while what is selected in the graph is only individuals: the toolbar then has no Edit button (#209). */
+  isIndividualSelection?: () => boolean;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
@@ -80,13 +87,15 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getClassLabel: deps.getClassLabel,
     dataSources: deps.dataSources,
     dataLoader,
+    layer: deps.individualsLayer,
+    getOntologySource: deps.getOntologySource,
   });
   host.registerTab(individualsTab);
 
   const buttons = mountPanelButtons(wrapper, [
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },
     { id: 'individualsPanelBtn', label: '', title: '', onClick: () => host.toggle(individualsTab.id) },
-  ]);
+  ], { hideEdit: deps.isIndividualSelection });
   host.onChange((activeId) => {
     buttons.setPressed('queryPanelBtn', activeId === queryTab.id);
     buttons.setPressed('individualsPanelBtn', activeId === individualsTab.id);
@@ -94,18 +103,24 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
 
   /** The label of the Individuals button follows what there is: an invitation to add some, or the count. */
   const updateIndividualsButton = (): void => {
-    const { label, title } = individualsButtonText(countIndividuals(stores()));
+    const count = countIndividuals(stores());
+    const { label, title } = individualsButtonText(count);
+    // The option for how individuals are laid out only means something when there are some.
+    const relaxToggle = document.getElementById('relaxIndividualsWrap');
+    if (relaxToggle) relaxToggle.style.display = count > 0 ? 'flex' : 'none';
     buttons.setLabel('individualsPanelBtn', label);
     buttons.setTitle('individualsPanelBtn', title);
   };
   updateIndividualsButton();
   deps.dataSources?.onChange(() => {
+    deps.individualsLayer?.invalidate();
     individualsTab.refresh();
     updateIndividualsButton();
   });
 
   return {
     refresh: () => {
+      deps.individualsLayer?.reset();
       queryTab.refresh();
       individualsTab.refresh();
       updateIndividualsButton();

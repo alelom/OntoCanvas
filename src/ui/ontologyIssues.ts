@@ -4,25 +4,18 @@ import { getMainOntologyBase, getClassNamespace } from '../ontology/ontologyBase
 import { extractLocalName } from '../utils/localName';
 import { getExampleImageUrisForClassUri } from '../lib/exampleImageStore';
 import { resolveImageUrl, isImageUrlReachable } from '../lib/exampleImageUrlValidation';
-import { individualsOf } from '../lib/instanceData';
 
 const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const OWL = 'http://www.w3.org/2002/07/owl#';
 const BASE_IRI = 'http://example.org/aec-drawing-ontology#';
 
 export interface OntologyIssue {
-  type: 'unused_annotation_property' | 'unreachable_example_image' | 'instance_data_not_drawn';
+  type: 'unused_annotation_property' | 'unreachable_example_image';
   severity: 'warning' | 'error';
   message: string;
   elementName: string;
   elementType: string;
-  /** Links shown after the message. */
-  links?: { label: string; url: string }[];
-  /** A button the notice shows, for something the app can do about it (#211). */
-  action?: { id: 'open-individuals'; label: string };
 }
-
-const REPO_ISSUES = 'https://github.com/alelom/OntoCanvas/issues';
 
 /**
  * Detect unused annotation properties in the ontology.
@@ -174,28 +167,6 @@ async function detectUnreachableExampleImages(
 }
 
 /**
- * Instance data (individuals) is not drawn: the graph shows classes. Without a word, a file that is mostly instance data
- * looks like it failed to load (#181).
- */
-export function detectInstanceData(store: Store): OntologyIssue | null {
-  const count = individualsOf(store).size;
-  if (count === 0) return null;
-  return {
-    type: 'instance_data_not_drawn',
-    severity: 'warning',
-    elementType: 'Instance data',
-    elementName: `${count} ${count === 1 ? 'individual' : 'individuals'}`,
-    message:
-      'The graph draws classes, so the individuals of this file are not drawn. Browse them in the Individuals tab, or query them with SPARQL. Drawing individuals is work in progress, see',
-    action: { id: 'open-individuals', label: 'Open the Individuals tab' },
-    links: [
-      { label: '#168', url: `${REPO_ISSUES}/168` },
-      { label: '#181', url: `${REPO_ISSUES}/181` },
-    ],
-  };
-}
-
-/**
  * Detect all ontology issues.
  * Now includes async checks for unreachable example images.
  */
@@ -209,9 +180,6 @@ export async function detectOntologyIssues(
 
   // Detect unused annotation properties (synchronous)
   issues.push(...detectUnusedAnnotationProperties(store));
-
-  const instanceData = detectInstanceData(store);
-  if (instanceData) issues.push(instanceData);
 
   // Detect unreachable example images (async)
   const imageIssues = await detectUnreachableExampleImages(store, ontologyLocation);
@@ -243,8 +211,6 @@ export function getIssueTypeLabel(type: string): string {
       return 'Unused Elements';
     case 'unreachable_example_image':
       return 'Unreachable Example Images';
-    case 'instance_data_not_drawn':
-      return 'Instance data not drawn';
     default:
       return 'Other Issues';
   }

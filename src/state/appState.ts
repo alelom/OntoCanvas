@@ -32,6 +32,8 @@ export const session = {
   ttlStore: null as import('n3').Store | null,
   /** The prefixes the open file declares (for the query panel). */
   currentPrefixMap: {} as Record<string, string>,
+  /** The individuals drawn in the graph, over the class graph (#209). */
+  individualsLayer: null as import('../abox/individualsLayer').IndividualsLayer | null,
   sidePanel: null as { refresh(): void; addDataUrls(urls: string[]): Promise<void>; openIndividuals(): void } | null,
   /** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
    * after some edits; this is merged back in each time. */
@@ -76,6 +78,8 @@ export const canvasState = {
   clusterThingDataProperties: true,
   /** Stack many leaf children in a block under their parent in the tiered layouts (#159). */
   stackLeaves: true,
+  /** Lay the individuals drawn in the graph out by force relaxation, anchored to the class nodes (#209). */
+  relaxIndividuals: true,
   /** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
   hierarchyTypes: new Set(DEFAULT_HIERARCHY_TYPES),
   /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */
@@ -86,6 +90,8 @@ export const canvasState = {
   /** What the search bar can suggest: the terms the last render drew (set in buildNetworkData, #81). */
   searchSuggestionSources: [] as SuggestionSource[],
   /** What the search outline surrounds after the last render (set in buildNetworkData, #84). */
+  /** What the active search keeps of the individuals drawn in the graph; null when it hides none (#209). */
+  individualSearch: null as import('../abox/individualSearch').IndividualSearchFilter | null,
   searchOutlineTargets: { nodeIds: [], dataPropertyNames: [], edgeIds: [] } as OutlineTargets,
   /** Display font settings relative to their defaults, refreshed on each build; sizes class-expression badges. */
   classExpressionFontRatios: { node: 1, relationship: 1, dataProperty: 1 } as BadgeFontRatios,

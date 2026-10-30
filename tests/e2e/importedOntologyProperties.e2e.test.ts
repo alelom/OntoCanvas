@@ -75,7 +75,8 @@ async function getRenderedNode(page: Page, nodeId: string): Promise<{ opacity?: 
 async function getRenderedEdgeIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const network = (window as any).__EDITOR_TEST__.getNetwork();
-    return (network?.body?.data?.edges?.get() ?? []).map((e: { id: string }) => String(e.id));
+    // The class graph's edges: the individuals the file has are drawn too (#209), with edges of their own.
+    return (network?.body?.data?.edges?.get() ?? []).map((e: { id: string }) => String(e.id)).filter((id: string) => !id.startsWith('__individual'));
   });
 }
 

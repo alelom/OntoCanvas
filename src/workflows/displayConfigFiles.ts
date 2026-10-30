@@ -65,6 +65,7 @@ export function collectDisplayConfig(options: { forBrowser?: boolean } = {}): Di
     displayExternalReferences: displayExternalRefEl?.checked ?? canvasState.displayExternalReferences,
     clusterThingDataProperties: canvasState.clusterThingDataProperties,
     stackLeaves: canvasState.stackLeaves,
+    relaxIndividuals: canvasState.relaxIndividuals,
     externalNodeLayout: (externalNodeLayoutEl?.value as ExternalNodeLayout) ?? canvasState.externalNodeLayout,
     hierarchyRelationships: [...canvasState.hierarchyTypes],
   };

@@ -39,6 +39,10 @@ export function renderApp(): void {
           <input type="checkbox" id="stackLeaves" checked />
           Stack many leaves under their parent
         </label>
+        <label id="relaxIndividualsWrap" title="Individuals drawn in the graph are spread by force relaxation: they stay clear of the classes and of each other, and near what they are linked to, whichever layout placed the classes. Unchecked: they sit on a ring around their class." style="font-size: 12px; display: none; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="relaxIndividuals" checked />
+          Spread individuals clear of classes
+        </label>
         <button type="button" id="restorePositions" title="Put the nodes back where they were before the layout was changed or reset" style="display: none; align-self: flex-start; cursor: pointer; padding: 2px 8px; font-size: 12px;">↶ Restore positions</button>
         <div id="textDisplayWrap" style="position: relative; display: inline-block; margin-top: 4px;">
           <button type="button" id="textDisplayToggle" style="cursor: pointer; font-weight: bold; font-size: 12px;">Text display options</button>

@@ -215,7 +215,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     container.classList.add('query-tab');
     const note = element(
       'p',
-      'query-note',
+      'query-note panel-description',
       "Queries are read-only and run over the open ontology's own triples. Classes shown from external ontologies (faded stubs) are not part of that data. Ctrl+Enter runs the query."
     );
 

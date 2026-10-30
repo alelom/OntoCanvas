@@ -27,6 +27,8 @@ import { forgetNodePositions } from '../workflows/nodePositions';
 import { openExternalOntology } from '../workflows/openExternalTab';
 import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
+import { addIndividualsToNetworkData, classNodesByUri } from './individualsOverlay';
+import { isIndividualNodeId } from '../abox/individualsLayer';
 import { setupDragCoupling } from './dataPropertyDragCoupling';
 import { expandWithExternalRefs } from './externalExpansion';
 import { setupNetworkSelectionAndNavigation } from './networkSelection';
@@ -177,6 +179,7 @@ export function applyFilter(preserveView = false): void {
   graphDataForBuild = withThingNode(graphDataForBuild, session.dataProperties, canvasState.clusterThingDataProperties);
   session.currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
+  if (session.individualsLayer) addIndividualsToNetworkData(data, session.individualsLayer, classNodesByUri(graphDataForBuild.nodes), { relax: canvasState.relaxIndividuals, search: canvasState.individualSearch });
   if (canvasState.network && session.ttlStore) {
     updateContextMenuData(session.ttlStore, graphDataForBuild, session.externalOntologyReferences, openExternalOntology);
   }
@@ -434,6 +437,7 @@ export function applyFilter(preserveView = false): void {
       if (isEmbedded()) return; // read-only in embedded mode
       if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0] as string;
+        if (isIndividualNodeId(clickedNodeId)) return;
         if (clickedNodeId.startsWith('http://') || clickedNodeId.startsWith('https://')) {
           return;
         }

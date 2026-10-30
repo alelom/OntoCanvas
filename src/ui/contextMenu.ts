@@ -18,6 +18,7 @@ import {
 import { copyTextToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/debug';
 import type { PinnedUri } from '../lib/versionPinnedUri';
+import { isIndividualNodeId, isIndividualEdgeId } from '../abox/individualsLayer';
 
 /**
  * Callback type for when relationships are pasted.
@@ -223,6 +224,9 @@ export function showContextMenu(
           const at = network.getEdgeAt(domPos);
           return at != null ? String(at) : null;
         })();
+
+  // Individuals are drawn read-only (#209): no menu for them, which would paste or edit relationships on an id the ontology does not have.
+  if ((resolvedNodeId && isIndividualNodeId(resolvedNodeId)) || (resolvedEdgeId && isIndividualEdgeId(resolvedEdgeId))) return;
 
   // In copy-only mode there is nothing to offer on the empty canvas.
   if (copyOnlyMenu && !resolvedNodeId && !resolvedEdgeId) return;

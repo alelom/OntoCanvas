@@ -11,7 +11,7 @@ import { runQuery } from '../../src/sparql/runQuery';
 import { prefixHeader, withStandardPrefixes } from '../../src/sparql/prefixHeader';
 import { describeResult, type ResultView } from '../../src/sparql/resultView';
 import { irisInTable, matchIrisToGraph } from '../../src/sparql/graphMatches';
-import { detectInstanceData } from '../../src/ui/ontologyIssues';
+import { individualsOf } from '../../src/lib/instanceData';
 import { INDIVIDUALS_STARTER_QUERY } from '../../src/ui/sidePanel/queryTab';
 
 const EXAMPLE = join(dirname(fileURLToPath(import.meta.url)), '../../examples/sparql/query-panel.ttl');
@@ -154,10 +154,10 @@ describe('examples/sparql/instance-data.ttl (#181)', () => {
     instancePrefixes = parsed.prefixes ?? {};
   });
 
-  it('draws one class, and the bottom bar warns about the four individuals it does not draw', async () => {
+  it('draws one class, and holds four individuals', async () => {
     const parsed = await parseRdfToGraph(ttl, { path: PATH });
     expect(parsed.graphData.nodes).toHaveLength(1);
-    expect(detectInstanceData(instanceStore)).toMatchObject({ type: 'instance_data_not_drawn', elementName: '4 individuals' });
+    expect(individualsOf(instanceStore).size).toBe(4);
   });
 
   it("the panel's starting query lists the four individuals with their classes", async () => {

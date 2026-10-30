@@ -1,6 +1,6 @@
 /**
- * The way into the side panel: buttons in the graph's own toolbar, right after "Add Edge" (#171, #211): SPARQL query, then
- * Individuals.
+ * The way into the side panel: buttons in the graph's own toolbar, after "Add Edge" and the Edit button that a selection
+ * brings (#171, #211): SPARQL query, then Individuals.
  *
  * vis-network renders that toolbar (`.vis-manipulation`) and empties it whenever its mode changes (a node is selected,
  * Add Node is pressed), so the buttons are put back after each rebuild, which a MutationObserver on the stable wrapper
@@ -29,7 +29,12 @@ interface ButtonState {
   title: string;
 }
 
-export function mountPanelButtons(wrapper: HTMLElement, specs: PanelButtonSpec[]): PanelButtons {
+export interface PanelButtonsOptions {
+  /** True while the selection is only of things that cannot be edited (individuals, #209): the toolbar's Edit button is taken away. */
+  hideEdit?: () => boolean;
+}
+
+export function mountPanelButtons(wrapper: HTMLElement, specs: PanelButtonSpec[], options: PanelButtonsOptions = {}): PanelButtons {
   const states = new Map<string, ButtonState>(specs.map((spec) => [spec.id, { spec, pressed: false, label: spec.label, title: spec.title }]));
 
   const draw = (state: ButtonState, button: HTMLElement): void => {
@@ -55,10 +60,19 @@ export function mountPanelButtons(wrapper: HTMLElement, specs: PanelButtonSpec[]
   const place = (): void => {
     for (const bar of wrapper.querySelectorAll('.vis-manipulation')) {
       const addEdge = bar.querySelector(':scope > .vis-connect');
-      if (!addEdge || specs.some((spec) => bar.querySelector(`#${spec.id}`))) continue;
+      if (!addEdge) continue;
+      if (options.hideEdit?.()) {
+        for (const edit of bar.querySelectorAll(':scope > .vis-edit')) {
+          if (edit.previousElementSibling?.classList.contains('vis-separator-line')) edit.previousElementSibling.remove();
+          edit.remove();
+        }
+      }
+      if (specs.some((spec) => bar.querySelector(`#${spec.id}`))) continue;
+      // After the Edit button vis-network adds for a selection, so that one stays next to Add Edge.
+      const anchor = [...bar.querySelectorAll(':scope > .vis-edit')].pop() ?? addEdge;
       const separator = document.createElement('div');
       separator.className = 'vis-separator-line';
-      addEdge.after(separator, ...specs.map((spec) => create(states.get(spec.id)!)));
+      anchor.after(separator, ...specs.map((spec) => create(states.get(spec.id)!)));
     }
   };
 

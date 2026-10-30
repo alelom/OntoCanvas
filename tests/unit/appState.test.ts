@@ -6,10 +6,10 @@ import { describe, it, expect } from 'vitest';
 import { session, fileState, canvasState, editState, initFlags } from '../../src/state/appState';
 
 describe('app state', () => {
-  it('holds the 61 fields that main.ts used to declare and the 2 the query panel added, in five groups', () => {
+  it('holds the 61 fields that main.ts used to declare, the 2 the query panel added and the 3 individuals added (#209), in five groups', () => {
     const sizes = [session, fileState, canvasState, editState, initFlags].map((g) => Object.keys(g).length);
-    expect(sizes).toEqual([15, 9, 17, 16, 6]);
-    expect(sizes.reduce((a, b) => a + b, 0)).toBe(63);
+    expect(sizes).toEqual([16, 9, 19, 16, 6]);
+    expect(sizes.reduce((a, b) => a + b, 0)).toBe(66);
   });
 
   it('starts with no ontology loaded', () => {

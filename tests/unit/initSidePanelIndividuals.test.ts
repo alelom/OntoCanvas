@@ -15,7 +15,8 @@ const store = (turtle: string) => new Store(new Parser().parse(PREFIXES + turtle
 let ontology: Store | null;
 
 const tabButton = () => document.querySelector<HTMLButtonElement>('[data-tab-button="individuals"]');
-const options = () => [...document.querySelectorAll<HTMLOptionElement>('[data-individuals-class] option')].map((o) => o.textContent);
+/** What the tab says it holds: a row for each type, with how many individuals it has. */
+const options = () => [...document.querySelectorAll('[data-individuals-group-toggle] .individuals-group-title')].map((o) => o.textContent);
 const toolbarButton = () => document.getElementById('individualsPanelBtn') as HTMLButtonElement;
 const queryButton = () => document.getElementById('queryPanelBtn') as HTMLButtonElement;
 const panelEl = () => document.getElementById('sidePanel') as HTMLElement;
@@ -43,11 +44,11 @@ describe('initSidePanel with the Individuals tab', () => {
   it('has an Individuals tab beside Query, drawn when it is first opened', () => {
     mount();
     expect(tabButton()).not.toBeNull();
-    expect(document.querySelector('[data-individuals-class]')).toBeNull();
+    expect(document.querySelector('[data-individuals-search]')).toBeNull();
 
     tabButton()!.click();
 
-    expect(options()).toEqual(['All (1)', ':Room (1)']);
+    expect(options()).toEqual([':Room (1)']);
   });
 
   it('recounts when data is added to the ontology, and when it is removed', async () => {
@@ -55,10 +56,10 @@ describe('initSidePanel with the Individuals tab', () => {
     tabButton()!.click();
 
     const added = await dataSources.addText('more.ttl', PREFIXES + ':room2 a :Room . :room3 a :Room .', { path: 'more.ttl' });
-    expect(options()).toEqual(['All (3)', ':Room (3)']);
+    expect(options()).toEqual([':Room (3)']);
 
     dataSources.remove(added.id);
-    expect(options()).toEqual(['All (1)', ':Room (1)']);
+    expect(options()).toEqual([':Room (1)']);
   });
 
   it('recounts when another ontology is opened', () => {
@@ -68,7 +69,7 @@ describe('initSidePanel with the Individuals tab', () => {
     ontology = store(':Wall a owl:Class .');
     panel.refresh();
 
-    expect(options()).toEqual(['All (0)']);
+    expect(options()).toEqual([]);
     expect(document.querySelector('[data-individuals-empty]')!.textContent).toMatch(/no individuals/i);
   });
 
@@ -78,7 +79,7 @@ describe('initSidePanel with the Individuals tab', () => {
 
     tabButton()!.click();
 
-    expect(options()).toEqual(['All (0)']);
+    expect(options()).toEqual([]);
   });
 
   it('has the controls to add individuals in the tab', () => {
@@ -201,5 +202,38 @@ describe('the link from the Query tab', () => {
     document.querySelector<HTMLButtonElement>('[data-query-data-manage]')!.click();
 
     expect(panelEl().querySelector('[data-tab-body="individuals"]')!.hasAttribute('hidden')).toBe(false);
+  });
+});
+
+describe('the toggle for spreading individuals clear of classes (#209)', () => {
+  const toggle = () => document.getElementById('relaxIndividualsWrap') as HTMLElement;
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="networkWrapper"></div><aside id="sidePanel"></aside><label id="relaxIndividualsWrap" style="display: none"></label>';
+  });
+
+  it('is shown when there are individuals, and not when there are none', () => {
+    ontology = store(':Room a owl:Class .');
+    mount();
+    expect(toggle().style.display).toBe('none');
+
+    ontology = store(':Room a owl:Class . :room1 a :Room .');
+    mount();
+    expect(toggle().style.display).not.toBe('none');
+  });
+
+  it('follows the data added, and another ontology being opened', async () => {
+    ontology = store(':Room a owl:Class .');
+    const { dataSources, panel } = mount();
+    expect(toggle().style.display).toBe('none');
+
+    const added = await dataSources.addText('d.ttl', PREFIXES + ':room1 a :Room .', { path: 'd.ttl' });
+    expect(toggle().style.display).not.toBe('none');
+
+    dataSources.remove(added.id);
+    expect(toggle().style.display).toBe('none');
+
+    ontology = store(':Room a owl:Class . :room9 a :Room .');
+    panel.refresh();
+    expect(toggle().style.display).not.toBe('none');
   });
 });

@@ -8,8 +8,8 @@ import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
 import { createDataSources } from './sparql/dataSources';
+import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from './abox/individualsLayer';
 import { getDataUrlsFromParams } from './utils/urlParams';
-import { setIssueActionHandler } from './ui/statusBar';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
 import { isDebugMode, debugLog } from './utils/debug';
@@ -114,6 +114,12 @@ document.addEventListener('click', (e) => {
 
 registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm });
 renderApp();
+const dataSources = createDataSources();
+session.individualsLayer = createIndividualsLayer({
+  getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.stores()] : dataSources.stores()),
+});
+// Drawing or clearing individuals redraws the graph where it is.
+session.individualsLayer.onChange(() => applyFilter(true));
 session.sidePanel = initSidePanel({
   getStore: () => session.ttlStore,
   getPrefixes: () => session.currentPrefixMap,
@@ -128,13 +134,18 @@ session.sidePanel = initSidePanel({
     selectInGraph(network, match);
     updateSelectionInfoDisplay(network);
   },
-  dataSources: createDataSources(),
+  dataSources,
+  individualsLayer: session.individualsLayer,
+  getOntologySource: () => (fileState.loadedFileName ? { name: fileState.loadedFileName, title: fileState.loadedFilePath ?? undefined } : null),
+  isIndividualSelection: () => {
+    const network = canvasState.network;
+    if (!network) return false;
+    const nodes = network.getSelectedNodes().map(String);
+    const edges = network.getSelectedEdges().map(String);
+    return nodes.length + edges.length > 0 && nodes.every(isIndividualNodeId) && edges.every(isIndividualEdgeId);
+  },
   getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? null,
   embedded: isEmbedded(),
-});
-// The notice about instance data has a button that opens the Individuals tab (#211); an embedded view has no panel.
-setIssueActionHandler((id) => {
-  if (id === 'open-individuals') session.sidePanel?.openIndividuals();
 });
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {

@@ -35,6 +35,8 @@ export interface DisplayConfig {
   hierarchyRelationships?: string[];
   /** Stack many leaf children in a block under their parent in the tiered layouts (#159); true when absent. */
   stackLeaves?: boolean;
+  /** Spread the individuals drawn in the graph clear of the classes and of each other (#209); true when absent. */
+  relaxIndividuals?: boolean;
 }
 
 export interface ExternalOntologyReference {
