@@ -292,3 +292,61 @@ describe('refresh', () => {
     expect(() => early.refresh()).not.toThrow();
   });
 });
+
+describe('where the individuals come from', () => {
+  const origin = () => container.querySelector<HTMLElement>('[data-individuals-origin]')!;
+  const mountWith = (getOntologySource: () => { name: string; title?: string } | null, withData = false) => {
+    const sources = createDataSources();
+    tab = createIndividualsTab({
+      getStores: () => stores,
+      getPrefixes: () => ({ '': NS }),
+      getOntologySource,
+      ...(withData ? { dataSources: sources, dataLoader: createDataLoader({ sources, getStore: () => ONTOLOGY, confirm: async () => true }) } : {}),
+    });
+    tab.render(container);
+  };
+
+  it('names the ontology file when it holds individuals itself, with how many', () => {
+    stores = [store(':Room a owl:Class . :r1 a :Room . :r2 a :Room .')];
+    mountWith(() => ({ name: 'building.ttl', title: 'https://example.org/building.ttl' }));
+
+    expect(origin().hidden).toBe(false);
+    expect(origin().textContent).toContain('2 individuals');
+    expect(origin().textContent).toContain('building.ttl');
+    expect(origin().title).toBe('https://example.org/building.ttl');
+  });
+
+  it('counts only the ontology file\'s own individuals, not those of data added to it', () => {
+    stores = [store(':Room a owl:Class . :r1 a :Room .'), store(':r2 a :Room . :r3 a :Room .')];
+    mountWith(() => ({ name: 'building.ttl' }), true);
+
+    expect(origin().textContent).toContain('1 individual from');
+    expect(origin().textContent).not.toContain('1 individuals');
+  });
+
+  it('is not there when the ontology file holds none (they all come from added data), or when its name is not known', () => {
+    stores = [ONTOLOGY, store(':r1 a :Room .')];
+    mountWith(() => ({ name: 'building.ttl' }), true);
+    expect(origin().hidden).toBe(true);
+
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.append(container);
+    stores = [store(':Room a owl:Class . :r1 a :Room .')];
+    mountWith(() => null);
+    expect(origin().hidden).toBe(true);
+  });
+
+  it('follows another ontology being opened', () => {
+    let name = 'one.ttl';
+    stores = [store(':r1 a :Room .')];
+    mountWith(() => ({ name }));
+    expect(origin().textContent).toContain('one.ttl');
+
+    name = 'two.ttl';
+    stores = [store(':Room a owl:Class .')];
+    tab.refresh();
+
+    expect(origin().hidden).toBe(true);
+  });
+});

@@ -136,6 +136,7 @@ session.sidePanel = initSidePanel({
   },
   dataSources,
   individualsLayer: session.individualsLayer,
+  getOntologySource: () => (fileState.loadedFileName ? { name: fileState.loadedFileName, title: fileState.loadedFilePath ?? undefined } : null),
   isIndividualSelection: () => {
     const network = canvasState.network;
     if (!network) return false;

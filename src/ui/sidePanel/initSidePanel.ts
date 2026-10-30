@@ -31,6 +31,8 @@ export interface SidePanelDeps {
   getClassLabel?: (classIri: string) => string | null;
   /** What is drawn of the individuals in the graph (#209): the Individuals tab draws into it and clears it. */
   individualsLayer?: IndividualsLayer;
+  /** The open ontology file's name, and where it was opened from (#209): the Individuals tab says how many individuals it holds itself. */
+  getOntologySource?: () => { name: string; title?: string } | null;
   /** True while what is selected in the graph is only individuals: the toolbar then has no Edit button (#209). */
   isIndividualSelection?: () => boolean;
   /** In an iframe the app is a read-only view: no panel. */
@@ -86,6 +88,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     dataSources: deps.dataSources,
     dataLoader,
     layer: deps.individualsLayer,
+    getOntologySource: deps.getOntologySource,
   });
   host.registerTab(individualsTab);
 

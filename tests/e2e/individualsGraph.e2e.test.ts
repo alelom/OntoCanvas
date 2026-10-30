@@ -149,6 +149,22 @@ describe('individuals in the graph', () => {
     expect(await page.locator('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]').innerText()).toBe('Show 1 (0 displayed/1 total)');
   });
 
+  it('says in the Individuals tab where the individuals are: the ontology file that holds some itself, and the data added to it', async () => {
+    const embedded = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+    embedded.setDefaultTimeout(5000);
+    const cors = { 'access-control-allow-origin': '*' };
+    await embedded.route((url) => url.hostname === 'e2e-onto.test' && url.pathname === '/with.ttl', (route) => route.fulfill({ status: 200, contentType: 'text/turtle', body: ONTOLOGY + ':zed a :Person ; <http://www.w3.org/2000/01/rdf-schema#label> "Zed" .', headers: cors }));
+    await embedded.route((url) => url.hostname === 'e2e-data.test' && url.pathname === '/d.ttl', (route) => route.fulfill({ status: 200, contentType: 'text/plain', body: DATA, headers: cors }));
+    await embedded.goto(`${EDITOR_URL}?onto=${encodeURIComponent('https://e2e-onto.test/with.ttl')}&data=${encodeURIComponent('https://e2e-data.test/d.ttl')}`, { waitUntil: 'domcontentloaded' });
+    await embedded.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (5)');
+    await embedded.click('#individualsPanelBtn');
+
+    const origin = embedded.locator('[data-individuals-origin]');
+    expect(await origin.innerText()).toBe('1 individual from the ontology file with.ttl');
+    expect(await embedded.locator('[data-data-list] li').first().innerText()).toContain('d.ttl');
+    await embedded.close();
+  });
+
   it('has no Edit button while an edge between individuals is selected, and has it, before the panel buttons, for a class edge', async () => {
     await page.click('[data-individuals-clear]').catch(() => {});
     await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');

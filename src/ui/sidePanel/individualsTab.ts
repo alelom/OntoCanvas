@@ -5,7 +5,7 @@
  */
 
 import { DataFactory, type Store } from 'n3';
-import { createIndividualIndex, NO_CLASS, type DescribedLink, type DescribedTerm, type IndividualDetail, type IndividualIndex } from '../../abox/individualIndex';
+import { countIndividuals, createIndividualIndex, NO_CLASS, type DescribedLink, type DescribedTerm, type IndividualDetail, type IndividualIndex } from '../../abox/individualIndex';
 import { formatTerm } from '../../sparql/formatTerm';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
 import { debounced } from '../../utils/debounced';
@@ -29,6 +29,8 @@ export interface IndividualsTabDeps {
   dataLoader?: DataLoader;
   /** With this, an individual can be drawn in the graph, and what is drawn is shown and cleared here (#209). */
   layer?: IndividualsLayer;
+  /** The open ontology file's name (and where it was opened from, for a tooltip): the tab says how many individuals it holds itself. */
+  getOntologySource?: () => { name: string; title?: string } | null;
 }
 
 export interface IndividualsTab extends SidePanelTab {
@@ -74,6 +76,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   let rangeText!: HTMLElement;
   let detail!: HTMLElement;
   let drawnLine!: HTMLElement;
+  let originLine!: HTMLElement;
 
   const prefixes = () => withStandardPrefixes(deps.getPrefixes());
   const nameOf = (iri: string): string => formatTerm(DataFactory.namedNode(iri), prefixes()).text;
@@ -224,6 +227,17 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     );
   }
 
+  /** Where the individuals come from: the ontology file when it holds some itself (the added data files are listed in their own block). */
+  function renderOrigin(): void {
+    const source = deps.getOntologySource?.();
+    // The ontology's store is the first of the stores; the rest are the data added to it.
+    const own = source ? countIndividuals(deps.getStores().slice(0, 1)) : 0;
+    originLine.hidden = !source || own === 0;
+    if (originLine.hidden || !source) return;
+    originLine.textContent = `${own.toLocaleString('en')} ${own === 1 ? 'individual' : 'individuals'} from the ontology file ${source.name}`;
+    originLine.title = source.title ?? source.name;
+  }
+
   function select(iri: string): void {
     selected = iri;
     renderDetail();
@@ -270,6 +284,9 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     detail = element('div', 'individuals-detail');
     detail.setAttribute('data-individuals-detail', '');
     detail.hidden = true;
+    originLine = element('p', 'query-note');
+    originLine.setAttribute('data-individuals-origin', '');
+    originLine.hidden = true;
     drawnLine = element('div', 'individuals-drawn');
     drawnLine.setAttribute('data-individuals-drawn', '');
     drawnLine.hidden = true;
@@ -294,7 +311,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     });
 
     const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader }) : null;
-    container.append(note, ...(dataBlock ? [dataBlock] : []), drawnLine, controls, empty, detail);
+    container.append(note, originLine, ...(dataBlock ? [dataBlock] : []), drawnLine, controls, empty, detail);
     drawn = true;
     refresh();
   }
@@ -312,6 +329,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     }
     renderDetail();
     renderDrawn();
+    renderOrigin();
   }
 
   return { id: 'individuals', title: 'Individuals', render, refresh };
