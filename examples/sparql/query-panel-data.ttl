@@ -9,9 +9,12 @@
 #     -> three rows: :room101 :Room, :room102 :Bedroom, :room102 :Room. The data says what is a :Room; only the ontology says
 #        that a :Room is a :Space, so the answer needs both, and :wall1 and :door1 are not in it
 #   SELECT (COUNT(?i) AS ?n) WHERE { ?i a :Room }
-#     -> "2"^^xsd:integer. The individuals are not drawn: the graph still shows the five classes
+#     -> "2"^^xsd:integer. The individuals are not drawn until asked: the graph still shows the five classes
 #   The Individuals tab (issues #208, #211) lists them: All (4), then :Room (2), :Bedroom (1), :Door (1), :Wall (1). Choose :Room
 #     -> "Room 101" and "Room 102"; choose one to see its class and label, and that :room102 is a :Room and a :Bedroom
+#   Choose :room102 and press "Show in graph" (issue #209): an orange ellipse "Room 102" appears beside the classes, with a dashed
+#     edge to Room and one to Bedroom. "Clear individuals" in the tab takes it away; double-click, Delete and the right-click menu do
+#     nothing on it, as it is not part of the ontology
 #   After Remove, the first query gives no rows, and Save still writes only the ontology: added data is never saved.
 @prefix : <http://example.org/examples/sparql-queries#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .

@@ -56,7 +56,7 @@ A class counts as *defined elsewhere* when it carries an `rdfs:isDefinedBy` poin
 ## Opening by link
 
 - `?onto=<url>` opens the ontology at that address (any format OntoCanvas reads).
-- `?data=<url>` adds a data file (individuals) to that ontology: repeat it for several files. The SPARQL panel opens with a line saying the data is queried (and the progress, or why a file could not be added), the file is listed in the Individuals tab, and queries run over the ontology and the data together. The data is not drawn and never saved. It needs `?onto=`, is ignored in an embedded view, and is dropped from the address when another ontology is opened. A file over 2 MB is asked about first, one over 10 MB is refused.
+- `?data=<url>` adds a data file (individuals) to that ontology: repeat it for several files. The SPARQL panel opens with a line saying the data is queried (and the progress, or why a file could not be added), the file is listed in the Individuals tab, and queries run over the ontology and the data together. The data is drawn only when asked (Show in graph in the Individuals tab) and never saved. It needs `?onto=`, is ignored in an embedded view, and is dropped from the address when another ontology is opened. A file over 2 MB is asked about first, one over 10 MB is refused.
 
 For example `https://alelom.github.io/OntoCanvas/?onto=<ONTOLOGY_URL>&data=<DATA_URL>`, with both addresses percent-encoded.
 
@@ -195,7 +195,7 @@ imports it**; a file nothing places selects every area, and docs select none. Th
 | `search` | The search box: suggestions, scope and the outline around the matches. | 3 |
 | `embed` | The app embedded in an iframe: the compact, read-only view. | 2 |
 | `shell` | The bottom bar and what it shows about the selection. | 1 |
-| `sparql` | SPARQL queries over the loaded ontology. | 3 |
+| `sparql` | SPARQL queries over the loaded ontology. | 4 |
 <!-- e2e-areas:end -->
 ## Repository hygiene
 

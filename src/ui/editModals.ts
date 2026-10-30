@@ -2,6 +2,7 @@
  * The edit edge modal, and opening the edit modal for a node or an edge.
  * Moved out of main.ts (#175).
  */
+import { isIndividualNodeId } from '../abox/individualsLayer';
 import { edgeLock } from '../lib/edgeEditability';
 import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { session, editState } from '../state/appState';
@@ -18,6 +19,8 @@ import { showRenameModal } from './renameModal';
 
 /** Open the appropriate edit modal for a node (class rename, data property restriction, or normal data property). */
 export function openEditModalForNode(nodeId: string): void {
+  // Individuals are drawn read-only (#209): there is nothing of them to edit in the ontology.
+  if (isIndividualNodeId(nodeId)) return;
   // Handle data property restriction nodes
   if (nodeId.startsWith('__dataproprestrict__')) {
     const match = nodeId.match(/^__dataproprestrict__(.+)__(.+)$/);

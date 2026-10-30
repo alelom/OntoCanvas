@@ -32,6 +32,8 @@ export const session = {
   ttlStore: null as import('n3').Store | null,
   /** The prefixes the open file declares (for the query panel). */
   currentPrefixMap: {} as Record<string, string>,
+  /** The individuals drawn in the graph, over the class graph (#209). */
+  individualsLayer: null as import('../abox/individualsLayer').IndividualsLayer | null,
   sidePanel: null as { refresh(): void; addDataUrls(urls: string[]): Promise<void>; openIndividuals(): void } | null,
   /** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
    * after some edits; this is merged back in each time. */

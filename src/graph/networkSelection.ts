@@ -9,6 +9,7 @@ import { attachClassExpressionMarks } from '../ui/classExpressionInteraction';
 import { showContextMenu } from '../ui/contextMenu';
 import { hideEdgeLinesUnderNodes } from '../ui/edgeNodeClipping';
 import { openEditModalForNode, openEditModalForEdge } from '../ui/editModals';
+import { isIndividualNodeId } from '../abox/individualsLayer';
 import { showMultiEditModal } from '../ui/nodeModalHelpers';
 import { attachSearchOutline } from '../ui/searchOutlineOverlay';
 import { updateSelectionInfoDisplay } from '../ui/selectionInfo';
@@ -234,6 +235,8 @@ export function setupNetworkSelectionAndNavigation(
     const nodeAt = net.getNodeAt(domPos);
     if (nodeAt != null) {
       const nodeId = String(nodeAt);
+      // Individuals are drawn read-only (#209).
+      if (isIndividualNodeId(nodeId)) return;
       const selectedIds = net.getSelectedNodes().map(String);
       if (selectedIds.length > 1 && selectedIds.includes(nodeId)) {
         showMultiEditModal(selectedIds);

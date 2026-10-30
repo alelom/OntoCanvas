@@ -13,6 +13,7 @@ import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
+import type { IndividualsLayer } from '../../abox/individualsLayer';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -28,6 +29,8 @@ export interface SidePanelDeps {
   dataSources?: DataSources;
   /** The label a class has in the graph, for the Individuals tab (#208). */
   getClassLabel?: (classIri: string) => string | null;
+  /** What is drawn of the individuals in the graph (#209): the Individuals tab draws into it and clears it. */
+  individualsLayer?: IndividualsLayer;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
@@ -80,6 +83,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getClassLabel: deps.getClassLabel,
     dataSources: deps.dataSources,
     dataLoader,
+    layer: deps.individualsLayer,
   });
   host.registerTab(individualsTab);
 
@@ -100,12 +104,14 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   };
   updateIndividualsButton();
   deps.dataSources?.onChange(() => {
+    deps.individualsLayer?.invalidate();
     individualsTab.refresh();
     updateIndividualsButton();
   });
 
   return {
     refresh: () => {
+      deps.individualsLayer?.clear();
       queryTab.refresh();
       individualsTab.refresh();
       updateIndividualsButton();

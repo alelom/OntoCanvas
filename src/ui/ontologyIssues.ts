@@ -186,7 +186,7 @@ export function detectInstanceData(store: Store): OntologyIssue | null {
     elementType: 'Instance data',
     elementName: `${count} ${count === 1 ? 'individual' : 'individuals'}`,
     message:
-      'The graph draws classes, so the individuals of this file are not drawn. Browse them in the Individuals tab, or query them with SPARQL. Drawing individuals is work in progress, see',
+      'The graph draws classes, so the individuals of this file are drawn only when asked: choose one in the Individuals tab and use Show in graph, or query them with SPARQL. Drawing individuals is work in progress, see',
     action: { id: 'open-individuals', label: 'Open the Individuals tab' },
     links: [
       { label: '#168', url: `${REPO_ISSUES}/168` },

@@ -646,6 +646,18 @@ body.embed-no-menu #ontologyIssuesPopup {
   font-family: Consolas, monospace;
   text-decoration: underline;
 }
+.individuals-drawn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #e67e22;
+  background: #fdf2e3;
+}
+.individuals-detail > button[data-individuals-show-in-graph] {
+  margin: 2px 0 4px;
+}
 .individual-more {
   color: #666;
 }

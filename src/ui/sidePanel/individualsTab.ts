@@ -11,6 +11,7 @@ import { withStandardPrefixes } from '../../sparql/prefixHeader';
 import { debounced } from '../../utils/debounced';
 import type { DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
+import type { IndividualsLayer } from '../../abox/individualsLayer';
 import { createDataBlock } from './dataBlock';
 import type { SidePanelTab } from './sidePanelHost';
 
@@ -26,6 +27,8 @@ export interface IndividualsTabDeps {
   /** With these, the tab has the controls to add a file or a URL of individuals, and what was added (#211). */
   dataSources?: DataSources;
   dataLoader?: DataLoader;
+  /** With this, an individual can be drawn in the graph, and what is drawn is shown and cleared here (#209). */
+  layer?: IndividualsLayer;
 }
 
 export interface IndividualsTab extends SidePanelTab {
@@ -70,6 +73,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   let nextButton!: HTMLButtonElement;
   let rangeText!: HTMLElement;
   let detail!: HTMLElement;
+  let drawnLine!: HTMLElement;
 
   const prefixes = () => withStandardPrefixes(deps.getPrefixes());
   const nameOf = (iri: string): string => formatTerm(DataFactory.namedNode(iri), prefixes()).text;
@@ -173,8 +177,46 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       iri,
       types,
       ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
+      ...(deps.layer ? [showInGraphButton(selected)] : []),
       renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
       renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
+    );
+  }
+
+  function showInGraphButton(iri: string): HTMLElement {
+    const button = element('button', undefined, 'Show in graph');
+    button.type = 'button';
+    button.title = 'Draw this individual and the individuals linked to it in the graph';
+    button.setAttribute('data-individuals-show-in-graph', '');
+    button.addEventListener('click', () => deps.layer?.show(iri));
+    return button;
+  }
+
+  /** What is drawn in the graph: how many individuals, a way to draw the rest of an individual's neighbours, and Clear. */
+  function renderDrawn(): void {
+    const layer = deps.layer;
+    if (!layer || layer.isEmpty()) {
+      drawnLine.hidden = true;
+      drawnLine.replaceChildren();
+      return;
+    }
+    const view = layer.build(new Map());
+    const text = element('span', undefined, `Drawn in the graph: ${view.nodes.length} individual${view.nodes.length === 1 ? '' : 's'}.${view.warning ? ` ${view.warning}` : ''}`);
+    const clear = element('button', undefined, 'Clear individuals');
+    clear.type = 'button';
+    clear.setAttribute('data-individuals-clear', '');
+    clear.addEventListener('click', () => layer.clear());
+    drawnLine.hidden = false;
+    drawnLine.replaceChildren(
+      text,
+      clear,
+      ...view.more.map((entry) => {
+        const more = element('button', undefined, `Show ${Math.min(entry.hidden, 50)} more of ${entry.label} (${entry.hidden} left)`);
+        more.type = 'button';
+        more.setAttribute('data-individuals-more', '');
+        more.addEventListener('click', () => layer.showMore(entry.iri));
+        return more;
+      })
     );
   }
 
@@ -191,7 +233,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   function render(container: HTMLElement): void {
     container.classList.add('individuals-tab');
-    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. They are not drawn in the graph yet.');
+    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. Choose one and use Show in graph to draw it.');
 
     classSelect = element('select');
     classSelect.setAttribute('data-individuals-class', '');
@@ -224,6 +266,10 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     detail = element('div', 'individuals-detail');
     detail.setAttribute('data-individuals-detail', '');
     detail.hidden = true;
+    drawnLine = element('div', 'individuals-drawn');
+    drawnLine.setAttribute('data-individuals-drawn', '');
+    drawnLine.hidden = true;
+    deps.layer?.onChange(renderDrawn);
 
     classSelect.addEventListener('change', () => {
       classIri = classSelect.value === '' ? null : classSelect.value;
@@ -241,7 +287,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     });
 
     const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader }) : null;
-    container.append(note, ...(dataBlock ? [dataBlock] : []), controls, empty, detail);
+    container.append(note, ...(dataBlock ? [dataBlock] : []), drawnLine, controls, empty, detail);
     drawn = true;
     refresh();
   }
