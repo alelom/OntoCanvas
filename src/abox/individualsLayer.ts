@@ -170,8 +170,14 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     };
     if (auto()) for (const iri of known()) add(iri);
     for (const iri of picked) if (known().has(iri)) add(iri);
+    // Full is as good as cut: nothing more can be drawn.
+    cut = cut || shown.size >= maxTotal;
     return (shownCache = { shown, cut });
   };
+
+  /** How many more individuals fit under the total cap, and how many a request adds at most. */
+  const room = (): number => Math.max(0, maxTotal - computeShown().shown.size);
+  const batch = (): number => Math.min(maxPerExpansion, room());
 
   /** The individuals of a class, sorted by what is shown for them; kept until the data changes. */
   const memberCache = new Map<string, string[]>();
@@ -188,12 +194,18 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
 
   return {
     show(iri) {
+      if (!computeShown().shown.has(iri) && room() === 0) return;
       picked.add(iri);
       changed();
     },
     showNeighbours(iri) {
+      const fit = room();
+      const { shown } = computeShown();
+      // The individual comes first, and takes a place of its own when it is not drawn yet.
+      const places = shown.has(iri) ? fit : fit - 1;
+      if (places < 0) return;
       picked.add(iri);
-      for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, maxPerExpansion)) picked.add(neighbour);
+      for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, Math.min(maxPerExpansion, places))) picked.add(neighbour);
       changed();
     },
     clear() {
@@ -212,24 +224,24 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     },
     showClass(classIri) {
       const { shown } = computeShown();
-      for (const iri of membersOf(classIri).filter((m) => !shown.has(m)).slice(0, maxPerExpansion)) picked.add(iri);
+      for (const iri of membersOf(classIri).filter((m) => !shown.has(m)).slice(0, batch())) picked.add(iri);
       changed();
     },
     previewClass(classIri) {
       const members = membersOf(classIri);
       const { shown } = computeShown();
       const displayed = members.filter((m) => shown.has(m)).length;
-      return { adds: Math.min(members.length - displayed, maxPerExpansion), displayed, total: members.length };
+      return { adds: Math.min(members.length - displayed, batch()), displayed, total: members.length };
     },
     preview(iri) {
       const shown = computeShown().shown.has(iri);
-      return { shown, adds: shown ? 0 : 1, displayed: shown ? 1 : 0, total: 1 };
+      return { shown, adds: shown || room() === 0 ? 0 : 1, displayed: shown ? 1 : 0, total: 1 };
     },
     previewNeighbours(iri) {
       const neighbours = neighboursOf(iri);
       const { shown } = computeShown();
       const displayed = neighbours.filter((n) => shown.has(n)).length;
-      return { adds: Math.min(neighbours.length - displayed, maxPerExpansion), displayed, total: neighbours.length };
+      return { adds: Math.min(neighbours.length - displayed, batch()), displayed, total: neighbours.length };
     },
     isEmpty: () => picked.size === 0 && !auto(),
     invalidate() {
@@ -267,7 +279,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
           }
         }
       }
-      return { nodes, edges, warning: cut ? `Showing the first ${maxTotal} individuals; clear some to see others.` : null };
+      return { nodes, edges, warning: cut ? `Showing the first ${maxTotal} individuals, the limit. Clear individuals, or filter for a narrower set, to see others.` : null };
     },
   };
 }

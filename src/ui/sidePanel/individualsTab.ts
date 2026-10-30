@@ -169,7 +169,9 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-class', '');
-    if (displayed < total) {
+    if (displayed < total && adds === 0) {
+      limitReached(button);
+    } else if (displayed < total) {
       button.textContent = `Show ${adds}${displayed > 0 ? ' more' : ''} (${displayed} displayed/${total} total)`;
       button.title = `Draw ${adds}${displayed > 0 ? ' more' : ''} of the individuals of this type in the graph`;
       button.addEventListener('click', () => layer.showClass(classIri));
@@ -239,13 +241,22 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     );
   }
 
+  /** A button that cannot add any more: the graph holds as many individuals as it will draw. */
+  function limitReached(button: HTMLButtonElement): void {
+    button.textContent = 'Limit reached';
+    button.title = 'The graph shows as many individuals as it will draw: use Clear individuals to start again, or filter for a narrower set';
+    button.disabled = true;
+  }
+
   /** Next to an individual's row: draws that individual alone, and says whether it is drawn. */
   function graphButton(layer: IndividualsLayer, iri: string, preview: ReturnType<IndividualsLayer['preview']>): HTMLButtonElement {
     const { adds, displayed, total } = preview;
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-in-graph', '');
-    if (displayed < total) {
+    if (displayed < total && adds === 0) {
+      limitReached(button);
+    } else if (displayed < total) {
       button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
       button.title = 'Draw this individual in the graph';
       button.addEventListener('click', () => layer.show(iri));
@@ -264,7 +275,9 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-neighbours', '');
-    if (displayed < total) {
+    if (displayed < total && adds === 0) {
+      limitReached(button);
+    } else if (displayed < total) {
       button.textContent = `Show ${adds}${displayed > 0 ? ' more' : ''} ${adds === 1 ? 'neighbour' : 'neighbours'} (${displayed} displayed/${total} total)`;
       button.title = 'Draw this individual and the individuals linked to it, both ways, in the graph';
       button.addEventListener('click', () => layer.showNeighbours(iri));

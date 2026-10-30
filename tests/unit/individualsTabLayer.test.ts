@@ -197,3 +197,16 @@ describe('the rows after a type header is pressed', () => {
     expect(rowItem('h').classList.contains('individual-drawn')).toBe(false);
   });
 });
+
+describe('the buttons at the total cap', () => {
+  it('say the limit is reached, disabled, instead of offering more that cannot be drawn', () => {
+    mount(links(120), { maxTotal: 10 });
+    choose('h');
+    neighbours().click();
+    expect(neighbours().textContent).toBe('Limit reached');
+    expect(neighbours().disabled).toBe(true);
+    expect(row('p020').textContent).toBe('Limit reached');
+    expect(row('p020').disabled).toBe(true);
+    expect(drawn().textContent).toMatch(/Clear individuals, or filter/);
+  });
+});

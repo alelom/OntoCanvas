@@ -295,3 +295,45 @@ describe('the individuals of a class', () => {
     expect(l.isEmpty()).toBe(true);
   });
 });
+
+describe('at the total cap', () => {
+  const capped = () => createIndividualsLayer({ autoMax: 0, getStores: () => [hub(12)], maxPerExpansion: 4, maxTotal: 6 });
+
+  it('adds only what fits, then offers nothing more and draws nothing more', () => {
+    const l = capped();
+    l.showNeighbours(ex('h'));
+    expect(l.build(classNodes).nodes).toHaveLength(5);
+    expect(l.previewNeighbours(ex('h'))).toEqual({ adds: 1, displayed: 4, total: 12 });
+
+    l.showNeighbours(ex('h'));
+    expect(l.build(classNodes).nodes).toHaveLength(6);
+    expect(l.previewNeighbours(ex('h'))).toEqual({ adds: 0, displayed: 5, total: 12 });
+
+    for (let i = 0; i < 3; i++) l.showNeighbours(ex('h'));
+    expect(l.build(classNodes).nodes).toHaveLength(6);
+  });
+
+  it('offers nothing for a class or another individual either, and says the limit was reached', () => {
+    const l = capped();
+    l.showNeighbours(ex('h'));
+    l.showNeighbours(ex('h'));
+
+    expect(l.previewClass(ex('Person'))).toMatchObject({ adds: 0 });
+    expect(l.preview(ex('p011'))).toMatchObject({ adds: 0, shown: false });
+    l.showClass(ex('Person'));
+    l.show(ex('p011'));
+    expect(l.build(classNodes).nodes).toHaveLength(6);
+    expect(l.build(classNodes).warning).toMatch(/first 6 individuals/);
+  });
+
+  it('frees room again when everything is cleared', () => {
+    const l = capped();
+    l.showNeighbours(ex('h'));
+    l.showNeighbours(ex('h'));
+    l.clear();
+
+    l.showNeighbours(ex('h'));
+
+    expect(l.build(classNodes).nodes).toHaveLength(5);
+  });
+});
