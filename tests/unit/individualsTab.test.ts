@@ -31,7 +31,7 @@ function mount(options: { pageSize?: number; classLabel?: (iri: string) => strin
 
 const q = <T extends HTMLElement>(selector: string) => container.querySelector<T>(selector)!;
 const classOptions = () => [...container.querySelectorAll<HTMLOptionElement>('[data-individuals-class] option')].map((o) => o.textContent);
-const rows = () => [...container.querySelectorAll('[data-individuals-list] li')].map((li) => li.textContent ?? '');
+const rows = () => [...container.querySelectorAll('[data-individuals-list] li:not([data-individuals-group])')].map((li) => li.textContent ?? '');
 const range = () => q('[data-individuals-range]').textContent;
 const choose = (value: string) => {
   const select = q<HTMLSelectElement>('[data-individuals-class]');
@@ -246,6 +246,8 @@ describe('the detail', () => {
   it('says how many more rows there are than it shows', () => {
     stores = [ONTOLOGY, store(':hub a :Room ; rdfs:label "Hub" .\n' + Array.from({ length: 120 }, (_, i) => `:hub :link :n${i} . :n${i} a :Wall .`).join('\n'))];
     mount();
+    // The walls are the bigger group and fill the first page: the hub is in the other.
+    choose(NS + 'Room');
 
     click('Hub');
 

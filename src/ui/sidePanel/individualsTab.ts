@@ -106,11 +106,14 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       prevButton.disabled = nextButton.disabled = true;
       return;
     }
-    const { items, total } = index.list({ classIri, search, offset, limit: pageSize });
+    const { items, total, groupTotals } = index.list({ classIri, search, offset, limit: pageSize, grouped: true });
     empty.hidden = total > 0;
     if (total === 0) empty.textContent = 'No individual matches.';
+    let previousGroup: string | null = null;
     list.replaceChildren(
-      ...items.map((item) => {
+      ...items.flatMap((item) => {
+        const header = item.group !== previousGroup ? [groupHeader(item.group, groupTotals.get(item.group) ?? 0)] : [];
+        previousGroup = item.group;
         const button = element('button');
         button.type = 'button';
         button.setAttribute('data-individuals-item', '');
@@ -118,13 +121,46 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
         button.title = item.iri;
         button.addEventListener('click', () => select(item.iri));
         const li = element('li');
-        li.append(button, ...(deps.layer ? [graphButton(deps.layer, item.iri)] : []));
-        return li;
+        if (deps.layer) {
+          const preview = deps.layer.preview(item.iri);
+          // Marks the individuals that are drawn, however they came to be (their type's button, another individual's, by themselves).
+          li.classList.toggle('individual-drawn', preview.shown);
+          li.append(button, graphButton(deps.layer, item.iri, preview));
+        } else {
+          li.append(button);
+        }
+        return [...header, li];
       })
     );
     rangeText.textContent = total === 0 ? '' : `${offset + 1}–${offset + items.length} of ${total}`;
     prevButton.disabled = offset === 0;
     nextButton.disabled = offset + pageSize >= total;
+  }
+
+  /** The row above the individuals of a type: its name and how many are listed, and a button to draw them in batches. */
+  function groupHeader(group: string, count: number): HTMLElement {
+    const li = element('li', 'individuals-group');
+    li.setAttribute('data-individuals-group', group);
+    li.append(element('span', 'individuals-group-title', `${group === NO_CLASS ? 'No class' : classTitle(group)} (${count})`));
+    if (deps.layer && group !== NO_CLASS) li.append(classButton(deps.layer, group));
+    return li;
+  }
+
+  /** How many of the type's individuals the next click draws, and how many are drawn of all of them. */
+  function classButton(layer: IndividualsLayer, classIri: string): HTMLButtonElement {
+    const { adds, displayed, total } = layer.previewClass(classIri);
+    const button = element('button', 'individual-graph');
+    button.type = 'button';
+    button.setAttribute('data-individuals-show-class', '');
+    if (displayed < total) {
+      button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
+      button.title = `Draw ${adds} more of the individuals of this type in the graph`;
+      button.addEventListener('click', () => layer.showClass(classIri));
+    } else {
+      button.textContent = `All ${total} displayed`;
+      button.disabled = true;
+    }
+    return button;
   }
 
   function renderTerm(term: DescribedTerm, isIndividual: boolean): HTMLElement {
@@ -186,21 +222,22 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   }
 
   /** Next to an individual's row: how many of its neighbours the next click draws, and how many are drawn of all of them. */
-  function graphButton(layer: IndividualsLayer, iri: string): HTMLButtonElement {
-    const { shown, adds, displayed, total } = layer.preview(iri);
+  function graphButton(layer: IndividualsLayer, iri: string, preview: ReturnType<IndividualsLayer['preview']>): HTMLButtonElement {
+    const { shown, adds, displayed, total } = preview;
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-in-graph', '');
     if (displayed < total) {
       button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
-      button.title = shown ? `Draw ${adds} more of the neighbours of this individual` : `Draw this individual and ${adds} of its ${total} neighbours`;
-      button.addEventListener('click', () => (shown ? layer.showMore(iri) : layer.show(iri)));
+      button.title = shown ? `This individual is drawn. Draw ${adds} more of its ${total} neighbours` : `Draw this individual and ${adds} of its ${total} neighbours`;
+      button.addEventListener('click', () => layer.show(iri));
     } else if (!shown) {
       button.textContent = 'Show in graph';
       button.title = 'Draw this individual in the graph';
       button.addEventListener('click', () => layer.show(iri));
     } else {
       button.textContent = total > 0 ? `All ${total} displayed` : 'Shown in graph';
+      button.title = 'This individual and its neighbours are drawn';
       button.disabled = true;
     }
     return button;
@@ -251,7 +288,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   function render(container: HTMLElement): void {
     container.classList.add('individuals-tab');
-    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; use the button on a row to draw that individual.');
+    const note = element('p', 'query-note panel-description', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; use the button on a row to draw that individual.');
 
     classSelect = element('select');
     classSelect.setAttribute('data-individuals-class', '');

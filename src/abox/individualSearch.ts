@@ -62,6 +62,5 @@ export function filterIndividualsBySearch(view: LayerView, filter: IndividualSea
   }
   const nodes = view.nodes.filter((n) => keep.has(n.id));
   const edges = view.edges.filter((e) => keep.has(e.from) && (e.type === 'rdf:type' || keep.has(e.to)));
-  const iris = new Set(nodes.map((n) => n.iri));
-  return { ...view, nodes, edges, more: view.more.filter((m) => iris.has(m.iri)) };
+  return { ...view, nodes, edges };
 }

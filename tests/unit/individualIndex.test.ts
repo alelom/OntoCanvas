@@ -112,7 +112,7 @@ describe('list', () => {
   });
 
   it('finds nothing for a search that matches nothing', () => {
-    expect(index().list({ search: 'zzz', offset: 0, limit: 50 })).toEqual({ items: [], total: 0 });
+    expect(index().list({ search: 'zzz', offset: 0, limit: 50 })).toMatchObject({ items: [], total: 0 });
   });
 });
 
@@ -206,5 +206,34 @@ describe('countIndividuals', () => {
 
     expect(countIndividuals([ONTOLOGY])).toBe(0);
     expect(countIndividuals([])).toBe(0);
+  });
+});
+
+describe('list(), grouped by class', () => {
+  const index = () => createIndividualIndex([ONTOLOGY, DATA]);
+  const grouped = (options: Partial<Parameters<ReturnType<typeof index>['list']>[0]> = {}) => index().list({ offset: 0, limit: 50, grouped: true, ...options });
+
+  it('puts the individuals of each class together, the biggest class first, by label inside each, those with no class last', () => {
+    const { items, groupTotals } = grouped();
+    const byGroup = new Map<string, string[]>();
+    for (const item of items) byGroup.set(item.group, [...(byGroup.get(item.group) ?? []), item.iri]);
+
+    // Room and Wall have two individuals each (Room first, by IRI); Bedroom's only individual is also a Room, so it is listed there.
+    expect([...byGroup.keys()]).toEqual([NS + 'Room', NS + 'Wall', NO_CLASS]);
+    expect(byGroup.get(NS + 'Room')).toEqual([NS + 'room101', NS + 'room102']);
+    expect([...groupTotals.entries()].reduce((sum, [, n]) => sum + n, 0)).toBe(items.length);
+  });
+
+  it('lists an individual of two classes once, under the first of them', () => {
+    const { items } = grouped();
+    const iris = items.map((i) => i.iri);
+    expect(new Set(iris).size).toBe(iris.length);
+  });
+
+  it('counts the matches of a search in each group, and gives one group for one class', () => {
+    const all = grouped();
+    const one = grouped({ classIri: all.items[0].group });
+    expect(new Set(one.items.map((i) => i.group))).toEqual(new Set([all.items[0].group]));
+    expect(one.groupTotals.get(all.items[0].group)).toBe(one.total);
   });
 });

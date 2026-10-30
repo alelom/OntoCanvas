@@ -48,23 +48,23 @@ export interface LayerEdge {
 export interface LayerView {
   nodes: LayerNode[];
   edges: LayerEdge[];
-  /** Individuals asked for that have neighbours not drawn yet. */
-  more: Array<{ iri: string; label: string; hidden: number }>;
   /** Set when the total cap cut what was asked for. */
   warning: string | null;
 }
 
 export interface IndividualsLayer {
-  /** Draws the individual and up to the cap of its neighbours. */
+  /** Draws the individual and up to the cap of its neighbours that are not drawn yet; asked again, the next ones. */
   show(iri: string): void;
-  /** Draws up to the cap more of its neighbours. */
-  showMore(iri: string): void;
   /** Hides what is drawn, what was drawn by itself included, until the data changes. */
   clear(): void;
   /** Another ontology was opened: forgets what was asked for and the clearing, without telling the listeners (a redraw follows). */
   reset(): void;
   isEmpty(): boolean;
-  /** Of the neighbours of this individual: `total`, how many are `displayed` now, and how many the next request `adds` (up to the cap). `shown` is whether the individual itself is drawn. */
+  /** Draws up to the cap of the individuals of a class that are not drawn yet, by label, without their neighbours. */
+  showClass(classIri: string): void;
+  /** Of the individuals of a class: `total`, how many are `displayed` now (however they came to be drawn), and how many the next request `adds` (up to the cap). */
+  previewClass(classIri: string): { adds: number; displayed: number; total: number };
+  /** Of the neighbours of this individual: `total`, how many are `displayed` now, and how many the next request `adds` (up to the cap). `shown` is whether the individual itself is drawn, however it came to be. */
   preview(iri: string): { shown: boolean; adds: number; displayed: number; total: number };
   /** The data changed (another ontology, data added or removed): what is drawn is read again, and what is gone is dropped. */
   invalidate(): void;
@@ -82,14 +82,17 @@ export interface IndividualsLayerOptions {
 }
 
 export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX }: IndividualsLayerOptions): IndividualsLayer {
-  /** The individuals asked for, in the order asked, with how many of each one's neighbours are drawn. */
-  const roots = new Map<string, number>();
+  /** The individuals asked for, in the order asked: one with its neighbours, or from a class. */
+  const picked = new Set<string>();
   const listeners: Array<() => void> = [];
   let individuals: Set<string> | null = null;
   /** The user cleared what was drawn by itself. */
   let hidden = false;
   const auto = (): boolean => !hidden && known().size > 0 && known().size <= autoMax;
-  const changed = (): void => listeners.forEach((listener) => listener());
+  const changed = (): void => {
+    shownCache = null;
+    listeners.forEach((listener) => listener());
+  };
 
   const known = (): Set<string> => {
     if (!individuals) {
@@ -149,66 +152,87 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     return lines.join('\n');
   };
 
+  /** Which individuals are drawn: those of the auto draw and the ones asked for. Kept until what is asked for changes. */
+  let shownCache: { shown: Set<string>; cut: boolean } | null = null;
+  const computeShown = (): { shown: Set<string>; cut: boolean } => {
+    if (shownCache) return shownCache;
+    const shown = new Set<string>();
+    let cut = false;
+    const add = (iri: string): boolean => {
+      if (shown.has(iri)) return true;
+      if (shown.size >= maxTotal) return (cut = true), false;
+      shown.add(iri);
+      return true;
+    };
+    if (auto()) for (const iri of known()) add(iri);
+    for (const iri of picked) if (known().has(iri)) add(iri);
+    return (shownCache = { shown, cut });
+  };
+
+  /** The individuals of a class, sorted by what is shown for them; kept until the data changes. */
+  const memberCache = new Map<string, string[]>();
+  const membersOf = (classIri: string): string[] => {
+    let members = memberCache.get(classIri);
+    if (!members) {
+      const found = new Set<string>();
+      for (const store of getStores()) for (const q of store.getQuads(null, RDF_TYPE, classIri, null)) if (known().has(q.subject.value)) found.add(q.subject.value);
+      members = [...found].map((iri) => ({ iri, text: labelOf(iri) })).sort((a, b) => byText(a.text, b.text) || (a.iri < b.iri ? -1 : 1)).map((m) => m.iri);
+      memberCache.set(classIri, members);
+    }
+    return members;
+  };
+
   return {
     show(iri) {
-      if (!roots.has(iri)) roots.set(iri, maxPerExpansion);
-      changed();
-    },
-    showMore(iri) {
-      roots.set(iri, (roots.get(iri) ?? 0) + maxPerExpansion);
+      picked.add(iri);
+      for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, maxPerExpansion)) picked.add(neighbour);
       changed();
     },
     clear() {
-      if (roots.size === 0 && !auto()) return;
-      roots.clear();
+      if (picked.size === 0 && !auto()) return;
+      picked.clear();
       hidden = true;
       changed();
     },
     reset() {
-      roots.clear();
+      picked.clear();
       hidden = false;
       individuals = null;
+      shownCache = null;
       neighbourCache.clear();
+      memberCache.clear();
+    },
+    showClass(classIri) {
+      const { shown } = computeShown();
+      for (const iri of membersOf(classIri).filter((m) => !shown.has(m)).slice(0, maxPerExpansion)) picked.add(iri);
+      changed();
+    },
+    previewClass(classIri) {
+      const members = membersOf(classIri);
+      const { shown } = computeShown();
+      const displayed = members.filter((m) => shown.has(m)).length;
+      return { adds: Math.min(members.length - displayed, maxPerExpansion), displayed, total: members.length };
     },
     preview(iri) {
-      const total = neighboursOf(iri).length;
-      const count = roots.get(iri);
-      if (count === undefined) {
-        if (auto()) return { shown: true, adds: 0, displayed: total, total };
-        return { shown: false, adds: Math.min(total, maxPerExpansion), displayed: 0, total };
-      }
-      const displayed = Math.min(total, count);
-      return { shown: true, adds: Math.min(total - displayed, maxPerExpansion), displayed, total };
+      const neighbours = neighboursOf(iri);
+      const { shown } = computeShown();
+      const displayed = neighbours.filter((n) => shown.has(n)).length;
+      return { shown: shown.has(iri), adds: Math.min(neighbours.length - displayed, maxPerExpansion), displayed, total: neighbours.length };
     },
-    isEmpty: () => roots.size === 0 && !auto(),
+    isEmpty: () => picked.size === 0 && !auto(),
     invalidate() {
       individuals = null;
+      shownCache = null;
       neighbourCache.clear();
+      memberCache.clear();
       hidden = false;
-      for (const iri of [...roots.keys()]) if (!known().has(iri)) roots.delete(iri);
-      if (roots.size > 0 || auto()) changed();
+      for (const iri of [...picked]) if (!known().has(iri)) picked.delete(iri);
+      if (picked.size > 0 || auto()) changed();
     },
     onChange: (listener) => void listeners.push(listener),
 
     build(classNodeByUri) {
-      const shown = new Set<string>();
-      const more: LayerView['more'] = [];
-      let cut = false;
-      const add = (iri: string): boolean => {
-        if (shown.has(iri)) return true;
-        if (shown.size >= maxTotal) return (cut = true), false;
-        shown.add(iri);
-        return true;
-      };
-      if (auto()) for (const iri of known()) add(iri);
-      for (const [iri, count] of roots) {
-        if (!known().has(iri) || !add(iri)) continue;
-        const neighbours = neighboursOf(iri);
-        let drawn = 0;
-        for (const neighbour of neighbours.slice(0, count)) if (add(neighbour)) drawn++;
-        const hidden = neighbours.length - Math.min(neighbours.length, count);
-        if (hidden > 0 && drawn === Math.min(neighbours.length, count)) more.push({ iri, label: labelOf(iri), hidden });
-      }
+      const { shown, cut } = computeShown();
 
       const nodes: LayerNode[] = [...shown].map((iri) => ({ id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) }));
       const edges: LayerEdge[] = [];
@@ -231,7 +255,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
           }
         }
       }
-      return { nodes, edges, more, warning: cut ? `Showing the first ${maxTotal} individuals; clear some to see others.` : null };
+      return { nodes, edges, warning: cut ? `Showing the first ${maxTotal} individuals; clear some to see others.` : null };
     },
   };
 }

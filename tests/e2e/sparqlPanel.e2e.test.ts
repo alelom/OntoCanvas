@@ -254,7 +254,7 @@ describe('SPARQL side panel', () => {
     expect(await page.locator('[data-individuals-class] option').allTextContents()).toEqual(['All (2)', 'Person (1)', 'Student (1)']);
 
     await page.selectOption('[data-individuals-class]', 'http://example.org/o#Student');
-    expect(await page.locator('[data-individuals-list] li').count()).toBe(1);
+    expect(await page.locator('[data-individuals-list] li:not([data-individuals-group])').count()).toBe(1);
     await page.click('[data-individuals-item]');
     const detail = await page.locator('[data-individuals-detail]').innerText();
     expect(detail).toContain('Alice');

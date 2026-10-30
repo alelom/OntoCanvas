@@ -24,9 +24,15 @@ function mount(turtle: string): void {
 }
 const open = (name: string) =>
   [...container.querySelectorAll<HTMLButtonElement>('[data-individuals-item]')].find((b) => b.title === `${NS}${name}`)!.click();
+/** Lists the individuals of one class only: the hub of `links` is a Room, and the 120 persons fill the first pages. */
+const chooseRooms = () => {
+  const select = q<HTMLSelectElement>('[data-individuals-class]');
+  select.value = `${NS}Room`;
+  select.dispatchEvent(new Event('change'));
+};
 /** The button next to the row of an individual. */
 const row = (name: string) =>
-  [...container.querySelectorAll<HTMLElement>('[data-individuals-list] li')].find((li) => li.querySelector<HTMLElement>('[data-individuals-item]')!.title === `${NS}${name}`)!.querySelector<HTMLButtonElement>('[data-individuals-show-in-graph]')!;
+  [...container.querySelectorAll<HTMLElement>('[data-individuals-list] li:not([data-individuals-group])')].find((li) => li.querySelector<HTMLElement>('[data-individuals-item]')!.title === `${NS}${name}`)!.querySelector<HTMLButtonElement>('[data-individuals-show-in-graph]')!;
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -74,6 +80,7 @@ describe('what is drawn', () => {
 
   it('says how many the next click draws and how many are drawn of the total, until all are', () => {
     mount(links(120));
+    chooseRooms();
     expect(row('h').textContent).toBe('Show 50 (0 displayed/120 total)');
     row('h').click();
 
@@ -93,9 +100,85 @@ describe('what is drawn', () => {
     const stores = [store(links(120))];
     layer = createIndividualsLayer({ autoMax: 0, getStores: () => stores, maxTotal: 10 });
     createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({}), layer }).render(container);
+    chooseRooms();
     row('h').click();
 
     expect(drawn().textContent).toContain('10');
     expect(drawn().textContent).toMatch(/first 10/);
+  });
+});
+
+describe('the individuals grouped by type', () => {
+  const headers = () => [...container.querySelectorAll<HTMLElement>('[data-individuals-group]')];
+  const classButton = (group: string) => headers().find((h) => h.dataset.individualsGroup === `${NS}${group}`)!.querySelector<HTMLButtonElement>('[data-individuals-show-class]')!;
+
+  it('has a header row above the individuals of each type, with how many there are, the bigger type first', () => {
+    mount(links(120));
+
+    expect(headers().map((h) => h.querySelector('.individuals-group-title')!.textContent)).toEqual([':Person (120)']);
+    // The 120 persons fill the first page of 50; the one room is on the third.
+    container.querySelector<HTMLButtonElement>('[data-individuals-next]')!.click();
+    container.querySelector<HTMLButtonElement>('[data-individuals-next]')!.click();
+    expect(headers().map((h) => h.querySelector('.individuals-group-title')!.textContent)).toEqual([':Person (120)', ':Room (1)']);
+  });
+
+  it('has a button on the header that says how many it draws and how many are drawn of the total, until all are', () => {
+    mount(links(120));
+    expect(classButton('Person').textContent).toBe('Show 50 (0 displayed/120 total)');
+
+    classButton('Person').click();
+
+    expect(layer.build(new Map()).nodes).toHaveLength(50);
+    expect(classButton('Person').textContent).toBe('Show 50 (50 displayed/120 total)');
+    classButton('Person').click();
+    classButton('Person').click();
+    expect(classButton('Person').textContent).toBe('All 120 displayed');
+    expect(classButton('Person').disabled).toBe(true);
+  });
+
+  it('has one header when one class is chosen, and no button where there is no class', () => {
+    mount(':a a :Room . :loose a <http://www.w3.org/2002/07/owl#NamedIndividual> .');
+
+    const titles = headers().map((h) => h.querySelector('.individuals-group-title')!.textContent);
+    expect(titles).toEqual([':Room (1)', 'No class (1)']);
+    expect(headers()[1].querySelector('[data-individuals-show-class]')).toBeNull();
+  });
+});
+
+describe('the rows after a type header is pressed', () => {
+  const rowItem = (name: string) =>
+    [...container.querySelectorAll<HTMLElement>('[data-individuals-list] li:not([data-individuals-group])')].find((li) => li.querySelector<HTMLElement>('[data-individuals-item]')!.title === `${NS}${name}`)!;
+  const header = () => container.querySelector<HTMLButtonElement>('[data-individuals-group] [data-individuals-show-class]')!;
+
+  it('say that the individuals the header drew are all displayed, with their neighbours', () => {
+    mount(':a a :Room ; :next :b . :b a :Room . :c a :Room .');
+    expect(row('a').textContent).toBe('Show 1 (0 displayed/1 total)');
+    expect(rowItem('a').classList.contains('individual-drawn')).toBe(false);
+
+    header().click();
+
+    expect(rowItem('a').classList.contains('individual-drawn')).toBe(true);
+    expect(row('a').textContent).toBe('All 1 displayed');
+    expect(row('a').disabled).toBe(true);
+    expect(row('b').textContent).toBe('All 1 displayed');
+    expect(row('c').textContent).toBe('Shown in graph');
+  });
+
+  it('count a neighbour the header drew as displayed, and mark the individuals that are drawn', () => {
+    mount(links(120));
+    header().click();
+
+    // The hub is a room, not drawn by the persons' header; each of the 50 persons drawn has the hub as its one neighbour, not drawn.
+    expect(rowItem('p000').classList.contains('individual-drawn')).toBe(true);
+    expect(row('p000').textContent).toBe('Show 1 (0 displayed/1 total)');
+    expect(row('p000').title).toContain('This individual is drawn');
+    expect(rowItem('p049').classList.contains('individual-drawn')).toBe(true);
+  });
+
+  it('draw the next neighbours, not the ones already drawn, when the row is pressed after the header', () => {
+    mount(':a a :Room ; :next :b , :c . :b a :Room . :c a :Room .');
+    // Header draws the three rooms; the row of a then has nothing left to draw.
+    header().click();
+    expect(layer.preview(`${NS}a`)).toEqual({ shown: true, adds: 0, displayed: 2, total: 2 });
   });
 });

@@ -23,6 +23,8 @@ export interface ClassCount {
 
 export interface IndividualItem {
   iri: string;
+  /** With `grouped`: the class the individual is listed under (the first of its classes, biggest first), or NO_CLASS. */
+  group: string;
   /** The label shown for it, or null when it has none (the name stands for it). */
   label: string | null;
 }
@@ -34,6 +36,8 @@ export interface ListOptions {
   search?: string;
   offset: number;
   limit: number;
+  /** Put the individuals of each class together (biggest class first, those with no class last), by label inside each. */
+  grouped?: boolean;
 }
 
 export interface DescribedTerm {
@@ -63,7 +67,8 @@ export interface IndividualDetail {
 
 export interface IndividualIndex {
   classCounts(): { total: number; classes: ClassCount[]; withoutClass: number };
-  list(options: ListOptions): { items: IndividualItem[]; total: number };
+  /** `groupTotals`: how many matches each group has (all of them, not just this page); empty unless `grouped`. */
+  list(options: ListOptions): { items: IndividualItem[]; total: number; groupTotals: Map<string, number> };
   describe(iri: string, options?: { maxRows?: number }): IndividualDetail;
 }
 
@@ -127,6 +132,16 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
     sortKey: string;
     haystack: string;
   }
+  /** The class each individual is listed under when grouped: the first of its classes in the order of classCounts. */
+  let primary: Map<string, string> | null = null;
+  const primaryOf = (iri: string): string => {
+    if (!primary) {
+      primary = new Map();
+      const order = [...members].sort((a, b) => b[1].size - a[1].size || byText(a[0], b[0]));
+      for (const [classIri, set] of order) for (const member of set) if (!primary.has(member)) primary.set(member, classIri);
+    }
+    return primary.get(iri) ?? NO_CLASS;
+  };
   const sortedCache = new Map<string | null, SortedItem[]>();
   const sortedFor = (classIri: string | null): SortedItem[] => {
     let sorted = sortedCache.get(classIri);
@@ -135,12 +150,30 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
       sorted = pool
         .map((iri) => {
           const label = labelOf(iri);
-          return { iri, label, sortKey: label ?? extractLocalName(iri), haystack: `${label ?? ''}\n${iri}`.toLowerCase() };
+          return { iri, label, group: NO_CLASS, sortKey: label ?? extractLocalName(iri), haystack: `${label ?? ''}\n${iri}`.toLowerCase() };
         })
         .sort((a, b) => byText(a.sortKey, b.sortKey) || (a.iri < b.iri ? -1 : a.iri > b.iri ? 1 : 0));
       sortedCache.set(classIri, sorted);
     }
     return sorted;
+  };
+
+  /** The individuals of a class (or all) in the order of the groups: one group for a class, by class for all. Kept like `sortedFor`. */
+  const groupedCache = new Map<string | null, SortedItem[]>();
+  const groupedFor = (classIri: string | null): SortedItem[] => {
+    let grouped = groupedCache.get(classIri);
+    if (!grouped) {
+      const base = sortedFor(classIri);
+      if (classIri && classIri !== NO_CLASS) {
+        grouped = base.map((item) => ({ ...item, group: classIri }));
+      } else {
+        const rank = new Map([...members].sort((a, b) => b[1].size - a[1].size || byText(a[0], b[0])).map(([c], i) => [c, i] as const));
+        const rankOf = (group: string): number => rank.get(group) ?? rank.size;
+        grouped = base.map((item) => ({ ...item, group: primaryOf(item.iri) })).sort((a, b) => rankOf(a.group) - rankOf(b.group));
+      }
+      groupedCache.set(classIri, grouped);
+    }
+    return grouped;
   };
 
   return {
@@ -149,12 +182,14 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
       return { total: individuals.size, classes, withoutClass: individuals.size - typed.size };
     },
 
-    list({ classIri, search, offset, limit }) {
-      const sorted = sortedFor(classIri ?? null);
+    list({ classIri, search, offset, limit, grouped }) {
+      const sorted = grouped ? groupedFor(classIri ?? null) : sortedFor(classIri ?? null);
       const needle = search?.trim().toLowerCase();
       // Filtering keeps the order, so a search does not sort again.
       const matching = needle ? sorted.filter((item) => item.haystack.includes(needle)) : sorted;
-      return { items: matching.slice(offset, offset + limit).map(({ iri, label }) => ({ iri, label })), total: matching.length };
+      const groupTotals = new Map<string, number>();
+      if (grouped) for (const item of matching) groupTotals.set(item.group, (groupTotals.get(item.group) ?? 0) + 1);
+      return { items: matching.slice(offset, offset + limit).map(({ iri, label, group }) => ({ iri, label, group })), total: matching.length, groupTotals };
     },
 
     describe(iri, { maxRows = DEFAULT_MAX_ROWS } = {}) {

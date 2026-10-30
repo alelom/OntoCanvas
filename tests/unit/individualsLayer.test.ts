@@ -25,7 +25,7 @@ describe('createIndividualsLayer', () => {
   it('draws nothing until an individual is shown', () => {
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(3)] });
     expect(layer.isEmpty()).toBe(true);
-    expect(layer.build(classNodes)).toMatchObject({ nodes: [], edges: [], more: [], warning: null });
+    expect(layer.build(classNodes)).toMatchObject({ nodes: [], edges: [], warning: null });
   });
 
   it('draws the individual, its neighbours in both directions, and the links between them', () => {
@@ -70,7 +70,7 @@ describe('createIndividualsLayer', () => {
     const view = layer.build(classNodes);
 
     expect(view.nodes).toHaveLength(51);
-    expect(view.more).toEqual([{ iri: ex('h'), label: 'Hub', hidden: 70 }]);
+    expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 50, displayed: 50, total: 120 });
   });
 
   it('shows 50 more at a time, in a stable order, until none are left', () => {
@@ -78,21 +78,21 @@ describe('createIndividualsLayer', () => {
     layer.show(ex('h'));
     const first = new Set(layer.build(classNodes).nodes.map((n) => n.iri));
 
-    layer.showMore(ex('h'));
+    layer.show(ex('h'));
     const second = layer.build(classNodes);
     expect(second.nodes).toHaveLength(101);
     expect([...first].every((iri) => second.nodes.some((n) => n.iri === iri))).toBe(true);
 
-    layer.showMore(ex('h'));
+    layer.show(ex('h'));
     const third = layer.build(classNodes);
     expect(third.nodes).toHaveLength(121);
-    expect(third.more).toEqual([]);
+    expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 0, displayed: 120, total: 120 });
   });
 
   it('stops at a total, with a warning, however many are expanded', () => {
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(120)], maxPerExpansion: 50, maxTotal: 60 });
     layer.show(ex('h'));
-    layer.showMore(ex('h'));
+    layer.show(ex('h'));
 
     const view = layer.build(classNodes);
 
@@ -131,7 +131,7 @@ describe('createIndividualsLayer', () => {
     layer.onChange(() => calls++);
 
     layer.show(ex('h'));
-    layer.showMore(ex('h'));
+    layer.show(ex('h'));
     layer.clear();
 
     expect(calls).toBe(3);
@@ -165,7 +165,6 @@ describe('few individuals are drawn without being asked', () => {
     const view = layer.build(classNodes);
     expect(view.nodes.map((n) => n.iri).sort()).toEqual([ex('a'), ex('b'), ex('c')]);
     expect(view.edges.some((e) => e.type === ex('next'))).toBe(true);
-    expect(view.more).toEqual([]);
   });
 
   it('draws nothing by itself above the limit', () => {
@@ -219,10 +218,10 @@ describe('preview(): what asking for an individual would draw', () => {
     layer.show(ex('h'));
     expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 50, displayed: 50, total: 120 });
 
-    layer.showMore(ex('h'));
+    layer.show(ex('h'));
     expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 20, displayed: 100, total: 120 });
 
-    layer.showMore(ex('h'));
+    layer.show(ex('h'));
     expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 0, displayed: 120, total: 120 });
   });
 
@@ -230,5 +229,57 @@ describe('preview(): what asking for an individual would draw', () => {
     const layer = createIndividualsLayer({ getStores: () => [hub(3)], autoMax: 30 });
 
     expect(layer.preview(ex('h'))).toEqual({ shown: true, adds: 0, displayed: 3, total: 3 });
+  });
+});
+
+describe('the individuals of a class', () => {
+  const person = ex('Person');
+  const layer = (autoMax = 0) => createIndividualsLayer({ getStores: () => [hub(120)], autoMax });
+
+  it('previews 50 of the 120 before any is drawn', () => {
+    expect(layer().previewClass(person)).toEqual({ adds: 50, displayed: 0, total: 120 });
+  });
+
+  it('draws the first 50 by label, with no neighbours, and the next 50 and the last 20 on the next requests', () => {
+    const l = layer();
+    l.showClass(person);
+
+    const first = l.build(classNodes);
+    expect(first.nodes).toHaveLength(50);
+    expect(first.nodes.map((n) => n.label).sort()[0]).toBe('P000');
+    expect(l.previewClass(person)).toEqual({ adds: 50, displayed: 50, total: 120 });
+
+    l.showClass(person);
+    l.showClass(person);
+    expect(l.build(classNodes).nodes).toHaveLength(120);
+    expect(l.previewClass(person)).toEqual({ adds: 0, displayed: 120, total: 120 });
+  });
+
+  it('counts the individuals of the class that are drawn some other way, and draws only the ones still missing', () => {
+    const l = layer();
+    l.show(ex('h'));
+    expect(l.previewClass(person)).toEqual({ adds: 50, displayed: 50, total: 120 });
+
+    l.showClass(person);
+
+    expect(l.previewClass(person)).toEqual({ adds: 20, displayed: 100, total: 120 });
+    expect(l.build(classNodes).nodes).toHaveLength(101);
+  });
+
+  it('is all displayed when the individuals are drawn by themselves, is cleared by clear() and reset(), and tells the listeners', () => {
+    expect(layer(200).previewClass(person)).toEqual({ adds: 0, displayed: 120, total: 120 });
+
+    const l = layer();
+    let calls = 0;
+    l.onChange(() => calls++);
+    l.showClass(person);
+    expect(calls).toBe(1);
+    expect(l.isEmpty()).toBe(false);
+
+    l.clear();
+    expect(l.isEmpty()).toBe(true);
+    l.showClass(person);
+    l.reset();
+    expect(l.isEmpty()).toBe(true);
   });
 });

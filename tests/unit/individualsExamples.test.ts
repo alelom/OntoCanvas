@@ -79,14 +79,14 @@ describe('individuals-hub.ttl', () => {
     let view = l.build(new Map());
     expect(view.nodes).toHaveLength(51);
     expect(view.nodes.filter((n) => n.label.startsWith('Floor'))).toHaveLength(2);
-    expect(view.more).toEqual([{ iri: hq, label: 'Head office', hidden: 72 }]);
+    expect(l.preview(hq)).toEqual({ shown: true, adds: 50, displayed: 50, total: 122 });
 
-    l.showMore(hq);
+    l.show(hq);
     expect(l.build(new Map()).nodes).toHaveLength(101);
-    l.showMore(hq);
+    l.show(hq);
     view = l.build(new Map());
     expect(view.nodes).toHaveLength(123);
-    expect(view.more).toEqual([]);
+    expect(l.preview(hq)).toEqual({ shown: true, adds: 0, displayed: 122, total: 122 });
   });
 
   it('adds the six rooms of Floor 1 when it is shown too', () => {

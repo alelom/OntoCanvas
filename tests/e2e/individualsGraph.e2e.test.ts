@@ -165,6 +165,19 @@ describe('individuals in the graph', () => {
     await embedded.close();
   });
 
+  it('draws the individuals of a type from the header row of the type, saying how many are displayed of the total', async () => {
+    await page.click('[data-individuals-clear]').catch(() => {});
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+    const person = page.locator('[data-individuals-group$="#Person"] [data-individuals-show-class]');
+    expect(await person.innerText()).toBe('Show 3 (0 displayed/3 total)');
+
+    await person.click();
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 3);
+
+    expect(await drawnIndividuals()).toEqual(['alice', 'bob', 'carol']);
+    expect(await person.innerText()).toBe('All 3 displayed');
+  });
+
   it('has no Edit button while an edge between individuals is selected, and has it, before the panel buttons, for a class edge', async () => {
     await page.click('[data-individuals-clear]').catch(() => {});
     await page.click('[data-individuals-list] li:has([title$="#alice"]) [data-individuals-show-in-graph]');

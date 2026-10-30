@@ -604,6 +604,24 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   align-items: stretch;
   border-bottom: 1px solid #eee;
 }
+.individuals-list li.individuals-group {
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 6px;
+  background: #eef1f4;
+  font-weight: bold;
+}
+.individuals-list li.individuals-group button.individual-graph {
+  font-weight: normal;
+}
+.individuals-list li.individual-drawn {
+  background: #fdf2e3;
+}
+.individuals-list li.individual-drawn button[data-individuals-item]::before {
+  content: '●';
+  margin-right: 4px;
+  color: #e67e22;
+}
 .individuals-list li button.individual-graph {
   flex: none;
   width: auto;
@@ -756,9 +774,18 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .query-result > button {
   margin-bottom: 8px;
 }
+/* The line that says what a tab is for: in italics, so it reads apart from the controls and the text below. */
+.panel-description {
+  font-style: italic;
+}
 .query-data {
-  margin-bottom: 8px;
+  margin-bottom: 0;
   font-size: 11px;
+}
+/* In the Individuals tab the controls to add data end in a thin divider, and the room around it is small. */
+.individuals-tab .query-data {
+  padding-bottom: 6px;
+  border-bottom: 1px solid #d5d9de;
 }
 .query-data-add {
   display: flex;
@@ -773,7 +800,9 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   display: flex;
   gap: 6px;
   align-items: center;
-  min-height: 16px;
+}
+.query-data-status .query-status:empty {
+  display: none;
 }
 .query-data-list {
   margin: 4px 0 0;
