@@ -203,3 +203,36 @@ describe('the link from the Query tab', () => {
     expect(panelEl().querySelector('[data-tab-body="individuals"]')!.hasAttribute('hidden')).toBe(false);
   });
 });
+
+describe('the toggle for spreading individuals clear of classes (#209)', () => {
+  const toggle = () => document.getElementById('relaxIndividualsWrap') as HTMLElement;
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="networkWrapper"></div><aside id="sidePanel"></aside><label id="relaxIndividualsWrap" style="display: none"></label>';
+  });
+
+  it('is shown when there are individuals, and not when there are none', () => {
+    ontology = store(':Room a owl:Class .');
+    mount();
+    expect(toggle().style.display).toBe('none');
+
+    ontology = store(':Room a owl:Class . :room1 a :Room .');
+    mount();
+    expect(toggle().style.display).not.toBe('none');
+  });
+
+  it('follows the data added, and another ontology being opened', async () => {
+    ontology = store(':Room a owl:Class .');
+    const { dataSources, panel } = mount();
+    expect(toggle().style.display).toBe('none');
+
+    const added = await dataSources.addText('d.ttl', PREFIXES + ':room1 a :Room .', { path: 'd.ttl' });
+    expect(toggle().style.display).not.toBe('none');
+
+    dataSources.remove(added.id);
+    expect(toggle().style.display).toBe('none');
+
+    ontology = store(':Room a owl:Class . :room9 a :Room .');
+    panel.refresh();
+    expect(toggle().style.display).not.toBe('none');
+  });
+});

@@ -88,6 +88,35 @@ describe('individuals in the graph', () => {
   }
   const toolbar = () => page.evaluate(() => [...document.querySelectorAll('.vis-manipulation > button')].map((b) => b.id || b.className.replace('vis-button ', '')));
 
+  /** The ids of individual nodes whose drawn box overlaps a class node's. */
+  const overlaps = () =>
+    page.evaluate(() => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      const ids = (net.body.data.nodes.getIds() as string[]).map(String);
+      const box = (id: string) => net.getBoundingBox(id) as { left: number; right: number; top: number; bottom: number };
+      const hit = (a: any, b: any) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      const individuals = ids.filter((id) => id.startsWith('__individual__'));
+      const classes = ids.filter((id) => !id.startsWith('__individual__') && !id.startsWith('__dataprop'));
+      return individuals.filter((i) => classes.some((c) => hit(box(i), box(c))));
+    });
+
+  it('spreads the individuals clear of the classes by default, and puts them on a ring around their class when that is unticked', async () => {
+    expect(await page.locator('#relaxIndividuals').isChecked()).toBe(true);
+    await page.click('[data-individuals-clear]').catch(() => {});
+    await page.click('#relaxIndividuals');
+    await page.click('#relaxIndividuals');
+    await page.click('[data-individuals-item][title$="#alice"]');
+    await page.click('[data-individuals-show-in-graph]');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#alice'));
+    expect(await overlaps()).toEqual([]);
+
+    const where = () => page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().getPositions(['__individual__http://example.org/o#alice'])['__individual__http://example.org/o#alice'] as { x: number; y: number });
+    const relaxed = await where();
+    await page.click('#relaxIndividuals');
+    await page.waitForFunction(([x, y]) => { const p = (window as any).__EDITOR_TEST__.getNetwork().getPositions(['__individual__http://example.org/o#alice'])['__individual__http://example.org/o#alice']; return p.x !== x || p.y !== y; }, [relaxed.x, relaxed.y]);
+    await page.click('#relaxIndividuals');
+  });
+
   it('has no Edit button while an edge between individuals is selected, and has it, before the panel buttons, for a class edge', async () => {
     await page.click('[data-individuals-clear]').catch(() => {});
     await page.click('[data-individuals-item][title$="#alice"]');

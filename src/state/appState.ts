@@ -78,6 +78,8 @@ export const canvasState = {
   clusterThingDataProperties: true,
   /** Stack many leaf children in a block under their parent in the tiered layouts (#159). */
   stackLeaves: true,
+  /** Lay the individuals drawn in the graph out by force relaxation, anchored to the class nodes (#209). */
+  relaxIndividuals: true,
   /** The relationships that make the tiers of the hierarchical layouts (#151), as edge types. */
   hierarchyTypes: new Set(DEFAULT_HIERARCHY_TYPES),
   /** Layout of external nodes: auto or always right/top/bottom/left of connected local node. */

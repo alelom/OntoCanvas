@@ -100,7 +100,11 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
 
   /** The label of the Individuals button follows what there is: an invitation to add some, or the count. */
   const updateIndividualsButton = (): void => {
-    const { label, title } = individualsButtonText(countIndividuals(stores()));
+    const count = countIndividuals(stores());
+    const { label, title } = individualsButtonText(count);
+    // The option for how individuals are laid out only means something when there are some.
+    const relaxToggle = document.getElementById('relaxIndividualsWrap');
+    if (relaxToggle) relaxToggle.style.display = count > 0 ? 'flex' : 'none';
     buttons.setLabel('individualsPanelBtn', label);
     buttons.setTitle('individualsPanelBtn', title);
   };

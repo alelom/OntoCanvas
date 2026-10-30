@@ -19,7 +19,7 @@ import { performDeleteSelection } from '../workflows/deleteSelection';
 import { applyDisplayConfig } from '../workflows/displayConfigApply';
 import { collectDisplayConfig } from '../workflows/displayConfigFiles';
 import { scheduleDisplayConfigSave } from '../workflows/displayConfigSave';
-import { setStackLeaves, setHierarchyTypes } from '../workflows/layoutOptions';
+import { setStackLeaves, setHierarchyTypes, setRelaxIndividuals } from '../workflows/layoutOptions';
 import { loadFromFile, loadFromUrl, loadLastOpenedFile, loadLastOpenedUrl, loadFromRecentEntry, loadTtlAndRender } from '../workflows/loadOntologyFlow';
 import { restoreNodePositions, forgetNodePositions } from '../workflows/nodePositions';
 import { saveTtl } from '../workflows/saveTtlFlow';
@@ -136,6 +136,11 @@ export function setupEventListeners(): void {
   document.getElementById('stackLeaves')?.addEventListener('change', (e) => {
     setStackLeaves((e.target as HTMLInputElement).checked);
     forgetNodePositions();
+    actions.applyFilter(true);
+    scheduleDisplayConfigSave();
+  });
+  document.getElementById('relaxIndividuals')?.addEventListener('change', (e) => {
+    setRelaxIndividuals((e.target as HTMLInputElement).checked);
     actions.applyFilter(true);
     scheduleDisplayConfigSave();
   });
@@ -655,6 +660,7 @@ export function setupEventListeners(): void {
     forgetNodePositions();
     setHierarchyTypes(undefined);
     setStackLeaves(true);
+    setRelaxIndividuals(true);
     
     // Reset all display settings to defaults
     (document.getElementById('wrapChars') as HTMLInputElement).value = '12';

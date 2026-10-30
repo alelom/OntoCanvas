@@ -6,6 +6,7 @@
 import type { DataSet } from 'vis-data';
 import type { IndividualsLayer } from '../abox/individualsLayer';
 import { extractLocalName } from '../utils/localName';
+import { relaxIndividuals, type FixedBox } from './individualsRelax';
 
 interface NetworkData {
   nodes: DataSet<any>;
@@ -22,7 +23,14 @@ export function classNodesByUri(nodes: Array<{ id: string; uri?: string }>): Map
   return byUri;
 }
 
-export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>): void {
+/** The room a node already placed takes, estimated from its label (the canvas has not drawn it yet). */
+function boxOf(node: { id: string; x: number; y: number; label?: string; font?: { size?: number } }): FixedBox {
+  const lines = String(node.label ?? '').split('\n');
+  const size = node.font?.size ?? 20;
+  return { id: String(node.id), x: node.x, y: node.y, width: Math.max(80, Math.max(...lines.map((l) => l.length)) * size * 0.55 + 24), height: lines.length * size * 1.3 + 20 };
+}
+
+export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean } = {}): void {
   if (layer.isEmpty()) return;
   const view = layer.build(classNodes);
 
@@ -57,6 +65,7 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       return { ...base, x: anchor.x + radius * Math.cos(angle), y: anchor.y + radius * Math.sin(angle) };
     })
   );
+  if (options.relax ?? true) relax(data, view);
   data.edges.add(
     view.edges.map((edge) => ({
       id: edge.id,
@@ -70,4 +79,19 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       smooth: false,
     }))
   );
+}
+
+/** Moves the individuals by force relaxation, anchored to the nodes the layout already placed; the rest are left to the canvas. */
+function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>): void {
+  const individualIds = new Set(view.nodes.map((n) => n.id));
+  const fixed = (data.nodes.get() as Array<{ id: string; x?: number; y?: number; label?: string }>)
+    .filter((n) => !individualIds.has(String(n.id)) && typeof n.x === 'number' && typeof n.y === 'number')
+    .map((n) => boxOf(n as Parameters<typeof boxOf>[0]));
+  // With the classes unplaced (the physics layout) there is nothing to anchor to: the canvas lays everything out.
+  if (fixed.length === 0) return;
+  const centre = { x: fixed.reduce((sum, f) => sum + f.x, 0) / fixed.length, y: fixed.reduce((sum, f) => sum + f.y, 0) / fixed.length };
+  const movable = data.nodes.get(view.nodes.map((n) => n.id)).map((n: { id: string; x?: number; y?: number }) => ({ id: String(n.id), x: n.x ?? centre.x, y: n.y ?? centre.y }));
+  const links = view.edges.map((e) => [e.from, e.to] as [string, string]);
+  const placed = relaxIndividuals({ movable, fixed, links });
+  data.nodes.update([...placed].map(([id, p]) => ({ id, x: p.x, y: p.y })));
 }

@@ -52,3 +52,25 @@ describe('addIndividualsToNetworkData', () => {
     }
   });
 });
+
+describe('the layout of the individuals', () => {
+  const crowded = new Store(new Parser().parse(`@prefix : <${NS}> . ${Array.from({ length: 10 }, (_, i) => `:r${i} a :Room .`).join(' ')}`));
+  const place = (relax: boolean) => {
+    const layer = createIndividualsLayer({ getStores: () => [crowded] });
+    const data = network();
+    addIndividualsToNetworkData(data, layer, classNodesByUri(classNodes), { relax });
+    return data.nodes.get().filter((n: any) => String(n.id).startsWith(INDIVIDUAL_PREFIX)) as Array<{ x: number; y: number }>;
+  };
+
+  it('keeps them off the class nodes and off each other when relaxing, the default', () => {
+    const points = place(true);
+
+    expect(points).toHaveLength(10);
+    for (const p of points) expect(Math.abs(p.x - 100) < 60 + 45 && Math.abs(p.y - 50) < 25 + 45).toBe(false);
+    for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++) expect(Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y)).toBeGreaterThan(30);
+  });
+
+  it('leaves them on the plain ring around their class when not relaxing', () => {
+    for (const p of place(false)) expect(Math.hypot(p.x - 100, p.y - 50)).toBeGreaterThanOrEqual(160 - 1e-6);
+  });
+});

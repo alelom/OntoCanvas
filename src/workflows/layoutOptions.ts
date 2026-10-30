@@ -28,6 +28,13 @@ export function setStackLeaves(value: boolean): boolean {
   return changed;
 }
 
+/** Sets whether individuals are laid out by force relaxation (#209), and its checkbox. */
+export function setRelaxIndividuals(value: boolean): void {
+  canvasState.relaxIndividuals = value;
+  const el = document.getElementById('relaxIndividuals') as HTMLInputElement | null;
+  if (el) el.checked = value;
+}
+
 export function updateRestorePositionsButton(): void {
   const btn = document.getElementById('restorePositions');
   if (btn) btn.style.display = canvasState.positionsBeforeLayout ? '' : 'none';

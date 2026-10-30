@@ -13,7 +13,7 @@ import { defaultMaxFontSize } from '../ui/fontSizeDefaults';
 import { getAllRelationshipTypes, colourableRelationshipTypes } from '../ui/relationshipUtils';
 import { setSearchScope } from '../ui/searchOptions';
 import { debugLog, debugWarn, isDebugMode } from '../utils/debug';
-import { setHierarchyTypes, setStackLeaves } from './layoutOptions';
+import { setHierarchyTypes, setRelaxIndividuals, setStackLeaves } from './layoutOptions';
 import { forgetNodePositions, clearPositionsBeforeLayout } from './nodePositions';
 
 export function applyDisplayConfig(config: DisplayConfig): void {
@@ -26,6 +26,7 @@ export function applyDisplayConfig(config: DisplayConfig): void {
   // below. Loading a config is not undone with "Restore positions" (#152).
   const tiersChanged = setHierarchyTypes(config.hierarchyRelationships);
   const stackChanged = setStackLeaves(config.stackLeaves ?? true);
+  setRelaxIndividuals(config.relaxIndividuals ?? true);
   const configLayoutMode = resolveLayoutMode(config.layoutMode);
   if (tiersChanged || stackChanged || (canvasState.lastLayoutMode !== null && canvasState.lastLayoutMode !== configLayoutMode)) forgetNodePositions();
   canvasState.lastLayoutMode = configLayoutMode;
