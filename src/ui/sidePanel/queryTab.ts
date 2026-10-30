@@ -372,7 +372,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     render,
     refresh() {
       // The data belongs to the ontology it was added to.
-      deps.dataLoader?.cancel();
+      deps.dataLoader?.reset();
       deps.dataSources?.clear();
       if (!editor) return;
       if (!edited) editor.setText(starterText());

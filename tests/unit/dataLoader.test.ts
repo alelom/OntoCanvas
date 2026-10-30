@@ -110,6 +110,57 @@ describe('addFile', () => {
   });
 });
 
+describe('reset (another ontology is opened)', () => {
+  it('stops a read that is going on, and leaves nothing to say: nobody pressed Cancel', async () => {
+    const data = loader();
+
+    const reading = data.addFile(file('long.ttl', ttl(20000)));
+    await vi.waitFor(() => expect(data.loading()).toBe(true));
+    data.reset();
+    await reading;
+
+    expect(data.loading()).toBe(false);
+    expect(data.status()).toBe('');
+    expect(sources.list()).toEqual([]);
+  });
+
+  it('forgets the failure of the last read', async () => {
+    const data = loader();
+    await data.addFile(file('huge.ttl', 'x', 11 * MB));
+    expect(data.status()).toMatch(/too large/i);
+
+    data.reset();
+
+    expect(data.status()).toBe('');
+  });
+
+  it('tells the listeners, once, when it clears something, and not when there was nothing to clear', async () => {
+    const data = loader();
+    const changed = vi.fn();
+    data.onChange(changed);
+
+    data.reset();
+    expect(changed).not.toHaveBeenCalled();
+
+    await data.addFile(file('huge.ttl', 'x', 11 * MB));
+    changed.mockClear();
+    data.reset();
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets the next read go ahead as normal', async () => {
+    const data = loader();
+    const reading = data.addFile(file('long.ttl', ttl(20000)));
+    await vi.waitFor(() => expect(data.loading()).toBe(true));
+    data.reset();
+    await reading;
+
+    await data.addFile(file('b.ttl', ttl(2)));
+
+    expect(sources.list().map((s) => s.name)).toEqual(['b.ttl']);
+  });
+});
+
 describe('addUrls', () => {
   function serve(answers: Record<string, string | number>): ReturnType<typeof vi.fn> {
     const fetchFn = vi.fn(async (url: string) => {

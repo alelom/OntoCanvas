@@ -143,7 +143,7 @@ describe('queries over the data', () => {
 });
 
 describe('another ontology', () => {
-  it('drops the data added to the one before, and stops a read that is going on', async () => {
+  it('drops the data added to the one before, stops a read that is going on, and leaves no status of it in the line', async () => {
     const tab = mount();
     await sources.addText('a.ttl', ttl(2), { path: 'a.ttl' });
     const reading = loader.addFile({ name: 'long.ttl', size: 10, text: async () => ttl(20000) });
@@ -153,7 +153,7 @@ describe('another ontology', () => {
     await reading;
 
     expect(sources.list()).toEqual([]);
-    expect(loader.status()).toBe('Cancelled.');
-    expect(summary().textContent).not.toContain('data file');
+    expect(loader.status()).toBe('');
+    expect(summary().hidden).toBe(true);
   });
 });

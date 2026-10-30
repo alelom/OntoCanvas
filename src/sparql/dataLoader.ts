@@ -24,6 +24,8 @@ export interface DataLoader {
   addUrls(urls: string[]): Promise<void>;
   /** Stops the read that is going on, if any. */
   cancel(): void;
+  /** Another ontology was opened: stops a read and forgets its status and any failure, as nobody asked for that read to stop. */
+  reset(): void;
   /** Called when the status or whether it is loading changes. */
   onChange(listener: () => void): void;
 }
@@ -35,6 +37,8 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
   const listeners: Array<() => void> = [];
   let status = '';
   let controller: AbortController | null = null;
+  /** Counts the resets: a read that began before one has nothing left to say. */
+  let generation = 0;
 
   const set = (next: string): void => {
     status = next;
@@ -49,20 +53,33 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       return status;
     }
     const mine = new AbortController();
+    const began = generation;
     controller = mine;
     set(`Loading ${label}…`);
+    // What this read leaves in the status: kept apart from the shared one, which a reset or a later read may have changed.
+    let outcome = '';
     try {
-      await add({ signal: mine.signal, confirm: ask, onProgress: (triples) => set(`Loading ${label}… ${triples.toLocaleString('en')} triples`) });
-      status = '';
+      await add({
+        signal: mine.signal,
+        confirm: ask,
+        onProgress: (triples) => {
+          if (began === generation) set(`Loading ${label}… ${triples.toLocaleString('en')} triples`);
+        },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // "Cancelled" is the user's Cancel, or a no to the question about a large file (nothing to say then).
-      status = message === 'Cancelled' ? (mine.signal.aborted ? 'Cancelled.' : '') : message;
+      outcome = message === 'Cancelled' ? (mine.signal.aborted ? 'Cancelled.' : '') : message;
     } finally {
-      controller = null;
+      if (controller === mine) controller = null;
     }
-    set(status);
-    return status;
+    if (began !== generation) {
+      // Reset while it ran: its status was cleared then, and the tabs only need to see that it is no longer loading.
+      listeners.forEach((listener) => listener());
+      return '';
+    }
+    set(outcome);
+    return outcome;
   }
 
   return {
@@ -79,6 +96,13 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       set(failures.join('  '));
     },
     cancel: () => controller?.abort(),
+    reset() {
+      generation++;
+      const reading = controller;
+      controller = null;
+      reading?.abort();
+      if (status !== '') set('');
+    },
     onChange: (listener) => void listeners.push(listener),
   };
 }

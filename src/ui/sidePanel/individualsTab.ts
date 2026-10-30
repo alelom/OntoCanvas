@@ -252,7 +252,11 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     renderClasses();
     offset = 0;
     renderList();
-    if (selected !== null && index.describe(selected).types.length === 0 && index.describe(selected).outgoingTotal === 0 && index.describe(selected).incomingTotal === 0) selected = null;
+    if (selected !== null) {
+      // The individual chosen is gone when nothing is known of it any more.
+      const known = index.describe(selected);
+      if (known.types.length === 0 && known.outgoingTotal === 0 && known.incomingTotal === 0) selected = null;
+    }
     renderDetail();
   }
 
