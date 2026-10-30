@@ -1,22 +1,24 @@
 // @vitest-environment jsdom
 /**
- * Data added to the open ontology in the query tab (#205): a file or a URL, listed with its triples and a Remove button,
- * queried together with the ontology, dropped when another ontology is opened.
+ * Data added to the open ontology, as the Query tab shows it (#205, #211): queries run over it, one line says that it is
+ * there (and the loading status of an address's ?data=), and it is dropped when another ontology is opened. The controls to
+ * add it are in the Individuals tab.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Store } from 'n3';
 import { createQueryTab } from '../../src/ui/sidePanel/queryTab';
 import { createDataSources, type DataSources } from '../../src/sparql/dataSources';
+import { createDataLoader, type DataLoader } from '../../src/sparql/dataLoader';
 import type { QueryResult } from '../../src/sparql/runQuery';
 
-const MB = 1024 * 1024;
 const ttl = (n: number) =>
   '@prefix : <http://example.org/d#> .\n' + Array.from({ length: n }, (_, i) => `:i${i} a :Thing ; :next :i${i + 1} .`).join('\n');
 
 let container: HTMLElement;
 let run: ReturnType<typeof vi.fn>;
 let sources: DataSources;
-let confirm: ReturnType<typeof vi.fn>;
+let loader: DataLoader;
+let openIndividuals: ReturnType<typeof vi.fn>;
 const store = new Store();
 const neverLoads = () => new Promise<never>(() => {});
 
@@ -27,22 +29,15 @@ const mount = () => {
     run: (...args) => run(...args),
     loadEditor: neverLoads,
     dataSources: sources,
-    confirm: (message) => confirm(message),
+    dataLoader: loader,
+    openIndividuals: () => openIndividuals(),
   });
   tab.render(container);
   return tab;
 };
 
-const file = (name: string, text: string, size = text.length) => ({ name, size, text: async () => text });
 const q = <T extends HTMLElement>(selector: string) => container.querySelector<T>(selector)!;
-const items = () => [...container.querySelectorAll('[data-data-list] li')].map((li) => li.textContent ?? '');
-
-/** What the file input does when the user picks a file. */
-function pick(picked: unknown): void {
-  const input = q<HTMLInputElement>('[data-add-file-input]');
-  Object.defineProperty(input, 'files', { value: [picked], configurable: true });
-  input.dispatchEvent(new Event('change'));
-}
+const summary = () => q<HTMLElement>('[data-query-data-summary]');
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -50,89 +45,71 @@ beforeEach(() => {
   document.body.append(container);
   run = vi.fn().mockResolvedValue({ kind: 'boolean', value: true } satisfies QueryResult);
   sources = createDataSources();
-  confirm = vi.fn().mockResolvedValue(true);
+  loader = createDataLoader({ sources, getStore: () => store, confirm: async () => true });
+  openIndividuals = vi.fn();
 });
 
-describe('the data block', () => {
-  it('offers a file and a URL, and shows no list while nothing is added', () => {
+describe('the line about the data', () => {
+  it('is not there while no data is added and nothing is loading', () => {
     mount();
 
-    expect(q('[data-add-file]').textContent).toMatch(/Add data file/);
-    expect(q('[data-add-url-input]')).not.toBeNull();
-    expect(q('[data-add-url]').textContent).toMatch(/Add/);
-    expect(q<HTMLElement>('[data-data-list]').hidden).toBe(true);
+    expect(summary().hidden).toBe(true);
   });
 
-  it('lists a file added, with its triples, and removes it', async () => {
+  it('says the queries run over the ontology and the data added, with a link to where it is managed', async () => {
     mount();
 
-    pick(file('people.ttl', ttl(4)));
-    await vi.waitFor(() => expect(items()).toHaveLength(1));
+    await sources.addText('a.ttl', ttl(2), { path: 'a.ttl' });
+    await sources.addText('b.ttl', ttl(3), { path: 'b.ttl' });
 
-    expect(items()[0]).toContain('people.ttl');
-    expect(items()[0]).toContain('8 triples');
-    q<HTMLButtonElement>('[data-data-remove]').click();
-    await vi.waitFor(() => expect(items()).toEqual([]));
-    expect(q<HTMLElement>('[data-data-list]').hidden).toBe(true);
+    expect(summary().hidden).toBe(false);
+    expect(summary().textContent).toContain('Querying the ontology and 2 data files');
+    q<HTMLButtonElement>('[data-query-data-manage]').click();
+    expect(openIndividuals).toHaveBeenCalledTimes(1);
   });
 
-  it('says "1 triple" in the singular', async () => {
+  it('says "1 data file" in the singular, and goes when the data is removed', async () => {
     mount();
+    const added = await sources.addText('a.ttl', ttl(2), { path: 'a.ttl' });
+    expect(summary().textContent).toContain('1 data file');
+    expect(summary().textContent).not.toContain('1 data files');
 
-    pick(file('one.ttl', '@prefix : <http://example.org/d#> . :a :b :c .'));
-    await vi.waitFor(() => expect(items()).toHaveLength(1));
+    sources.remove(added.id);
 
-    expect(items()[0]).toContain('1 triple');
-    expect(items()[0]).not.toContain('1 triples');
+    expect(summary().hidden).toBe(true);
   });
 
-  it('adds a URL, from the field, and empties the field', async () => {
-    const fetchFn = vi.fn(async () => new Response(ttl(3), { headers: { 'content-type': 'text/turtle' } }));
-    vi.stubGlobal('fetch', fetchFn);
+  it('shows the loading status of data that is being read, with a Cancel, though nothing is added yet', async () => {
     mount();
 
-    q<HTMLInputElement>('[data-add-url-input]').value = 'https://example.org/data/places.ttl';
-    q<HTMLButtonElement>('[data-add-url]').click();
-    await vi.waitFor(() => expect(items()).toHaveLength(1));
+    const reading = loader.addFile({ name: 'long.ttl', size: 10, text: async () => ttl(20000) });
+    await vi.waitFor(() => expect(summary().textContent).toMatch(/Loading long\.ttl/));
 
-    expect(items()[0]).toContain('places.ttl');
-    expect(q<HTMLInputElement>('[data-add-url-input]').value).toBe('');
+    expect(summary().hidden).toBe(false);
+    expect(q<HTMLButtonElement>('[data-query-data-cancel]').hidden).toBe(false);
+    q<HTMLButtonElement>('[data-query-data-cancel]').click();
+    await reading;
+    expect(summary().textContent).toContain('Cancelled.');
+    expect(q<HTMLButtonElement>('[data-query-data-cancel]').hidden).toBe(true);
+  });
+
+  it('shows why a file named in the address could not be added', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+    mount();
+
+    await loader.addUrls(['https://example.org/missing.ttl']);
+
+    expect(summary().hidden).toBe(false);
+    expect(summary().textContent).toContain('missing.ttl');
+    expect(summary().textContent).toContain('404');
     vi.unstubAllGlobals();
   });
 
-  it('shows why a file was not added, in the block, and lists nothing', async () => {
-    mount();
+  it('is not drawn without data sources (a tab for an ontology alone)', () => {
+    const tab = createQueryTab({ getStore: () => store, getPrefixes: () => ({}), loadEditor: neverLoads });
+    tab.render(container);
 
-    pick(file('huge.ttl', 'x', 11 * MB));
-    await vi.waitFor(() => expect(q('[data-data-status]').textContent).toMatch(/too large/i));
-
-    expect(items()).toEqual([]);
-  });
-
-  it('asks before a large file, and says nothing when the answer is no', async () => {
-    confirm.mockResolvedValue(false);
-    mount();
-
-    pick(file('big.ttl', ttl(3), 5 * MB));
-    await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
-
-    expect(confirm.mock.calls[0][0]).toMatch(/5\.0 MB/);
-    await vi.waitFor(() => expect(q('[data-data-status]').textContent).toBe(''));
-    expect(items()).toEqual([]);
-  });
-
-  it('shows the triples read while a file loads, and Cancel stops it', async () => {
-    mount();
-    const text = ttl(20000);
-
-    pick(file('long.ttl', text));
-    await vi.waitFor(() => expect(q('[data-data-status]').textContent).toMatch(/Loading long\.ttl/));
-    expect(q<HTMLButtonElement>('[data-data-cancel]').hidden).toBe(false);
-    q<HTMLButtonElement>('[data-data-cancel]').click();
-
-    await vi.waitFor(() => expect(q('[data-data-status]').textContent).toMatch(/Cancelled/));
-    expect(items()).toEqual([]);
-    expect(q<HTMLButtonElement>('[data-data-cancel]').hidden).toBe(true);
+    expect(container.querySelector('[data-query-data-summary]')).toBeNull();
   });
 });
 
@@ -144,8 +121,7 @@ describe('queries over the data', () => {
 
   it('run over the ontology and every added source, in that order', async () => {
     mount();
-    pick(file('a.ttl', ttl(2)));
-    await vi.waitFor(() => expect(items()).toHaveLength(1));
+    await sources.addText('a.ttl', ttl(2), { path: 'a.ttl' });
 
     await runQuery();
 
@@ -157,9 +133,8 @@ describe('queries over the data', () => {
 
   it('run over the ontology alone when nothing is added, or after a source is removed', async () => {
     mount();
-    pick(file('a.ttl', ttl(2)));
-    await vi.waitFor(() => expect(items()).toHaveLength(1));
-    q<HTMLButtonElement>('[data-data-remove]').click();
+    const added = await sources.addText('a.ttl', ttl(2), { path: 'a.ttl' });
+    sources.remove(added.id);
 
     await runQuery();
 
@@ -168,14 +143,17 @@ describe('queries over the data', () => {
 });
 
 describe('another ontology', () => {
-  it('drops the data added to the one before', async () => {
+  it('drops the data added to the one before, and stops a read that is going on', async () => {
     const tab = mount();
-    pick(file('a.ttl', ttl(2)));
-    await vi.waitFor(() => expect(items()).toHaveLength(1));
+    await sources.addText('a.ttl', ttl(2), { path: 'a.ttl' });
+    const reading = loader.addFile({ name: 'long.ttl', size: 10, text: async () => ttl(20000) });
+    await vi.waitFor(() => expect(loader.loading()).toBe(true));
 
     tab.refresh();
+    await reading;
 
     expect(sources.list()).toEqual([]);
-    expect(items()).toEqual([]);
+    expect(loader.status()).toBe('Cancelled.');
+    expect(summary().textContent).not.toContain('data file');
   });
 });

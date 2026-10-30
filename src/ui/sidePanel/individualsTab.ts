@@ -1,5 +1,5 @@
 /**
- * The Instances tab of the side panel (#208): browse the individuals of the open ontology and of the data added to it.
+ * The Individuals tab of the side panel (#208): browse the individuals of the open ontology and of the data added to it.
  * A class selector with the number of individuals of each, a list of the chosen class a page at a time with a search, and
  * what is known of the individual chosen. Nothing is drawn (the graph shows classes) and nothing is written.
  */
@@ -9,9 +9,12 @@ import { createIndividualIndex, NO_CLASS, type DescribedLink, type DescribedTerm
 import { formatTerm } from '../../sparql/formatTerm';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
 import { debounced } from '../../utils/debounced';
+import type { DataSources } from '../../sparql/dataSources';
+import type { DataLoader } from '../../sparql/dataLoader';
+import { createDataBlock } from './dataBlock';
 import type { SidePanelTab } from './sidePanelHost';
 
-export interface InstancesTabDeps {
+export interface IndividualsTabDeps {
   /** The ontology's store and the stores of the data added to it. */
   getStores: () => Store[];
   /** The prefixes the open file declares. */
@@ -20,9 +23,12 @@ export interface InstancesTabDeps {
   getClassLabel?: (classIri: string) => string | null;
   /** Individuals to a page; 50 by default. */
   pageSize?: number;
+  /** With these, the tab has the controls to add a file or a URL of individuals, and what was added (#211). */
+  dataSources?: DataSources;
+  dataLoader?: DataLoader;
 }
 
-export interface InstancesTab extends SidePanelTab {
+export interface IndividualsTab extends SidePanelTab {
   /** The ontology or the data changed: recount, and keep what is still there. */
   refresh(): void;
 }
@@ -45,7 +51,7 @@ const toStoreTerm = (term: DescribedTerm) =>
       ? DataFactory.blankNode(term.value)
       : DataFactory.literal(term.value, term.language || (term.datatype ? DataFactory.namedNode(term.datatype) : undefined));
 
-export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
+export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   const pageSize = deps.pageSize ?? DEFAULT_PAGE_SIZE;
   let index: IndividualIndex = createIndividualIndex([]);
   let drawn = false;
@@ -85,7 +91,9 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
     controls.hidden = allTotal === 0;
     if (allTotal === 0) {
       list.replaceChildren();
-      empty.textContent = 'There are no individuals in this ontology or in the data added to it. Open a file with instance data, or add a data file in the Query tab.';
+      empty.textContent = deps.dataSources
+        ? 'There are no individuals in this ontology or in the data added to it. Add a file or a URL above, or open a file that has them.'
+        : 'There are no individuals in this ontology. Open a file that has them.';
       empty.hidden = false;
       rangeText.textContent = '';
       prevButton.disabled = nextButton.disabled = true;
@@ -98,8 +106,8 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
       ...items.map((item) => {
         const button = element('button');
         button.type = 'button';
-        button.setAttribute('data-instances-item', '');
-        button.append(element('span', 'instance-label', item.label ?? nameOf(item.iri)), element('span', 'instance-name', nameOf(item.iri)));
+        button.setAttribute('data-individuals-item', '');
+        button.append(element('span', 'individual-label', item.label ?? nameOf(item.iri)), element('span', 'individual-name', nameOf(item.iri)));
         button.title = item.iri;
         button.addEventListener('click', () => select(item.iri));
         const li = element('li');
@@ -115,10 +123,10 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
   function renderTerm(term: DescribedTerm, isIndividual: boolean): HTMLElement {
     const formatted = formatTerm(toStoreTerm(term), prefixes());
     if (term.termType === 'NamedNode' && isIndividual) {
-      const follow = element('button', 'instance-follow', formatted.text);
+      const follow = element('button', 'individual-follow', formatted.text);
       follow.type = 'button';
       follow.title = `${term.value}: show this individual`;
-      follow.setAttribute('data-instances-follow', '');
+      follow.setAttribute('data-individuals-follow', '');
       follow.addEventListener('click', () => select(term.value));
       return follow;
     }
@@ -128,13 +136,13 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
   }
 
   function renderLinks(title: string, attribute: string, links: DescribedLink[], total: number, side: 'object' | 'subject'): HTMLElement {
-    const section = element('div', 'instance-links');
+    const section = element('div', 'individual-links');
     section.setAttribute(attribute, '');
     section.append(element('h5', undefined, `${title} (${total})`));
     const rows = element('ul');
     for (const link of links) {
       const row = element('li');
-      const property = element('span', 'instance-predicate', nameOf(link.predicate));
+      const property = element('span', 'individual-predicate', nameOf(link.predicate));
       property.title = link.predicate;
       row.append(
         ...(side === 'object'
@@ -143,7 +151,7 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
       );
       rows.append(row);
     }
-    if (total > links.length) rows.append(element('li', 'instance-more', `…and ${total - links.length} more`));
+    if (total > links.length) rows.append(element('li', 'individual-more', `…and ${total - links.length} more`));
     section.append(rows);
     return section;
   }
@@ -157,16 +165,16 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
     const described: IndividualDetail = index.describe(selected);
     detail.hidden = false;
     const heading = element('h4', undefined, described.labels[0] ?? nameOf(selected));
-    const iri = element('p', 'instance-iri', selected);
-    const types = element('p', 'instance-types', described.types.length ? `Class: ${described.types.map(classTitle).join(', ')}` : 'No class');
+    const iri = element('p', 'individual-iri', selected);
+    const types = element('p', 'individual-types', described.types.length ? `Class: ${described.types.map(classTitle).join(', ')}` : 'No class');
     const otherLabels = described.labels.slice(1);
     detail.replaceChildren(
       heading,
       iri,
       types,
-      ...(otherLabels.length ? [element('p', 'instance-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
-      renderLinks('Points to', 'data-instances-outgoing', described.outgoing, described.outgoingTotal, 'object'),
-      renderLinks('Pointed to by', 'data-instances-incoming', described.incoming, described.incomingTotal, 'subject')
+      ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
+      renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
+      renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
     );
   }
 
@@ -182,39 +190,39 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
   }, SEARCH_DELAY_MS);
 
   function render(container: HTMLElement): void {
-    container.classList.add('instances-tab');
-    const note = element('p', 'query-note', 'The individuals of this ontology and of the data you added in the Query tab. They are not drawn in the graph yet.');
+    container.classList.add('individuals-tab');
+    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. They are not drawn in the graph yet.');
 
     classSelect = element('select');
-    classSelect.setAttribute('data-instances-class', '');
+    classSelect.setAttribute('data-individuals-class', '');
     classSelect.setAttribute('aria-label', 'Class');
     searchInput = element('input');
     searchInput.type = 'search';
     searchInput.placeholder = 'Search by label or name';
     searchInput.setAttribute('aria-label', 'Search the individuals');
-    searchInput.setAttribute('data-instances-search', '');
+    searchInput.setAttribute('data-individuals-search', '');
 
     prevButton = element('button', undefined, 'Previous');
     prevButton.type = 'button';
-    prevButton.setAttribute('data-instances-prev', '');
+    prevButton.setAttribute('data-individuals-prev', '');
     nextButton = element('button', undefined, 'Next');
     nextButton.type = 'button';
-    nextButton.setAttribute('data-instances-next', '');
-    rangeText = element('span', 'instances-range');
-    rangeText.setAttribute('data-instances-range', '');
-    const pager = element('div', 'instances-pager');
+    nextButton.setAttribute('data-individuals-next', '');
+    rangeText = element('span', 'individuals-range');
+    rangeText.setAttribute('data-individuals-range', '');
+    const pager = element('div', 'individuals-pager');
     pager.append(prevButton, rangeText, nextButton);
 
-    list = element('ul', 'instances-list');
-    list.setAttribute('data-instances-list', '');
-    controls = element('div', 'instances-controls');
-    controls.setAttribute('data-instances-controls', '');
+    list = element('ul', 'individuals-list');
+    list.setAttribute('data-individuals-list', '');
+    controls = element('div', 'individuals-controls');
+    controls.setAttribute('data-individuals-controls', '');
     controls.append(classSelect, searchInput, pager, list);
 
     empty = element('p', 'query-note');
-    empty.setAttribute('data-instances-empty', '');
-    detail = element('div', 'instances-detail');
-    detail.setAttribute('data-instances-detail', '');
+    empty.setAttribute('data-individuals-empty', '');
+    detail = element('div', 'individuals-detail');
+    detail.setAttribute('data-individuals-detail', '');
     detail.hidden = true;
 
     classSelect.addEventListener('change', () => {
@@ -232,7 +240,8 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
       renderList();
     });
 
-    container.append(note, controls, empty, detail);
+    const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader }) : null;
+    container.append(note, ...(dataBlock ? [dataBlock] : []), controls, empty, detail);
     drawn = true;
     refresh();
   }
@@ -247,5 +256,5 @@ export function createInstancesTab(deps: InstancesTabDeps): InstancesTab {
     renderDetail();
   }
 
-  return { id: 'instances', title: 'Instances', render, refresh };
+  return { id: 'individuals', title: 'Individuals', render, refresh };
 }

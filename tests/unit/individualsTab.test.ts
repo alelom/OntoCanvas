@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 /**
- * The Instances tab (#208): the individuals of the ontology and of the added data, counted per class, listed a page at a
+ * The Individuals tab (#208): the individuals of the ontology and of the added data, counted per class, listed a page at a
  * time with a search, and described one at a time. Nothing is drawn or written.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Parser, Store } from 'n3';
-import { createInstancesTab, type InstancesTab } from '../../src/ui/sidePanel/instancesTab';
+import { createIndividualsTab, type IndividualsTab } from '../../src/ui/sidePanel/individualsTab';
+import { createDataSources } from '../../src/sparql/dataSources';
+import { createDataLoader } from '../../src/sparql/dataLoader';
 
 const NS = 'http://example.org/d#';
 const PREFIXES = `
@@ -20,19 +22,19 @@ const people = (n: number) => Array.from({ length: n }, (_, i) => `:room${String
 
 let container: HTMLElement;
 let stores: Store[];
-let tab: InstancesTab;
+let tab: IndividualsTab;
 
 function mount(options: { pageSize?: number; classLabel?: (iri: string) => string | null } = {}): void {
-  tab = createInstancesTab({ getStores: () => stores, getPrefixes: () => ({ '': NS }), getClassLabel: options.classLabel, pageSize: options.pageSize ?? 50 });
+  tab = createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({ '': NS }), getClassLabel: options.classLabel, pageSize: options.pageSize ?? 50 });
   tab.render(container);
 }
 
 const q = <T extends HTMLElement>(selector: string) => container.querySelector<T>(selector)!;
-const classOptions = () => [...container.querySelectorAll<HTMLOptionElement>('[data-instances-class] option')].map((o) => o.textContent);
-const rows = () => [...container.querySelectorAll('[data-instances-list] li')].map((li) => li.textContent ?? '');
-const range = () => q('[data-instances-range]').textContent;
+const classOptions = () => [...container.querySelectorAll<HTMLOptionElement>('[data-individuals-class] option')].map((o) => o.textContent);
+const rows = () => [...container.querySelectorAll('[data-individuals-list] li')].map((li) => li.textContent ?? '');
+const range = () => q('[data-individuals-range]').textContent;
 const choose = (value: string) => {
-  const select = q<HTMLSelectElement>('[data-instances-class]');
+  const select = q<HTMLSelectElement>('[data-individuals-class]');
   select.value = value;
   select.dispatchEvent(new Event('change'));
 };
@@ -88,26 +90,26 @@ describe('the list', () => {
     stores = [ONTOLOGY, store(people(5))];
     mount({ pageSize: 2 });
     expect(rows()).toHaveLength(2);
-    expect(q<HTMLButtonElement>('[data-instances-prev]').disabled).toBe(true);
+    expect(q<HTMLButtonElement>('[data-individuals-prev]').disabled).toBe(true);
     expect(range()).toMatch(/1.*2 of 5/);
 
-    q<HTMLButtonElement>('[data-instances-next]').click();
+    q<HTMLButtonElement>('[data-individuals-next]').click();
     expect(rows()[0]).toContain('Room 02');
     expect(range()).toMatch(/3.*4 of 5/);
 
-    q<HTMLButtonElement>('[data-instances-next]').click();
+    q<HTMLButtonElement>('[data-individuals-next]').click();
     expect(rows()).toHaveLength(1);
-    expect(q<HTMLButtonElement>('[data-instances-next]').disabled).toBe(true);
+    expect(q<HTMLButtonElement>('[data-individuals-next]').disabled).toBe(true);
     expect(range()).toMatch(/5.*5 of 5/);
 
-    q<HTMLButtonElement>('[data-instances-prev]').click();
+    q<HTMLButtonElement>('[data-individuals-prev]').click();
     expect(rows()[0]).toContain('Room 02');
   });
 
   it('goes back to the first page when the class changes', () => {
     stores = [ONTOLOGY, store(people(5) + '\n:wall1 a :Wall . :wall2 a :Wall . :wall3 a :Wall .')];
     mount({ pageSize: 2 });
-    q<HTMLButtonElement>('[data-instances-next]').click();
+    q<HTMLButtonElement>('[data-individuals-next]').click();
 
     choose(NS + 'Wall');
 
@@ -118,9 +120,9 @@ describe('the list', () => {
     vi.useFakeTimers();
     stores = [ONTOLOGY, store(people(5))];
     mount({ pageSize: 2 });
-    q<HTMLButtonElement>('[data-instances-next]').click();
+    q<HTMLButtonElement>('[data-individuals-next]').click();
 
-    const input = q<HTMLInputElement>('[data-instances-search]');
+    const input = q<HTMLInputElement>('[data-individuals-search]');
     input.value = 'room 03';
     input.dispatchEvent(new Event('input'));
     expect(rows()).toHaveLength(2);
@@ -135,30 +137,70 @@ describe('the list', () => {
     vi.useFakeTimers();
     mount();
 
-    const input = q<HTMLInputElement>('[data-instances-search]');
+    const input = q<HTMLInputElement>('[data-individuals-search]');
     input.value = 'zzz';
     input.dispatchEvent(new Event('input'));
     vi.advanceTimersByTime(400);
 
     expect(rows()).toEqual([]);
-    expect(q('[data-instances-empty]').textContent).toMatch(/No individual matches/);
+    expect(q('[data-individuals-empty]').textContent).toMatch(/No individual matches/);
+  });
+});
+
+describe('adding individuals in the tab (#211)', () => {
+  const withSources = () => {
+    const dataSources = createDataSources();
+    const dataLoader = createDataLoader({ sources: dataSources, getStore: () => ONTOLOGY, confirm: async () => true });
+    tab = createIndividualsTab({ getStores: () => [...stores, ...dataSources.stores()], getPrefixes: () => ({ '': NS }), dataSources, dataLoader });
+    tab.render(container);
+    dataSources.onChange(() => tab.refresh());
+    return { dataSources, dataLoader };
+  };
+
+  it('has the controls to add a file or a URL above the list, where an empty tab shows them as its call to action', () => {
+    stores = [ONTOLOGY];
+    withSources();
+
+    expect(q('[data-add-file]')).not.toBeNull();
+    expect(q('[data-add-url-input]')).not.toBeNull();
+    expect(q('[data-individuals-empty]').textContent).toMatch(/Add a file or a URL above/);
+    expect(q<HTMLElement>('[data-individuals-controls]').hidden).toBe(true);
+  });
+
+  it('lists what was added, in the tab, and its individuals appear', async () => {
+    stores = [ONTOLOGY];
+    const { dataSources } = withSources();
+
+    await dataSources.addText('people.ttl', PREFIXES + ':alice a :Room ; rdfs:label "Alice" .', { path: 'people.ttl' });
+
+    expect(q('[data-data-list]').textContent).toContain('people.ttl');
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toContain('Alice');
+  });
+
+  it('has no such controls when no data sources are given (a tab for the ontology alone), and says to open a file that has individuals', () => {
+    stores = [ONTOLOGY];
+    mount();
+
+    expect(container.querySelector('[data-add-file]')).toBeNull();
+    expect(q('[data-individuals-empty]').textContent).toMatch(/Open a file that has them/);
   });
 });
 
 describe('with no individuals', () => {
-  it('says where they can come from, and has no list', () => {
+  it('says where they can come from (without the controls to add them), and has no list', () => {
     stores = [ONTOLOGY];
     mount();
 
-    expect(q('[data-instances-empty]').textContent).toMatch(/no individuals.*add a data file/i);
+    expect(q('[data-individuals-empty]').textContent).toMatch(/no individuals.*open a file that has them/i);
     expect(rows()).toEqual([]);
-    expect(q<HTMLElement>('[data-instances-controls]').hidden).toBe(true);
+    expect(q<HTMLElement>('[data-individuals-controls]').hidden).toBe(true);
   });
 });
 
 describe('the detail', () => {
-  const click = (name: string) => [...container.querySelectorAll<HTMLElement>('[data-instances-list] li button')].find((b) => b.textContent!.includes(name))!.click();
-  const detail = () => q('[data-instances-detail]').textContent ?? '';
+  const click = (name: string) => [...container.querySelectorAll<HTMLElement>('[data-individuals-list] li button')].find((b) => b.textContent!.includes(name))!.click();
+  const detail = () => q('[data-individuals-detail]').textContent ?? '';
 
   it('shows an individual\'s IRI, label, class and what it points to', () => {
     mount();
@@ -177,17 +219,17 @@ describe('the detail', () => {
 
     click('North wall');
 
-    expect(q('[data-instances-incoming]').textContent).toContain(':room101');
-    expect(q('[data-instances-incoming]').textContent).toContain(':hasPart');
+    expect(q('[data-individuals-incoming]').textContent).toContain(':room101');
+    expect(q('[data-individuals-incoming]').textContent).toContain(':hasPart');
   });
 
   it('follows a link to another individual', () => {
     mount();
     click('Room 101');
 
-    q<HTMLButtonElement>('[data-instances-outgoing] [data-instances-follow]').click();
+    q<HTMLButtonElement>('[data-individuals-outgoing] [data-individuals-follow]').click();
 
-    expect(q('[data-instances-detail] h4').textContent).toContain('North wall');
+    expect(q('[data-individuals-detail] h4').textContent).toContain('North wall');
   });
 
   it('shows a literal with its datatype or language, not as a link', () => {
@@ -196,9 +238,9 @@ describe('the detail', () => {
 
     click('A');
 
-    expect(q('[data-instances-outgoing]').textContent).toContain('"2.5"^^xsd:decimal');
-    expect(q('[data-instances-outgoing]').textContent).toContain('"hello"@en');
-    expect(container.querySelectorAll('[data-instances-outgoing] [data-instances-follow]')).toHaveLength(0);
+    expect(q('[data-individuals-outgoing]').textContent).toContain('"2.5"^^xsd:decimal');
+    expect(q('[data-individuals-outgoing]').textContent).toContain('"hello"@en');
+    expect(container.querySelectorAll('[data-individuals-outgoing] [data-individuals-follow]')).toHaveLength(0);
   });
 
   it('says how many more rows there are than it shows', () => {
@@ -207,27 +249,27 @@ describe('the detail', () => {
 
     click('Hub');
 
-    expect(q('[data-instances-outgoing]').textContent).toMatch(/and 20 more/);
+    expect(q('[data-individuals-outgoing]').textContent).toMatch(/and 20 more/);
   });
 
   it('shows nothing until an individual is chosen', () => {
     mount();
 
-    expect(q<HTMLElement>('[data-instances-detail]').hidden).toBe(true);
+    expect(q<HTMLElement>('[data-individuals-detail]').hidden).toBe(true);
   });
 });
 
 describe('refresh', () => {
   it('recounts when the data changes, and drops a detail whose individual is gone', () => {
     mount();
-    [...container.querySelectorAll<HTMLElement>('[data-instances-list] li button')].find((b) => b.textContent!.includes('North wall'))!.click();
+    [...container.querySelectorAll<HTMLElement>('[data-individuals-list] li button')].find((b) => b.textContent!.includes('North wall'))!.click();
 
     stores = [ONTOLOGY];
     tab.refresh();
 
     expect(classOptions()).toEqual(['All (0)']);
-    expect(q<HTMLElement>('[data-instances-detail]').hidden).toBe(true);
-    expect(q('[data-instances-empty]').textContent).toMatch(/no individuals/i);
+    expect(q<HTMLElement>('[data-individuals-detail]').hidden).toBe(true);
+    expect(q('[data-individuals-empty]').textContent).toMatch(/no individuals/i);
   });
 
   it('keeps the class chosen while it still has individuals, and falls back to all when it has none', () => {
@@ -236,16 +278,16 @@ describe('refresh', () => {
 
     stores = [...stores, store(':wall3 a :Wall .')];
     tab.refresh();
-    expect(q<HTMLSelectElement>('[data-instances-class]').value).toBe(NS + 'Wall');
+    expect(q<HTMLSelectElement>('[data-individuals-class]').value).toBe(NS + 'Wall');
     expect(rows()).toHaveLength(3);
 
     stores = [ONTOLOGY, store(':room101 a :Room .')];
     tab.refresh();
-    expect(q<HTMLSelectElement>('[data-instances-class]').value).toBe('');
+    expect(q<HTMLSelectElement>('[data-individuals-class]').value).toBe('');
   });
 
   it('does nothing before the tab is drawn', () => {
-    const early = createInstancesTab({ getStores: () => stores, getPrefixes: () => ({}) });
+    const early = createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({}) });
 
     expect(() => early.refresh()).not.toThrow();
   });

@@ -1,15 +1,16 @@
 # Individuals for examples/sparql/query-panel.ttl (issue #205): a data file to ADD to that ontology, not to open on its own.
 #
-# Open query-panel.ttl, then in the SPARQL panel press "Add data file..." and choose this file (or paste its raw URL in the
-# field and press Add), or open the ontology with `&data=<raw URL of this file>` after `?onto=<raw URL of query-panel.ttl>`: the panel
-# then opens with this file already listed. The file is listed with its triples and a Remove button. Then run:
+# Open query-panel.ttl, press "Add individuals" in the graph toolbar and, in the Individuals tab, "From a file..." to choose this file
+# (or paste its raw URL in the field and press Add), or open the ontology with `&data=<raw URL of this file>` after `?onto=<raw URL of
+# query-panel.ttl>`: the SPARQL panel then opens with a line saying the data is queried. The file is listed in the Individuals tab with
+# its triples and a Remove button, and the toolbar button reads "Individuals (4)". Then run (in the Query tab):
 #
 #   SELECT ?i ?c WHERE { ?i a ?c . ?c rdfs:subClassOf* :Space } ORDER BY ?i ?c
 #     -> three rows: :room101 :Room, :room102 :Bedroom, :room102 :Room. The data says what is a :Room; only the ontology says
 #        that a :Room is a :Space, so the answer needs both, and :wall1 and :door1 are not in it
 #   SELECT (COUNT(?i) AS ?n) WHERE { ?i a :Room }
 #     -> "2"^^xsd:integer. The individuals are not drawn: the graph still shows the five classes
-#   The Instances tab of the panel (issue #208) lists them: All (4), then :Room (2), :Bedroom (1), :Door (1), :Wall (1). Choose :Room
+#   The Individuals tab (issues #208, #211) lists them: All (4), then :Room (2), :Bedroom (1), :Door (1), :Wall (1). Choose :Room
 #     -> "Room 101" and "Room 102"; choose one to see its class and label, and that :room102 is a :Room and a :Bedroom
 #   After Remove, the first query gives no rows, and Save still writes only the ontology: added data is never saved.
 @prefix : <http://example.org/examples/sparql-queries#> .

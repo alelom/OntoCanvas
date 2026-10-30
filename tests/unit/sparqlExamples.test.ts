@@ -53,7 +53,7 @@ ${query}`);
     expect(await rows([ontology, data], 'SELECT (COUNT(?i) AS ?n) WHERE { ?i a :Room }')).toEqual([['2']]);
   });
 
-  it('is what the Instances tab lists: four individuals, Room twice, and room102 of two classes (#208)', async () => {
+  it('is what the Individuals tab lists: four individuals, Room twice, and room102 of two classes (#208)', async () => {
     const { parseIntoStoreInSlices } = await import('../../src/rdf/parseIntoStore');
     const { createIndividualIndex } = await import('../../src/abox/individualIndex');
     const ontology = (await parseRdfToGraph(readFileSync(EXAMPLE, 'utf-8'), { path: EXAMPLE })).store;

@@ -11,7 +11,8 @@ import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
 import { describeMatch, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
-import type { DataSource, DataSources } from '../../sparql/dataSources';
+import type { DataSources } from '../../sparql/dataSources';
+import type { DataLoader } from '../../sparql/dataLoader';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
 
@@ -33,15 +34,15 @@ export interface QueryTabDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects these nodes and edges in the graph and brings them into view. */
   showInGraph?: (match: GraphMatch) => void;
-  /** The data added to the open ontology (#205): queries run over it too. Without it, no "Add data". */
+  /** The data added to the open ontology (#205): queries run over it too, and a line says so. */
   dataSources?: DataSources;
-  /** Asks about loading a large file; defaults to the browser's confirm. */
-  confirm?: (message: string) => Promise<boolean>;
+  /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
+  dataLoader?: DataLoader;
+  /** Opens the Individuals tab, where the data is added and removed (#211). */
+  openIndividuals?: () => void;
 }
 
 export interface QueryTab extends SidePanelTab {
-  /** Adds the data files an address names (?data=<url>, #205), one after the other, through the Data block. Needs the tab drawn. */
-  addDataUrls(urls: string[]): Promise<void>;
   /** Another ontology was opened: refresh the prefixes of a query the user has not edited. */
   refresh(): void;
 }
@@ -103,9 +104,6 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   let edited = false;
   let prefixNote: HTMLElement | null = null;
   let stop: (() => void) | null = null;
-  /** The data being read, if any; one at a time. */
-  let loadingData: AbortController | null = null;
-  let addDataUrlsInBlock: ((urls: string[]) => Promise<void>) | null = null;
   /** The prefixes the query's text was written with (the starter's header); the note compares the open file's to them. */
   let headerPrefixes = JSON.stringify(deps.getPrefixes());
 
@@ -174,120 +172,43 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     return [button];
   }
 
-  /** The "Data" block (#205): add a file or a URL, see what is added, remove it. */
-  function renderDataBlock(): HTMLElement | null {
+  /**
+   * One line about the data added to the ontology (#211): the queries run over it, where it is managed, and the status of a
+   * read going on (an address's ?data= loads its files while this is the tab shown). Nothing when there is nothing to say.
+   */
+  function renderDataSummary(): HTMLElement | null {
     const sources = deps.dataSources;
     if (!sources) return null;
-    const block = element('div', 'query-data');
-    block.setAttribute('data-query-data', '');
-
-    const addFile = element('button', undefined, 'Add data file…');
-    addFile.type = 'button';
-    addFile.title = 'Add the individuals of another file to the queries. They are not drawn and never saved.';
-    addFile.setAttribute('data-add-file', '');
-    const fileInput = element('input');
-    fileInput.type = 'file';
-    fileInput.hidden = true;
-    fileInput.setAttribute('data-add-file-input', '');
-    const urlInput = element('input');
-    urlInput.type = 'url';
-    urlInput.placeholder = 'or a data URL (https://…)';
-    urlInput.setAttribute('aria-label', 'Data URL');
-    urlInput.setAttribute('data-add-url-input', '');
-    const addUrl = element('button', undefined, 'Add');
-    addUrl.type = 'button';
-    addUrl.setAttribute('data-add-url', '');
-    const adders = element('div', 'query-data-add');
-    adders.append(addFile, fileInput, urlInput, addUrl);
-
-    const status = element('span', 'query-status');
-    status.setAttribute('data-data-status', '');
+    const line = element('div', 'query-note query-data-summary');
+    line.setAttribute('data-query-data-summary', '');
+    const text = element('span');
+    text.setAttribute('data-query-data-text', '');
+    const manage = element('button', undefined, 'manage in Individuals');
+    manage.type = 'button';
+    manage.setAttribute('data-query-data-manage', '');
+    manage.addEventListener('click', () => deps.openIndividuals?.());
+    const status = element('span');
+    status.setAttribute('data-query-data-status', '');
     status.setAttribute('aria-live', 'polite');
     const cancel = element('button', undefined, 'Cancel');
     cancel.type = 'button';
-    cancel.hidden = true;
-    cancel.setAttribute('data-data-cancel', '');
-    const progress = element('div', 'query-data-status');
-    progress.append(status, cancel);
+    cancel.setAttribute('data-query-data-cancel', '');
+    cancel.addEventListener('click', () => deps.dataLoader?.cancel());
+    line.append(text, ' ', manage, ' ', status, ' ', cancel);
 
-    const list = element('ul', 'query-data-list');
-    list.hidden = true;
-    list.setAttribute('data-data-list', '');
-    const renderList = (): void => {
-      const added = sources.list();
-      list.hidden = added.length === 0;
-      list.replaceChildren(
-        ...added.map((source: DataSource) => {
-          const remove = element('button', undefined, 'Remove');
-          remove.type = 'button';
-          remove.title = 'Take this data out of the queries';
-          remove.setAttribute('data-data-remove', '');
-          remove.addEventListener('click', () => sources.remove(source.id));
-          const item = element('li');
-          item.append(element('span', undefined, `${source.name} — ${plural(source.triples, 'triple', 'triples')}`), remove);
-          return item;
-        })
-      );
+    const draw = (): void => {
+      const added = sources.list().length;
+      const said = deps.dataLoader?.status() ?? '';
+      text.textContent = added ? `Querying the ontology and ${plural(added, 'data file', 'data files')}.` : '';
+      manage.hidden = added === 0;
+      status.textContent = said;
+      cancel.hidden = !deps.dataLoader?.loading();
+      line.hidden = added === 0 && said === '';
     };
-    sources.onChange(renderList);
-    renderList();
-
-    const ask = deps.confirm ?? ((message: string) => Promise.resolve(window.confirm(message)));
-    /** Returns what is left in the status line: '' when the data was added or the user said no. */
-    async function load(label: string, add: (options: { signal: AbortSignal; confirm: (message: string) => Promise<boolean>; onProgress: (triples: number) => void }) => Promise<unknown>): Promise<string> {
-      if (loadingData) return '';
-      if (!deps.getStore()) {
-        status.textContent = 'Open an ontology first: the data is added to it.';
-        return status.textContent;
-      }
-      const controller = new AbortController();
-      loadingData = controller;
-      cancel.hidden = false;
-      status.textContent = `Loading ${label}…`;
-      try {
-        await add({ signal: controller.signal, confirm: ask, onProgress: (triples) => void (status.textContent = `Loading ${label}… ${triples.toLocaleString('en')} triples`) });
-        status.textContent = '';
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        // "Cancelled" is the user's Cancel, or a no to the question about a large file (nothing to say then).
-        status.textContent = message === 'Cancelled' ? (controller.signal.aborted ? 'Cancelled.' : '') : message;
-      } finally {
-        loadingData = null;
-        cancel.hidden = true;
-      }
-      return status.textContent ?? '';
-    }
-
-    // The data files an address names: one after the other, a failure shown at the end with the others' results kept.
-    addDataUrlsInBlock = async (urls) => {
-      const failures: string[] = [];
-      for (const url of urls) {
-        const left = await load(url, (options) => sources.addUrl(url, options));
-        if (left) failures.push(`${url}: ${left}`);
-      }
-      status.textContent = failures.join('  ');
-    };
-
-    addFile.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => {
-      const picked = fileInput.files?.[0];
-      fileInput.value = '';
-      if (picked) void load(picked.name, (options) => sources.addFile(picked, options));
-    });
-    const submitUrl = () => {
-      const url = urlInput.value.trim();
-      if (!url) return;
-      urlInput.value = '';
-      void load(url, (options) => sources.addUrl(url, options));
-    };
-    addUrl.addEventListener('click', submitUrl);
-    urlInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') submitUrl();
-    });
-    cancel.addEventListener('click', () => loadingData?.abort());
-
-    block.append(adders, progress, list);
-    return block;
+    sources.onChange(draw);
+    deps.dataLoader?.onChange(draw);
+    draw();
+    return line;
   }
 
   function render(container: HTMLElement): void {
@@ -436,8 +357,8 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
 
     runButton.addEventListener('click', () => void execute());
     stopButton.addEventListener('click', () => stop?.());
-    const dataBlock = renderDataBlock();
-    container.append(note, ...(dataBlock ? [dataBlock] : []), prefixNote, historyRow, editorHost, actions, result);
+    const dataSummary = renderDataSummary();
+    container.append(note, ...(dataSummary ? [dataSummary] : []), prefixNote, historyRow, editorHost, actions, result);
   }
 
   /** An edited query keeps its own PREFIX lines; say so when the open file's differ from them. */
@@ -449,12 +370,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     id: 'query',
     title: 'Query',
     render,
-    async addDataUrls(urls) {
-      await addDataUrlsInBlock?.(urls);
-    },
     refresh() {
       // The data belongs to the ontology it was added to.
-      loadingData?.abort();
+      deps.dataLoader?.cancel();
       deps.dataSources?.clear();
       if (!editor) return;
       if (!edited) editor.setText(starterText());
