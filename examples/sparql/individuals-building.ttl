@@ -1,0 +1,64 @@
+# A building with several kinds of individuals and several kinds of relationship between them, not only classes (issue #209).
+# It has 17 individuals, so all are drawn by themselves. Expected on opening:
+#   - the classes: Space (with Room and Corridor below it), Element (with Wall, Door and Window below it), Person (with Engineer
+#     and Inspector), Report; and one orange ellipse for each individual, with a dashed edge to its class
+#   - nine kinds of solid edge between individuals, each labelled: adjacent to, connects, hosts, separates, responsible for,
+#     describes, inspected by, supplied by, employs; the corridor is adjacent to three spaces and the lobby to the corridor
+#   - Ana has two dashed edges, to Engineer and to Inspector (an individual of two classes); the server room has two as well, Room
+#     and Secure area, the latter a class declared without a place in the hierarchy
+#   - Acme is typed as Company, a class this file never declares, so it has no dashed edge: its classes are the ones the graph draws
+#   - hover Door 3: its fire rating; hover Server room: its area (values are in the tooltip, not drawn as nodes)
+#   - choose Door 3 in the tab and read its detail: it points to Corridor 1 and the server room (connects), is hosted by Wall 3,
+#     supplied by Acme, and is pointed to by Ana (responsible for) and the report (describes). Follow a link in the detail to go to that individual
+#   - Clear individuals hides them all; Show in graph on Ana draws her, the server room, Door 3 and Acme
+@prefix : <http://example.org/examples/individuals-building#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/examples/individuals-building> a owl:Ontology ; rdfs:label "Individuals, a building" .
+
+:Space a owl:Class ; rdfs:label "Space" .
+:Room a owl:Class ; rdfs:label "Room" ; rdfs:subClassOf :Space .
+:Corridor a owl:Class ; rdfs:label "Corridor" ; rdfs:subClassOf :Space .
+:SecureArea a owl:Class ; rdfs:label "Secure area" .
+:Element a owl:Class ; rdfs:label "Element" .
+:Wall a owl:Class ; rdfs:label "Wall" ; rdfs:subClassOf :Element .
+:Door a owl:Class ; rdfs:label "Door" ; rdfs:subClassOf :Element .
+:Window a owl:Class ; rdfs:label "Window" ; rdfs:subClassOf :Element .
+:Person a owl:Class ; rdfs:label "Person" .
+:Engineer a owl:Class ; rdfs:label "Engineer" ; rdfs:subClassOf :Person .
+:Inspector a owl:Class ; rdfs:label "Inspector" ; rdfs:subClassOf :Person .
+:Report a owl:Class ; rdfs:label "Report" .
+
+:adjacentTo a owl:ObjectProperty, owl:SymmetricProperty ; rdfs:label "adjacent to" ; rdfs:domain :Space ; rdfs:range :Space .
+:connects a owl:ObjectProperty ; rdfs:label "connects" ; rdfs:domain :Door ; rdfs:range :Space .
+:hosts a owl:ObjectProperty ; rdfs:label "hosts" ; rdfs:domain :Wall ; rdfs:range :Element .
+:separates a owl:ObjectProperty ; rdfs:label "separates" ; rdfs:domain :Wall ; rdfs:range :Space .
+:responsibleFor a owl:ObjectProperty ; rdfs:label "responsible for" ; rdfs:domain :Person .
+:describes a owl:ObjectProperty ; rdfs:label "describes" ; rdfs:domain :Report .
+:inspectedBy a owl:ObjectProperty ; rdfs:label "inspected by" ; rdfs:domain :Report ; rdfs:range :Inspector .
+:suppliedBy a owl:ObjectProperty ; rdfs:label "supplied by" ; rdfs:domain :Element .
+:employs a owl:ObjectProperty ; rdfs:label "employs" .
+:fireRating a owl:DatatypeProperty ; rdfs:domain :Door ; rdfs:range xsd:integer .
+:area a owl:DatatypeProperty ; rdfs:domain :Space ; rdfs:range xsd:decimal .
+
+:lobby a :Room ; rdfs:label "Lobby" ; :adjacentTo :corridor1 .
+:corridor1 a :Corridor ; rdfs:label "Corridor 1" ; :adjacentTo :office1 , :office2 , :server .
+:office1 a :Room ; rdfs:label "Office 1" .
+:office2 a :Room ; rdfs:label "Office 2" .
+:server a :Room , :SecureArea ; rdfs:label "Server room" ; :area 12.5 .
+
+:wall1 a :Wall ; rdfs:label "Wall 1" ; :hosts :door1 .
+:wall2 a :Wall ; rdfs:label "Wall 2" ; :hosts :door2 , :window1 .
+:wall3 a :Wall ; rdfs:label "Wall 3" ; :hosts :door3 .
+:wall4 a :Wall ; rdfs:label "Wall 4" ; :separates :office1 , :office2 .
+:door1 a :Door ; rdfs:label "Door 1" ; :connects :lobby , :corridor1 .
+:door2 a :Door ; rdfs:label "Door 2" ; :connects :corridor1 , :office1 .
+:door3 a :Door ; rdfs:label "Door 3" ; :connects :corridor1 , :server ; :fireRating 60 ; :suppliedBy :acme .
+:window1 a :Window ; rdfs:label "Window 1" .
+
+:ana a :Engineer , :Inspector ; rdfs:label "Ana" ; :responsibleFor :server , :door3 .
+:ben a :Inspector ; rdfs:label "Ben" .
+:acme a :Company ; rdfs:label "Acme" ; :employs :ana .
+:report1 a :Report ; rdfs:label "Report 1" ; :describes :wall3 , :door3 ; :inspectedBy :ben .

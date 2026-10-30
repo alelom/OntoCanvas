@@ -18,13 +18,13 @@ const network = () => ({ nodes: new DataSet<any>([{ id: 'Room', label: 'Room', x
 describe('addIndividualsToNetworkData', () => {
   it('adds nothing while the layer is empty', () => {
     const data = network();
-    addIndividualsToNetworkData(data, createIndividualsLayer({ getStores: () => [store] }), classNodesByUri(classNodes));
+    addIndividualsToNetworkData(data, createIndividualsLayer({ autoMax: 0, getStores: () => [store] }), classNodesByUri(classNodes));
     expect(data.nodes.length).toBe(1);
     expect(data.edges.length).toBe(0);
   });
 
   it('adds ellipse nodes for the individuals and edges to their class, around the class node', () => {
-    const layer = createIndividualsLayer({ getStores: () => [store] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [store] });
     layer.show(`${NS}a`);
     const data = network();
 
@@ -40,7 +40,7 @@ describe('addIndividualsToNetworkData', () => {
   });
 
   it('gives edges ids that no edit modal can read as an ontology edge', () => {
-    const layer = createIndividualsLayer({ getStores: () => [store] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [store] });
     layer.show(`${NS}a`);
     const data = network();
 

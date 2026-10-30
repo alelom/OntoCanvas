@@ -1,0 +1,35 @@
+# A small ontology with its individuals in the same file (issue #209). With 30 individuals or fewer, every one is drawn in the
+# graph by itself. Expected on opening (10 individuals):
+#   - three classes (Person, Team, Project) and, beside them, ten orange ellipses with dashed edges to their class
+#   - solid orange edges between individuals: Alice, Bob and Carol are memberOf Red team; Dan and Eve memberOf Blue team;
+#     Red team and Blue team both worksOn Apollo (Blue team also on Gemini); Alice also manages Dan
+#   - Frank has no links and floats alone, joined only to Person
+#   - hover Alice: her IRI, "Class: Person" and her values (email, age); labels come from rdfs:label
+#   - "Individuals (10)" in the toolbar; in the tab, "Clear individuals" removes them all, "Show in graph" on one brings back
+#     that individual with its neighbours; double-click, Delete and the right-click menu do nothing on an individual
+@prefix : <http://example.org/examples/individuals-small#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/examples/individuals-small> a owl:Ontology ; rdfs:label "Individuals, a small file" .
+
+:Person a owl:Class ; rdfs:label "Person" .
+:Team a owl:Class ; rdfs:label "Team" .
+:Project a owl:Class ; rdfs:label "Project" .
+:memberOf a owl:ObjectProperty ; rdfs:label "member of" ; rdfs:domain :Person ; rdfs:range :Team .
+:worksOn a owl:ObjectProperty ; rdfs:label "works on" ; rdfs:domain :Team ; rdfs:range :Project .
+:manages a owl:ObjectProperty ; rdfs:label "manages" ; rdfs:domain :Person ; rdfs:range :Person .
+:email a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:string .
+:age a owl:DatatypeProperty ; rdfs:domain :Person ; rdfs:range xsd:integer .
+
+:red a :Team ; rdfs:label "Red team" ; :worksOn :apollo .
+:blue a :Team ; rdfs:label "Blue team" ; :worksOn :apollo , :gemini .
+:apollo a :Project ; rdfs:label "Apollo" .
+:gemini a :Project ; rdfs:label "Gemini" .
+:alice a :Person ; rdfs:label "Alice" ; :memberOf :red ; :manages :dan ; :email "alice@example.org" ; :age 41 .
+:bob a :Person ; rdfs:label "Bob" ; :memberOf :red ; :age 29 .
+:carol a :Person ; rdfs:label "Carol" ; :memberOf :red .
+:dan a :Person ; rdfs:label "Dan" ; :memberOf :blue .
+:eve a :Person ; rdfs:label "Eve" ; :memberOf :blue .
+:frank a :Person ; rdfs:label "Frank" .

@@ -233,7 +233,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   function render(container: HTMLElement): void {
     container.classList.add('individuals-tab');
-    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. Choose one and use Show in graph to draw it.');
+    const note = element('p', 'query-note', 'The individuals of this ontology and of the data added to it. A few are drawn in the graph by themselves; choose one and use Show in graph to draw it.');
 
     classSelect = element('select');
     classSelect.setAttribute('data-individuals-class', '');
@@ -304,6 +304,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       if (known.types.length === 0 && known.outgoingTotal === 0 && known.incomingTotal === 0) selected = null;
     }
     renderDetail();
+    renderDrawn();
   }
 
   return { id: 'individuals', title: 'Individuals', render, refresh };

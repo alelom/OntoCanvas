@@ -19,7 +19,7 @@ const drawn = () => q('[data-individuals-drawn]');
 
 function mount(turtle: string): void {
   const stores = [store(turtle)];
-  layer = createIndividualsLayer({ getStores: () => stores });
+  layer = createIndividualsLayer({ autoMax: 0, getStores: () => stores });
   createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({ '': NS }), layer }).render(container);
 }
 const open = (name: string) =>
@@ -86,7 +86,7 @@ describe('what is drawn', () => {
 
   it('says when the total cap cut what was asked for', () => {
     const stores = [store(links(120))];
-    layer = createIndividualsLayer({ getStores: () => stores, maxTotal: 10 });
+    layer = createIndividualsLayer({ autoMax: 0, getStores: () => stores, maxTotal: 10 });
     createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({}), layer }).render(container);
     open('h');
 

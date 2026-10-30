@@ -1,0 +1,159 @@
+# A hub: one building with many individuals linked to it, to see the limits on drawing individuals (issue #209). The file has 135
+# individuals, more than the 30 that are drawn by themselves, so on opening the graph shows only the four classes. Then:
+#   - open the Individuals tab (the toolbar says "Individuals (135)"), search "Head office", choose it and press "Show in graph":
+#     Head office is drawn with its first 50 neighbours (the two floors and 48 sensors, in label order)
+#   - the tab says "Drawn in the graph: 51 individuals." and offers "Show 50 more of Head office (72 left)"; press it once for
+#     101 individuals, and again for all 123 (Head office and its 122 neighbours), the offer going when none is left
+#   - choose Floor 1 and press "Show in graph" too: its six rooms are added, the individuals already drawn stay
+#   - each sensor's "reading" is in its tooltip; "Clear individuals" removes everything
+#   - the same file with more than 300 individuals asked for would show the first 300 with a warning
+@prefix : <http://example.org/examples/individuals-hub#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/examples/individuals-hub> a owl:Ontology ; rdfs:label "Individuals, a hub" .
+
+:Building a owl:Class ; rdfs:label "Building" .
+:Floor a owl:Class ; rdfs:label "Floor" .
+:Room a owl:Class ; rdfs:label "Room" .
+:Sensor a owl:Class ; rdfs:label "Sensor" .
+:partOf a owl:ObjectProperty ; rdfs:label "part of" .
+:installedIn a owl:ObjectProperty ; rdfs:label "installed in" ; rdfs:domain :Sensor ; rdfs:range :Building .
+:reading a owl:DatatypeProperty ; rdfs:domain :Sensor ; rdfs:range xsd:decimal .
+
+:hq a :Building ; rdfs:label "Head office" .
+:floor1 a :Floor ; rdfs:label "Floor 1" ; :partOf :hq .
+:floor2 a :Floor ; rdfs:label "Floor 2" ; :partOf :hq .
+:room1 a :Room ; rdfs:label "Room 1" ; :partOf :floor1 .
+:room2 a :Room ; rdfs:label "Room 2" ; :partOf :floor1 .
+:room3 a :Room ; rdfs:label "Room 3" ; :partOf :floor1 .
+:room4 a :Room ; rdfs:label "Room 4" ; :partOf :floor1 .
+:room5 a :Room ; rdfs:label "Room 5" ; :partOf :floor1 .
+:room6 a :Room ; rdfs:label "Room 6" ; :partOf :floor1 .
+:room7 a :Room ; rdfs:label "Room 7" ; :partOf :floor2 .
+:room8 a :Room ; rdfs:label "Room 8" ; :partOf :floor2 .
+:room9 a :Room ; rdfs:label "Room 9" ; :partOf :floor2 .
+:room10 a :Room ; rdfs:label "Room 10" ; :partOf :floor2 .
+:room11 a :Room ; rdfs:label "Room 11" ; :partOf :floor2 .
+:room12 a :Room ; rdfs:label "Room 12" ; :partOf :floor2 .
+:sensor001 a :Sensor ; rdfs:label "Sensor 001" ; :installedIn :hq ; :reading 16.0 .
+:sensor002 a :Sensor ; rdfs:label "Sensor 002" ; :installedIn :hq ; :reading 17.0 .
+:sensor003 a :Sensor ; rdfs:label "Sensor 003" ; :installedIn :hq ; :reading 18.0 .
+:sensor004 a :Sensor ; rdfs:label "Sensor 004" ; :installedIn :hq ; :reading 19.0 .
+:sensor005 a :Sensor ; rdfs:label "Sensor 005" ; :installedIn :hq ; :reading 20.0 .
+:sensor006 a :Sensor ; rdfs:label "Sensor 006" ; :installedIn :hq ; :reading 21.0 .
+:sensor007 a :Sensor ; rdfs:label "Sensor 007" ; :installedIn :hq ; :reading 22.0 .
+:sensor008 a :Sensor ; rdfs:label "Sensor 008" ; :installedIn :hq ; :reading 23.0 .
+:sensor009 a :Sensor ; rdfs:label "Sensor 009" ; :installedIn :hq ; :reading 24.0 .
+:sensor010 a :Sensor ; rdfs:label "Sensor 010" ; :installedIn :hq ; :reading 25.0 .
+:sensor011 a :Sensor ; rdfs:label "Sensor 011" ; :installedIn :hq ; :reading 26.0 .
+:sensor012 a :Sensor ; rdfs:label "Sensor 012" ; :installedIn :hq ; :reading 27.0 .
+:sensor013 a :Sensor ; rdfs:label "Sensor 013" ; :installedIn :hq ; :reading 28.0 .
+:sensor014 a :Sensor ; rdfs:label "Sensor 014" ; :installedIn :hq ; :reading 29.0 .
+:sensor015 a :Sensor ; rdfs:label "Sensor 015" ; :installedIn :hq ; :reading 30.0 .
+:sensor016 a :Sensor ; rdfs:label "Sensor 016" ; :installedIn :hq ; :reading 31.0 .
+:sensor017 a :Sensor ; rdfs:label "Sensor 017" ; :installedIn :hq ; :reading 32.0 .
+:sensor018 a :Sensor ; rdfs:label "Sensor 018" ; :installedIn :hq ; :reading 33.0 .
+:sensor019 a :Sensor ; rdfs:label "Sensor 019" ; :installedIn :hq ; :reading 34.0 .
+:sensor020 a :Sensor ; rdfs:label "Sensor 020" ; :installedIn :hq ; :reading 15.0 .
+:sensor021 a :Sensor ; rdfs:label "Sensor 021" ; :installedIn :hq ; :reading 16.0 .
+:sensor022 a :Sensor ; rdfs:label "Sensor 022" ; :installedIn :hq ; :reading 17.0 .
+:sensor023 a :Sensor ; rdfs:label "Sensor 023" ; :installedIn :hq ; :reading 18.0 .
+:sensor024 a :Sensor ; rdfs:label "Sensor 024" ; :installedIn :hq ; :reading 19.0 .
+:sensor025 a :Sensor ; rdfs:label "Sensor 025" ; :installedIn :hq ; :reading 20.0 .
+:sensor026 a :Sensor ; rdfs:label "Sensor 026" ; :installedIn :hq ; :reading 21.0 .
+:sensor027 a :Sensor ; rdfs:label "Sensor 027" ; :installedIn :hq ; :reading 22.0 .
+:sensor028 a :Sensor ; rdfs:label "Sensor 028" ; :installedIn :hq ; :reading 23.0 .
+:sensor029 a :Sensor ; rdfs:label "Sensor 029" ; :installedIn :hq ; :reading 24.0 .
+:sensor030 a :Sensor ; rdfs:label "Sensor 030" ; :installedIn :hq ; :reading 25.0 .
+:sensor031 a :Sensor ; rdfs:label "Sensor 031" ; :installedIn :hq ; :reading 26.0 .
+:sensor032 a :Sensor ; rdfs:label "Sensor 032" ; :installedIn :hq ; :reading 27.0 .
+:sensor033 a :Sensor ; rdfs:label "Sensor 033" ; :installedIn :hq ; :reading 28.0 .
+:sensor034 a :Sensor ; rdfs:label "Sensor 034" ; :installedIn :hq ; :reading 29.0 .
+:sensor035 a :Sensor ; rdfs:label "Sensor 035" ; :installedIn :hq ; :reading 30.0 .
+:sensor036 a :Sensor ; rdfs:label "Sensor 036" ; :installedIn :hq ; :reading 31.0 .
+:sensor037 a :Sensor ; rdfs:label "Sensor 037" ; :installedIn :hq ; :reading 32.0 .
+:sensor038 a :Sensor ; rdfs:label "Sensor 038" ; :installedIn :hq ; :reading 33.0 .
+:sensor039 a :Sensor ; rdfs:label "Sensor 039" ; :installedIn :hq ; :reading 34.0 .
+:sensor040 a :Sensor ; rdfs:label "Sensor 040" ; :installedIn :hq ; :reading 15.0 .
+:sensor041 a :Sensor ; rdfs:label "Sensor 041" ; :installedIn :hq ; :reading 16.0 .
+:sensor042 a :Sensor ; rdfs:label "Sensor 042" ; :installedIn :hq ; :reading 17.0 .
+:sensor043 a :Sensor ; rdfs:label "Sensor 043" ; :installedIn :hq ; :reading 18.0 .
+:sensor044 a :Sensor ; rdfs:label "Sensor 044" ; :installedIn :hq ; :reading 19.0 .
+:sensor045 a :Sensor ; rdfs:label "Sensor 045" ; :installedIn :hq ; :reading 20.0 .
+:sensor046 a :Sensor ; rdfs:label "Sensor 046" ; :installedIn :hq ; :reading 21.0 .
+:sensor047 a :Sensor ; rdfs:label "Sensor 047" ; :installedIn :hq ; :reading 22.0 .
+:sensor048 a :Sensor ; rdfs:label "Sensor 048" ; :installedIn :hq ; :reading 23.0 .
+:sensor049 a :Sensor ; rdfs:label "Sensor 049" ; :installedIn :hq ; :reading 24.0 .
+:sensor050 a :Sensor ; rdfs:label "Sensor 050" ; :installedIn :hq ; :reading 25.0 .
+:sensor051 a :Sensor ; rdfs:label "Sensor 051" ; :installedIn :hq ; :reading 26.0 .
+:sensor052 a :Sensor ; rdfs:label "Sensor 052" ; :installedIn :hq ; :reading 27.0 .
+:sensor053 a :Sensor ; rdfs:label "Sensor 053" ; :installedIn :hq ; :reading 28.0 .
+:sensor054 a :Sensor ; rdfs:label "Sensor 054" ; :installedIn :hq ; :reading 29.0 .
+:sensor055 a :Sensor ; rdfs:label "Sensor 055" ; :installedIn :hq ; :reading 30.0 .
+:sensor056 a :Sensor ; rdfs:label "Sensor 056" ; :installedIn :hq ; :reading 31.0 .
+:sensor057 a :Sensor ; rdfs:label "Sensor 057" ; :installedIn :hq ; :reading 32.0 .
+:sensor058 a :Sensor ; rdfs:label "Sensor 058" ; :installedIn :hq ; :reading 33.0 .
+:sensor059 a :Sensor ; rdfs:label "Sensor 059" ; :installedIn :hq ; :reading 34.0 .
+:sensor060 a :Sensor ; rdfs:label "Sensor 060" ; :installedIn :hq ; :reading 15.0 .
+:sensor061 a :Sensor ; rdfs:label "Sensor 061" ; :installedIn :hq ; :reading 16.0 .
+:sensor062 a :Sensor ; rdfs:label "Sensor 062" ; :installedIn :hq ; :reading 17.0 .
+:sensor063 a :Sensor ; rdfs:label "Sensor 063" ; :installedIn :hq ; :reading 18.0 .
+:sensor064 a :Sensor ; rdfs:label "Sensor 064" ; :installedIn :hq ; :reading 19.0 .
+:sensor065 a :Sensor ; rdfs:label "Sensor 065" ; :installedIn :hq ; :reading 20.0 .
+:sensor066 a :Sensor ; rdfs:label "Sensor 066" ; :installedIn :hq ; :reading 21.0 .
+:sensor067 a :Sensor ; rdfs:label "Sensor 067" ; :installedIn :hq ; :reading 22.0 .
+:sensor068 a :Sensor ; rdfs:label "Sensor 068" ; :installedIn :hq ; :reading 23.0 .
+:sensor069 a :Sensor ; rdfs:label "Sensor 069" ; :installedIn :hq ; :reading 24.0 .
+:sensor070 a :Sensor ; rdfs:label "Sensor 070" ; :installedIn :hq ; :reading 25.0 .
+:sensor071 a :Sensor ; rdfs:label "Sensor 071" ; :installedIn :hq ; :reading 26.0 .
+:sensor072 a :Sensor ; rdfs:label "Sensor 072" ; :installedIn :hq ; :reading 27.0 .
+:sensor073 a :Sensor ; rdfs:label "Sensor 073" ; :installedIn :hq ; :reading 28.0 .
+:sensor074 a :Sensor ; rdfs:label "Sensor 074" ; :installedIn :hq ; :reading 29.0 .
+:sensor075 a :Sensor ; rdfs:label "Sensor 075" ; :installedIn :hq ; :reading 30.0 .
+:sensor076 a :Sensor ; rdfs:label "Sensor 076" ; :installedIn :hq ; :reading 31.0 .
+:sensor077 a :Sensor ; rdfs:label "Sensor 077" ; :installedIn :hq ; :reading 32.0 .
+:sensor078 a :Sensor ; rdfs:label "Sensor 078" ; :installedIn :hq ; :reading 33.0 .
+:sensor079 a :Sensor ; rdfs:label "Sensor 079" ; :installedIn :hq ; :reading 34.0 .
+:sensor080 a :Sensor ; rdfs:label "Sensor 080" ; :installedIn :hq ; :reading 15.0 .
+:sensor081 a :Sensor ; rdfs:label "Sensor 081" ; :installedIn :hq ; :reading 16.0 .
+:sensor082 a :Sensor ; rdfs:label "Sensor 082" ; :installedIn :hq ; :reading 17.0 .
+:sensor083 a :Sensor ; rdfs:label "Sensor 083" ; :installedIn :hq ; :reading 18.0 .
+:sensor084 a :Sensor ; rdfs:label "Sensor 084" ; :installedIn :hq ; :reading 19.0 .
+:sensor085 a :Sensor ; rdfs:label "Sensor 085" ; :installedIn :hq ; :reading 20.0 .
+:sensor086 a :Sensor ; rdfs:label "Sensor 086" ; :installedIn :hq ; :reading 21.0 .
+:sensor087 a :Sensor ; rdfs:label "Sensor 087" ; :installedIn :hq ; :reading 22.0 .
+:sensor088 a :Sensor ; rdfs:label "Sensor 088" ; :installedIn :hq ; :reading 23.0 .
+:sensor089 a :Sensor ; rdfs:label "Sensor 089" ; :installedIn :hq ; :reading 24.0 .
+:sensor090 a :Sensor ; rdfs:label "Sensor 090" ; :installedIn :hq ; :reading 25.0 .
+:sensor091 a :Sensor ; rdfs:label "Sensor 091" ; :installedIn :hq ; :reading 26.0 .
+:sensor092 a :Sensor ; rdfs:label "Sensor 092" ; :installedIn :hq ; :reading 27.0 .
+:sensor093 a :Sensor ; rdfs:label "Sensor 093" ; :installedIn :hq ; :reading 28.0 .
+:sensor094 a :Sensor ; rdfs:label "Sensor 094" ; :installedIn :hq ; :reading 29.0 .
+:sensor095 a :Sensor ; rdfs:label "Sensor 095" ; :installedIn :hq ; :reading 30.0 .
+:sensor096 a :Sensor ; rdfs:label "Sensor 096" ; :installedIn :hq ; :reading 31.0 .
+:sensor097 a :Sensor ; rdfs:label "Sensor 097" ; :installedIn :hq ; :reading 32.0 .
+:sensor098 a :Sensor ; rdfs:label "Sensor 098" ; :installedIn :hq ; :reading 33.0 .
+:sensor099 a :Sensor ; rdfs:label "Sensor 099" ; :installedIn :hq ; :reading 34.0 .
+:sensor100 a :Sensor ; rdfs:label "Sensor 100" ; :installedIn :hq ; :reading 15.0 .
+:sensor101 a :Sensor ; rdfs:label "Sensor 101" ; :installedIn :hq ; :reading 16.0 .
+:sensor102 a :Sensor ; rdfs:label "Sensor 102" ; :installedIn :hq ; :reading 17.0 .
+:sensor103 a :Sensor ; rdfs:label "Sensor 103" ; :installedIn :hq ; :reading 18.0 .
+:sensor104 a :Sensor ; rdfs:label "Sensor 104" ; :installedIn :hq ; :reading 19.0 .
+:sensor105 a :Sensor ; rdfs:label "Sensor 105" ; :installedIn :hq ; :reading 20.0 .
+:sensor106 a :Sensor ; rdfs:label "Sensor 106" ; :installedIn :hq ; :reading 21.0 .
+:sensor107 a :Sensor ; rdfs:label "Sensor 107" ; :installedIn :hq ; :reading 22.0 .
+:sensor108 a :Sensor ; rdfs:label "Sensor 108" ; :installedIn :hq ; :reading 23.0 .
+:sensor109 a :Sensor ; rdfs:label "Sensor 109" ; :installedIn :hq ; :reading 24.0 .
+:sensor110 a :Sensor ; rdfs:label "Sensor 110" ; :installedIn :hq ; :reading 25.0 .
+:sensor111 a :Sensor ; rdfs:label "Sensor 111" ; :installedIn :hq ; :reading 26.0 .
+:sensor112 a :Sensor ; rdfs:label "Sensor 112" ; :installedIn :hq ; :reading 27.0 .
+:sensor113 a :Sensor ; rdfs:label "Sensor 113" ; :installedIn :hq ; :reading 28.0 .
+:sensor114 a :Sensor ; rdfs:label "Sensor 114" ; :installedIn :hq ; :reading 29.0 .
+:sensor115 a :Sensor ; rdfs:label "Sensor 115" ; :installedIn :hq ; :reading 30.0 .
+:sensor116 a :Sensor ; rdfs:label "Sensor 116" ; :installedIn :hq ; :reading 31.0 .
+:sensor117 a :Sensor ; rdfs:label "Sensor 117" ; :installedIn :hq ; :reading 32.0 .
+:sensor118 a :Sensor ; rdfs:label "Sensor 118" ; :installedIn :hq ; :reading 33.0 .
+:sensor119 a :Sensor ; rdfs:label "Sensor 119" ; :installedIn :hq ; :reading 34.0 .
+:sensor120 a :Sensor ; rdfs:label "Sensor 120" ; :installedIn :hq ; :reading 15.0 .

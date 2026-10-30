@@ -111,7 +111,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
 
   return {
     refresh: () => {
-      deps.individualsLayer?.clear();
+      deps.individualsLayer?.reset();
       queryTab.refresh();
       individualsTab.refresh();
       updateIndividualsButton();

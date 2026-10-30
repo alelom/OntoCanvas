@@ -22,6 +22,8 @@ export const isIndividualEdgeId = (id: string): boolean => id.startsWith(INDIVID
 
 export const DEFAULT_MAX_PER_EXPANSION = 50;
 export const DEFAULT_MAX_TOTAL = 300;
+/** Up to this many individuals in all, every one is drawn without being asked. */
+export const DEFAULT_AUTO_MAX = 30;
 const TOOLTIP_ROWS = 10;
 // One collator: `localeCompare` with options builds one per call.
 const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -57,7 +59,10 @@ export interface IndividualsLayer {
   show(iri: string): void;
   /** Draws up to the cap more of its neighbours. */
   showMore(iri: string): void;
+  /** Hides what is drawn, what was drawn by itself included, until the data changes. */
   clear(): void;
+  /** Another ontology was opened: forgets what was asked for and the clearing, without telling the listeners (a redraw follows). */
+  reset(): void;
   isEmpty(): boolean;
   /** The data changed (another ontology, data added or removed): what is drawn is read again, and what is gone is dropped. */
   invalidate(): void;
@@ -70,13 +75,18 @@ export interface IndividualsLayerOptions {
   getStores: () => Store[];
   maxPerExpansion?: number;
   maxTotal?: number;
+  /** Draw every individual, unasked, while there are at most this many (30 by default; 0 for never). */
+  autoMax?: number;
 }
 
-export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL }: IndividualsLayerOptions): IndividualsLayer {
+export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX }: IndividualsLayerOptions): IndividualsLayer {
   /** The individuals asked for, in the order asked, with how many of each one's neighbours are drawn. */
   const roots = new Map<string, number>();
   const listeners: Array<() => void> = [];
   let individuals: Set<string> | null = null;
+  /** The user cleared what was drawn by itself. */
+  let hidden = false;
+  const auto = (): boolean => !hidden && known().size > 0 && known().size <= autoMax;
   const changed = (): void => listeners.forEach((listener) => listener());
 
   const known = (): Set<string> => {
@@ -141,15 +151,22 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       changed();
     },
     clear() {
-      if (roots.size === 0) return;
+      if (roots.size === 0 && !auto()) return;
       roots.clear();
+      hidden = true;
       changed();
     },
-    isEmpty: () => roots.size === 0,
+    reset() {
+      roots.clear();
+      hidden = false;
+      individuals = null;
+    },
+    isEmpty: () => roots.size === 0 && !auto(),
     invalidate() {
       individuals = null;
+      hidden = false;
       for (const iri of [...roots.keys()]) if (!known().has(iri)) roots.delete(iri);
-      if (roots.size > 0) changed();
+      if (roots.size > 0 || auto()) changed();
     },
     onChange: (listener) => void listeners.push(listener),
 
@@ -163,6 +180,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
         shown.add(iri);
         return true;
       };
+      if (auto()) for (const iri of known()) add(iri);
       for (const [iri, count] of roots) {
         if (!known().has(iri) || !add(iri)) continue;
         const neighbours = neighboursOf(iri);

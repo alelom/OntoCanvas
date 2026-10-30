@@ -48,9 +48,14 @@ describe('individuals in the graph', () => {
     page.evaluate(() => ((window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds() as string[]).map(String));
   const edgeCount = () => page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.edges.length as number);
 
-  it('draws the individual and the individuals linked to it, beside the classes, and clears them', async () => {
+  it('draws few individuals by themselves, clears them, and draws one with its neighbours on request', async () => {
+    // Four individuals are few: all are drawn at once.
+    expect((await nodeIds()).filter((id) => id.startsWith('__individual__'))).toHaveLength(4);
+    expect(await page.locator('[data-individuals-drawn]').innerText()).toContain('4 individuals');
+
+    await page.click('[data-individuals-clear]');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
     const classesOnly = await nodeIds();
-    expect(classesOnly.some((id) => id.startsWith('__individual__'))).toBe(false);
     const edgesBefore = await edgeCount();
 
     await page.click('[data-individuals-item][title$="#alice"]');

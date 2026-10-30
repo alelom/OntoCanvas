@@ -23,14 +23,14 @@ const classNodes = new Map([
 
 describe('createIndividualsLayer', () => {
   it('draws nothing until an individual is shown', () => {
-    const layer = createIndividualsLayer({ getStores: () => [hub(3)] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(3)] });
     expect(layer.isEmpty()).toBe(true);
     expect(layer.build(classNodes)).toMatchObject({ nodes: [], edges: [], more: [], warning: null });
   });
 
   it('draws the individual, its neighbours in both directions, and the links between them', () => {
     const s = store(':a a :Room ; :next :b . :c :next :a . :b a :Room . :c a :Room . :x a :Room .');
-    const layer = createIndividualsLayer({ getStores: () => [s] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
 
     layer.show(ex('a'));
     const view = layer.build(classNodes);
@@ -42,7 +42,7 @@ describe('createIndividualsLayer', () => {
   });
 
   it('labels a node with the label, else the local name, and puts its values and class in the tooltip', () => {
-    const layer = createIndividualsLayer({ getStores: () => [hub(1)] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(1)] });
     layer.show(ex('h'));
     const nodes = layer.build(classNodes).nodes;
 
@@ -55,7 +55,7 @@ describe('createIndividualsLayer', () => {
 
   it('joins an individual to the node of each class that is drawn, and to no other', () => {
     const s = store(':a a :Room, :Hidden .');
-    const layer = createIndividualsLayer({ getStores: () => [s] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
     layer.show(ex('a'));
 
     const toClasses = layer.build(classNodes).edges.filter((e) => e.type === 'rdf:type');
@@ -64,7 +64,7 @@ describe('createIndividualsLayer', () => {
   });
 
   it('draws at most 50 neighbours of an individual, and says how many are left', () => {
-    const layer = createIndividualsLayer({ getStores: () => [hub(120)] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(120)] });
     layer.show(ex('h'));
 
     const view = layer.build(classNodes);
@@ -74,7 +74,7 @@ describe('createIndividualsLayer', () => {
   });
 
   it('shows 50 more at a time, in a stable order, until none are left', () => {
-    const layer = createIndividualsLayer({ getStores: () => [hub(120)] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(120)] });
     layer.show(ex('h'));
     const first = new Set(layer.build(classNodes).nodes.map((n) => n.iri));
 
@@ -90,7 +90,7 @@ describe('createIndividualsLayer', () => {
   });
 
   it('stops at a total, with a warning, however many are expanded', () => {
-    const layer = createIndividualsLayer({ getStores: () => [hub(120)], maxPerExpansion: 50, maxTotal: 60 });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(120)], maxPerExpansion: 50, maxTotal: 60 });
     layer.show(ex('h'));
     layer.showMore(ex('h'));
 
@@ -102,7 +102,7 @@ describe('createIndividualsLayer', () => {
 
   it('keeps what was drawn when another individual is shown, and clears all on request', () => {
     const s = store(':a a :Room . :b a :Room .');
-    const layer = createIndividualsLayer({ getStores: () => [s] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
     layer.show(ex('a'));
     layer.show(ex('b'));
     expect(layer.build(classNodes).nodes.map((n) => n.iri).sort()).toEqual([ex('a'), ex('b')]);
@@ -115,7 +115,7 @@ describe('createIndividualsLayer', () => {
 
   it('forgets an individual that is no longer in the data, after invalidate()', () => {
     let current = store(':a a :Room .');
-    const layer = createIndividualsLayer({ getStores: () => [current] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [current] });
     layer.show(ex('a'));
     expect(layer.build(classNodes).nodes).toHaveLength(1);
 
@@ -126,7 +126,7 @@ describe('createIndividualsLayer', () => {
   });
 
   it('tells its listeners when what is drawn changes', () => {
-    const layer = createIndividualsLayer({ getStores: () => [hub(2)] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(2)] });
     let calls = 0;
     layer.onChange(() => calls++);
 
@@ -140,7 +140,7 @@ describe('createIndividualsLayer', () => {
   it('draws the data of a store that is not the ontology’s', () => {
     const ontology = store(':Room a <http://www.w3.org/2002/07/owl#Class> .');
     const data = store(':a a :Room ; :next :b . :b a :Room .');
-    const layer = createIndividualsLayer({ getStores: () => [ontology, data] });
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [ontology, data] });
     layer.show(ex('a'));
 
     expect(layer.build(classNodes).nodes).toHaveLength(2);
@@ -152,5 +152,56 @@ describe('isIndividualNodeId', () => {
     expect(isIndividualNodeId(INDIVIDUAL_PREFIX + ex('a'))).toBe(true);
     expect(isIndividualNodeId('Room')).toBe(false);
     expect(isIndividualNodeId(ex('Room'))).toBe(false);
+  });
+});
+
+describe('few individuals are drawn without being asked', () => {
+  const few = () => store(':a a :Room ; :next :b . :b a :Room . :c a :Room .');
+
+  it('draws every individual while there are no more than the limit, with the links between them', () => {
+    const layer = createIndividualsLayer({ getStores: () => [few()], autoMax: 3 });
+
+    expect(layer.isEmpty()).toBe(false);
+    const view = layer.build(classNodes);
+    expect(view.nodes.map((n) => n.iri).sort()).toEqual([ex('a'), ex('b'), ex('c')]);
+    expect(view.edges.some((e) => e.type === ex('next'))).toBe(true);
+    expect(view.more).toEqual([]);
+  });
+
+  it('draws nothing by itself above the limit', () => {
+    const layer = createIndividualsLayer({ getStores: () => [few()], autoMax: 2 });
+
+    expect(layer.isEmpty()).toBe(true);
+    expect(layer.build(classNodes).nodes).toEqual([]);
+  });
+
+  it('is hidden by clear(), and comes back when the data changes or reset() says another ontology is open', () => {
+    let current = few();
+    const layer = createIndividualsLayer({ getStores: () => [current], autoMax: 3 });
+    let calls = 0;
+    layer.onChange(() => calls++);
+
+    layer.clear();
+    expect(layer.isEmpty()).toBe(true);
+    expect(calls).toBe(1);
+
+    layer.invalidate();
+    expect(layer.isEmpty()).toBe(false);
+
+    layer.clear();
+    current = store(':z a :Room .');
+    layer.reset();
+    expect(layer.isEmpty()).toBe(false);
+    expect(layer.build(classNodes).nodes.map((n) => n.iri)).toEqual([ex('z')]);
+  });
+
+  it('keeps an individual shown on request when data added takes the total over the limit', () => {
+    let current = few();
+    const layer = createIndividualsLayer({ getStores: () => [current], autoMax: 3 });
+    layer.show(ex('a'));
+    current = store(':a a :Room ; :next :b . :b a :Room . :c a :Room . :d a :Room .');
+    layer.invalidate();
+
+    expect(layer.build(classNodes).nodes.map((n) => n.iri).sort()).toEqual([ex('a'), ex('b')]);
   });
 });
