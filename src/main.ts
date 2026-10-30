@@ -8,7 +8,7 @@ import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
 import { createDataSources } from './sparql/dataSources';
-import { createIndividualsLayer } from './abox/individualsLayer';
+import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from './abox/individualsLayer';
 import { getDataUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
@@ -136,6 +136,13 @@ session.sidePanel = initSidePanel({
   },
   dataSources,
   individualsLayer: session.individualsLayer,
+  isIndividualSelection: () => {
+    const network = canvasState.network;
+    if (!network) return false;
+    const nodes = network.getSelectedNodes().map(String);
+    const edges = network.getSelectedEdges().map(String);
+    return nodes.length + edges.length > 0 && nodes.every(isIndividualNodeId) && edges.every(isIndividualEdgeId);
+  },
   getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? null,
   embedded: isEmbedded(),
 });

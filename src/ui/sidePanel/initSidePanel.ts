@@ -31,6 +31,8 @@ export interface SidePanelDeps {
   getClassLabel?: (classIri: string) => string | null;
   /** What is drawn of the individuals in the graph (#209): the Individuals tab draws into it and clears it. */
   individualsLayer?: IndividualsLayer;
+  /** True while what is selected in the graph is only individuals: the toolbar then has no Edit button (#209). */
+  isIndividualSelection?: () => boolean;
   /** In an iframe the app is a read-only view: no panel. */
   embedded: boolean;
 }
@@ -90,7 +92,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const buttons = mountPanelButtons(wrapper, [
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },
     { id: 'individualsPanelBtn', label: '', title: '', onClick: () => host.toggle(individualsTab.id) },
-  ]);
+  ], { hideEdit: deps.isIndividualSelection });
   host.onChange((activeId) => {
     buttons.setPressed('queryPanelBtn', activeId === queryTab.id);
     buttons.setPressed('individualsPanelBtn', activeId === individualsTab.id);

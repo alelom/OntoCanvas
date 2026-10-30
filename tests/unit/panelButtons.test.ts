@@ -29,10 +29,32 @@ beforeEach(() => {
 });
 
 describe('mountPanelButtons', () => {
-  it('puts the buttons right after Add Edge, in order, when the toolbar is there already', () => {
-    const bar = renderToolbar('<button class="vis-button vis-edit"></button>');
+  it('puts the buttons after Add Edge, in order, when the toolbar is there already', () => {
+    const bar = renderToolbar();
     mountPanelButtons(wrapper, [spec(QUERY, 'SPARQL query'), spec(INDIVIDUALS, 'Individuals')]);
-    expect(order(bar)).toEqual(['vis-add', 'vis-connect', QUERY, INDIVIDUALS, 'vis-edit']);
+    expect(order(bar)).toEqual(['vis-add', 'vis-connect', QUERY, INDIVIDUALS]);
+  });
+
+  it('puts them after the Edit button too, which vis-network adds for a selection, not between it and Add Edge (#209)', async () => {
+    const bar = renderToolbar('<div class="vis-separator-line"></div><button class="vis-button vis-edit"></button>');
+    mountPanelButtons(wrapper, [spec(QUERY, 'SPARQL query'), spec(INDIVIDUALS, 'Individuals')]);
+    expect(order(bar)).toEqual(['vis-add', 'vis-connect', 'vis-edit', QUERY, INDIVIDUALS]);
+  });
+
+  it('takes the Edit button and the separator before it away while the selection is of individuals, which cannot be edited (#209)', async () => {
+    let individualsSelected = true;
+    const bar = renderToolbar('<div class="vis-separator-line"></div><button class="vis-button vis-edit"></button>');
+    mountPanelButtons(wrapper, [spec(QUERY, 'SPARQL query')], { hideEdit: () => individualsSelected });
+    await flush();
+    expect(bar.querySelector('.vis-edit')).toBeNull();
+    expect(bar.querySelectorAll('.vis-separator-line')).toHaveLength(2);
+    expect(order(bar)).toEqual(['vis-add', 'vis-connect', QUERY]);
+
+    // vis-network rebuilds the toolbar when the selection changes: now of a class, so the button stays.
+    individualsSelected = false;
+    bar.innerHTML = '<button class="vis-button vis-add"></button><button class="vis-button vis-connect"></button><div class="vis-separator-line"></div><button class="vis-button vis-edit"></button>';
+    await flush();
+    expect(order(bar)).toEqual(['vis-add', 'vis-connect', 'vis-edit', QUERY]);
   });
 
   it('puts one separator before the buttons, not one for each', () => {

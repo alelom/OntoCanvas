@@ -73,6 +73,36 @@ describe('individuals in the graph', () => {
     expect(await edgeCount()).toBe(edgesBefore);
   });
 
+/** Clicks the middle of the first edge for which `pick` is true, as a user does. */
+  async function clickEdge(pick: string): Promise<void> {
+    const point = await page.evaluate((src) => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      const test = new Function('e', 'return ' + src) as (e: any) => boolean;
+      const edge = net.body.data.edges.get().find(test);
+      const pos = net.getPositions([edge.from, edge.to]);
+      const mid = net.canvasToDOM({ x: (pos[edge.from].x + pos[edge.to].x) / 2, y: (pos[edge.from].y + pos[edge.to].y) / 2 });
+      const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+      return { x: rect.left + mid.x, y: rect.top + mid.y };
+    }, pick);
+    await page.mouse.click(point.x, point.y);
+  }
+  const toolbar = () => page.evaluate(() => [...document.querySelectorAll('.vis-manipulation > button')].map((b) => b.id || b.className.replace('vis-button ', '')));
+
+  it('has no Edit button while an edge between individuals is selected, and has it, before the panel buttons, for a class edge', async () => {
+    await page.click('[data-individuals-clear]').catch(() => {});
+    await page.click('[data-individuals-item][title$="#alice"]');
+    await page.click('[data-individuals-show-in-graph]');
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('__individual__http://example.org/o#alice'));
+
+    await clickEdge("e.id.startsWith('__individual_edge__') && e.label === 'memberOf'");
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().getSelectedEdges().length > 0);
+    expect(await toolbar()).toEqual(['vis-add', 'vis-connect', 'queryPanelBtn', 'individualsPanelBtn']);
+
+    await clickEdge("!e.id.startsWith('__individual') && /memberOf$/.test(String(e.id))");
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().getSelectedEdges().some((id: string) => !id.startsWith('__individual')));
+    expect(await toolbar()).toEqual(['vis-add', 'vis-connect', 'vis-edit', 'queryPanelBtn', 'individualsPanelBtn']);
+  });
+
   it('leaves a drawn individual alone on Delete, and the ontology unchanged', async () => {
     await page.click('[data-individuals-item][title$="#carol"]');
     await page.click('[data-individuals-show-in-graph]');
