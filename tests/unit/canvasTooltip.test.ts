@@ -6,6 +6,7 @@ import { pickTooltip, showCanvasTooltip, hideCanvasTooltip, RICH_TOOLTIP_HIDE_DE
 describe('pickTooltip', () => {
   it('prefers an edge label, then a class-expression mark, then a node, then an edge line', () => {
     expect(pickTooltip({ edgeLabel: 'label', expressionMark: 'mark', node: 'node', edgeLine: 'line' })?.text).toBe('label');
+    expect(pickTooltip({ individualBadge: 'badge', node: 'node', edgeLine: 'line' })?.text).toBe('badge');
     expect(pickTooltip({ expressionMark: 'mark', node: 'node', edgeLine: 'line' })?.text).toBe('mark');
     expect(pickTooltip({ node: 'node', edgeLine: 'line' })?.text).toBe('node');
     expect(pickTooltip({ edgeLine: 'line' })?.text).toBe('line');

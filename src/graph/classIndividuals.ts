@@ -25,13 +25,12 @@ export function classIndividualsAction(layer: IndividualsLayer, classIri: string
   return { label: `Show ${adds}${more} individuals (${displayed} displayed/${total} total)`, title: `Draw ${adds}${more} of the individuals of this class in the graph`, disabled: false, run };
 }
 
-/** Adds how many individuals the loaded data has to the label of each class node that has any (none, no count). */
+/** Records how many individuals the loaded data has on each class node that has any (none, no count); the canvas draws it as a badge. */
 export function addIndividualCounts(nodes: DataSet<any>, layer: IndividualsLayer, classNodes: Map<string, string>): void {
-  const updates: Array<{ id: string; label: string }> = [];
+  const updates: Array<{ id: string; individualCount: number }> = [];
   for (const [classIri, nodeId] of classNodes) {
     const { total } = layer.previewClass(classIri);
-    const node = nodes.get(nodeId) as { label?: string } | null;
-    if (total > 0 && node) updates.push({ id: nodeId, label: `${node.label ?? ''}\n● ${total}` });
+    if (total > 0 && nodes.get(nodeId)) updates.push({ id: nodeId, individualCount: total });
   }
   if (updates.length) nodes.update(updates);
 }

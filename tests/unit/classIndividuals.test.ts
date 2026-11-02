@@ -49,11 +49,12 @@ describe('addIndividualCounts', () => {
   ]);
   const byUri = new Map([[`${NS}Person`, 'Person'], [`${NS}Room`, 'Room']]);
 
-  it('adds the count to the label of a class that has individuals, whether or not they are drawn, and leaves the others alone', () => {
+  it('records the count on a class that has individuals, whether or not they are drawn, and leaves the label and the others alone', () => {
     const data = nodes();
     addIndividualCounts(data, layerOf(people(120)), byUri);
 
-    expect(data.get('Person').label).toBe('Person\n● 120');
-    expect(data.get('Room').label).toBe('Room');
+    expect(data.get('Person').individualCount).toBe(120);
+    expect(data.get('Person').label).toBe('Person');
+    expect(data.get('Room').individualCount).toBeUndefined();
   });
 });

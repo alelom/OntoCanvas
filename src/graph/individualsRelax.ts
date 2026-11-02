@@ -30,7 +30,7 @@ export interface RelaxInput {
 
 const ITERATIONS = 150;
 const MAX_ITERATIONS = 600;
-const SETTLE_STEPS = 200;
+const MIN_SETTLE_STEPS = 200;
 /** How far an individual's centre stays from the edge of a box, and from another individual's centre. */
 const BOX_MARGIN = 45;
 /** What an individual takes when its size is not known, and the space kept free around it. */
@@ -42,6 +42,7 @@ const MAX_STEP = 40;
 
 export function relaxIndividuals({ movable, fixed, links, iterations: requested }: RelaxInput): Map<string, { x: number; y: number }> {
   // A crowd needs more steps to spread out than a few individuals do.
+  const settleSteps = Math.max(MIN_SETTLE_STEPS, movable.length * 4);
   const iterations = requested ?? Math.min(MAX_ITERATIONS, Math.max(ITERATIONS, movable.length * 4));
   const points = movable.map((m, i) => ({ id: m.id, x: m.x + (i % 7) * 0.01, y: m.y + Math.floor(i / 7) * 0.01 }));
   const byId = new Map<string, { x: number; y: number }>(points.map((p) => [p.id, p]));
@@ -62,7 +63,7 @@ export function relaxIndividuals({ movable, fixed, links, iterations: requested 
   };
 
   // After the relaxation, a few steps with the links off, until nothing overlaps: the links must not hold a crowd together.
-  for (let step = 0; step < iterations + SETTLE_STEPS; step++) {
+  for (let step = 0; step < iterations + settleSteps; step++) {
     const settling = step >= iterations;
     const cooling = settling ? 1 : 1 - step / iterations;
     let crowded = false;

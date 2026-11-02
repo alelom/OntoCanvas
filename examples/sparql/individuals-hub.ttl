@@ -1,5 +1,8 @@
 # A hub: one building with many individuals linked to it, to see the limits on drawing individuals (issue #209). The file has 135
-# individuals, more than the 30 that are drawn by themselves, so on opening the graph shows only the four classes. Then:
+# individuals, more than the 30 that are drawn by themselves, so on opening the graph shows only the five classes. Then:
+#   - each class with individuals carries a round badge with their count near its bottom right corner (Sensor 120, Room 12, Floor 2, Building 1); hover it for what it does,
+#     click it to draw the individuals of that class in batches (the same as the right-click menu entry "Show 50 individuals ..." on the class node, or the button of its row in the tab).
+#     Site has no individuals: no badge, and no entry in its menu
 #   - open the Individuals tab (the toolbar says "Individuals (135)"): the individuals are listed by type (filter them by label or name above), each type a closed row,
 #     the biggest first: Sensor (120), Room (12), Floor (2), Building (1)
 #   - press the button on the Sensor row, "Show 50 (0 displayed/120 total)": 50 sensors are drawn, beside the classes, and it reads
@@ -24,6 +27,8 @@
 :Floor a owl:Class ; rdfs:label "Floor" .
 :Room a owl:Class ; rdfs:label "Room" .
 :Sensor a owl:Class ; rdfs:label "Sensor" .
+:Site a owl:Class ; rdfs:label "Site" .
+:Building rdfs:subClassOf :Site .
 :partOf a owl:ObjectProperty ; rdfs:label "part of" .
 :installedIn a owl:ObjectProperty ; rdfs:label "installed in" ; rdfs:domain :Sensor ; rdfs:range :Building .
 :reading a owl:DatatypeProperty ; rdfs:domain :Sensor ; rdfs:range xsd:decimal .

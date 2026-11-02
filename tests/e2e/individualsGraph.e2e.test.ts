@@ -224,9 +224,20 @@ describe('individuals in the graph', () => {
     await page.click('[data-individuals-clear]');
     await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
 
-    const labelOf = (id: string) => page.evaluate((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(nodeId)?.label as string, id);
-    expect(await labelOf('Person')).toContain('● 3');
-    expect(await labelOf('Team')).toContain('● 1');
+    // The count is a badge over the canvas, not part of the label.
+    const countOf = (id: string) => page.evaluate((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(nodeId)?.individualCount as number | undefined, id);
+    expect(await countOf('Person')).toBe(3);
+    expect(await countOf('Team')).toBe(1);
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('Person').label)).toBe('Person');
+    /** The screen point of the badge of a class node: near its bottom right corner. */
+    const badgeOf = (id: string) =>
+      page.evaluate((nodeId) => {
+        const net = (window as any).__EDITOR_TEST__.getNetwork();
+        const box = net.getBoundingBox(nodeId);
+        const dom = net.canvasToDOM({ x: box.right - 6, y: box.bottom - 2 });
+        const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+        return { x: rect.left + dom.x, y: rect.top + dom.y };
+      }, id);
 
     const menuOf = async (id: string) => {
       const point = await page.evaluate((nodeId) => {
@@ -244,7 +255,41 @@ describe('individuals in the graph', () => {
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 3);
     expect(await drawnIndividuals()).toEqual(['alice', 'bob', 'carol']);
 
+    // Once drawn, the class node still has its menu, which says all are displayed (an individual's edge ends under the node).
+    await menuOf('Person');
+    expect(await page.locator('#contextMenu').getByText('All 3 individuals displayed').count()).toBe(1);
+    await page.keyboard.press('Escape');
+
+    // The badge draws the individuals of its class when clicked, and says what it does when hovered.
+    await page.click('[data-individuals-clear]');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+    const badge = await badgeOf('Team');
+    await page.mouse.move(badge.x, badge.y);
+    await page.waitForFunction(() => /1 individual of this class/.test(document.body.innerText));
+    await page.mouse.click(badge.x, badge.y);
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id === '__individual__http://example.org/o#red'));
+
     // The tab agrees: the type is all displayed.
-    expect(await page.locator('[data-individuals-group] [data-individuals-show-class]').first().innerText()).toBe('All 3 displayed');
+    expect(await page.locator('[data-individuals-group] [data-individuals-show-class]').first().innerText()).toBe('Show 3 (0 displayed/3 total)');
+  });
+
+  it('shows the count on a class node when many individuals are loaded and none is drawn', async () => {
+    const many = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    many.setDefaultTimeout(5000);
+    const cors = { 'access-control-allow-origin': '*' };
+    const people = Array.from({ length: 40 }, (_, i) => `:p${i} a :Person .`).join(' ');
+    await many.route((url) => url.hostname === 'e2e-onto.test', (route) => route.fulfill({ status: 200, contentType: 'text/turtle', body: ONTOLOGY, headers: cors }));
+    await many.route((url) => url.hostname === 'e2e-data.test', (route) => route.fulfill({ status: 200, contentType: 'text/plain', body: '@prefix : <http://example.org/o#> . ' + people, headers: cors }));
+    await many.goto(`${EDITOR_URL}?onto=${encodeURIComponent('https://e2e-onto.test/o.ttl')}`, { waitUntil: 'domcontentloaded' });
+    await many.waitForFunction(() => (window as any).__EDITOR_TEST__?.getNetwork()?.body.data.nodes.get('Person'));
+    // The data is added after the graph is drawn: nothing redraws it but the change of data.
+    await many.click('#individualsPanelBtn');
+    await many.fill('[data-add-url-input]', 'https://e2e-data.test/many.ttl');
+    await many.click('[data-add-url]');
+    await many.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (40)');
+
+    await many.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('Person')?.individualCount === 40);
+    expect(await many.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')))).toBe(false);
+    await many.close();
   });
 });

@@ -251,7 +251,8 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       memberCache.clear();
       hidden = false;
       for (const iri of [...picked]) if (!known().has(iri)) picked.delete(iri);
-      if (picked.size > 0 || auto()) changed();
+      // Redrawn even when nothing is drawn: the counts on the class nodes follow the data.
+      changed();
     },
     onChange: (listener) => void listeners.push(listener),
 

@@ -234,7 +234,8 @@ export function showContextMenu(
         })();
 
   // Individuals are drawn read-only (#209): no menu for them, which would paste or edit relationships on an id the ontology does not have.
-  if ((resolvedNodeId && isIndividualNodeId(resolvedNodeId)) || (resolvedEdgeId && isIndividualEdgeId(resolvedEdgeId))) return;
+  // A node wins over an edge ending under the click: the dashed edges of drawn individuals end at their class node.
+  if (resolvedNodeId ? isIndividualNodeId(resolvedNodeId) : resolvedEdgeId && isIndividualEdgeId(resolvedEdgeId)) return;
 
   // In copy-only mode there is nothing to offer on the empty canvas.
   if (copyOnlyMenu && !resolvedNodeId && !resolvedEdgeId) return;

@@ -73,6 +73,22 @@ describe('relaxIndividuals with many individuals of one class', () => {
     expect(overlapping).toBe(0);
   });
 
+  it('leaves none overlapping at the total cap, around one class or two crowds with a class between them', () => {
+    const count = (movable: ReturnType<typeof crowd>, fixed: FixedBox[], links: Array<[string, string]>) => {
+      const out = relaxIndividuals({ movable, fixed, links });
+      const points = movable.map((m) => out.get(m.id)!);
+      let n = 0;
+      for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++) if (overlap(points[i], points[j])) n++;
+      return n;
+    };
+    const one = crowd(300);
+    expect(count(one, [box('Sensor', 0, 0)], one.map((m) => [m.id, 'Sensor']))).toBe(0);
+
+    const two = crowd(300);
+    const links = two.map((m, i) => [m.id, i < 150 ? 'A' : 'B'] as [string, string]);
+    expect(count(two.map((m, i) => ({ ...m, x: i < 150 ? -500 : 500 })), [box('A', -500, 0), box('B', 500, 0), box('Mid', 0, 0)], links)).toBe(0);
+  });
+
   it('keeps them off the class and spreads them out from it as there are more', () => {
     const fixed = [box('Sensor', 0, 0)];
     const spread = (n: number) => {
