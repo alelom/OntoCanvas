@@ -275,8 +275,11 @@ describe('individuals in the graph', () => {
       await page.mouse.move(badge.x + (wiggle++ % 2), badge.y);
       expect(await page.evaluate(() => /Click to draw a sample of 1 individual of this class, 0 currently displayed/.test(document.body.innerText))).toBe(true);
     }, { timeout: 4000, interval: 100 });
-    await page.mouse.click(badge.x, badge.y);
-    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id === '__individual__http://example.org/o#red'));
+    // A click on the badge draws its class. Pressed again while it is not drawn: the badge is only a hit once the canvas has drawn it.
+    await vi.waitFor(async () => {
+      await page.mouse.click(badge.x, badge.y);
+      expect(await nodeIds()).toContain('__individual__http://example.org/o#red');
+    }, { timeout: 4000, interval: 200 });
 
     // The tab agrees: the type is all displayed.
     expect(await page.locator('[data-individuals-group] [data-individuals-show-class]').first().innerText()).toBe('Show 3 (0 displayed/3 total)');
