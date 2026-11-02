@@ -247,17 +247,26 @@ describe('individuals in the graph', () => {
         return { x: rect.left + dom.x, y: rect.top + dom.y };
       }, id);
 
+    // Where the node is is read again at each try: the canvas can still be resizing after the panel opened.
     const menuOf = async (id: string) => {
       await settled();
-      const point = await page.evaluate((nodeId) => {
-        const net = (window as any).__EDITOR_TEST__.getNetwork();
-        const pos = net.getPositions([nodeId])[nodeId];
-        const dom = net.canvasToDOM(pos);
-        const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
-        return { x: rect.left + dom.x, y: rect.top + dom.y };
-      }, id);
-      await page.mouse.click(point.x, point.y, { button: 'right' });
-      await page.locator('#contextMenu').waitFor({ state: 'visible' });
+      await vi.waitFor(async () => {
+        const point = await page.evaluate((nodeId) => {
+          const net = (window as any).__EDITOR_TEST__.getNetwork();
+          const pos = net.getPositions([nodeId])[nodeId];
+          const dom = net.canvasToDOM(pos);
+          const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+          return { x: rect.left + dom.x, y: rect.top + dom.y };
+        }, id);
+        await page.mouse.click(point.x, point.y, { button: 'right' });
+        const seen = await page.evaluate(([x, y]) => {
+          const el = document.elementFromPoint(x, y);
+          const net = (window as any).__EDITOR_TEST__.getNetwork();
+          const r = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+          return JSON.stringify({ el: el ? el.tagName + '.' + el.className : null, nodeAt: net.getNodeAt({ x: x - r.left, y: y - r.top }) ?? null });
+        }, [point.x, point.y]);
+        expect(await page.locator('#contextMenu').isVisible(), id + ' ' + JSON.stringify(point) + ' ' + seen).toBe(true);
+      }, { timeout: 4000, interval: 200 });
     };
     await menuOf('Person');
     await page.locator('#contextMenu').getByText('Show 3 individuals (0 displayed/3 total)').click();
