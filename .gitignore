@@ -25,3 +25,6 @@ test-results.log
 scripts/cursor_recovery/*.txt
 scripts/cursor_recovery/*.md
 scripts/rdflibexperiments/output/
+
+# Playwright traces of failed E2E tests (tests/e2e/traceOnFailure.ts)
+test-results/

@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { EDITOR_URL } from './editorUrl';
+import { traceOnFailure } from './traceOnFailure';
 
 const ONTOLOGY = `
 @prefix : <http://example.org/o#> .
@@ -43,6 +44,9 @@ describe('individuals in the graph', () => {
   afterAll(async () => {
     await browser?.close();
   });
+
+  // A trace of a test that fails (kept by CI): these tests click on a canvas and failed on CI alone, with no way to see why.
+  traceOnFailure(() => page.context());
 
   const nodeIds = () =>
     page.evaluate(() => ((window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds() as string[]).map(String));
