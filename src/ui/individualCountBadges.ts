@@ -74,7 +74,8 @@ export function attachIndividualCountBadges(net: BadgeNet, getAction: (nodeId: s
       const badge = at(point);
       const action = badge && getAction(badge.id);
       if (!badge || !action) return null;
-      return `${badge.count} ${badge.count === 1 ? 'individual' : 'individuals'} of this class in the loaded data.\n${action.title}`;
+      const what = action.disabled ? action.title : `Click to draw a sample of ${action.adds} ${action.adds === 1 ? 'individual' : 'individuals'} of this class, ${action.displayed} currently displayed`;
+      return `${badge.count} ${badge.count === 1 ? 'individual' : 'individuals'} of this class in the loaded data.\n${what}`;
     },
     openAt(point) {
       const badge = at(point);

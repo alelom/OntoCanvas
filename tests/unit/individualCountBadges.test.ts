@@ -26,7 +26,7 @@ function fakeNet(nodes: Array<{ id: string; individualCount?: number }>) {
   };
 }
 
-const action = (run = vi.fn(), over: Partial<ClassIndividualsAction> = {}): ClassIndividualsAction => ({ label: 'Show 50 individuals', title: 'Draw 50 of the individuals of this class in the graph', disabled: false, run, ...over });
+const action = (run = vi.fn(), over: Partial<ClassIndividualsAction> = {}): ClassIndividualsAction => ({ label: 'Show 50 individuals', title: 'Draw 50 of the individuals of this class in the graph', disabled: false, adds: 50, displayed: 20, run, ...over });
 /** Where the badge of a class node sits: on its bottom right corner. */
 const corner = { x: BOX.right - 6, y: BOX.bottom - 2 };
 
@@ -60,7 +60,7 @@ describe('attachIndividualCountBadges', () => {
     paint();
 
     expect(badges.tooltipAt({ x: 50, y: 30 })).toBeNull();
-    expect(badges.tooltipAt(corner)).toBe('120 individuals of this class in the loaded data.\nDraw 50 of the individuals of this class in the graph');
+    expect(badges.tooltipAt(corner)).toBe('120 individuals of this class in the loaded data.\nClick to draw a sample of 50 individuals of this class, 20 currently displayed');
   });
 
   it('does nothing when the action is disabled, and says why', () => {

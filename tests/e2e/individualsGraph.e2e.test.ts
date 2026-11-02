@@ -3,7 +3,7 @@
  * to the canvas, as nodes of their own beside the classes; they cannot be edited or deleted, and Clear individuals takes
  * them away. The addresses are answered by routes (no real network).
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { EDITOR_URL } from './editorUrl';
@@ -92,8 +92,13 @@ describe('individuals in the graph', () => {
       const test = new Function('e', 'return ' + src) as (e: any) => boolean;
       const edge = net.body.data.edges.get().find(test);
       const pos = net.getPositions([edge.from, edge.to]);
-      const mid = net.canvasToDOM({ x: (pos[edge.from].x + pos[edge.to].x) / 2, y: (pos[edge.from].y + pos[edge.to].y) / 2 });
       const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+      // Where a user can click it: the point nearest the middle that is on the edge and on no node.
+      for (const t of [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7]) {
+        const dom = net.canvasToDOM({ x: pos[edge.from].x + (pos[edge.to].x - pos[edge.from].x) * t, y: pos[edge.from].y + (pos[edge.to].y - pos[edge.from].y) * t });
+        if (net.getNodeAt(dom) === undefined && net.getEdgeAt(dom) === edge.id) return { x: rect.left + dom.x, y: rect.top + dom.y };
+      }
+      const mid = net.canvasToDOM({ x: (pos[edge.from].x + pos[edge.to].x) / 2, y: (pos[edge.from].y + pos[edge.to].y) / 2 });
       return { x: rect.left + mid.x, y: rect.top + mid.y };
     }, pick);
     await page.mouse.click(point.x, point.y);
@@ -264,8 +269,12 @@ describe('individuals in the graph', () => {
     await page.click('[data-individuals-clear]');
     await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
     const badge = await badgeOf('Team');
-    await page.mouse.move(badge.x, badge.y);
-    await page.waitForFunction(() => /1 individual of this class/.test(document.body.innerText));
+    // The tooltip follows the pointer's moves: move over the badge until the redraw after Clear has placed it.
+    let wiggle = 0;
+    await vi.waitFor(async () => {
+      await page.mouse.move(badge.x + (wiggle++ % 2), badge.y);
+      expect(await page.evaluate(() => /Click to draw a sample of 1 individual of this class, 0 currently displayed/.test(document.body.innerText))).toBe(true);
+    }, { timeout: 4000, interval: 100 });
     await page.mouse.click(badge.x, badge.y);
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id === '__individual__http://example.org/o#red'));
 
