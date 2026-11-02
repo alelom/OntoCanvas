@@ -59,6 +59,8 @@ describe('individuals in the graph', () => {
     await page.click(`[data-individuals-item][title$="#${who}"]`);
     await page.click('[data-individuals-show-neighbours]');
   }
+  /** Drawing refits the view a moment later: a click must wait for it, or it lands where the graph was. */
+  const settled = () => page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());
   const edgeCount = () => page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.edges.length as number);
 
   it('draws few individuals by themselves, clears them, and draws one with its neighbours on request', async () => {
@@ -87,6 +89,7 @@ describe('individuals in the graph', () => {
 
 /** Clicks the middle of the first edge for which `pick` is true, as a user does. */
   async function clickEdge(pick: string): Promise<void> {
+    await settled();
     const point = await page.evaluate((src) => {
       const net = (window as any).__EDITOR_TEST__.getNetwork();
       const test = new Function('e', 'return ' + src) as (e: any) => boolean;
@@ -245,6 +248,7 @@ describe('individuals in the graph', () => {
       }, id);
 
     const menuOf = async (id: string) => {
+      await settled();
       const point = await page.evaluate((nodeId) => {
         const net = (window as any).__EDITOR_TEST__.getNetwork();
         const pos = net.getPositions([nodeId])[nodeId];
@@ -268,6 +272,7 @@ describe('individuals in the graph', () => {
     // The badge draws the individuals of its class when clicked, and says what it does when hovered.
     await page.click('[data-individuals-clear]');
     await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+    await settled();
     const badge = await badgeOf('Team');
     // The tooltip follows the pointer's moves: move over the badge until the redraw after Clear has placed it.
     let wiggle = 0;
