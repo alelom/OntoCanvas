@@ -1,3 +1,12 @@
+# [2.1.0](https://github.com/alelom/OntoCanvas/compare/v2.0.0...v2.1.0) (2026-11-02)
+
+
+### Features
+
+* draw a class's individuals from its node, show their count on it, and lay out crowds of individuals without overlaps ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([5a6b370](https://github.com/alelom/OntoCanvas/commit/5a6b370b18f2f0ff38a2d54770ea562a4e240f58))
+* the badge tooltip says what a click draws; make the individuals E2E steady ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([7dc2f26](https://github.com/alelom/OntoCanvas/commit/7dc2f266d7940b752e4d0029fb66bb4cc29e19fd))
+* the count of individuals is a clickable badge on the class node; fix the review of [#215](https://github.com/alelom/OntoCanvas/issues/215) and the class menu after drawing ([#209](https://github.com/alelom/OntoCanvas/issues/209)) ([99db839](https://github.com/alelom/OntoCanvas/commit/99db839f7ca05e5dbf893595e113668c6351a701))
+
 # [2.0.0](https://github.com/alelom/OntoCanvas/compare/v1.43.0...v2.0.0) (2026-10-30)
 
 
