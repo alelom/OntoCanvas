@@ -1,0 +1,37 @@
+/**
+ * Individuals as the class node offers them (#209): the entry of its right-click menu, which draws the individuals of that
+ * class in batches like the type header of the Individuals tab, and the count of individuals the node carries. Display only.
+ */
+import type { DataSet } from 'vis-data';
+import type { IndividualsLayer } from '../abox/individualsLayer';
+
+export interface ClassIndividualsAction {
+  label: string;
+  title: string;
+  disabled: boolean;
+  run: () => void;
+}
+
+/** What the menu of a class node offers for its individuals; null when the class has none in the loaded data. */
+export function classIndividualsAction(layer: IndividualsLayer, classIri: string): ClassIndividualsAction | null {
+  const { adds, displayed, total } = layer.previewClass(classIri);
+  if (total === 0) return null;
+  const run = (): void => layer.showClass(classIri);
+  if (displayed >= total) return { label: `All ${total} individuals displayed`, title: 'Every individual of this class is drawn', disabled: true, run };
+  if (adds === 0) {
+    return { label: 'Limit reached', title: 'The graph shows as many individuals as it will draw: use Clear individuals to start again, or filter for a narrower set', disabled: true, run };
+  }
+  const more = displayed > 0 ? ' more' : '';
+  return { label: `Show ${adds}${more} individuals (${displayed} displayed/${total} total)`, title: `Draw ${adds}${more} of the individuals of this class in the graph`, disabled: false, run };
+}
+
+/** Adds how many individuals the loaded data has to the label of each class node that has any (none, no count). */
+export function addIndividualCounts(nodes: DataSet<any>, layer: IndividualsLayer, classNodes: Map<string, string>): void {
+  const updates: Array<{ id: string; label: string }> = [];
+  for (const [classIri, nodeId] of classNodes) {
+    const { total } = layer.previewClass(classIri);
+    const node = nodes.get(nodeId) as { label?: string } | null;
+    if (total > 0 && node) updates.push({ id: nodeId, label: `${node.label ?? ''}\n● ${total}` });
+  }
+  if (updates.length) nodes.update(updates);
+}

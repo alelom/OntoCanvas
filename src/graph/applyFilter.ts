@@ -28,6 +28,7 @@ import { openExternalOntology } from '../workflows/openExternalTab';
 import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
 import { addIndividualsToNetworkData, classNodesByUri } from './individualsOverlay';
+import { addIndividualCounts } from './classIndividuals';
 import { isIndividualNodeId } from '../abox/individualsLayer';
 import { setupDragCoupling } from './dataPropertyDragCoupling';
 import { expandWithExternalRefs } from './externalExpansion';
@@ -179,7 +180,11 @@ export function applyFilter(preserveView = false): void {
   graphDataForBuild = withThingNode(graphDataForBuild, session.dataProperties, canvasState.clusterThingDataProperties);
   session.currentGraphDataForBuild = graphDataForBuild;
   const data = buildNetworkData(currentFilter, graphDataForBuild);
-  if (session.individualsLayer) addIndividualsToNetworkData(data, session.individualsLayer, classNodesByUri(graphDataForBuild.nodes), { relax: canvasState.relaxIndividuals, search: canvasState.individualSearch });
+  if (session.individualsLayer) {
+    const classNodes = classNodesByUri(graphDataForBuild.nodes);
+    addIndividualCounts(data.nodes, session.individualsLayer, classNodes);
+    addIndividualsToNetworkData(data, session.individualsLayer, classNodes, { relax: canvasState.relaxIndividuals, search: canvasState.individualSearch });
+  }
   if (canvasState.network && session.ttlStore) {
     updateContextMenuData(session.ttlStore, graphDataForBuild, session.externalOntologyReferences, openExternalOntology);
   }

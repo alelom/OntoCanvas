@@ -56,3 +56,33 @@ describe('relaxIndividuals', () => {
     for (const p of out.values()) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
   });
 });
+
+describe('relaxIndividuals with many individuals of one class', () => {
+  const size = { width: 90, height: 34 };
+  const crowd = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `i${i}`, x: 0, y: 0, ...size }));
+  const overlap = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) < size.width && Math.abs(a.y - b.y) < size.height;
+
+  it('leaves no two of them on top of each other, whatever the size of their labels', () => {
+    const movable = crowd(120);
+
+    const out = relaxIndividuals({ movable, fixed: [box('Sensor', 0, 0)], links: movable.map((m) => [m.id, 'Sensor'] as [string, string]) });
+
+    const points = movable.map((m) => out.get(m.id)!);
+    let overlapping = 0;
+    for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++) if (overlap(points[i], points[j])) overlapping++;
+    expect(overlapping).toBe(0);
+  });
+
+  it('keeps them off the class and spreads them out from it as there are more', () => {
+    const fixed = [box('Sensor', 0, 0)];
+    const spread = (n: number) => {
+      const movable = crowd(n);
+      const out = relaxIndividuals({ movable, fixed, links: movable.map((m) => [m.id, 'Sensor'] as [string, string]) });
+      const points = movable.map((m) => out.get(m.id)!);
+      for (const p of points) expect(inside(p, fixed[0])).toBe(false);
+      return Math.max(...points.map((p) => dist(p, { x: 0, y: 0 })));
+    };
+
+    expect(spread(120)).toBeGreaterThan(spread(10) * 1.5);
+  });
+});

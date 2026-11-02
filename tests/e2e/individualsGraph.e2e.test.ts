@@ -216,4 +216,35 @@ describe('individuals in the graph', () => {
     expect((await nodeIds()).filter((id) => !id.startsWith('__individual__'))).toHaveLength(classCount);
     expect(await nodeIds()).toContain('__individual__http://example.org/o#carol');
   });
+
+  it('shows the count of individuals on a class node, and draws the individuals of the class from its right-click menu', async () => {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.getNetwork()?.body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 4);
+    await page.click('#individualsPanelBtn');
+    await page.click('[data-individuals-clear]');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+
+    const labelOf = (id: string) => page.evaluate((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(nodeId)?.label as string, id);
+    expect(await labelOf('Person')).toContain('● 3');
+    expect(await labelOf('Team')).toContain('● 1');
+
+    const menuOf = async (id: string) => {
+      const point = await page.evaluate((nodeId) => {
+        const net = (window as any).__EDITOR_TEST__.getNetwork();
+        const pos = net.getPositions([nodeId])[nodeId];
+        const dom = net.canvasToDOM(pos);
+        const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+        return { x: rect.left + dom.x, y: rect.top + dom.y };
+      }, id);
+      await page.mouse.click(point.x, point.y, { button: 'right' });
+      await page.locator('#contextMenu').waitFor({ state: 'visible' });
+    };
+    await menuOf('Person');
+    await page.locator('#contextMenu').getByText('Show 3 individuals (0 displayed/3 total)').click();
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 3);
+    expect(await drawnIndividuals()).toEqual(['alice', 'bob', 'carol']);
+
+    // The tab agrees: the type is all displayed.
+    expect(await page.locator('[data-individuals-group] [data-individuals-show-class]').first().innerText()).toBe('All 3 displayed');
+  });
 });
