@@ -278,7 +278,13 @@ describe('individuals in the graph', () => {
     // A click on the badge draws its class. Pressed again while it is not drawn: the badge is only a hit once the canvas has drawn it.
     await vi.waitFor(async () => {
       await page.mouse.click(badge.x, badge.y);
-      expect(await nodeIds()).toContain('__individual__http://example.org/o#red');
+      const ids = await nodeIds();
+      const seen = await page.evaluate(([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        const net = (window as any).__EDITOR_TEST__.getNetwork();
+        return JSON.stringify({ el: el ? el.tagName + '.' + el.className : null, selected: net.getSelectedNodes(), box: net.getBoundingBox('Team'), scale: net.getScale() });
+      }, [badge.x, badge.y]);
+      expect(ids, 'badge ' + JSON.stringify(badge) + ' ' + seen).toContain('__individual__http://example.org/o#red');
     }, { timeout: 4000, interval: 200 });
 
     // The tab agrees: the type is all displayed.
