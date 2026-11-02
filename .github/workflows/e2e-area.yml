@@ -38,3 +38,13 @@ jobs:
       # the app under test runs in Chromium, so it measured a few imported modules, not the app (#96).
       - name: Run the E2E tests of this area
         run: npm run test:e2e:area -- ${{ inputs.area }}
+
+      # The Playwright traces of the tests that failed (tests that ask for them, see tests/e2e/traceOnFailure.ts): open one with
+      # `npx playwright show-trace <file>`.
+      - name: Upload the traces of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-traces-${{ inputs.area }}
+          path: test-results/e2e-traces/
+          if-no-files-found: ignore

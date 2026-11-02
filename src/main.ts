@@ -16,6 +16,7 @@ import { isDebugMode, debugLog } from './utils/debug';
 import {
   showContextMenu,
   setTermUriResolver,
+  setClassIndividualsProvider,
   setVersionPinnedUriResolver,
 } from './ui/contextMenu';
 import { versionPinnedUri } from './lib/versionPinnedUri';
@@ -55,8 +56,13 @@ import { setupEventListeners } from './ui/eventListeners';
 import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyModal } from './ui/dataPropertyModals';
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { applyFilter } from './graph/applyFilter';
+import { classIndividualsAction } from './graph/classIndividuals';
 
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
+setClassIndividualsProvider((nodeId) => {
+  const uri = resolveTerm('node', nodeId)?.uri;
+  return uri && session.individualsLayer ? classIndividualsAction(session.individualsLayer, uri) : null;
+});
 setVersionPinnedUriResolver((kind, id) =>
   versionPinnedUri(resolveTerm(kind, id)?.uri ?? null, session.ttlStore ? readOntologyVersion(session.ttlStore) : null)
 );

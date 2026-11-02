@@ -6,6 +6,8 @@ import { session, canvasState, editState } from '../state/appState';
 import { showAddNodeModal } from '../ui/addNodeModal';
 import { hideCanvasTooltip, pickTooltip, showCanvasTooltip } from '../ui/canvasTooltip';
 import { attachClassExpressionMarks } from '../ui/classExpressionInteraction';
+import { attachIndividualCountBadges } from '../ui/individualCountBadges';
+import { classIndividualsAction } from './classIndividuals';
 import { showContextMenu } from '../ui/contextMenu';
 import { hideEdgeLinesUnderNodes } from '../ui/edgeNodeClipping';
 import { openEditModalForNode, openEditModalForEdge } from '../ui/editModals';
@@ -27,6 +29,11 @@ export function setupNetworkSelectionAndNavigation(
     () => session.rawData?.classExpressions ?? [],
     () => canvasState.classExpressionFontRatios,
   );
+  // The count of individuals on a class node, a badge that draws them when clicked (#209).
+  const individualBadges = attachIndividualCountBadges(net as unknown as Parameters<typeof attachIndividualCountBadges>[0], (nodeId) => {
+    const uri = session.currentGraphDataForBuild?.nodes.find((n) => n.id === nodeId)?.uri;
+    return uri && session.individualsLayer ? classIndividualsAction(session.individualsLayer, uri) : null;
+  });
   // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
   hideEdgeLinesUnderNodes(net);
   // A pulsing outline around what the search matched, in an SVG layer that follows the view (#84).
@@ -130,12 +137,15 @@ export function setupNetworkSelectionAndNavigation(
       images: records?.[kind]?.get(id)?.exampleImages,
     });
     const labelEdgeId = getEdgeIdAtLabelPoint(net, coords);
+    const badgeTip = individualBadges.tooltipAt(net.DOMtoCanvas(coords));
+    container.style.cursor = badgeTip ? 'pointer' : '';
     const nodeId = net.getNodeAt(coords);
     const lineEdgeId = nodeId === undefined ? net.getEdgeAt(coords) : undefined;
     const content = pickTooltip({
       edgeLabel: labelEdgeId ? contentOf('edges', labelEdgeId) : null,
       // A class-expression mark (∪ ∩ ¬ {}) or connector explains the expression and how to edit it.
       expressionMark: classExprMarks.tooltipAt(net.DOMtoCanvas(coords)),
+      individualBadge: badgeTip,
       node: nodeId !== undefined ? contentOf('nodes', String(nodeId)) : null,
       edgeLine: lineEdgeId !== undefined ? contentOf('edges', String(lineEdgeId)) : null,
     });
@@ -270,6 +280,7 @@ export function setupNetworkSelectionAndNavigation(
         dom = { x: params.event.srcEvent.clientX - rect.left, y: params.event.srcEvent.clientY - rect.top };
       }
       if (dom && classExprMarks.openAt(net.DOMtoCanvas(dom))) return;
+      if (dom && individualBadges.openAt(net.DOMtoCanvas(dom))) return;
     }
 
     // If in add node mode and no node clicked, show the add node modal

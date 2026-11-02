@@ -14,6 +14,7 @@ interface NetworkData {
   edges: DataSet<any>;
 }
 
+const INDIVIDUAL_FONT_SIZE = 14;
 const RING_RADIUS = 160;
 const RING_STEP = 18;
 
@@ -53,7 +54,7 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
         title: node.title,
         shape: 'ellipse',
         color: { background: '#fdebd0', border: '#e67e22', highlight: { background: '#fad7a0', border: '#d35400' } },
-        font: { size: 14 },
+        font: { size: INDIVIDUAL_FONT_SIZE },
         borderWidth: 1,
       };
       const cls = classOf.get(node.id);
@@ -91,7 +92,11 @@ function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>): 
   // With the classes unplaced (the physics layout) there is nothing to anchor to: the canvas lays everything out.
   if (fixed.length === 0) return;
   const centre = { x: fixed.reduce((sum, f) => sum + f.x, 0) / fixed.length, y: fixed.reduce((sum, f) => sum + f.y, 0) / fixed.length };
-  const movable = data.nodes.get(view.nodes.map((n) => n.id)).map((n: { id: string; x?: number; y?: number }) => ({ id: String(n.id), x: n.x ?? centre.x, y: n.y ?? centre.y }));
+  // Each takes the room of its label (an ellipse at the font size drawn).
+  const movable = data.nodes.get(view.nodes.map((n) => n.id)).map((n: { id: string; x?: number; y?: number; label?: string }) => {
+    const { width, height } = boxOf({ id: String(n.id), x: 0, y: 0, label: n.label, font: { size: INDIVIDUAL_FONT_SIZE } });
+    return { id: String(n.id), x: n.x ?? centre.x, y: n.y ?? centre.y, width: width - 24 + 30, height: height - 20 + 14 };
+  });
   const links = view.edges.map((e) => [e.from, e.to] as [string, string]);
   const placed = relaxIndividuals({ movable, fixed, links });
   data.nodes.update([...placed].map(([id, p]) => ({ id, x: p.x, y: p.y })));

@@ -126,6 +126,17 @@ describe('createIndividualsLayer', () => {
     expect(layer.build(classNodes).nodes).toEqual([]);
   });
 
+  it('tells its listeners when the data changed, though nothing is drawn, so the counts on the classes follow', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(40)] });
+    let calls = 0;
+    layer.onChange(() => calls++);
+
+    layer.invalidate();
+
+    expect(layer.isEmpty()).toBe(true);
+    expect(calls).toBe(1);
+  });
+
   it('tells its listeners when what is drawn changes', () => {
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(2)] });
     let calls = 0;

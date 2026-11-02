@@ -72,6 +72,12 @@ describe('individuals-hub.ttl', () => {
     expect(layer().isEmpty()).toBe(true);
   });
 
+  it('has a class with no individuals (Site), for a node with no badge', () => {
+    expect(store.getQuads(`${NS('hub')}Site`, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type', 'http://www.w3.org/2002/07/owl#Class', null)).toHaveLength(1);
+    expect(layer().previewClass(`${NS('hub')}Site`).total).toBe(0);
+    expect(layer().previewClass(`${NS('hub')}Sensor`).total).toBe(120);
+  });
+
   it('draws Head office with 50 neighbours, the two floors first, and 50 more at a time until all 122', () => {
     const l = layer();
     l.showNeighbours(hq);

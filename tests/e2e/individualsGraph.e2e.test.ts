@@ -3,10 +3,11 @@
  * to the canvas, as nodes of their own beside the classes; they cannot be edited or deleted, and Clear individuals takes
  * them away. The addresses are answered by routes (no real network).
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { EDITOR_URL } from './editorUrl';
+import { traceOnFailure } from './traceOnFailure';
 
 const ONTOLOGY = `
 @prefix : <http://example.org/o#> .
@@ -44,6 +45,9 @@ describe('individuals in the graph', () => {
     await browser?.close();
   });
 
+  // A trace of a test that fails (kept by CI): these tests click on a canvas and failed on CI alone, with no way to see why.
+  traceOnFailure(() => page.context());
+
   const nodeIds = () =>
     page.evaluate(() => ((window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds() as string[]).map(String));
   /** The groups of the table are closed until opened. */
@@ -59,6 +63,8 @@ describe('individuals in the graph', () => {
     await page.click(`[data-individuals-item][title$="#${who}"]`);
     await page.click('[data-individuals-show-neighbours]');
   }
+  /** Drawing refits the view a moment later: a click must wait for it, or it lands where the graph was. */
+  const settled = () => page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());
   const edgeCount = () => page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.edges.length as number);
 
   it('draws few individuals by themselves, clears them, and draws one with its neighbours on request', async () => {
@@ -87,13 +93,19 @@ describe('individuals in the graph', () => {
 
 /** Clicks the middle of the first edge for which `pick` is true, as a user does. */
   async function clickEdge(pick: string): Promise<void> {
+    await settled();
     const point = await page.evaluate((src) => {
       const net = (window as any).__EDITOR_TEST__.getNetwork();
       const test = new Function('e', 'return ' + src) as (e: any) => boolean;
       const edge = net.body.data.edges.get().find(test);
       const pos = net.getPositions([edge.from, edge.to]);
-      const mid = net.canvasToDOM({ x: (pos[edge.from].x + pos[edge.to].x) / 2, y: (pos[edge.from].y + pos[edge.to].y) / 2 });
       const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+      // Where a user can click it: the point nearest the middle that is on the edge and on no node.
+      for (const t of [0.5, 0.45, 0.55, 0.4, 0.6, 0.35, 0.65, 0.3, 0.7]) {
+        const dom = net.canvasToDOM({ x: pos[edge.from].x + (pos[edge.to].x - pos[edge.from].x) * t, y: pos[edge.from].y + (pos[edge.to].y - pos[edge.from].y) * t });
+        if (net.getNodeAt(dom) === undefined && net.getEdgeAt(dom) === edge.id) return { x: rect.left + dom.x, y: rect.top + dom.y };
+      }
+      const mid = net.canvasToDOM({ x: (pos[edge.from].x + pos[edge.to].x) / 2, y: (pos[edge.from].y + pos[edge.to].y) / 2 });
       return { x: rect.left + mid.x, y: rect.top + mid.y };
     }, pick);
     await page.mouse.click(point.x, point.y);
@@ -215,5 +227,105 @@ describe('individuals in the graph', () => {
 
     expect((await nodeIds()).filter((id) => !id.startsWith('__individual__'))).toHaveLength(classCount);
     expect(await nodeIds()).toContain('__individual__http://example.org/o#carol');
+  });
+
+  it('shows the count of individuals on a class node, and draws the individuals of the class from its right-click menu', async () => {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__?.getNetwork()?.body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 4);
+    await page.click('#individualsPanelBtn');
+    await page.click('[data-individuals-clear]');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+
+    // The count is a badge over the canvas, not part of the label.
+    const countOf = (id: string) => page.evaluate((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(nodeId)?.individualCount as number | undefined, id);
+    expect(await countOf('Person')).toBe(3);
+    expect(await countOf('Team')).toBe(1);
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('Person').label)).toBe('Person');
+    /** The screen point of the badge of a class node: near its bottom right corner. */
+    const badgeOf = (id: string) =>
+      page.evaluate((nodeId) => {
+        const net = (window as any).__EDITOR_TEST__.getNetwork();
+        const box = net.getBoundingBox(nodeId);
+        const dom = net.canvasToDOM({ x: box.right - 6, y: box.bottom - 2 });
+        const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+        return { x: rect.left + dom.x, y: rect.top + dom.y };
+      }, id);
+
+    // Where the node is is read again at each try: the canvas can still be resizing after the panel opened.
+    const menuOf = async (id: string) => {
+      await settled();
+      await vi.waitFor(async () => {
+        const point = await page.evaluate((nodeId) => {
+          const net = (window as any).__EDITOR_TEST__.getNetwork();
+          const pos = net.getPositions([nodeId])[nodeId];
+          const dom = net.canvasToDOM(pos);
+          const rect = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+          return { x: rect.left + dom.x, y: rect.top + dom.y };
+        }, id);
+        await page.mouse.click(point.x, point.y, { button: 'right' });
+        const seen = await page.evaluate(([x, y]) => {
+          const el = document.elementFromPoint(x, y);
+          const net = (window as any).__EDITOR_TEST__.getNetwork();
+          const r = (document.getElementById('network') as HTMLElement).getBoundingClientRect();
+          return JSON.stringify({ el: el ? el.tagName + '.' + el.className : null, nodeAt: net.getNodeAt({ x: x - r.left, y: y - r.top }) ?? null });
+        }, [point.x, point.y]);
+        expect(await page.locator('#contextMenu').isVisible(), id + ' ' + JSON.stringify(point) + ' ' + seen).toBe(true);
+      }, { timeout: 4000, interval: 200 });
+    };
+    await menuOf('Person');
+    await page.locator('#contextMenu').getByText('Show 3 individuals (0 displayed/3 total)').click();
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().filter((id: string) => id.startsWith('__individual__')).length === 3);
+    expect(await drawnIndividuals()).toEqual(['alice', 'bob', 'carol']);
+
+    // Once drawn, the class node still has its menu, which says all are displayed (an individual's edge ends under the node).
+    await menuOf('Person');
+    expect(await page.locator('#contextMenu').getByText('All 3 individuals displayed').count()).toBe(1);
+    await page.keyboard.press('Escape');
+
+    // The badge draws the individuals of its class when clicked, and says what it does when hovered.
+    await page.click('[data-individuals-clear]');
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+    await settled();
+    const badge = await badgeOf('Team');
+    // The tooltip follows the pointer's moves: move over the badge until the redraw after Clear has placed it.
+    let wiggle = 0;
+    await vi.waitFor(async () => {
+      await page.mouse.move(badge.x + (wiggle++ % 2), badge.y);
+      expect(await page.evaluate(() => /Click to draw a sample of 1 individual of this class, 0 currently displayed/.test(document.body.innerText))).toBe(true);
+    }, { timeout: 4000, interval: 100 });
+    // A click on the badge draws its class. Pressed again while it is not drawn: the badge is only a hit once the canvas has drawn it.
+    await vi.waitFor(async () => {
+      await page.mouse.click(badge.x, badge.y);
+      const ids = await nodeIds();
+      const seen = await page.evaluate(([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        const net = (window as any).__EDITOR_TEST__.getNetwork();
+        return JSON.stringify({ el: el ? el.tagName + '.' + el.className : null, selected: net.getSelectedNodes(), box: net.getBoundingBox('Team'), scale: net.getScale() });
+      }, [badge.x, badge.y]);
+      expect(ids, 'badge ' + JSON.stringify(badge) + ' ' + seen).toContain('__individual__http://example.org/o#red');
+    }, { timeout: 4000, interval: 200 });
+
+    // The tab agrees: the type is all displayed.
+    expect(await page.locator('[data-individuals-group] [data-individuals-show-class]').first().innerText()).toBe('Show 3 (0 displayed/3 total)');
+  });
+
+  it('shows the count on a class node when many individuals are loaded and none is drawn', async () => {
+    const many = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+    many.setDefaultTimeout(5000);
+    const cors = { 'access-control-allow-origin': '*' };
+    const people = Array.from({ length: 40 }, (_, i) => `:p${i} a :Person .`).join(' ');
+    await many.route((url) => url.hostname === 'e2e-onto.test', (route) => route.fulfill({ status: 200, contentType: 'text/turtle', body: ONTOLOGY, headers: cors }));
+    await many.route((url) => url.hostname === 'e2e-data.test', (route) => route.fulfill({ status: 200, contentType: 'text/plain', body: '@prefix : <http://example.org/o#> . ' + people, headers: cors }));
+    await many.goto(`${EDITOR_URL}?onto=${encodeURIComponent('https://e2e-onto.test/o.ttl')}`, { waitUntil: 'domcontentloaded' });
+    await many.waitForFunction(() => (window as any).__EDITOR_TEST__?.getNetwork()?.body.data.nodes.get('Person'));
+    // The data is added after the graph is drawn: nothing redraws it but the change of data.
+    await many.click('#individualsPanelBtn');
+    await many.fill('[data-add-url-input]', 'https://e2e-data.test/many.ttl');
+    await many.click('[data-add-url]');
+    await many.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (40)');
+
+    await many.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get('Person')?.individualCount === 40);
+    expect(await many.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')))).toBe(false);
+    await many.close();
   });
 });

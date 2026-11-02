@@ -19,6 +19,7 @@ import { copyTextToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/debug';
 import type { PinnedUri } from '../lib/versionPinnedUri';
 import { isIndividualNodeId, isIndividualEdgeId } from '../abox/individualsLayer';
+import type { ClassIndividualsAction } from '../graph/classIndividuals';
 
 /**
  * Callback type for when relationships are pasted.
@@ -80,6 +81,13 @@ let termUriResolver: TermUriResolver | null = null;
 let versionPinnedUriResolver: VersionPinnedUriResolver | null = null;
 /** When true (embedded, read-only mode) the menu offers only the "Copy URI" items. */
 let copyOnlyMenu = false;
+
+let classIndividualsProvider: ((nodeId: string) => ClassIndividualsAction | null) | null = null;
+
+/** Register what the menu of a class node offers for the individuals of that class (#209); null for a class with none. */
+export function setClassIndividualsProvider(provider: ((nodeId: string) => ClassIndividualsAction | null) | null): void {
+  classIndividualsProvider = provider;
+}
 
 /** Register how "Copy URI" resolves a node/edge to its term URI. */
 export function setTermUriResolver(resolver: TermUriResolver | null): void {
@@ -226,7 +234,8 @@ export function showContextMenu(
         })();
 
   // Individuals are drawn read-only (#209): no menu for them, which would paste or edit relationships on an id the ontology does not have.
-  if ((resolvedNodeId && isIndividualNodeId(resolvedNodeId)) || (resolvedEdgeId && isIndividualEdgeId(resolvedEdgeId))) return;
+  // A node wins over an edge ending under the click: the dashed edges of drawn individuals end at their class node.
+  if (resolvedNodeId ? isIndividualNodeId(resolvedNodeId) : resolvedEdgeId && isIndividualEdgeId(resolvedEdgeId)) return;
 
   // In copy-only mode there is nothing to offer on the empty canvas.
   if (copyOnlyMenu && !resolvedNodeId && !resolvedEdgeId) return;
@@ -327,6 +336,19 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       );
     }
 
+    const individualsAction = isClassNode ? classIndividualsProvider?.(nodeId) ?? null : null;
+    const individualsBtn = individualsAction
+      ? createMenuItem(
+          individualsAction.label,
+          () => {
+            individualsAction.run();
+            hideContextMenu();
+          },
+          individualsAction.disabled
+        )
+      : null;
+    if (individualsBtn && individualsAction) individualsBtn.title = individualsAction.title;
+
     // Separator above selection commands, separator before "Edit properties" / "Open external ontology"
     const separatorBeforeSelection = createSeparator();
     const separatorBeforeEdit = createSeparator();
@@ -347,6 +369,7 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       contextMenuElement.appendChild(separatorBeforeSelection);
       if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
       if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+      if (individualsBtn) contextMenuElement.appendChild(individualsBtn);
       contextMenuElement.appendChild(separatorBeforeEdit);
       contextMenuElement.appendChild(openExternalBtn);
     } else {
@@ -361,6 +384,7 @@ function updateContextMenuItems(nodeId: string | null, edgeId: string | null): v
       contextMenuElement.appendChild(separatorBeforeSelection);
       if (selectParentsBtn) contextMenuElement.appendChild(selectParentsBtn);
       if (selectChildrenBtn) contextMenuElement.appendChild(selectChildrenBtn);
+      if (individualsBtn) contextMenuElement.appendChild(individualsBtn);
       contextMenuElement.appendChild(separatorBeforeEdit);
       contextMenuElement.appendChild(editBtn);
     }

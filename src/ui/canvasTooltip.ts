@@ -255,6 +255,8 @@ export function hideCanvasTooltip(immediately = false): void {
 export interface TooltipCandidates {
   edgeLabel?: string | TooltipContent | null;
   expressionMark?: string | TooltipContent | null;
+  /** The count of individuals on a class node (#209). */
+  individualBadge?: string | TooltipContent | null;
   node?: string | TooltipContent | null;
   edgeLine?: string | TooltipContent | null;
 }
@@ -267,5 +269,5 @@ function asContent(c: string | TooltipContent | null | undefined): TooltipConten
 
 /** The tooltip to show, or null for none. */
 export function pickTooltip(c: TooltipCandidates): TooltipContent | null {
-  return asContent(c.edgeLabel) ?? asContent(c.expressionMark) ?? asContent(c.node) ?? asContent(c.edgeLine);
+  return asContent(c.edgeLabel) ?? asContent(c.expressionMark) ?? asContent(c.individualBadge) ?? asContent(c.node) ?? asContent(c.edgeLine);
 }
