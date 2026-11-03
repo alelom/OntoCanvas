@@ -1,3 +1,15 @@
+# [2.2.0](https://github.com/alelom/OntoCanvas/compare/v2.1.0...v2.2.0) (2026-11-03)
+
+
+### Features
+
+* draw a stub for the class of a drawn individual that is not on the canvas, make the links to the schema in the Individuals tab clickable, and fit the view after a draw ([#216](https://github.com/alelom/OntoCanvas/issues/216)) ([e0f8287](https://github.com/alelom/OntoCanvas/commit/e0f828790296d294a442c8d15a240e4e98a4fd84))
+
+
+### Performance Improvements
+
+* the relaxation compares an individual with its neighbours only, and stops when it has settled ([#216](https://github.com/alelom/OntoCanvas/issues/216)) ([d5dfec1](https://github.com/alelom/OntoCanvas/commit/d5dfec149971783a554226e49eac53f712407249))
+
 # [2.1.0](https://github.com/alelom/OntoCanvas/compare/v2.0.0...v2.1.0) (2026-11-02)
 
 
