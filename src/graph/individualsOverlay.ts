@@ -4,7 +4,7 @@
  * position. Display only: nothing here reaches rawData, the ontology's store or the save pipeline.
  */
 import type { DataSet } from 'vis-data';
-import type { IndividualsLayer } from '../abox/individualsLayer';
+import { INDIVIDUAL_PREFIX, type IndividualsLayer, type LayerClass } from '../abox/individualsLayer';
 import { extractLocalName } from '../utils/localName';
 import { relaxIndividuals, type FixedBox } from './individualsRelax';
 import { filterIndividualsBySearch, type IndividualSearchFilter } from '../abox/individualSearch';
@@ -15,6 +15,11 @@ interface NetworkData {
 }
 
 const INDIVIDUAL_FONT_SIZE = 14;
+/** Where the stubs of classes with no node go: a column this far right of the class nodes, this far apart (#216). */
+const STUB_OFFSET = 280;
+const STUB_STEP = 130;
+/** Room added between two stubs for each individual of them: a crowd around one must not run into the crowd of the next. */
+const STUB_PER_INDIVIDUAL = 14;
 const RING_RADIUS = 160;
 const RING_STEP = 18;
 
@@ -46,6 +51,7 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
     if (cls) ringSize.set(cls, (ringSize.get(cls) ?? 0) + 1);
   }
 
+  addClassStubs(data, view.classes, view.edges);
   data.nodes.add(
     view.nodes.map((node) => {
       const base = {
@@ -81,6 +87,53 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       smooth: false,
     }))
   );
+}
+
+/**
+ * A stub for each class of a drawn individual that is no node of the graph (imported, or never declared), so the individual
+ * is joined to something (#216). Faded and dashed, like the classes of other ontologies. It goes in a column beside the class
+ * nodes, where the individuals of it are then placed around it like around any class; with the classes unplaced (the physics
+ * layout) the canvas places it.
+ */
+function addClassStubs(data: NetworkData, classes: LayerClass[], edges: Array<{ to: string }>): void {
+  if (classes.length === 0) return;
+  const placed = (data.nodes.get() as Array<{ id: string; x?: number; y?: number; label?: string; font?: { size?: number } }>)
+    .filter((n) => typeof n.x === 'number' && typeof n.y === 'number')
+    .map((n) => boxOf(n as Parameters<typeof boxOf>[0]));
+  const right = Math.max(...placed.map((b) => b.x + b.width / 2));
+  const middle = placed.length ? (Math.min(...placed.map((b) => b.y - b.height / 2)) + Math.max(...placed.map((b) => b.y + b.height / 2))) / 2 : 0;
+  // Each stub is as far from the one before as the crowds of the two need.
+  const crowd = classes.map((c) => edges.filter((e) => e.to === c.id).length);
+  const offsets: number[] = [];
+  classes.forEach((_, i) => offsets.push(i === 0 ? 0 : offsets[i - 1] + STUB_STEP + (STUB_PER_INDIVIDUAL * (crowd[i - 1] + crowd[i])) / 2));
+  const centre = offsets[offsets.length - 1] / 2;
+  data.nodes.add(
+    classes.map((c, i) => ({
+      id: c.id,
+      label: c.label,
+      title: `${c.iri}\nA class of the drawn individuals that is not a node of this graph.`,
+      shape: 'box',
+      color: { background: '#f4f6f6', border: '#aab7b8', highlight: { background: '#eaeded', border: '#7b8a8b' } },
+      font: { size: 18, color: '#7b8a8b' },
+      borderWidth: 1,
+      borderDashes: [5, 5],
+      ...(placed.length ? { x: right + STUB_OFFSET, y: middle + offsets[i] - centre } : {}),
+    }))
+  );
+}
+
+/**
+ * What the view fits to after the individuals `drawn` (their IRIs) were added: their nodes, and the class nodes and stubs they
+ * are joined to. Only what is in the data: a search may have hidden some. Empty when none is.
+ */
+export function focusNodeIds(data: NetworkData, drawn: string[]): string[] {
+  const individuals = new Set(drawn.map((iri) => INDIVIDUAL_PREFIX + iri).filter((id) => data.nodes.get(id)));
+  if (individuals.size === 0) return [];
+  const ids = new Set(individuals);
+  for (const edge of data.edges.get() as Array<{ from: string; to: string }>) {
+    if (individuals.has(edge.from) && !edge.to.startsWith(INDIVIDUAL_PREFIX) && data.nodes.get(edge.to)) ids.add(edge.to);
+  }
+  return [...ids];
 }
 
 /** Moves the individuals by force relaxation, anchored to the nodes the layout already placed; the rest are left to the canvas. */

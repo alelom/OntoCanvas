@@ -5,8 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import { DataSet } from 'vis-data';
 import { Parser, Store } from 'n3';
-import { createIndividualsLayer, INDIVIDUAL_PREFIX, isIndividualEdgeId } from '../../src/abox/individualsLayer';
-import { addIndividualsToNetworkData, classNodesByUri } from '../../src/graph/individualsOverlay';
+import { createIndividualsLayer, INDIVIDUAL_PREFIX, INDIVIDUAL_CLASS_PREFIX, isIndividualEdgeId } from '../../src/abox/individualsLayer';
+import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds } from '../../src/graph/individualsOverlay';
 import { parseEdgeId } from '../../src/utils/edgeId';
 
 const NS = 'http://example.org/d#';
@@ -72,5 +72,83 @@ describe('the layout of the individuals', () => {
 
   it('leaves them on the plain ring around their class when not relaxing', () => {
     for (const p of place(false)) expect(Math.hypot(p.x - 100, p.y - 50)).toBeGreaterThanOrEqual(160 - 1e-6);
+  });
+});
+
+describe('the stubs of classes that are not on the canvas (#216)', () => {
+  const kinds = new Store(new Parser().parse(`@prefix : <${NS}> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:a a :Kind , :Room ; rdfs:label "A" . :b a :Kind ; rdfs:label "B" . :Kind rdfs:label "A kind" .`));
+  const drawKinds = (positions = true) => {
+    const layer = createIndividualsLayer({ autoMax: 100, getStores: () => [kinds] });
+    const data = {
+      nodes: new DataSet<any>([{ id: 'Room', label: 'Room', ...(positions ? { x: 100, y: 50 } : {}) }, { id: 'Other', label: 'Other', ...(positions ? { x: 400, y: 250 } : {}) }]),
+      edges: new DataSet<any>(),
+    };
+    addIndividualsToNetworkData(data, layer, classNodesByUri(classNodes));
+    return data;
+  };
+  const stubId = INDIVIDUAL_CLASS_PREFIX + `${NS}Kind`;
+
+  it('adds a faded stub for a class with no node, and a dashed edge to it from each individual of it', () => {
+    const data = drawKinds();
+
+    const stub = data.nodes.get(stubId) as any;
+    expect(stub.label).toBe('A kind');
+    expect(stub.title).toContain(`${NS}Kind`);
+    expect(stub.shape).toBe('box');
+    const toStub = data.edges.get().filter((e: any) => e.to === stubId);
+    expect(toStub).toHaveLength(2);
+    expect(toStub.every((e: any) => e.dashes === true)).toBe(true);
+  });
+
+  it('places the stub clear of the class nodes, beside them, and the individuals of it around it', () => {
+    const data = drawKinds();
+
+    const stub = data.nodes.get(stubId) as any;
+    expect(stub.x).toBeGreaterThan(400);
+    for (const name of ['a', 'b']) {
+      const individual = data.nodes.get(INDIVIDUAL_PREFIX + `${NS}${name}`) as any;
+      expect(Math.hypot(individual.x - stub.x, individual.y - stub.y)).toBeGreaterThan(60);
+    }
+  });
+
+  it('leaves a stub to the canvas when the classes are not placed, and adds none for a class that is a node', () => {
+    const unplaced = drawKinds(false);
+    expect((unplaced.nodes.get(stubId) as any).x).toBeUndefined();
+
+    const layer = createIndividualsLayer({ autoMax: 100, getStores: () => [kinds] });
+    const data = { nodes: new DataSet<any>([{ id: 'Kind', label: 'Kind', x: 0, y: 0 }]), edges: new DataSet<any>() };
+    addIndividualsToNetworkData(data, layer, new Map([[`${NS}Kind`, 'Kind'], [`${NS}Room`, 'Room']]));
+    expect(data.nodes.get(stubId)).toBeNull();
+  });
+
+  it('puts nothing in the data while no individual is drawn', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [kinds] });
+    const data = { nodes: new DataSet<any>([{ id: 'Room', label: 'Room', x: 0, y: 0 }]), edges: new DataSet<any>() };
+    addIndividualsToNetworkData(data, layer, new Map());
+    expect(data.nodes.length).toBe(1);
+  });
+});
+
+describe('focusNodeIds: what the view fits to after a draw (#216)', () => {
+  it('is the individuals that were drawn, and the classes and stubs they are joined to; not the ones drawn before', () => {
+    const data = {
+      nodes: new DataSet<any>([{ id: 'Room', x: 0, y: 0 }, { id: 'Person', x: 0, y: 0 }, { id: INDIVIDUAL_CLASS_PREFIX + 'k' }, { id: INDIVIDUAL_PREFIX + 'a' }, { id: INDIVIDUAL_PREFIX + 'b' }, { id: INDIVIDUAL_PREFIX + 'old' }]),
+      edges: new DataSet<any>([
+        { id: 'e1', from: INDIVIDUAL_PREFIX + 'a', to: 'Room' },
+        { id: 'e2', from: INDIVIDUAL_PREFIX + 'b', to: INDIVIDUAL_CLASS_PREFIX + 'k' },
+        { id: 'e3', from: INDIVIDUAL_PREFIX + 'a', to: INDIVIDUAL_PREFIX + 'b' },
+        { id: 'e4', from: INDIVIDUAL_PREFIX + 'old', to: 'Person' },
+      ]),
+    };
+
+    expect(focusNodeIds(data, ['a', 'b']).sort()).toEqual(['Room', INDIVIDUAL_CLASS_PREFIX + 'k', INDIVIDUAL_PREFIX + 'a', INDIVIDUAL_PREFIX + 'b'].sort());
+  });
+
+  it('leaves out what is not in the data (a search hid it), and is empty when none is', () => {
+    const data = { nodes: new DataSet<any>([{ id: INDIVIDUAL_PREFIX + 'a' }]), edges: new DataSet<any>() };
+
+    expect(focusNodeIds(data, ['a', 'gone'])).toEqual([INDIVIDUAL_PREFIX + 'a']);
+    expect(focusNodeIds(data, ['gone'])).toEqual([]);
   });
 });

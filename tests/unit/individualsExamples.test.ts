@@ -49,11 +49,11 @@ describe('individuals-building.ttl', () => {
     expect([count('responsibleFor'), count('inspectedBy'), count('suppliedBy'), count('employs')]).toEqual([2, 1, 1, 1]);
   });
 
-  it('joins an individual of two classes to both, and leaves one of an undeclared class without a class edge', () => {
+  it('joins an individual of two classes to both, and one of an undeclared class to a stub of it (#216)', () => {
     const classEdges = (iri: string) => view.edges.filter((e) => e.type === 'rdf:type' && e.from === `__individual__${ns}${iri}`).map((e) => e.to).sort();
     expect(classEdges('ana')).toEqual(['Engineer', 'Inspector']);
     expect(classEdges('server')).toEqual(['Room', 'SecureArea']);
-    expect(classEdges('acme')).toEqual([]);
+    expect(classEdges('acme')).toEqual([`__individual_class__${ns}Company`]);
   });
 
   it('puts the values of an individual in its tooltip', () => {
@@ -101,5 +101,35 @@ describe('individuals-hub.ttl', () => {
     l.showNeighbours(`${NS('hub')}floor1`);
 
     expect(l.build(new Map()).nodes.filter((n) => n.label.startsWith('Room'))).toHaveLength(6);
+  });
+});
+
+describe('individuals-vocabulary.ttl (#216)', () => {
+  const store = load('individuals-vocabulary.ttl');
+  const ns = NS('vocabulary');
+  const classNodes = new Map(['Building', 'Sensor'].map((c) => [`${ns}${c}`, c]));
+  const layer = () => createIndividualsLayer({ getStores: () => [store] });
+
+  it('has five individuals, drawn by themselves, three of a class the file never declares', () => {
+    expect(individualsOf(store).size).toBe(5);
+    expect(store.getQuads(`${ns}FieldKind`, null, null, null)).toEqual([]);
+    expect(layer().isEmpty()).toBe(false);
+  });
+
+  it('draws a stub for the class of the three kinds, and a dashed edge from each, and none for the classes that are nodes', () => {
+    const view = layer().build(classNodes);
+
+    expect(view.classes.map((c) => c.iri)).toEqual([`${ns}FieldKind`]);
+    const toStub = view.edges.filter((e) => e.to === view.classes[0].id);
+    expect(toStub).toHaveLength(3);
+    expect(view.edges.filter((e) => e.type === 'rdf:type' && classNodes.has(`${ns}Sensor`) && (e.to === 'Sensor' || e.to === 'Building'))).toHaveLength(2);
+  });
+
+  it('has, for the kinds, the links the header says: a class and relationship that are drawn, and one that is not', () => {
+    const quads = (kind: string, predicate: string) => store.getQuads(`${ns}${kind}`, `${ns}${predicate}`, null, null).map((q) => q.object.value);
+
+    expect(quads('SensorField', 'expects')).toEqual([`${ns}Sensor`]);
+    expect(quads('SensorField', 'mapsTo')).toEqual([`${ns}installedIn`]);
+    expect(quads('NameField', 'mapsTo')).toEqual([`${ns}name`]);
   });
 });

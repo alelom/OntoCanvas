@@ -11,7 +11,7 @@ import { mountPanelButtons } from './panelButtons';
 import { createDataLoader } from '../../sparql/dataLoader';
 import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
-import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
+import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 
@@ -89,6 +89,18 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     dataLoader,
     layer: deps.individualsLayer,
     getOntologySource: deps.getOntologySource,
+    // A class or a property in the detail of an individual that is in the graph can be selected there (#216).
+    schemaLinks:
+      deps.getGraph && deps.showInGraph
+        ? {
+            match: (iri) => {
+              const graph = deps.getGraph!();
+              const match = graph ? matchIrisToGraph([iri], graph) : null;
+              return match && match.nodeIds.length + match.edgeIds.length > 0 ? match : null;
+            },
+            show: deps.showInGraph,
+          }
+        : undefined,
   });
   host.registerTab(individualsTab);
 
