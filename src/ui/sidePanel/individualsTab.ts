@@ -10,6 +10,7 @@ import { formatTerm } from '../../sparql/formatTerm';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
 import { debounced } from '../../utils/debounced';
 import type { DataSources } from '../../sparql/dataSources';
+import type { GraphMatch } from '../../sparql/graphMatches';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 import { createDataBlock } from './dataBlock';
@@ -29,6 +30,8 @@ export interface IndividualsTabDeps {
   dataLoader?: DataLoader;
   /** With this, an individual can be drawn in the graph, and what is drawn is shown and cleared here (#209). */
   layer?: IndividualsLayer;
+  /** With this, a class or a property in the detail of an individual that is in the graph can be selected there (#216). `match` says what it is in the graph, or null. */
+  schemaLinks?: { match: (iri: string) => GraphMatch | null; show: (match: GraphMatch) => void };
   /** The open ontology file's name (and where it was opened from, for a tooltip): the tab says how many individuals it holds itself. */
   getOntologySource?: () => { name: string; title?: string } | null;
 }
@@ -80,6 +83,19 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   const prefixes = () => withStandardPrefixes(deps.getPrefixes());
   const nameOf = (iri: string): string => formatTerm(DataFactory.namedNode(iri), prefixes()).text;
   const classTitle = (iri: string): string => deps.getClassLabel?.(iri) ?? nameOf(iri);
+
+  /** A button that selects a class or a property in the graph, when it is there; null otherwise (#216). */
+  function schemaButton(iri: string, text: string, title: string): HTMLButtonElement | null {
+    const links = deps.schemaLinks;
+    const match = links?.match(iri);
+    if (!links || !match) return null;
+    const button = element('button', 'schema-follow', text);
+    button.type = 'button';
+    button.title = `${title}: select it in the graph`;
+    button.setAttribute('data-individuals-schema-link', '');
+    button.addEventListener('click', () => links.show(match));
+    return button;
+  }
 
   function renderList(): void {
     const { total: allTotal } = index.classCounts();
@@ -192,6 +208,8 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       follow.addEventListener('click', () => select(term.value));
       return follow;
     }
+    const schema = term.termType === 'NamedNode' ? schemaButton(term.value, formatted.text, formatted.title) : null;
+    if (schema) return schema;
     const span = element('span', `term-${formatted.kind}`, formatted.text);
     span.title = formatted.title;
     return span;
@@ -228,7 +246,11 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     detail.hidden = false;
     const heading = element('h4', undefined, described.labels[0] ?? nameOf(selected));
     const iri = element('p', 'individual-iri', selected);
-    const types = element('p', 'individual-types', described.types.length ? `Class: ${described.types.map(classTitle).join(', ')}` : 'No class');
+    const types = element('p', 'individual-types', described.types.length ? 'Class: ' : 'No class');
+    described.types.forEach((type, i) => {
+      if (i > 0) types.append(', ');
+      types.append(schemaButton(type, classTitle(type), type) ?? classTitle(type));
+    });
     const otherLabels = described.labels.slice(1);
     detail.replaceChildren(
       heading,

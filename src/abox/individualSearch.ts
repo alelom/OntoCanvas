@@ -51,8 +51,11 @@ export function filterIndividualsBySearch(view: LayerView, filter: IndividualSea
     if (namesMatch([node.label, node.iri, extractLocalName(node.iri)], filter.query, filter.exactMatch)) keep.add(node.id);
   }
   const byRelationship = filter.edgeTypes.size > 0;
+  // A class that is no node (a stub) is named by its own label or name, as a node is by the search of the classes (#216).
+  const namedStubs = new Set(view.classes.filter((c) => namesMatch([c.label, c.iri, extractLocalName(c.iri)], filter.query, filter.exactMatch)).map((c) => c.id));
   for (const edge of view.edges) {
     if (edge.type === 'rdf:type') {
+      if (namedStubs.has(edge.to)) keep.add(edge.from);
       // With a relationship matched, its classes are highlighted only as its ends: only a class named itself counts.
       if ((byRelationship ? filter.directClassNodeIds : filter.classNodeIds).has(edge.to)) keep.add(edge.from);
     } else if (filter.edgeTypes.has(edge.type)) {
@@ -62,5 +65,6 @@ export function filterIndividualsBySearch(view: LayerView, filter: IndividualSea
   }
   const nodes = view.nodes.filter((n) => keep.has(n.id));
   const edges = view.edges.filter((e) => keep.has(e.from) && (e.type === 'rdf:type' || keep.has(e.to)));
-  return { ...view, nodes, edges };
+  const classes = view.classes.filter((c) => edges.some((e) => e.to === c.id));
+  return { ...view, nodes, classes, edges };
 }

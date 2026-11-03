@@ -1,0 +1,30 @@
+# Individuals that describe the ontology, and a class that is not in the graph (issue #216). The three field kinds below are
+# individuals of a class, FieldKind, that this file never declares, the way a vocabulary of kinds is often kept (a SKOS concept
+# scheme, say). With 30 individuals or fewer in all, every one is drawn by itself. Expected on opening (5 individuals):
+#   - two classes, Sensor and Building, with their individuals (Head office, Sensor 1) beside them and dashed edges to the classes
+#   - the three kinds (Sensor field, Building field, Name field) with a dashed edge each to a faded, dashed-outline stub called
+#     FieldKind, to the right of the classes: a class with no node of its own gets a stub, so a kind is never left floating
+#   - the stub cannot be edited or deleted, like an individual; hover it for its IRI
+#   - open the Individuals tab, open FieldKind and choose "Sensor field": its detail has "Class: FieldKind" and, under "Points to",
+#     "expects :Sensor" and "mapsTo :installedIn". ":Sensor" and ":installedIn" are buttons: pressing one selects that class,
+#     or that relationship, in the graph and brings it into view. "Name field" points at ":name", which is in no graph, so it
+#     stays plain text
+#   - "Clear individuals" removes the stub with the individuals; drawing the kinds again (the FieldKind row's button) brings it
+#     back, and the view then fits what was drawn
+@prefix : <http://example.org/examples/individuals-vocabulary#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/individuals-vocabulary> a owl:Ontology ; rdfs:label "Individuals, a vocabulary" .
+
+:Building a owl:Class ; rdfs:label "Building" .
+:Sensor a owl:Class ; rdfs:label "Sensor" .
+:installedIn a owl:ObjectProperty ; rdfs:label "installed in" ; rdfs:domain :Sensor ; rdfs:range :Building .
+
+# The vocabulary: kinds of field, and what each is about. FieldKind is not declared anywhere.
+:SensorField a :FieldKind ; rdfs:label "Sensor field" ; :expects :Sensor ; :mapsTo :installedIn .
+:BuildingField a :FieldKind ; rdfs:label "Building field" ; :expects :Building ; :mapsTo :installedIn .
+:NameField a :FieldKind ; rdfs:label "Name field" ; :mapsTo :name .
+
+:hq a :Building ; rdfs:label "Head office" .
+:sensor1 a :Sensor ; rdfs:label "Sensor 1" ; :installedIn :hq .

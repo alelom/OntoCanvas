@@ -6,7 +6,7 @@
 #     describes, inspected by, supplied by, employs; the corridor is adjacent to three spaces and the lobby to the corridor
 #   - Ana has two dashed edges, to Engineer and to Inspector (an individual of two classes); the server room has two as well, Room
 #     and Secure area, the latter a class declared without a place in the hierarchy
-#   - Acme is typed as Company, a class this file never declares, so it has no dashed edge: its classes are the ones the graph draws
+#   - Acme is typed as Company, a class this file never declares, so it is joined to a faded stub called Company, to the right of the classes (a class with no node of its own gets one; see individuals-vocabulary.ttl)
 #   - hover Door 3: its fire rating; hover Server room: its area (values are in the tooltip, not drawn as nodes)
 #   - choose Door 3 in the tab and read its detail: it points to Corridor 1 and the server room (connects), is hosted by Wall 3,
 #     supplied by Acme, and is pointed to by Ana (responsible for) and the report (describes). Follow a link in the detail to go to that individual

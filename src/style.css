@@ -703,7 +703,8 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .individual-links li {
   padding: 1px 0;
 }
-.individual-follow {
+.individual-follow,
+.schema-follow {
   border: 0;
   background: none;
   padding: 0;

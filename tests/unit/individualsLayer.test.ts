@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
-import { createIndividualsLayer, INDIVIDUAL_PREFIX, isIndividualNodeId } from '../../src/abox/individualsLayer';
+import { createIndividualsLayer, INDIVIDUAL_PREFIX, INDIVIDUAL_CLASS_PREFIX, isIndividualNodeId } from '../../src/abox/individualsLayer';
 
 const ex = (name: string) => `http://example.org/d#${name}`;
 const store = (ttl: string): Store => new Store(new Parser().parse('@prefix : <http://example.org/d#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n' + ttl));
@@ -53,14 +53,14 @@ describe('createIndividualsLayer', () => {
     expect(nodes.find((n) => n.iri === ex('p000'))!.label).toBe('P000');
   });
 
-  it('joins an individual to the node of each class that is drawn, and to no other', () => {
+  it('joins an individual to the node of each class that is drawn, and to a stub of each other class', () => {
     const s = store(':a a :Room, :Hidden .');
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
     layer.showNeighbours(ex('a'));
 
     const toClasses = layer.build(classNodes).edges.filter((e) => e.type === 'rdf:type');
 
-    expect(toClasses.map((e) => [e.from, e.to])).toEqual([[INDIVIDUAL_PREFIX + ex('a'), 'Room']]);
+    expect(toClasses.map((e) => [e.from, e.to]).sort()).toEqual([[INDIVIDUAL_PREFIX + ex('a'), 'Room'], [INDIVIDUAL_PREFIX + ex('a'), INDIVIDUAL_CLASS_PREFIX + ex('Hidden')]].sort());
   });
 
   it('draws the individual and at most 50 of its neighbours, and says how many are left', () => {
@@ -346,5 +346,93 @@ describe('at the total cap', () => {
     l.showNeighbours(ex('h'));
 
     expect(l.build(classNodes).nodes).toHaveLength(5);
+  });
+});
+
+describe('what a change of the layer says (#216)', () => {
+  const changes = (layer: ReturnType<typeof createIndividualsLayer>) => {
+    const seen: Array<{ kind: string; drawn: string[] }> = [];
+    layer.onChange((change) => seen.push({ kind: change.kind, drawn: [...change.drawn].sort() }));
+    return seen;
+  };
+
+  it('says which individuals a draw added, and not the ones that were drawn already', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(3)] });
+    const seen = changes(layer);
+
+    layer.show(ex('p000'));
+    layer.showNeighbours(ex('h'));
+
+    expect(seen).toEqual([
+      { kind: 'draw', drawn: [ex('p000')] },
+      { kind: 'draw', drawn: [ex('h'), ex('p001'), ex('p002')].sort() },
+    ]);
+  });
+
+  it('says what a class draw added', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(2)] });
+    const seen = changes(layer);
+
+    layer.showClass(ex('Person'));
+
+    expect(seen).toEqual([{ kind: 'draw', drawn: [ex('p000'), ex('p001')] }]);
+  });
+
+  it('says a clear, and a change of the data, with nothing drawn', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(2)] });
+    layer.show(ex('p000'));
+    const seen = changes(layer);
+
+    layer.clear();
+    layer.invalidate();
+
+    expect(seen).toEqual([
+      { kind: 'clear', drawn: [] },
+      { kind: 'data', drawn: [] },
+    ]);
+  });
+});
+
+describe('the classes of drawn individuals that are not on the canvas (#216)', () => {
+  const typed = store(':a a :Kind , :Room ; rdfs:label "A" . :Kind rdfs:label "A kind" . :b a <http://www.w3.org/2002/07/owl#NamedIndividual> .');
+  const roomOnly = new Map([[ex('Room'), 'Room']]);
+
+  it('lists a class with no node, with its label, and draws the type edge to a stub of it', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [typed] });
+    layer.show(ex('a'));
+
+    const view = layer.build(roomOnly);
+
+    expect(view.classes).toEqual([{ iri: ex('Kind'), id: INDIVIDUAL_CLASS_PREFIX + ex('Kind'), label: 'A kind' }]);
+    const types = view.edges.filter((e) => e.type === 'rdf:type').map((e) => e.to).sort();
+    expect(types).toEqual(['Room', INDIVIDUAL_CLASS_PREFIX + ex('Kind')]);
+  });
+
+  it('lists none for a class that is a node, and none for owl:NamedIndividual', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [typed] });
+    layer.show(ex('a'));
+    layer.show(ex('b'));
+
+    const view = layer.build(new Map([[ex('Room'), 'Room'], [ex('Kind'), 'Kind']]));
+
+    expect(view.classes).toEqual([]);
+  });
+
+  it('names a class once, however many individuals have it, and only while one is drawn', () => {
+    const many = store(':a a :Kind . :b a :Kind . :c a :Kind .');
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [many] });
+    expect(layer.build(new Map()).classes).toEqual([]);
+
+    layer.showClass(ex('Kind'));
+
+    const view = layer.build(new Map());
+    expect(view.classes.map((c) => c.iri)).toEqual([ex('Kind')]);
+    expect(view.classes[0].label).toBe('Kind');
+    expect(view.edges.filter((e) => e.to === INDIVIDUAL_CLASS_PREFIX + ex('Kind'))).toHaveLength(3);
+  });
+
+  it('is read-only like an individual: its id is one of an individual', () => {
+    expect(isIndividualNodeId(INDIVIDUAL_CLASS_PREFIX + ex('Kind'))).toBe(true);
+    expect(isIndividualNodeId('Room')).toBe(false);
   });
 });

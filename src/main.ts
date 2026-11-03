@@ -124,8 +124,8 @@ const dataSources = createDataSources();
 session.individualsLayer = createIndividualsLayer({
   getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.stores()] : dataSources.stores()),
 });
-// Drawing or clearing individuals redraws the graph where it is.
-session.individualsLayer.onChange(() => applyFilter(true));
+// Drawing or clearing individuals redraws the graph where it is; after a draw the user started, the view fits what was drawn (#216).
+session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined));
 session.sidePanel = initSidePanel({
   getStore: () => session.ttlStore,
   getPrefixes: () => session.currentPrefixMap,

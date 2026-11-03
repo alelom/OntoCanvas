@@ -69,3 +69,26 @@ describe('individuals while a search is active', () => {
     expect(view.edges).toEqual([]);
   });
 });
+
+describe('the stubs of classes that are not on the canvas, while a search is active (#216)', () => {
+  const withStubs = new Store(
+    new Parser().parse(`@prefix : <${NS}> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:one a :Concept ; rdfs:label "Client" . :two a :Concept ; rdfs:label "Scale" . :tom a :Person ; rdfs:label "Tom" . :Concept rdfs:label "Field kind" .`)
+  );
+  const stubView = () => createIndividualsLayer({ getStores: () => [withStubs], autoMax: 100 }).build(classNodes);
+  const sets = (query: string) => computeSearchSets(nodes, edges, query, false, false);
+  const filtered = (query: string) => filterIndividualsBySearch(stubView(), individualSearchFilter(sets(query), edges, objectProperties, { query, exactMatch: false }));
+
+  it('keeps the stub of a class while an individual that has it is kept, and drops it with the last one', () => {
+    expect(filtered('Client').classes.map((c) => c.iri)).toEqual([`${NS}Concept`]);
+    expect(iris(filtered('Client'))).toEqual(['one']);
+    expect(filtered('Tom').classes).toEqual([]);
+  });
+
+  it('keeps the individuals of a class named by its stub, so searching a kind shows its individuals', () => {
+    const view = filtered('Field kind');
+
+    expect(iris(view)).toEqual(['one', 'two']);
+    expect(view.classes.map((c) => c.iri)).toEqual([`${NS}Concept`]);
+  });
+});

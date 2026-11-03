@@ -27,7 +27,7 @@ import { forgetNodePositions } from '../workflows/nodePositions';
 import { openExternalOntology } from '../workflows/openExternalTab';
 import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
-import { addIndividualsToNetworkData, classNodesByUri } from './individualsOverlay';
+import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds } from './individualsOverlay';
 import { addIndividualCounts } from './classIndividuals';
 import { isIndividualNodeId } from '../abox/individualsLayer';
 import { setupDragCoupling } from './dataPropertyDragCoupling';
@@ -37,7 +37,12 @@ import { persistNodePositionsFromNetwork } from './persistNodePositions';
 import { withThingNode } from './thingNode';
 import { Network } from 'vis-network/esnext';
 
-export function applyFilter(preserveView = false): void {
+/**
+ * `fitTo`: the IRIs of individuals the user has just drawn (#216). With the view preserved, the view then fits them and the
+ * classes they are joined to, in place of staying where it was: a batch drawn past the viewport is seen. A redraw that is not
+ * a draw (a search, a filter, the individuals drawn by themselves when a file opens) leaves the view alone.
+ */
+export function applyFilter(preserveView = false, fitTo?: string[]): void {
   // Don't return early - we need to initialize the network even with no nodes
   // so that Add node/Add edge buttons and double-click work
 
@@ -293,13 +298,22 @@ export function applyFilter(preserveView = false): void {
     const h = networkContainer.clientHeight;
     if (w > 0 && h > 0) canvasState.network.setSize(`${w}px`, `${h}px`);
     if (preserveView && savedScale !== null && savedPosition !== null) {
+      const focus = fitTo ? focusNodeIds(data, fitTo) : [];
       requestAnimationFrame(() => {
-        canvasState.network?.moveTo({
+        const net = canvasState.network;
+        net?.moveTo({
           position: savedPosition!,
           scale: savedScale!,
           animation: false,
         });
-        viewSettled(settleToken);
+        if (net && focus.length > 0) {
+          // The view glides to what was drawn; it has settled when it gets there (or after a moment, whatever the animation does).
+          net.once('animationFinished', () => viewSettled(settleToken));
+          net.fit({ nodes: focus, maxZoomLevel: 1, animation: { duration: 350, easingFunction: 'easeInOutQuad' } });
+          setTimeout(() => viewSettled(settleToken), 600);
+        } else {
+          viewSettled(settleToken);
+        }
       });
     } else if (layoutMode === 'force') {
       canvasState.network.once('stabilizationIterationsDone', () => {

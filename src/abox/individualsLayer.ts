@@ -15,7 +15,9 @@ const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
 
 /** Ids of the nodes of individuals start with this, so nothing mistakes one for a class (not editable, not saved). */
 export const INDIVIDUAL_PREFIX = '__individual__';
-export const isIndividualNodeId = (id: string): boolean => id.startsWith(INDIVIDUAL_PREFIX);
+/** Ids of the stub nodes of the classes of drawn individuals that are not on the canvas (#216): read-only like an individual. */
+export const INDIVIDUAL_CLASS_PREFIX = '__individual_class__';
+export const isIndividualNodeId = (id: string): boolean => id.startsWith(INDIVIDUAL_PREFIX) || id.startsWith(INDIVIDUAL_CLASS_PREFIX);
 /** Ids of the edges of individuals; they hold no "->", so no edit modal parses one. */
 export const INDIVIDUAL_EDGE_PREFIX = '__individual_edge__';
 export const isIndividualEdgeId = (id: string): boolean => id.startsWith(INDIVIDUAL_EDGE_PREFIX);
@@ -45,8 +47,23 @@ export interface LayerEdge {
   type: string;
 }
 
+/** A class of a drawn individual that is not a node of the graph: drawn as a stub (#216). */
+export interface LayerClass {
+  iri: string;
+  id: string;
+  label: string;
+}
+
+/** What a change of the layer was: a draw (the individuals it added), a clear, or a change of the data. */
+export interface LayerChange {
+  kind: 'draw' | 'clear' | 'data';
+  drawn: string[];
+}
+
 export interface LayerView {
   nodes: LayerNode[];
+  /** The classes of the drawn individuals that are not in `classNodeByUri`, each named once. */
+  classes: LayerClass[];
   edges: LayerEdge[];
   /** Set when the total cap cut what was asked for. */
   warning: string | null;
@@ -74,7 +91,7 @@ export interface IndividualsLayer {
   invalidate(): void;
   /** `classNodeByUri`: the node id of each class that is drawn, by the class's IRI. */
   build(classNodeByUri: Map<string, string>): LayerView;
-  onChange(listener: () => void): void;
+  onChange(listener: (change: LayerChange) => void): void;
 }
 
 export interface IndividualsLayerOptions {
@@ -88,14 +105,16 @@ export interface IndividualsLayerOptions {
 export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX }: IndividualsLayerOptions): IndividualsLayer {
   /** The individuals asked for, in the order asked: one with its neighbours, or from a class. */
   const picked = new Set<string>();
-  const listeners: Array<() => void> = [];
+  const listeners: Array<(change: LayerChange) => void> = [];
   let individuals: Set<string> | null = null;
   /** The user cleared what was drawn by itself. */
   let hidden = false;
   const auto = (): boolean => !hidden && known().size > 0 && known().size <= autoMax;
-  const changed = (): void => {
+  /** Tells the listeners; `before` is what was drawn before a draw, to say what it added. */
+  const changed = (kind: LayerChange['kind'], before?: ReadonlySet<string>): void => {
     shownCache = null;
-    listeners.forEach((listener) => listener());
+    const drawn = before ? [...computeShown().shown].filter((iri) => !before.has(iri)) : [];
+    listeners.forEach((listener) => listener({ kind, drawn }));
   };
 
   const known = (): Set<string> => {
@@ -194,25 +213,27 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
 
   return {
     show(iri) {
-      if (!computeShown().shown.has(iri) && room() === 0) return;
+      const before = new Set(computeShown().shown);
+      if (!before.has(iri) && room() === 0) return;
       picked.add(iri);
-      changed();
+      changed('draw', before);
     },
     showNeighbours(iri) {
       const fit = room();
-      const { shown } = computeShown();
+      const before = new Set(computeShown().shown);
+      const shown = before;
       // The individual comes first, and takes a place of its own when it is not drawn yet.
       const places = shown.has(iri) ? fit : fit - 1;
       if (places < 0) return;
       picked.add(iri);
       for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, Math.min(maxPerExpansion, places))) picked.add(neighbour);
-      changed();
+      changed('draw', before);
     },
     clear() {
       if (picked.size === 0 && !auto()) return;
       picked.clear();
       hidden = true;
-      changed();
+      changed('clear');
     },
     reset() {
       picked.clear();
@@ -223,9 +244,9 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       memberCache.clear();
     },
     showClass(classIri) {
-      const { shown } = computeShown();
-      for (const iri of membersOf(classIri).filter((m) => !shown.has(m)).slice(0, batch())) picked.add(iri);
-      changed();
+      const before = new Set(computeShown().shown);
+      for (const iri of membersOf(classIri).filter((m) => !before.has(m)).slice(0, batch())) picked.add(iri);
+      changed('draw', before);
     },
     previewClass(classIri) {
       const members = membersOf(classIri);
@@ -252,7 +273,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       hidden = false;
       for (const iri of [...picked]) if (!known().has(iri)) picked.delete(iri);
       // Redrawn even when nothing is drawn: the counts on the class nodes follow the data.
-      changed();
+      changed('data');
     },
     onChange: (listener) => void listeners.push(listener),
 
@@ -260,6 +281,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       const { shown, cut } = computeShown();
 
       const nodes: LayerNode[] = [...shown].map((iri) => ({ id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) }));
+      const classes = new Map<string, LayerClass>();
       const edges: LayerEdge[] = [];
       const seen = new Set<string>();
       const addEdge = (from: string, to: string, type: string): void => {
@@ -272,15 +294,23 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
         for (const store of getStores()) {
           for (const q of store.getQuads(iri, null, null, null)) {
             if (q.predicate.value === RDF_TYPE) {
-              const classNode = q.object.termType === 'NamedNode' ? classNodeByUri.get(q.object.value) : undefined;
-              if (classNode) addEdge(INDIVIDUAL_PREFIX + iri, classNode, 'rdf:type');
+              if (q.object.termType !== 'NamedNode') continue;
+              const classNode = classNodeByUri.get(q.object.value);
+              if (classNode) {
+                addEdge(INDIVIDUAL_PREFIX + iri, classNode, 'rdf:type');
+              } else if (isClassOfIndividuals(q.object.value)) {
+                // A class that is no node of the graph (imported, or never declared): a stub stands for it.
+                const id = INDIVIDUAL_CLASS_PREFIX + q.object.value;
+                if (!classes.has(id)) classes.set(id, { iri: q.object.value, id, label: labelOf(q.object.value) });
+                addEdge(INDIVIDUAL_PREFIX + iri, id, 'rdf:type');
+              }
             } else if (q.object.termType === 'NamedNode' && shown.has(q.object.value)) {
               addEdge(INDIVIDUAL_PREFIX + iri, INDIVIDUAL_PREFIX + q.object.value, q.predicate.value);
             }
           }
         }
       }
-      return { nodes, edges, warning: cut ? `Showing the first ${maxTotal} individuals, the limit. Clear individuals, or filter for a narrower set, to see others.` : null };
+      return { nodes, classes: [...classes.values()], edges, warning: cut ? `Showing the first ${maxTotal} individuals, the limit. Clear individuals, or filter for a narrower set, to see others.` : null };
     },
   };
 }

@@ -237,3 +237,24 @@ describe('the toggle for spreading individuals clear of classes (#209)', () => {
     expect(toggle().style.display).not.toBe('none');
   });
 });
+
+describe('the Individuals tab and the graph (#216)', () => {
+  it('selects in the graph the class of an individual that is drawn there, from the detail of the individual', () => {
+    const shown: unknown[] = [];
+    initSidePanel({
+      getStore: () => ontology,
+      getPrefixes: () => ({ '': 'http://example.org/d#' }),
+      dataSources: createDataSources(),
+      embedded: false,
+      getGraph: () => ({ nodes: [{ id: 'Room', uri: 'http://example.org/d#Room' }], edges: [], objectProperties: [] }),
+      showInGraph: (match) => shown.push(match),
+    });
+    tabButton()!.click();
+    document.querySelectorAll<HTMLElement>('[data-individuals-group-toggle][aria-expanded="false"]').forEach((t) => t.click());
+    document.querySelector<HTMLButtonElement>('[data-individuals-item]')!.click();
+
+    document.querySelector<HTMLButtonElement>('.individual-types [data-individuals-schema-link]')!.click();
+
+    expect(shown).toEqual([{ nodeIds: ['Room'], edgeIds: [], allEdgesOfAProperty: false }].map((m) => expect.objectContaining({ nodeIds: m.nodeIds, edgeIds: m.edgeIds })));
+  });
+});
