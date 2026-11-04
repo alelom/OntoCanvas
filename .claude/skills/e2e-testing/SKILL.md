@@ -57,6 +57,14 @@ loads timing out was the commonest flake. `EDITOR_E2E_SERVER=dev` starts the dev
 - Editing `src/` or `tests/` while a run is going changes what that run tests (the dev server reloads pages, Vitest
   re-reads files for the next run).
 
+## CI does not run on a draft PR
+
+A draft pull request skips the type-check, the unit tests and the E2E areas (#219); only the public-repo hygiene check runs. So
+the E2E files the change touches (`npm run test:e2e:affected`, or the files by name) are run **locally** before the PR is marked
+ready: nothing else checks them until then. Marking it ready starts CI once, and every later push to a ready PR runs it again, so
+a flaky or slow test costs a whole CI round each time: measure it first (below), and turn a PR back into a draft
+(`gh pr ready --undo`) while iterating on one.
+
 ## Measure flakiness; don't guess
 
 `npm run test:e2e:flake -- 8 --out report.json` runs the whole suite N times and reports, per test, how often it failed
