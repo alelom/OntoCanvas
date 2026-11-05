@@ -160,3 +160,35 @@ describe('the controls', () => {
     expect(later.querySelector('[data-data-list] li')!.textContent).toContain('earlier.ttl');
   });
 });
+
+describe('the named graphs of the data (#224)', () => {
+  const NQ =
+    '<http://example.org/d#a> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/d#Thing> <http://example.org/batch/1> .\n' +
+    '<http://example.org/d#b> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/d#Thing> <http://example.org/batch/2> .\n' +
+    '<http://example.org/d#c> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/d#Thing> <http://example.org/batch/2> .\n' +
+    '<http://example.org/batch/2> <http://www.w3.org/2000/01/rdf-schema#label> "Batch 2" <http://example.org/batch/2> .\n';
+  const rows = () => [...block.querySelectorAll<HTMLElement>('[data-data-graph]')];
+
+  it('are not listed while the data has none', async () => {
+    await sources.addText('people.ttl', ttl(2), { path: 'people.ttl' });
+
+    expect(q<HTMLElement>('[data-data-graphs]').hidden).toBe(true);
+  });
+
+  it('are listed with their label (or IRI) and their quads, each with a checkbox that hides and shows it', async () => {
+    await sources.addText('run.nq', NQ, { path: 'run.nq' });
+
+    expect(q<HTMLElement>('[data-data-graphs]').hidden).toBe(false);
+    expect(rows().map((row) => row.textContent)).toEqual(['http://example.org/batch/1 — 1 quad', 'Batch 2 — 3 quads']);
+    expect(rows()[1].title).toBe('http://example.org/batch/2');
+    const box = rows()[0].querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(box.checked).toBe(true);
+
+    box.click();
+    expect(sources.isGraphHidden('http://example.org/batch/1')).toBe(true);
+    expect(rows()[0].querySelector<HTMLInputElement>('input')!.checked).toBe(false);
+
+    rows()[0].querySelector<HTMLInputElement>('input')!.click();
+    expect(sources.isGraphHidden('http://example.org/batch/1')).toBe(false);
+  });
+});

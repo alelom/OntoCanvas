@@ -1,14 +1,18 @@
 /**
  * The controls to add individuals to the open ontology, in the Individuals tab (#205, moved from the Query tab in #211): a
- * file or a URL, the progress with Cancel, why a file was not added, and what was added with a Remove button. The reading is
- * the data loader's, so the Query tab can show the same status; this only draws it.
+ * file or a URL, the progress with Cancel, why a file was not added, what was added with a Remove button, and the named graphs
+ * of the data with a checkbox each (#224). The reading is the data loader's, so the Query tab can show the same status; this
+ * only draws it.
  */
+import type { Store } from 'n3';
 import type { DataSource, DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
 
 export interface DataBlockDeps {
   sources: DataSources;
   loader: DataLoader;
+  /** Where else a graph's label may be stated: the ontology (#224). */
+  getLabelStores?: () => Store[];
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -20,7 +24,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
   return el;
 }
 
-export function createDataBlock({ sources, loader }: DataBlockDeps): HTMLElement {
+export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDeps): HTMLElement {
   const block = element('div', 'query-data');
   block.setAttribute('data-query-data', '');
 
@@ -58,6 +62,32 @@ export function createDataBlock({ sources, loader }: DataBlockDeps): HTMLElement
   list.hidden = true;
   list.setAttribute('data-data-list', '');
 
+  // The named graphs of the data (#224), one row per graph across the sources, each with a checkbox that hides or shows its
+  // statements in the list, the counts and the drawn individuals. Queries keep every graph.
+  const graphs = element('div', 'query-data-graphs');
+  graphs.hidden = true;
+  graphs.setAttribute('data-data-graphs', '');
+  const renderGraphs = (): void => {
+    const listed = sources.graphs(getLabelStores?.() ?? []);
+    graphs.hidden = listed.length === 0;
+    if (!listed.length) return graphs.replaceChildren();
+    const heading = element('div', 'query-note', 'Graphs (unticked ones are left out of the list and the graph; queries see them all)');
+    graphs.replaceChildren(
+      heading,
+      ...listed.map((graph) => {
+        const box = element('input');
+        box.type = 'checkbox';
+        box.checked = !sources.isGraphHidden(graph.key);
+        box.addEventListener('change', () => sources.setGraphHidden(graph.key, !box.checked));
+        const row = element('label', 'query-data-graph');
+        row.setAttribute('data-data-graph', '');
+        row.title = graph.iri ?? 'The statements in no named graph';
+        row.append(box, `${graph.label ?? graph.iri ?? 'Default graph'} — ${plural(graph.quads, 'quad', 'quads')}`);
+        return row;
+      })
+    );
+  };
+
   const renderList = (): void => {
     const added = sources.list();
     list.hidden = added.length === 0;
@@ -79,8 +109,10 @@ export function createDataBlock({ sources, loader }: DataBlockDeps): HTMLElement
     cancel.hidden = !loader.loading();
   };
   sources.onChange(renderList);
+  sources.onChange(renderGraphs);
   loader.onChange(renderStatus);
   renderList();
+  renderGraphs();
   renderStatus();
 
   addFile.addEventListener('click', () => fileInput.click());
@@ -101,6 +133,6 @@ export function createDataBlock({ sources, loader }: DataBlockDeps): HTMLElement
   });
   cancel.addEventListener('click', () => loader.cancel());
 
-  block.append(adders, progress, list);
+  block.append(adders, progress, list, graphs);
   return block;
 }

@@ -297,3 +297,23 @@ describe('dropping data files (#222)', () => {
     expect(names(dataSources)).toEqual([]);
   });
 });
+
+describe('hiding a named graph of the data (#224)', () => {
+  it('takes its individuals out of the list and the count of the toolbar button', async () => {
+    const { dataSources } = mount();
+    tabButton()!.click();
+    await dataSources.addText(
+      'run.nq',
+      '<http://example.org/d#r2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/d#Room> <http://example.org/g1> .\n' +
+        '<http://example.org/d#r3> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/d#Room> <http://example.org/g2> .\n',
+      { path: 'run.nq' }
+    );
+    await renderToolbar();
+    expect(options()).toEqual([':Room (3)']);
+
+    dataSources.setGraphHidden('http://example.org/g2', true);
+
+    expect(options()).toEqual([':Room (2)']);
+    expect(toolbarButton().textContent).toBe('Individuals (2)');
+  });
+});

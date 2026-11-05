@@ -122,7 +122,8 @@ registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm 
 renderApp();
 const dataSources = createDataSources();
 session.individualsLayer = createIndividualsLayer({
-  getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.stores()] : dataSources.stores()),
+  // The data without its hidden graphs (#224): a hidden graph's individuals are not drawn.
+  getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.visibleStores()] : dataSources.visibleStores()),
 });
 // Drawing or clearing individuals redraws the graph where it is; after a draw the user started, the view fits what was drawn (#216).
 session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined));

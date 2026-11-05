@@ -828,6 +828,19 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .query-data-status .query-status:empty {
   display: none;
 }
+/* The named graphs of the data, each with a checkbox (#224). */
+.query-data-graphs {
+  margin-top: 4px;
+}
+.query-data-graphs[hidden] {
+  display: none;
+}
+.query-data-graph {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
 /* Where dropped data files go (#222): the panel or the graph, while the Individuals tab is open. */
 .data-drop-active {
   outline: 2px dashed #1a5fb4;
