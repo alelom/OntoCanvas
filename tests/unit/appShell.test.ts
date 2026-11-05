@@ -63,3 +63,13 @@ describe('renderApp', () => {
     expect(app.querySelectorAll('#controls')).toHaveLength(1);
   });
 });
+
+describe('the save group', () => {
+  it('stacks "Overwrite file on save" and the serializer choice in a column under "Save changes", to save width', () => {
+    debug.on = true;
+    const group = render().querySelector<HTMLElement>('#saveGroup')!;
+
+    expect(group.style.flexDirection).toBe('column');
+    expect([...group.children].map((child) => child.id)).toEqual(['saveChanges', 'overwriteFileWrap', 'serializerSelect']);
+  });
+});

@@ -96,7 +96,7 @@ export function renderApp(): void {
         <button type="button" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
         <button type="button" id="redoBtn" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
       </span>
-      <span id="saveGroup" style="display: none; gap: 8px; align-items: center;">
+      <span id="saveGroup" style="display: none; gap: 4px; align-items: flex-start; flex-direction: column;">
         <button id="saveChanges" class="primary">Save changes</button>
         <span id="overwriteFileWrap">
           <label style="font-size: 11px;">

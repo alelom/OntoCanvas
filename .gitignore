@@ -28,3 +28,7 @@ scripts/rdflibexperiments/output/
 
 # Playwright traces of failed E2E tests (tests/e2e/traceOnFailure.ts)
 test-results/
+
+# Larger parts of examples/datasets/run-parts, written on demand to try the size checks (#223)
+examples/datasets/run-parts/part-0003.nq.gz
+examples/datasets/run-parts/part-0004.nq.gz

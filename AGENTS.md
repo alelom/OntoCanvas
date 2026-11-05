@@ -37,12 +37,15 @@ OntoCanvas is a **personal open-source project on GitHub** ([alelom/OntoCanvas](
 - **Open a PR that closes its issue.** Put a closing keyword on its **own line** in the PR
   **body** — `Closes #123` (one keyword, one issue, one line). A list after a single
   keyword (`Closes #1, #2`) only closes the first.
-- **Open the PR as a draft with the first commits, and mark it ready only when the first implementation is fully done** (#219).
+- **Open the PR as a draft with the first commits, and mark it ready as soon as the implementation is done and
+  `npm run typecheck` and the full unit suite (`npx vitest run`) pass locally** (#219; details in [`.claude/skills/pr-ready/SKILL.md`](.claude/skills/pr-ready/SKILL.md)).
   Right after the first push of a branch (`git push -u origin <branch>`), run `gh pr create --draft`: the body starts with
   `Closes #<issue>` and says what is still to do. The PR then exists from the start, with the number the "Try it" links need, and
-  the work in progress is visible. **CI does not run on a draft** (the type-check, the unit tests, the E2E areas and
+  the work in progress is visible. If the implementation is done and both checks already passed when the PR is opened, open it
+  ready directly (no `--draft`). **CI does not run on a draft** (the type-check, the unit tests, the E2E areas and
   `Ready to merge` are skipped; only the public-repo hygiene check runs), so push as often as you like. That also means nothing
-  checks the work for you before "ready": run the relevant unit tests and the E2E files the change touches locally first. Then
+  checks the work for you before "ready": the local type-check and unit suite are the check. Work still to come on the PR (an E2E
+  test, an example) does not keep it a draft; list it in the body. Then
   `gh pr ready` starts the checks once, and **every later push to a ready PR runs them again**, so for another round of work turn
   the PR back into a draft (`gh pr ready --undo`) and mark it ready again when that is done. Do not mark a PR ready "to see what CI
   says": that is what the local run is for. "Re-run all jobs" on a run that started while the PR was a draft still skips them (a

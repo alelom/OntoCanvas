@@ -828,6 +828,11 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .query-data-status .query-status:empty {
   display: none;
 }
+/* Where dropped data files go (#222): the panel or the graph, while the Individuals tab is open. */
+.data-drop-active {
+  outline: 2px dashed #1a5fb4;
+  outline-offset: -4px;
+}
 .query-data-list {
   margin: 4px 0 0;
   padding: 0;

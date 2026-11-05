@@ -1,0 +1,81 @@
+<http://example.org/examples/run-parts#sensor1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Sensor> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#sensor1> <http://www.w3.org/2000/01/rdf-schema#label> "Sensor 1" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#sensor2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Sensor> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#sensor2> <http://www.w3.org/2000/01/rdf-schema#label> "Sensor 2" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#sensor3> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Sensor> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#sensor3> <http://www.w3.org/2000/01/rdf-schema#label> "Sensor 3" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading1> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 1" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading1> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor1> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading1> <http://example.org/examples/run-parts#value> "18.7"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading1> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading2> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading2> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 2" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading2> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor2> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading2> <http://example.org/examples/run-parts#value> "19.4"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading2> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading3> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading3> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading3> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 3" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading3> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor3> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading3> <http://example.org/examples/run-parts#value> "20.1"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading3> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading4> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading4> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading4> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 4" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading4> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor1> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading4> <http://example.org/examples/run-parts#value> "20.8"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading4> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading5> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading5> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading5> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 5" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading5> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor2> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading5> <http://example.org/examples/run-parts#value> "21.5"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading5> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading6> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading6> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading6> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 6" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading6> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor3> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading6> <http://example.org/examples/run-parts#value> "22.2"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading6> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading7> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading7> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading7> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 7" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading7> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor1> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading7> <http://example.org/examples/run-parts#value> "22.9"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading7> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading8> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading8> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading8> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 8" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading8> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor2> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading8> <http://example.org/examples/run-parts#value> "18.6"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading8> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading9> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading9> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading9> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 9" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading9> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor3> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading9> <http://example.org/examples/run-parts#value> "19.3"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading9> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading10> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading10> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading10> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 10" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading10> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor1> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading10> <http://example.org/examples/run-parts#value> "20.0"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading10> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading11> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading11> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading11> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 11" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading11> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor2> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading11> <http://example.org/examples/run-parts#value> "20.7"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading11> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading12> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading12> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading12> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 12" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading12> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor3> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading12> <http://example.org/examples/run-parts#value> "21.4"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading12> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading13> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading13> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading13> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 13" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading13> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor1> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading13> <http://example.org/examples/run-parts#value> "22.1"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading13> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading14> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading14> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading14> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 14" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading14> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor2> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading14> <http://example.org/examples/run-parts#value> "22.8"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading14> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading15> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading15> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/examples/run-parts#Reading> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading15> <http://www.w3.org/2000/01/rdf-schema#label> "Reading 15" <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading15> <http://example.org/examples/run-parts#madeBy> <http://example.org/examples/run-parts#sensor3> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading15> <http://example.org/examples/run-parts#value> "18.5"^^<http://www.w3.org/2001/XMLSchema#decimal> <http://example.org/examples/run-parts/batch/1> .
+<http://example.org/examples/run-parts#reading15> <http://example.org/examples/run-parts#next> <http://example.org/examples/run-parts#reading16> <http://example.org/examples/run-parts/batch/1> .
