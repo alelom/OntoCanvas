@@ -1,0 +1,27 @@
+# A run of a batch process, split into numbered parts of compressed N-Quads (issues #221, #222, #223). Open this file as the
+# ontology, then add the data of the run, part-0001.nq.gz and part-0002.nq.gz beside it, in one of three ways:
+#   - by address: ?onto=<this file>&data=<part-0001.nq.gz>&data=<part-0002.nq.gz> (the README of this folder has the links)
+#   - Individuals tab, "From a file…": pick both parts at once
+#   - drop both parts on the Individuals tab, or on the graph while that tab is open (it is outlined while they are over it)
+# Expected once both parts are added (33 individuals):
+#   - the Individuals tab lists both parts as sources, part-0001.nq.gz with 81 triples and part-0002.nq.gz with 74, and the
+#     classes Sensor (3) and Reading (30)
+#   - each part was decompressed in the browser and read as N-Quads, told from its name without .gz: part-0001.nq beside it is
+#     the same data uncompressed, and adding it instead of part-0001.nq.gz gives the same individuals
+#   - picking several files shows one progress line, "Adding 2 of 2: part-0002.nq.gz…"
+#   - Reading 15 (the last of part 1) points to Reading 16 (the first of part 2): with part-0001.nq.gz alone, Reading 15 points
+#     to a reading the data does not describe; with part-0002.nq.gz alone, the readings are made by sensors it does not describe
+# Each part is one batch in a named graph of its own (batch/1, batch/2): listing and filtering the graphs is #224.
+@prefix : <http://example.org/examples/run-parts#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/examples/run-parts> a owl:Ontology ; rdfs:label "A run in numbered parts" .
+
+:Sensor a owl:Class ; rdfs:label "Sensor" .
+:Reading a owl:Class ; rdfs:label "Reading" .
+
+:madeBy a owl:ObjectProperty ; rdfs:label "made by" ; rdfs:domain :Reading ; rdfs:range :Sensor .
+:next a owl:ObjectProperty ; rdfs:label "next" ; rdfs:domain :Reading ; rdfs:range :Reading .
+:value a owl:DatatypeProperty ; rdfs:label "value" ; rdfs:domain :Reading ; rdfs:range xsd:decimal .

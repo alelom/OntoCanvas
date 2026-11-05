@@ -84,6 +84,14 @@ New feature PRs add to this collection; see [`.claude/skills/feature-examples`](
 | [rdfxml-prefixes.rdf](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsparql%2Frdfxml-prefixes.rdf) | An RDF/XML file: the SPARQL panel starts with its root element's namespaces (`PREFIX :`, `PREFIX ex:`), which rdf-parse does not report | #187 | [RDF/XML](sparql/rdfxml-prefixes.rdf) |
 | [jsonld-prefixes.jsonld](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fsparql%2Fjsonld-prefixes.jsonld) | A JSON-LD file: the panel starts with the namespace terms of its `@context` (`PREFIX ex:`, `PREFIX other:`), and not with the term shortcuts (`label`, `subClassOf`) | #187 | [JSON-LD](sparql/jsonld-prefixes.jsonld) |
 
+## Datasets
+
+Data as batch processes produce it, one folder per dataset, with a README of its own. Open the folder's ontology, then add its data.
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [run-parts](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fvocabulary.ttl&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fpart-0001.nq.gz&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fpart-0002.nq.gz) | A run in two numbered parts of gzip-compressed N-Quads, one named graph per batch: decompressed in the browser, added several at once or by drag and drop | #222, #223 | [folder](datasets/run-parts/) |
+
 ## Term URIs
 
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
