@@ -101,6 +101,18 @@ describe('the stubs of classes that are not on the canvas (#216)', () => {
     expect(toStub.every((e: any) => e.dashes === true)).toBe(true);
   });
 
+  it('draws a class an import declares as a labelled node of that ontology, with a solid border, not as an undeclared stub (#235)', () => {
+    const layer = createIndividualsLayer({ autoMax: 100, getStores: () => [kinds], classInfo: () => ({ label: 'Kind of thing', definedBy: 'https://example.org/kinds' }) });
+    const data = { nodes: new DataSet<any>([{ id: 'Room', label: 'Room', x: 100, y: 50 }]), edges: new DataSet<any>() };
+
+    addIndividualsToNetworkData(data, layer, classNodesByUri(classNodes));
+
+    const node = data.nodes.get(stubId) as any;
+    expect(node.label).toBe('(defined by: kinds)\nKind of thing');
+    expect(node.title).toContain('Declared in https://example.org/kinds, an ontology loaded as context');
+    expect(node.borderDashes).toBe(false);
+  });
+
   it('places the stub clear of the class nodes, beside them, and the individuals of it around it', () => {
     const data = drawKinds();
 

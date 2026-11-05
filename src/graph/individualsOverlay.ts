@@ -6,6 +6,7 @@
 import type { DataSet } from 'vis-data';
 import { INDIVIDUAL_PREFIX, type IndividualsLayer, type LayerClass } from '../abox/individualsLayer';
 import { extractLocalName } from '../utils/localName';
+import { definedByName } from '../abox/importedClasses';
 import { relaxIndividuals, type FixedBox } from './individualsRelax';
 import { filterIndividualsBySearch, type IndividualSearchFilter } from '../abox/individualSearch';
 
@@ -110,13 +111,17 @@ function addClassStubs(data: NetworkData, classes: LayerClass[], edges: Array<{ 
   data.nodes.add(
     classes.map((c, i) => ({
       id: c.id,
-      label: c.label,
-      title: `${c.iri}\nA class of the drawn individuals that is not a node of this graph.`,
+      // A class an import declares is named by it, with the ontology above as for imported terms (#111, #235); an undeclared
+      // one keeps the dashed border of a stub.
+      label: c.definedBy ? `(defined by: ${definedByName(c.definedBy)})\n${c.label}` : c.label,
+      title: c.definedBy
+        ? `${c.iri}\nDeclared in ${c.definedBy}, an ontology loaded as context. A class of the drawn individuals that is not a node of this graph.`
+        : `${c.iri}\nA class of the drawn individuals that is not a node of this graph.`,
       shape: 'box',
       color: { background: '#f4f6f6', border: '#aab7b8', highlight: { background: '#eaeded', border: '#7b8a8b' } },
       font: { size: 18, color: '#7b8a8b' },
       borderWidth: 1,
-      borderDashes: [5, 5],
+      borderDashes: c.definedBy ? false : [5, 5],
       ...(placed.length ? { x: right + STUB_OFFSET, y: middle + offsets[i] - centre } : {}),
     }))
   );

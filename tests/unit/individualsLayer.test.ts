@@ -408,6 +408,26 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
     expect(types).toEqual(['Room', INDIVIDUAL_CLASS_PREFIX + ex('Kind')]);
   });
 
+  it('names a class an import declares by its label there, and says which ontology defines it (#235)', () => {
+    const layer = createIndividualsLayer({
+      autoMax: 0,
+      getStores: () => [store(':a a :Assertion ; rdfs:label "A" .')],
+      classInfo: (iri) => (iri === ex('Assertion') ? { label: 'Field assertion', definedBy: 'https://example.org/prov' } : null),
+    });
+    layer.show(ex('a'));
+
+    expect(layer.build(roomOnly).classes).toEqual([
+      { iri: ex('Assertion'), id: INDIVIDUAL_CLASS_PREFIX + ex('Assertion'), label: 'Field assertion', definedBy: 'https://example.org/prov' },
+    ]);
+  });
+
+  it('keeps the label from the data for an imported class whose import gives none', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [typed], classInfo: () => ({ label: null, definedBy: 'https://example.org/k' }) });
+    layer.show(ex('a'));
+
+    expect(layer.build(roomOnly).classes[0]).toMatchObject({ label: 'A kind', definedBy: 'https://example.org/k' });
+  });
+
   it('lists none for a class that is a node, and none for owl:NamedIndividual', () => {
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [typed] });
     layer.show(ex('a'));

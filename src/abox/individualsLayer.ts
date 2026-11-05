@@ -52,6 +52,8 @@ export interface LayerClass {
   iri: string;
   id: string;
   label: string;
+  /** The ontology that declares it, when one loaded as context does (#235); an undeclared class has none. */
+  definedBy?: string;
 }
 
 /** What a change of the layer was: a draw (the individuals it added), a clear, or a change of the data. */
@@ -100,9 +102,11 @@ export interface IndividualsLayerOptions {
   maxTotal?: number;
   /** Draw every individual, unasked, while there are at most this many (30 by default; 0 for never). */
   autoMax?: number;
+  /** What an ontology loaded as context (an import) says of a class with no node: its label and the ontology (#235). */
+  classInfo?: (classIri: string) => { label: string | null; definedBy: string } | null;
 }
 
-export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX }: IndividualsLayerOptions): IndividualsLayer {
+export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX, classInfo }: IndividualsLayerOptions): IndividualsLayer {
   /** The individuals asked for, in the order asked: one with its neighbours, or from a class. */
   const picked = new Set<string>();
   const listeners: Array<(change: LayerChange) => void> = [];
@@ -299,9 +303,13 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
               if (classNode) {
                 addEdge(INDIVIDUAL_PREFIX + iri, classNode, 'rdf:type');
               } else if (isClassOfIndividuals(q.object.value)) {
-                // A class that is no node of the graph (imported, or never declared): a stub stands for it.
+                // A class that is no node of the graph (imported, or never declared): a stub stands for it, named and "defined
+                // by" its ontology when an import declares it (#235).
                 const id = INDIVIDUAL_CLASS_PREFIX + q.object.value;
-                if (!classes.has(id)) classes.set(id, { iri: q.object.value, id, label: labelOf(q.object.value) });
+                if (!classes.has(id)) {
+                  const info = classInfo?.(q.object.value);
+                  classes.set(id, { iri: q.object.value, id, label: info?.label ?? labelOf(q.object.value), ...(info ? { definedBy: info.definedBy } : {}) });
+                }
                 addEdge(INDIVIDUAL_PREFIX + iri, id, 'rdf:type');
               }
             } else if (q.object.termType === 'NamedNode' && shown.has(q.object.value)) {

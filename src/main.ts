@@ -29,6 +29,7 @@ import {
   setOnExploreDataFiles,
 } from './ui/openOntologyModal';
 import { exploreDataFiles } from './workflows/exploreDataFiles';
+import { importedClassLookup } from './abox/importedClasses';
 import { showWarningBar } from './ui/warningBar';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
@@ -124,9 +125,12 @@ document.addEventListener('click', (e) => {
 registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm });
 renderApp();
 const dataSources = createDataSources();
+// The classes the ontologies loaded as context declare (its imports, #235): they name the classes of individuals.
+const importedClass = importedClassLookup(() => session.importedOntologies);
 session.individualsLayer = createIndividualsLayer({
   // The data without its hidden graphs (#224): a hidden graph's individuals are not drawn.
   getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.visibleStores()] : dataSources.visibleStores()),
+  classInfo: importedClass,
 });
 // Drawing or clearing individuals redraws the graph where it is; after a draw the user started, the view fits what was drawn (#216).
 session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined));
@@ -154,7 +158,7 @@ session.sidePanel = initSidePanel({
     const edges = network.getSelectedEdges().map(String);
     return nodes.length + edges.length > 0 && nodes.every(isIndividualNodeId) && edges.every(isIndividualEdgeId);
   },
-  getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? null,
+  getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? importedClass(classIri)?.label ?? null,
   embedded: isEmbedded(),
 });
 const appEl = document.getElementById('app');

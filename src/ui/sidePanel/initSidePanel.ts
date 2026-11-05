@@ -48,9 +48,11 @@ export interface SidePanel {
   openIndividuals(): void;
   /** Opens the panel on the Individuals tab and adds the files as one selection (#234). */
   addDataFiles(files: DataFile[]): Promise<void>;
+  /** What is known of the classes changed (imports read in the background, #235): the Individuals tab names them again. Keeps the data. */
+  schemaChanged(): void;
 }
 
-const NO_PANEL: SidePanel = { refresh: () => {}, addDataUrls: async () => {}, openIndividuals: () => {}, addDataFiles: async () => {} };
+const NO_PANEL: SidePanel = { refresh: () => {}, addDataUrls: async () => {}, openIndividuals: () => {}, addDataFiles: async () => {}, schemaChanged: () => {} };
 
 export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const root = document.getElementById('sidePanel');
@@ -153,6 +155,10 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       await dataLoader.addUrls(urls);
     },
     openIndividuals: () => host.open(individualsTab.id),
+    schemaChanged() {
+      deps.individualsLayer?.invalidate();
+      individualsTab.refresh();
+    },
     async addDataFiles(files) {
       if (!files.length || !dataLoader) return;
       host.open(individualsTab.id);

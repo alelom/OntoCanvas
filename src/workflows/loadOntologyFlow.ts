@@ -87,6 +87,9 @@ export function startLoadingImportedDeclarations(store: NonNullable<typeof sessi
       session.dataProperties = merged.dataProperties;
       session.annotationProperties = merged.annotationProperties;
       refreshPropertyMenus();
+      // The imports name the classes of individuals (#235): the Individuals tab and the drawn individuals are named again,
+      // which redraws when individuals are drawn.
+      session.sidePanel?.schemaChanged();
       // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
       // uses came from an import; properties added as context are never drawn.
       if (mergeChangesWhatIsDrawn(before, merged)) actions.applyFilter(true);

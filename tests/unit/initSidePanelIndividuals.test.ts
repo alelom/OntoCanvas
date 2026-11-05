@@ -330,3 +330,20 @@ describe('addDataFiles (#234)', () => {
     expect(options()).toEqual([':Room (3)']);
   });
 });
+
+describe('schemaChanged (#235)', () => {
+  it('names the classes again (labels from imports read later) and keeps the data', async () => {
+    let label: string | null = null;
+    const dataSources = createDataSources();
+    const panel = initSidePanel({ getStore: () => ontology, getPrefixes: () => ({ '': 'http://example.org/d#' }), dataSources, getClassLabel: () => label, embedded: false });
+    tabButton()!.click();
+    await dataSources.addText('more.ttl', PREFIXES + ':room2 a :Room .', { path: 'more.ttl' });
+    expect(options()).toEqual([':Room (2)']);
+
+    label = 'A room';
+    panel.schemaChanged();
+
+    expect(options()).toEqual(['A room (2)']);
+    expect(dataSources.list()).toHaveLength(1);
+  });
+});

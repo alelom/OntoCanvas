@@ -10,7 +10,7 @@ import { DEFAULT_HIERARCHY_TYPES } from '../layouts/hierarchyRules';
 import type { PropertyLists, ImportedOntology } from '../lib/importedDeclarations';
 import type { SuggestionSource } from '../lib/searchSuggestions';
 import type { OriginalFileCache } from '../rdf/sourcePreservation';
-import type { DataFile } from '../sparql/dataSources';
+import type { SidePanel } from '../ui/sidePanel/initSidePanel';
 import type { ExternalOntologyReference, SerializerType, ExternalNodeLayout } from '../storage/types';
 import type { GraphData, GraphNode, AnnotationPropertyInfo, ObjectPropertyInfo, DataPropertyInfo, BorderLineType, DataPropertyRestriction } from '../types';
 import type { Network } from 'vis-network/esnext';
@@ -35,7 +35,7 @@ export const session = {
   currentPrefixMap: {} as Record<string, string>,
   /** The individuals drawn in the graph, over the class graph (#209). */
   individualsLayer: null as import('../abox/individualsLayer').IndividualsLayer | null,
-  sidePanel: null as { refresh(): void; addDataUrls(urls: string[]): Promise<void>; openIndividuals(): void; addDataFiles(files: DataFile[]): Promise<void> } | null,
+  sidePanel: null as SidePanel | null,
   /** What the loaded ontology's imports declare, once read (#104). The property lists are rebuilt from the store
    * after some edits; this is merged back in each time. */
   importedDeclarations: null as PropertyLists | null,
