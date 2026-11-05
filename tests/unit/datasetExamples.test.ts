@@ -9,6 +9,8 @@ import { Parser, Store } from 'n3';
 import { createDataSources } from '../../src/sparql/dataSources';
 import { createDataLoader } from '../../src/sparql/dataLoader';
 import { individualsOf } from '../../src/lib/instanceData';
+import { findDataOntologies } from '../../src/abox/dataOntologies';
+import { gunzipSync } from 'node:zlib';
 
 const DIR = join(__dirname, '../../examples/datasets/run-parts');
 const NS = 'http://example.org/examples/run-parts#';
@@ -84,5 +86,29 @@ describe('run-parts', () => {
 
     expect(part1.getGraphs(null, null, null).map((g) => g.value)).toEqual(['http://example.org/examples/run-parts/batch/1']);
     expect(part2.getGraphs(null, null, null).map((g) => g.value)).toEqual(['http://example.org/examples/run-parts/batch/2']);
+  });
+});
+
+describe('adiro-run (#235, #236)', () => {
+  const DIR_RUN = join(__dirname, '../../examples/datasets/adiro-run');
+  const read = (name: string) => readFileSync(join(DIR_RUN, name));
+
+  it('the compressed part is the plain one, and holds 19 individuals', () => {
+    const plain = new Store(new Parser({ format: 'N-Quads' }).parse(read('part-0001.nq').toString('utf8')));
+    // Compared as quads: a checkout may turn the plain file's line endings into CRLF.
+    const compressed = new Store(new Parser({ format: 'N-Quads' }).parse(gunzipSync(read('part-0001.nq.gz')).toString('utf8')));
+    const quads = (s: Store) => s.getQuads(null, null, null, null).map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`).sort();
+    expect(quads(compressed)).toEqual(quads(plain));
+    expect(individualsOf(plain).size).toBe(19);
+  });
+
+  it('names the three ADIRO versions it was made with, which the Individuals tab offers to open', () => {
+    const plain = new Store(new Parser({ format: 'N-Quads' }).parse(read('part-0001.nq').toString('utf8')));
+
+    expect(findDataOntologies([plain], [])).toEqual([
+      { iri: 'https://w3id.org/adiro/adiro_drawing_metadata/7.0.1', via: 'prov:used' },
+      { iri: 'https://w3id.org/adiro/adiro_provenance/2.2.0', via: 'prov:used' },
+      { iri: 'https://w3id.org/adiro/adiro_geometry/3.1.0', via: 'prov:used' },
+    ]);
   });
 });
