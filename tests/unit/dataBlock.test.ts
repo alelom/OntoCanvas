@@ -192,3 +192,41 @@ describe('the named graphs of the data (#224)', () => {
     expect(sources.isGraphHidden('http://example.org/batch/1')).toBe(false);
   });
 });
+
+describe('the notice about numbered parts (#225)', () => {
+  const notice = () => q<HTMLElement>('[data-data-parts]');
+
+  it('says nothing for files with no part number', async () => {
+    await sources.addText('people.ttl', ttl(2), { path: 'people.ttl' });
+
+    expect(notice().hidden).toBe(true);
+  });
+
+  it('names the missing part across everything added, and offers to add files', async () => {
+    await sources.addText('part-0001.ttl', ttl(1), { path: 'part-0001.ttl' });
+    await sources.addText('part-0004.ttl', ttl(1), { path: 'part-0004.ttl' });
+
+    expect(notice().hidden).toBe(false);
+    expect(notice().textContent).toContain('parts 2 and 3, and any after 4, may be missing');
+    expect(notice().classList.contains('strong')).toBe(true);
+    const picker = vi.spyOn(q<HTMLInputElement>('[data-add-file-input]'), 'click').mockImplementation(() => {});
+    notice().querySelector<HTMLButtonElement>('[data-data-parts-add]')!.click();
+    expect(picker).toHaveBeenCalled();
+  });
+
+  it('is softer for parts with no gap, and stays dismissed until what is added changes', async () => {
+    await sources.addText('part-0001.ttl', ttl(1), { path: 'part-0001.ttl' });
+    await sources.addText('part-0002.ttl', ttl(1), { path: 'part-0002.ttl' });
+    expect(notice().classList.contains('strong')).toBe(false);
+    expect(notice().textContent).toContain('There may be more');
+
+    notice().querySelector<HTMLButtonElement>('[data-data-parts-dismiss]')!.click();
+    expect(notice().hidden).toBe(true);
+    await sources.addText('other.ttl', ttl(1), { path: 'other.ttl' });
+    expect(notice().hidden).toBe(true);
+
+    await sources.addText('part-0004.ttl', ttl(1), { path: 'part-0004.ttl' });
+    expect(notice().hidden).toBe(false);
+    expect(notice().textContent).toContain('part 3');
+  });
+});

@@ -1,12 +1,13 @@
 /**
  * The controls to add individuals to the open ontology, in the Individuals tab (#205, moved from the Query tab in #211): a
- * file or a URL, the progress with Cancel, why a file was not added, what was added with a Remove button, and the named graphs
- * of the data with a checkbox each (#224). The reading is the data loader's, so the Query tab can show the same status; this
- * only draws it.
+ * file or a URL, the progress with Cancel, why a file was not added, what was added with a Remove button, a notice when a
+ * dataset split into numbered parts is added only in part (#225), and the named graphs of the data with a checkbox each (#224).
+ * The reading is the data loader's, so the Query tab can show the same status; this only draws it.
  */
 import type { Store } from 'n3';
 import type { DataSource, DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
+import { findPartGroups, partsNotice } from '../../sparql/numberedParts';
 
 export interface DataBlockDeps {
   sources: DataSources;
@@ -62,6 +63,32 @@ export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDe
   list.hidden = true;
   list.setAttribute('data-data-list', '');
 
+  // A dataset split into numbered parts, added only in part (#225): which parts seem to be missing, across everything added.
+  // Dismissed, it stays hidden until what it says changes.
+  const parts = element('div', 'query-data-parts');
+  parts.hidden = true;
+  parts.setAttribute('data-data-parts', '');
+  const partsText = element('span');
+  const addParts = element('button', undefined, 'Add files…');
+  addParts.type = 'button';
+  addParts.setAttribute('data-data-parts-add', '');
+  addParts.addEventListener('click', () => fileInput.click());
+  const dismissParts = element('button', undefined, 'Dismiss');
+  dismissParts.type = 'button';
+  dismissParts.setAttribute('data-data-parts-dismiss', '');
+  parts.append(partsText, addParts, dismissParts);
+  let dismissed: string | null = null;
+  const renderParts = (): void => {
+    const notice = partsNotice(findPartGroups(sources.list().map((s) => s.name)));
+    parts.hidden = !notice || notice.text === dismissed;
+    parts.classList.toggle('strong', !!notice?.strong);
+    partsText.textContent = notice?.text ?? '';
+  };
+  dismissParts.addEventListener('click', () => {
+    dismissed = partsText.textContent;
+    parts.hidden = true;
+  });
+
   // The named graphs of the data (#224), one row per graph across the sources, each with a checkbox that hides or shows its
   // statements in the list, the counts and the drawn individuals. Queries keep every graph.
   const graphs = element('div', 'query-data-graphs');
@@ -110,9 +137,11 @@ export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDe
   };
   sources.onChange(renderList);
   sources.onChange(renderGraphs);
+  sources.onChange(renderParts);
   loader.onChange(renderStatus);
   renderList();
   renderGraphs();
+  renderParts();
   renderStatus();
 
   addFile.addEventListener('click', () => fileInput.click());
@@ -133,6 +162,6 @@ export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDe
   });
   cancel.addEventListener('click', () => loader.cancel());
 
-  block.append(adders, progress, list, graphs);
+  block.append(adders, progress, list, parts, graphs);
   return block;
 }

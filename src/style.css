@@ -828,6 +828,24 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .query-data-status .query-status:empty {
   display: none;
 }
+/* A dataset added only in part (#225): soft when more parts may exist, strong when a part is known to be missing. */
+.query-data-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  padding: 4px 6px;
+  border: 1px solid #d5d9de;
+  background: #f6f8fa;
+}
+.query-data-parts.strong {
+  border-color: #e67e22;
+  background: #fdf2e3;
+}
+.query-data-parts[hidden] {
+  display: none;
+}
 /* The named graphs of the data, each with a checkbox (#224). */
 .query-data-graphs {
   margin-top: 4px;
