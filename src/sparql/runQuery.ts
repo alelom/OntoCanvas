@@ -117,7 +117,8 @@ export async function runQuery(stores: Store[], query: string, options: RunOptio
 async function execute(stores: Store[], query: string, limit: number, signal: AbortSignal | undefined): Promise<QueryResult> {
   const prepared = await prepare(query, limit);
   const engine = await getEngine();
-  const result = await engine.query(prepared, { sources: stores as [Store, ...Store[]] });
+  // The default graph is the union of all graphs (#224): data in named graphs (N-Quads, TriG) is seen by a query without GRAPH.
+  const result = await engine.query(prepared, { sources: stores as [Store, ...Store[]], unionDefaultGraph: true });
 
   switch (result.resultType) {
     case 'bindings': {
