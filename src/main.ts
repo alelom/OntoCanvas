@@ -31,7 +31,7 @@ import {
 } from './ui/openOntologyModal';
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
-import { findOntologiesOfData, openDataOntologies } from './workflows/dataOntologies';
+import { openOntologiesOfData } from './workflows/dataOntologies';
 import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
@@ -128,6 +128,8 @@ document.addEventListener('click', (e) => {
 registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm });
 renderApp();
 const dataSources = createDataSources();
+// The ontologies the data was made with are opened on their own, as context, whenever data is added (#236, #239).
+dataSources.onChange(() => void openOntologiesOfData(dataSources.stores()));
 // The classes the ontologies loaded as context declare (its imports, #235): they name the classes of individuals.
 const importedClass = importedClassLookup(() => session.importedOntologies);
 // The node of such a class, drawn for its individuals, offers to open the ontology that declares it.
@@ -154,8 +156,6 @@ session.sidePanel = initSidePanel({
     updateSelectionInfoDisplay(network);
   },
   dataSources,
-  // The ontologies the data was made with, offered to open as context (#236).
-  dataOntologies: { find: findOntologiesOfData, open: openDataOntologies },
   individualsLayer: session.individualsLayer,
   getOntologySource: () => (fileState.loadedFileName ? { name: fileState.loadedFileName, title: fileState.loadedFilePath ?? undefined } : null),
   isIndividualSelection: () => {

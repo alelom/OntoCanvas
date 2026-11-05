@@ -1,7 +1,8 @@
 /**
  * E2E: the ontologies the data was made with (#236), and the individuals named by them (#235). Data opened on its own names
- * an ontology version (prov:used); the Individuals tab offers to open it, and once it is read its class names the individuals
- * and their class node. The ontology's address is answered by a route (no network).
+ * an ontology version (prov:used); it is read on its own (#239), the bottom bar says so, and its class then names the
+ * individuals and their class node. The ontology's address is answered by a route (no network), held until a test lets it
+ * answer, so what is shown before it is read can be seen.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { type Browser, type Page } from 'playwright';
@@ -24,6 +25,8 @@ const DATA = [
 describe('the ontologies the data was made with', () => {
   let browser: Browser;
   let page: Page;
+  let letAnswer!: () => void;
+  const answer = new Promise<void>((resolve) => (letAnswer = resolve));
   const groups = () => page.locator('[data-individuals-group-toggle] .individuals-group-title').allTextContents();
   const classNodeLabels = () =>
     page.evaluate(() =>
@@ -36,9 +39,10 @@ describe('the ontologies the data was made with', () => {
     browser = await launchBrowser();
     page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.setDefaultTimeout(5000);
-    await page.route((url) => url.hostname === 'e2e-onto.test', (route) =>
-      route.fulfill({ status: 200, contentType: 'text/turtle', body: ONTOLOGY, headers: { 'access-control-allow-origin': '*' } })
-    );
+    await page.route((url) => url.hostname === 'e2e-onto.test', async (route) => {
+      await answer;
+      await route.fulfill({ status: 200, contentType: 'text/turtle', body: ONTOLOGY, headers: { 'access-control-allow-origin': '*' } });
+    });
     await page.goto(EDITOR_URL, { waitUntil: 'domcontentloaded' });
     await page.locator('#openOntologyModal [data-explore-data]').waitFor({ state: 'visible' });
     await page.setInputFiles('#openOntologyModal [data-explore-data-input]', { name: 'run.nq', mimeType: 'application/n-quads', buffer: Buffer.from(DATA) });
@@ -50,25 +54,22 @@ describe('the ontologies the data was made with', () => {
   });
   traceOnFailure(() => page.context());
 
-  it('names the classes by their local name, and draws them as stubs, while no ontology declares them', async () => {
+  it('names the classes by their local name, and draws them as dashed nodes with their counts, while no ontology declares them', async () => {
     expect(await groups()).toEqual(['Assertion (2)', 'Activity (1)']);
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());
     expect(await classNodeLabels()).toContain('Assertion');
   });
 
-  it('offers to open the ontology the data names, and opens nothing before it is asked to', async () => {
-    const offer = page.locator('[data-data-ontologies]');
-
-    await offer.waitFor({ state: 'visible' });
-
-    expect(await offer.innerText()).toContain('This data names 1 ontology it was made with: o 1.0.');
-    expect(await groups()).toEqual(['Assertion (2)', 'Activity (1)']);
+  it('asks nothing: the Individuals tab has no offer to open it (#239)', async () => {
+    expect(await page.locator('[data-data-ontologies]').count()).toBe(0);
   });
 
-  it('on Open, reads it, says so, and its label names the individuals and their class node, "defined by" it (#235)', async () => {
-    await page.click('[data-data-ontologies-open]');
+  it('reads it on its own, says so in the bottom bar, and its label names the individuals and their class node, "defined by" it (#235)', async () => {
+    letAnswer();
 
-    await page.waitForFunction(() => /Opened o 1\.0/.test(document.querySelector('[data-data-ontologies]')?.textContent ?? ''));
+    await page.waitForFunction(() =>
+      /Read as context: o 1\.0/.test(document.querySelector('#ontologyIssuesPopup [data-status-notice="data-ontologies"]')?.textContent ?? '')
+    );
     await page.waitForFunction(() => document.querySelector('[data-individuals-group-toggle] .individuals-group-title')?.textContent === 'Field assertion (2)');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());
     expect(await classNodeLabels()).toContain('(defined by: o)\nField assertion');

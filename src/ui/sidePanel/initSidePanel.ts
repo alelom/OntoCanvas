@@ -10,7 +10,6 @@ import { createIndividualsTab } from './individualsTab';
 import { mountPanelButtons } from './panelButtons';
 import { createDataLoader } from '../../sparql/dataLoader';
 import { attachDataDrop } from '../dataDrop';
-import type { DataOntologiesOfData } from './dataBlock';
 import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
@@ -29,8 +28,6 @@ export interface SidePanelDeps {
   showInGraph?: (match: GraphMatch) => void;
   /** The data added to the open ontology, queried with it (#205). */
   dataSources?: DataSources;
-  /** Finds and opens the ontologies the data was made with (#236). */
-  dataOntologies?: DataOntologiesOfData;
   /** The label a class has in the graph, for the Individuals tab (#208). */
   getClassLabel?: (classIri: string) => string | null;
   /** What is drawn of the individuals in the graph (#209): the Individuals tab draws into it and clears it. */
@@ -96,7 +93,6 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getClassLabel: deps.getClassLabel,
     dataSources: deps.dataSources,
     dataLoader,
-    dataOntologies: deps.dataOntologies,
     layer: deps.individualsLayer,
     getOntologySource: deps.getOntologySource,
     // A class or a property in the detail of an individual that is in the graph can be selected there (#216).

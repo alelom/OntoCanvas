@@ -8,24 +8,12 @@ import type { Store } from 'n3';
 import type { DataSource, DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
 import { findPartGroups, partsNotice } from '../../sparql/numberedParts';
-import type { DataOntology } from '../../abox/dataOntologies';
-import { createDataOntologiesNotice } from './dataOntologiesNotice';
 
 export interface DataBlockDeps {
   sources: DataSources;
   loader: DataLoader;
   /** Where else a graph's label may be stated: the ontology (#224). */
   getLabelStores?: () => Store[];
-  /** With this, the block offers to open the ontologies the data was made with (#236). */
-  ontologies?: DataOntologiesOfData;
-  /** Called with a listener to call when what is loaded besides the data changed (the tab's refresh). */
-  onRefresh?: (listener: () => void) => void;
-}
-
-/** Finds the ontologies the data names that are not loaded, and opens some (#236). */
-export interface DataOntologiesOfData {
-  find(dataStores: Store[]): DataOntology[];
-  open(iris: string[]): Promise<{ opened: string[]; failed: string[] }>;
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -37,7 +25,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
   return el;
 }
 
-export function createDataBlock({ sources, loader, getLabelStores, ontologies, onRefresh }: DataBlockDeps): HTMLElement {
+export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDeps): HTMLElement {
   const block = element('div', 'query-data');
   block.setAttribute('data-query-data', '');
 
@@ -174,16 +162,6 @@ export function createDataBlock({ sources, loader, getLabelStores, ontologies, o
   });
   cancel.addEventListener('click', () => loader.cancel());
 
-  // The ontologies the data was made with, offered to open (#236): looked for again when the data or what is loaded changes.
-  const ontologyOffer = ontologies
-    ? createDataOntologiesNotice({ find: () => ontologies.find(sources.stores()), open: (iris) => ontologies.open(iris) })
-    : null;
-  if (ontologyOffer) {
-    sources.onChange(ontologyOffer.render);
-    onRefresh?.(ontologyOffer.render);
-    ontologyOffer.render();
-  }
-
-  block.append(adders, progress, list, parts, ...(ontologyOffer ? [ontologyOffer.element] : []), graphs);
+  block.append(adders, progress, list, parts, graphs);
   return block;
 }

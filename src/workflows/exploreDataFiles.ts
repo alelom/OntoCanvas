@@ -18,7 +18,7 @@ export const WORKSPACE_TTL = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
 `;
 
 export const WORKSPACE_NOTE =
-  'Exploring data files with no ontology. When the data names the ontologies it was made with, the Individuals tab offers to open them; opening an ontology from the toolbar instead clears the data.';
+  'Exploring data files with no ontology. The ontologies the data names are read as context on their own; opening an ontology from the toolbar instead clears the data.';
 
 export interface ExploreDataDeps {
   /** Opens an ontology from its text, as a file of that name would be. */

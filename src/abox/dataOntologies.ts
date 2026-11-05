@@ -2,7 +2,7 @@
  * The ontologies the data was made with (#236). Generated data often says so: a run of a batch process records the versions it
  * used on its prov:Activity (prov:used), a dataset its dct:conformsTo or void:vocabulary. When it names none, the namespaces of
  * its classes and properties are the guess. What is loaded already is left out. Pure: only finds; opening them, after the
- * user says so, is src/workflows/dataOntologies.ts.
+ * data is added, is src/workflows/dataOntologies.ts.
  */
 import type { Store } from 'n3';
 import { isReservedNamespace } from '../rdf/reservedVocabulary';
@@ -63,3 +63,21 @@ export function findDataOntologies(dataStores: Store[], loaded: Iterable<string>
 
 /** "adiro_drawing_metadata 7.0.1": the end of the address, with the version after the name. */
 export const ontologyName = (iri: string): string => definedByName(iri).replace('/', ' ');
+
+/** "a", "a and b", "a, b and c". */
+const inWords = (names: string[]): string => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+
+/**
+ * The note in the bottom bar about the ontologies of the data, read on their own (#239); null when none was tried. One the data
+ * names that could not be read is a problem worth its reason; a namespace guessed at that holds no ontology is only said.
+ */
+export function dataOntologiesNote(opened: DataOntology[], failed: DataOntology[]): string | null {
+  const names = (list: DataOntology[]) => inWords(list.map((o) => ontologyName(o.iri)));
+  const named = failed.filter((o) => o.via !== 'namespace');
+  const guessed = failed.filter((o) => o.via === 'namespace');
+  const parts: string[] = [];
+  if (opened.length) parts.push(`Read as context: ${names(opened)}. They name the data's classes, and are never saved.`);
+  if (named.length) parts.push(`The data names ${names(named)}, which could not be read: the address may not answer with RDF, or may not let this page read it.`);
+  if (guessed.length) parts.push(`No ontology could be read at the namespaces of its classes and properties (${names(guessed)}).`);
+  return parts.length ? parts.join(' ') : null;
+}

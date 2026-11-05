@@ -1,10 +1,10 @@
 /**
  * The ontologies the data was made with (#236): what the data names (prov:used, dct:conformsTo, void:vocabulary), or else the
- * namespaces of its classes and properties, less what is loaded already. Only offered: nothing is fetched here.
+ * namespaces of its classes and properties, less what is loaded already, and the note that says what was read. Nothing is fetched here.
  */
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
-import { findDataOntologies, ontologyName } from '../../src/abox/dataOntologies';
+import { dataOntologiesNote, findDataOntologies, ontologyName } from '../../src/abox/dataOntologies';
 
 const nq = (text: string) => new Store(new Parser({ format: 'N-Quads' }).parse(text));
 const PROV_USED = 'http://www.w3.org/ns/prov#used';
@@ -68,5 +68,32 @@ describe('ontologyName', () => {
   it('names an ontology by the end of its address, its version with it', () => {
     expect(ontologyName('https://w3id.org/adiro/adiro_drawing_metadata/7.0.1')).toBe('adiro_drawing_metadata 7.0.1');
     expect(ontologyName('https://example.org/onto')).toBe('onto');
+  });
+});
+
+describe('dataOntologiesNote (#239: opened on their own, told in the bottom bar)', () => {
+  const named = (iri: string) => ({ iri, via: 'prov:used' as const });
+  const guessed = (iri: string) => ({ iri, via: 'namespace' as const });
+
+  it('says what was read as context', () => {
+    expect(dataOntologiesNote([named('https://w3id.org/adiro/adiro_drawing_metadata/7.0.1'), guessed('https://example.org/onto')], [])).toBe(
+      "Read as context: adiro_drawing_metadata 7.0.1 and onto. They name the data's classes, and are never saved."
+    );
+  });
+
+  it('says that what the data names could not be read, and why that may be', () => {
+    expect(dataOntologiesNote([], [named('https://example.org/onto/1.0')])).toBe(
+      'The data names onto 1.0, which could not be read: the address may not answer with RDF, or may not let this page read it.'
+    );
+  });
+
+  it('says more quietly that a guess found nothing: the data named no ontology', () => {
+    expect(dataOntologiesNote([], [guessed('http://example.org/examples/run-parts'), guessed('https://example.org/vocab')])).toBe(
+      'No ontology could be read at the namespaces of its classes and properties (run-parts and vocab).'
+    );
+  });
+
+  it('says nothing when nothing was tried', () => {
+    expect(dataOntologiesNote([], [])).toBeNull();
   });
 });
