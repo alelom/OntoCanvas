@@ -30,6 +30,7 @@ import {
 } from './ui/openOntologyModal';
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
+import { findOntologiesOfData, openDataOntologies } from './workflows/dataOntologies';
 import { showWarningBar } from './ui/warningBar';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
@@ -149,6 +150,8 @@ session.sidePanel = initSidePanel({
     updateSelectionInfoDisplay(network);
   },
   dataSources,
+  // The ontologies the data was made with, offered to open as context (#236).
+  dataOntologies: { find: findOntologiesOfData, open: openDataOntologies },
   individualsLayer: session.individualsLayer,
   getOntologySource: () => (fileState.loadedFileName ? { name: fileState.loadedFileName, title: fileState.loadedFilePath ?? undefined } : null),
   isIndividualSelection: () => {

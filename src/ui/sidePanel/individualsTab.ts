@@ -14,7 +14,7 @@ import type { DataSources } from '../../sparql/dataSources';
 import type { GraphMatch } from '../../sparql/graphMatches';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
-import { createDataBlock } from './dataBlock';
+import { createDataBlock, type DataOntologiesOfData } from './dataBlock';
 import type { SidePanelTab } from './sidePanelHost';
 
 export interface IndividualsTabDeps {
@@ -29,6 +29,8 @@ export interface IndividualsTabDeps {
   /** With these, the tab has the controls to add a file or a URL of individuals, and what was added (#211). */
   dataSources?: DataSources;
   dataLoader?: DataLoader;
+  /** With this, the tab offers to open the ontologies the data was made with (#236). */
+  dataOntologies?: DataOntologiesOfData;
   /** With this, an individual can be drawn in the graph, and what is drawn is shown and cleared here (#209). */
   layer?: IndividualsLayer;
   /** With this, a class or a property in the detail of an individual that is in the graph can be selected there (#216). `match` says what it is in the graph, or null. */
@@ -64,6 +66,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   const pageSize = deps.pageSize ?? DEFAULT_PAGE_SIZE;
   let index: IndividualIndex = createIndividualIndex([]);
   let drawn = false;
+  const refreshListeners: Array<() => void> = [];
   let search = '';
   let selected: string | null = null;
   /** The groups the user opened or closed; the others are closed, unless a filter is typed. */
@@ -406,7 +409,13 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
     searchInput.addEventListener('input', () => filter.schedule());
 
-    const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader, getLabelStores: deps.getStores }) : null;
+    const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({
+            sources: deps.dataSources,
+            loader: deps.dataLoader,
+            getLabelStores: deps.getStores,
+            ontologies: deps.dataOntologies,
+            onRefresh: (listener) => void refreshListeners.push(listener),
+          }) : null;
     container.append(note, originLine, ...(dataBlock ? [dataBlock] : []), drawnLine, controls, empty, detail);
     drawn = true;
     refresh();
@@ -414,6 +423,8 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   function refresh(): void {
     if (!drawn) return;
+    // What the data block shows that depends on what is loaded besides the data (the ontologies the data names, #236).
+    refreshListeners.forEach((listener) => listener());
     index = createIndividualIndex(deps.getStores());
     resetGroups();
     renderList();

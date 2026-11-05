@@ -6,7 +6,7 @@ import { fetchExternalOntologyTtl, getReferencedExternalClassesFromStore, preloa
 import { getEdgeTypes, resolveLayoutMode } from '../graph';
 import { applyAnnotationPropertyOrder } from '../lib/annotationStyle';
 import { latestDisplayConfigSource } from '../lib/displayConfigFallback';
-import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn } from '../lib/importedDeclarations';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type ImportedOntology } from '../lib/importedDeclarations';
 import { loadOntologyFromContent } from '../lib/loadOntology';
 import { forgetOntologyDirectory } from '../lib/ontologyDirectory';
 import { fetchOntologyFromUrl } from '../lib/ontologyUrlLoader';
@@ -59,6 +59,29 @@ export const IMPORT_READ_TIMEOUT_MS = 8000;
 export const IMPORT_READ_MAX_BYTES = 5_000_000;
 
 /**
+ * Makes `imported` the ontologies read as context, never written to the open ontology: the prefixes they declare, the
+ * properties they declare merged into the lists and menus (#104), and the names of the classes of individuals (#235).
+ * Its imports are read this way, and so are the ontologies the data names, once the user opens them (#236).
+ */
+export function applyImportedOntologies(imported: ImportedOntology[]): void {
+  session.importedOntologies = imported;
+  // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
+  setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
+  session.importedDeclarations = readImportedDeclarations(imported);
+  const before = { objectProperties: session.objectProperties, dataProperties: session.dataProperties, annotationProperties: session.annotationProperties };
+  const merged = mergeImportedDeclarations(before, session.importedDeclarations);
+  session.objectProperties = merged.objectProperties;
+  session.dataProperties = merged.dataProperties;
+  session.annotationProperties = merged.annotationProperties;
+  refreshPropertyMenus();
+  // The Individuals tab and the drawn individuals are named again, which redraws when individuals are drawn.
+  session.sidePanel?.schemaChanged();
+  // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
+  // uses came from an import; properties added as context are never drawn.
+  if (mergeChangesWhatIsDrawn(before, merged)) actions.applyFilter(true);
+}
+
+/**
  * Read what the loaded ontology's imports declare, in the background, and merge it into the property lists
  * and menus as read-only context (#104). Best effort: an import that can't be fetched (CORS, offline) is
  * skipped and nothing changes. The loaded store is never touched, so saving is unaffected. Nothing happens
@@ -77,22 +100,9 @@ export function startLoadingImportedDeclarations(store: NonNullable<typeof sessi
         fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
       );
       if (store !== session.ttlStore || imported.length === 0) return;
-      session.importedOntologies = imported;
-      // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
-      setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
-      session.importedDeclarations = readImportedDeclarations(imported);
-      const before = { objectProperties: session.objectProperties, dataProperties: session.dataProperties, annotationProperties: session.annotationProperties };
-      const merged = mergeImportedDeclarations(before, session.importedDeclarations);
-      session.objectProperties = merged.objectProperties;
-      session.dataProperties = merged.dataProperties;
-      session.annotationProperties = merged.annotationProperties;
-      refreshPropertyMenus();
-      // The imports name the classes of individuals (#235): the Individuals tab and the drawn individuals are named again,
-      // which redraws when individuals are drawn.
-      session.sidePanel?.schemaChanged();
-      // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
-      // uses came from an import; properties added as context are never drawn.
-      if (mergeChangesWhatIsDrawn(before, merged)) actions.applyFilter(true);
+      // Ontologies the data names, opened meanwhile (#236), are kept after the imports.
+      const openedMeanwhile = session.importedOntologies.filter((o) => !imported.some((i) => i.url === o.url));
+      applyImportedOntologies([...imported, ...openedMeanwhile]);
     } catch (err) {
       debugWarn('Could not read the declarations of the imports:', err);
     } finally {

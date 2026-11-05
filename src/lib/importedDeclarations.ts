@@ -97,15 +97,27 @@ export async function loadImportedOntologies(
   fetchTtl: (url: string) => Promise<string | null>,
   options: LoadImportsOptions = {}
 ): Promise<ImportedOntology[]> {
+  const mainBase = getMainOntologyBase(store);
+  return loadOntologies(getImportUrls(store), fetchTtl, { ...options, exclude: mainBase ? [mainBase] : [] });
+}
+
+/**
+ * Read the ontologies at `urls`, and their imports, level by level, each once, never one of `exclude` (what is loaded already).
+ * The imports of an open ontology are read this way, and so are the ontologies data names when the user opens them (#236).
+ */
+export async function loadOntologies(
+  urls: string[],
+  fetchTtl: (url: string) => Promise<string | null>,
+  options: LoadImportsOptions & { exclude: string[] }
+): Promise<ImportedOntology[]> {
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
   const maxOntologies = options.maxOntologies ?? DEFAULT_MAX_ONTOLOGIES;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const budget: SizeBudget = { used: 0, max: options.maxTotalCharacters ?? DEFAULT_MAX_TOTAL_CHARACTERS };
-  const mainBase = getMainOntologyBase(store);
-  const seen = new Set<string>(mainBase ? [bareIri(mainBase)] : []);
+  const seen = new Set<string>(options.exclude.map(bareIri));
   const result: ImportedOntology[] = [];
 
-  let level = getImportUrls(store);
+  let level = urls.map(bareIri);
   for (let depth = 1; depth <= maxDepth && level.length > 0; depth++) {
     // Chosen one by one, so that an ontology listed twice takes one slot, not two.
     const toRead: string[] = [];
