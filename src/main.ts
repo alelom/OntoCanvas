@@ -62,11 +62,12 @@ import { setupEventListeners } from './ui/eventListeners';
 import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyModal } from './ui/dataPropertyModals';
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { applyFilter } from './graph/applyFilter';
-import { classIndividualsAction } from './graph/classIndividuals';
+import { classIndividualsAction, classIriOfNode } from './graph/classIndividuals';
 
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setClassIndividualsProvider((nodeId) => {
-  const uri = resolveTerm('node', nodeId)?.uri;
+  // A class node of the graph, or the node of a class of the data that is not in it (#239).
+  const uri = resolveTerm('node', nodeId)?.uri ?? classIriOfNode(nodeId, []);
   return uri && session.individualsLayer ? classIndividualsAction(session.individualsLayer, uri) : null;
 });
 setVersionPinnedUriResolver((kind, id) =>

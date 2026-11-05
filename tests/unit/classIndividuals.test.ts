@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { DataSet } from 'vis-data';
 import { Parser, Store } from 'n3';
 import { createIndividualsLayer } from '../../src/abox/individualsLayer';
-import { classIndividualsAction, addIndividualCounts } from '../../src/graph/classIndividuals';
+import { classIndividualsAction, addIndividualCounts, classIriOfNode } from '../../src/graph/classIndividuals';
 
 const NS = 'http://example.org/d#';
 const people = (n: number) => Array.from({ length: n }, (_, i) => `:p${String(i).padStart(3, '0')} a :Person .`).join('\n');
@@ -56,5 +56,16 @@ describe('addIndividualCounts', () => {
     expect(data.get('Person').individualCount).toBe(120);
     expect(data.get('Person').label).toBe('Person');
     expect(data.get('Room').individualCount).toBeUndefined();
+  });
+});
+
+describe('classIriOfNode (#239)', () => {
+  it('is the IRI of a class node of the graph, or of the node of a class of the data that is not in the graph', () => {
+    const graph = [{ id: 'Room', uri: 'http://example.org/d#Room' }];
+
+    expect(classIriOfNode('Room', graph)).toBe('http://example.org/d#Room');
+    expect(classIriOfNode('__individual_class__http://example.org/p#Assertion', graph)).toBe('http://example.org/p#Assertion');
+    expect(classIriOfNode('__individual__http://example.org/d#a', graph)).toBeNull();
+    expect(classIriOfNode('Nothing', graph)).toBeNull();
   });
 });

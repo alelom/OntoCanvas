@@ -7,7 +7,7 @@ import { showAddNodeModal } from '../ui/addNodeModal';
 import { hideCanvasTooltip, pickTooltip, showCanvasTooltip } from '../ui/canvasTooltip';
 import { attachClassExpressionMarks } from '../ui/classExpressionInteraction';
 import { attachIndividualCountBadges } from '../ui/individualCountBadges';
-import { classIndividualsAction } from './classIndividuals';
+import { classIndividualsAction, classIriOfNode } from './classIndividuals';
 import { showContextMenu } from '../ui/contextMenu';
 import { hideEdgeLinesUnderNodes } from '../ui/edgeNodeClipping';
 import { openEditModalForNode, openEditModalForEdge } from '../ui/editModals';
@@ -31,7 +31,8 @@ export function setupNetworkSelectionAndNavigation(
   );
   // The count of individuals on a class node, a badge that draws them when clicked (#209).
   const individualBadges = attachIndividualCountBadges(net as unknown as Parameters<typeof attachIndividualCountBadges>[0], (nodeId) => {
-    const uri = session.currentGraphDataForBuild?.nodes.find((n) => n.id === nodeId)?.uri;
+    // A class node of the graph, or the node of a class of the data that is not in it (#239).
+    const uri = classIriOfNode(nodeId, session.currentGraphDataForBuild?.nodes ?? []);
     return uri && session.individualsLayer ? classIndividualsAction(session.individualsLayer, uri) : null;
   });
   // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).

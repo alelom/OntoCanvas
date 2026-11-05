@@ -29,6 +29,7 @@ import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
 import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds } from './individualsOverlay';
 import { addIndividualCounts } from './classIndividuals';
+import { setNotice } from '../ui/statusNotices';
 import { isIndividualNodeId } from '../abox/individualsLayer';
 import { setupDragCoupling } from './dataPropertyDragCoupling';
 import { expandWithExternalRefs } from './externalExpansion';
@@ -188,7 +189,9 @@ export function applyFilter(preserveView = false, fitTo?: string[]): void {
   if (session.individualsLayer) {
     const classNodes = classNodesByUri(graphDataForBuild.nodes);
     addIndividualCounts(data.nodes, session.individualsLayer, classNodes);
-    addIndividualsToNetworkData(data, session.individualsLayer, classNodes, { relax: canvasState.relaxIndividuals, search: canvasState.individualSearch });
+    const { moreClasses } = addIndividualsToNetworkData(data, session.individualsLayer, classNodes, { relax: canvasState.relaxIndividuals, search: canvasState.individualSearch });
+    // The classes of the data beyond the limit are not drawn as nodes of their own (#239): said in the bottom bar.
+    setNotice('more-data-classes', moreClasses ? `${moreClasses} more classes of the loaded data are not drawn as nodes: draw their individuals from the Individuals tab.` : null);
   }
   if (canvasState.network && session.ttlStore) {
     updateContextMenuData(session.ttlStore, graphDataForBuild, session.externalOntologyReferences, openExternalOntology);

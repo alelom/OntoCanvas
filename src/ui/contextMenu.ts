@@ -240,18 +240,34 @@ export function showContextMenu(
           return at != null ? String(at) : null;
         })();
 
-  // The node of a class an import declares, drawn for its individuals (#235): the ontology that declares it can be opened.
-  const importedFrom =
-    resolvedNodeId?.startsWith(INDIVIDUAL_CLASS_PREFIX) && onOpenExternalOntologyCallback
-      ? (importedClassProvider?.(resolvedNodeId.slice(INDIVIDUAL_CLASS_PREFIX.length)) ?? null)
-      : null;
-  if (importedFrom) {
-    contextMenuElement.replaceChildren(
-      createMenuItem('Open external ontology', async () => {
-        await onOpenExternalOntologyCallback!(importedFrom);
-        hideContextMenu();
-      })
-    );
+  // The node of a class of the data that is no node of the graph (#239): it offers to draw its individuals, and to open the
+  // ontology that declares it when one loaded as context does (#235). Nothing else: it is not a term of the ontology.
+  if (resolvedNodeId?.startsWith(INDIVIDUAL_CLASS_PREFIX)) {
+    const items: HTMLElement[] = [];
+    const individuals = classIndividualsProvider?.(resolvedNodeId) ?? null;
+    if (individuals) {
+      const item = createMenuItem(
+        individuals.label,
+        () => {
+          individuals.run();
+          hideContextMenu();
+        },
+        individuals.disabled
+      );
+      item.title = individuals.title;
+      items.push(item);
+    }
+    const importedFrom = onOpenExternalOntologyCallback ? (importedClassProvider?.(resolvedNodeId.slice(INDIVIDUAL_CLASS_PREFIX.length)) ?? null) : null;
+    if (importedFrom) {
+      items.push(
+        createMenuItem('Open external ontology', async () => {
+          await onOpenExternalOntologyCallback!(importedFrom);
+          hideContextMenu();
+        })
+      );
+    }
+    if (!items.length) return;
+    contextMenuElement.replaceChildren(...items);
     contextMenuElement.style.left = `${event.clientX}px`;
     contextMenuElement.style.top = `${event.clientY}px`;
     contextMenuElement.style.display = 'block';

@@ -57,17 +57,29 @@ describe('the context menu of a class node an import declares (#235)', () => {
     hideContextMenu();
   });
 
-  it('offers only "Open external ontology", which opens the ontology that declares it', async () => {
+  it('offers to draw its individuals (#239), and "Open external ontology", which opens the ontology that declares it', async () => {
+    setClassIndividualsProvider((nodeId) =>
+      nodeId === classNode ? { label: 'Show 50 individuals (0 displayed/184 total)', title: '', disabled: false, adds: 50, displayed: 0, run: () => {} } : null
+    );
+    rightClick(classNode, null);
+
+    expect(items()).toEqual(['Show 50 individuals (0 displayed/184 total)', 'Open external ontology']);
+    setClassIndividualsProvider(() => null);
     rightClick(classNode, null);
 
     expect(menu().style.display).toBe('block');
     expect(items()).toEqual(['Open external ontology']);
-    (menu().firstElementChild as HTMLElement).click();
+    (menu().lastElementChild as HTMLElement).click();
     await Promise.resolve();
     expect(opened).toEqual(['https://example.org/prov']);
   });
 
-  it('shows nothing for a stub of a class that no loaded ontology declares, nor for an individual', () => {
+  it('offers only its individuals for a class that no loaded ontology declares, and shows nothing for an individual', () => {
+    setClassIndividualsProvider(() => ({ label: 'Show 3 individuals (0 displayed/3 total)', title: '', disabled: false, adds: 3, displayed: 0, run: () => {} }));
+    rightClick('__individual_class__https://example.org/other#Kind', null);
+    expect(items()).toEqual(['Show 3 individuals (0 displayed/3 total)']);
+    setClassIndividualsProvider(() => null);
+    hideContextMenu();
     rightClick('__individual_class__https://example.org/other#Kind', null);
     expect(menu().style.display).toBe('none');
 

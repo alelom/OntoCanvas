@@ -26,6 +26,17 @@ export const DEFAULT_MAX_PER_EXPANSION = 50;
 export const DEFAULT_MAX_TOTAL = 300;
 /** Up to this many individuals in all, every one is drawn without being asked. */
 export const DEFAULT_AUTO_MAX = 30;
+/**
+ * What an individual with no label is called: the end of its IRI. A urn has no / or # to end at, and its start says only whose
+ * it is (urn:example:configuration:sha256:…), so it is called by what follows "urn:<namespace>:" (#239).
+ */
+export function nameOfIri(iri: string): string {
+  const name = extractLocalName(iri);
+  return name === iri ? iri.replace(/^urn:[^:]+:/i, '') : name;
+}
+
+/** The most classes of the data drawn as nodes of their own before any of their individuals is (#239), those with most first. */
+export const MAX_DATA_CLASSES = 50;
 const TOOLTIP_ROWS = 10;
 // One collator: `localeCompare` with options builds one per call.
 const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
@@ -54,6 +65,8 @@ export interface LayerClass {
   label: string;
   /** The ontology that declares it, when one loaded as context does (#235); an undeclared class has none. */
   definedBy?: string;
+  /** How many individuals of it the loaded data has (#239): its node carries the count, and offers to draw them. */
+  count?: number;
 }
 
 /** What a change of the layer was: a draw (the individuals it added), a clear, or a change of the data. */
@@ -64,8 +77,13 @@ export interface LayerChange {
 
 export interface LayerView {
   nodes: LayerNode[];
-  /** The classes of the drawn individuals that are not in `classNodeByUri`, each named once. */
+  /**
+   * The classes of the individuals in the data that are not in `classNodeByUri`, each named once (#239): those with most
+   * individuals, up to MAX_DATA_CLASSES, and the class of any drawn individual.
+   */
   classes: LayerClass[];
+  /** How many classes of the data were left out of `classes` by the limit. */
+  moreClasses: number;
   edges: LayerEdge[];
   /** Set when the total cap cut what was asked for. */
   warning: string | null;
@@ -135,7 +153,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       const preferred = labels.find((q) => !(q.object as { language?: string }).language) ?? labels[0];
       if (preferred) return preferred.object.value;
     }
-    return extractLocalName(iri);
+    return nameOfIri(iri);
   };
 
   /** The individuals linked to this one by an object property, either way, sorted by what is shown for them; kept until the data changes. */
@@ -202,6 +220,24 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
   const room = (): number => Math.max(0, maxTotal - computeShown().shown.size);
   const batch = (): number => Math.min(maxPerExpansion, room());
 
+  /** How many individuals each class has in the data (a class of the schema's own, such as owl:NamedIndividual, not); kept until the data changes. */
+  let classCounts: Map<string, number> | null = null;
+  const countsOfClasses = (): Map<string, number> => {
+    if (!classCounts) {
+      const members = new Map<string, Set<string>>();
+      for (const store of getStores()) {
+        for (const q of store.getQuads(null, RDF_TYPE, null, null)) {
+          if (q.object.termType !== 'NamedNode' || !isClassOfIndividuals(q.object.value) || !known().has(q.subject.value)) continue;
+          let set = members.get(q.object.value);
+          if (!set) members.set(q.object.value, (set = new Set()));
+          set.add(q.subject.value);
+        }
+      }
+      classCounts = new Map([...members].map(([iri, set]) => [iri, set.size]));
+    }
+    return classCounts;
+  };
+
   /** The individuals of a class, sorted by what is shown for them; kept until the data changes. */
   const memberCache = new Map<string, string[]>();
   const membersOf = (classIri: string): string[] => {
@@ -246,6 +282,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       shownCache = null;
       neighbourCache.clear();
       memberCache.clear();
+      classCounts = null;
     },
     showClass(classIri) {
       const before = new Set(computeShown().shown);
@@ -274,6 +311,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       shownCache = null;
       neighbourCache.clear();
       memberCache.clear();
+      classCounts = null;
       hidden = false;
       for (const iri of [...picked]) if (!known().has(iri)) picked.delete(iri);
       // Redrawn even when nothing is drawn: the counts on the class nodes follow the data.
@@ -286,6 +324,17 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
 
       const nodes: LayerNode[] = [...shown].map((iri) => ({ id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) }));
       const classes = new Map<string, LayerClass>();
+      const counts = countsOfClasses();
+      const classOf = (iri: string): LayerClass => {
+        const info = classInfo?.(iri);
+        return { iri, id: INDIVIDUAL_CLASS_PREFIX + iri, label: info?.label ?? labelOf(iri), ...(info ? { definedBy: info.definedBy } : {}), count: counts.get(iri) ?? 0 };
+      };
+      // Each class of the data that is no node of the graph gets one (#239), so its individuals can be drawn from its count;
+      // those with most individuals first, up to the limit.
+      const missing = [...counts].filter(([iri]) => !classNodeByUri.has(iri)).map(([iri]) => classOf(iri));
+      missing.sort((a, b) => b.count! - a.count! || byText(a.label, b.label) || (a.iri < b.iri ? -1 : 1));
+      for (const c of missing.slice(0, MAX_DATA_CLASSES)) classes.set(c.id, c);
+      const moreClasses = Math.max(0, missing.length - MAX_DATA_CLASSES);
       const edges: LayerEdge[] = [];
       const seen = new Set<string>();
       const addEdge = (from: string, to: string, type: string): void => {
@@ -306,10 +355,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
                 // A class that is no node of the graph (imported, or never declared): a stub stands for it, named and "defined
                 // by" its ontology when an import declares it (#235).
                 const id = INDIVIDUAL_CLASS_PREFIX + q.object.value;
-                if (!classes.has(id)) {
-                  const info = classInfo?.(q.object.value);
-                  classes.set(id, { iri: q.object.value, id, label: info?.label ?? labelOf(q.object.value), ...(info ? { definedBy: info.definedBy } : {}) });
-                }
+                if (!classes.has(id)) classes.set(id, classOf(q.object.value));
                 addEdge(INDIVIDUAL_PREFIX + iri, id, 'rdf:type');
               }
             } else if (q.object.termType === 'NamedNode' && shown.has(q.object.value)) {
@@ -318,7 +364,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
           }
         }
       }
-      return { nodes, classes: [...classes.values()], edges, warning: cut ? `Showing the first ${maxTotal} individuals, the limit. Clear individuals, or filter for a narrower set, to see others.` : null };
+      return { nodes, classes: [...classes.values()], moreClasses, edges, warning: cut ? `Showing the first ${maxTotal} individuals, the limit. Clear individuals, or filter for a narrower set, to see others.` : null };
     },
   };
 }

@@ -403,7 +403,7 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
 
     const view = layer.build(roomOnly);
 
-    expect(view.classes).toEqual([{ iri: ex('Kind'), id: INDIVIDUAL_CLASS_PREFIX + ex('Kind'), label: 'A kind' }]);
+    expect(view.classes).toEqual([{ iri: ex('Kind'), id: INDIVIDUAL_CLASS_PREFIX + ex('Kind'), label: 'A kind', count: 1 }]);
     const types = view.edges.filter((e) => e.type === 'rdf:type').map((e) => e.to).sort();
     expect(types).toEqual(['Room', INDIVIDUAL_CLASS_PREFIX + ex('Kind')]);
   });
@@ -417,7 +417,7 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
     layer.show(ex('a'));
 
     expect(layer.build(roomOnly).classes).toEqual([
-      { iri: ex('Assertion'), id: INDIVIDUAL_CLASS_PREFIX + ex('Assertion'), label: 'Field assertion', definedBy: 'https://example.org/prov' },
+      { iri: ex('Assertion'), id: INDIVIDUAL_CLASS_PREFIX + ex('Assertion'), label: 'Field assertion', definedBy: 'https://example.org/prov', count: 1 },
     ]);
   });
 
@@ -426,6 +426,36 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
     layer.show(ex('a'));
 
     expect(layer.build(roomOnly).classes[0]).toMatchObject({ label: 'A kind', definedBy: 'https://example.org/k' });
+  });
+
+  it('lists every class of the individuals in the data that is not a node, with its count, though none is drawn (#239)', () => {
+    const data = store(':a a :Kind . :b a :Kind . :c a :Other , :Room . :d a <http://www.w3.org/2002/07/owl#NamedIndividual> .');
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [data] });
+
+    const view = layer.build(roomOnly);
+
+    expect(view.nodes).toEqual([]);
+    expect(view.classes.map((c) => [c.label, c.count])).toEqual([['Kind', 2], ['Other', 1]]);
+    expect(view.moreClasses).toBe(0);
+  });
+
+  it('lists the 50 classes with the most individuals, and says how many more there are', () => {
+    const data = store(Array.from({ length: 55 }, (_, i) => `:i${i} a :C${i} .${i < 3 ? ` :j${i} a :C${i} .` : ''}`).join('\n'));
+    const view = createIndividualsLayer({ autoMax: 0, getStores: () => [data] }).build(new Map());
+
+    expect(view.classes).toHaveLength(50);
+    expect(view.classes.slice(0, 3).map((c) => c.count)).toEqual([2, 2, 2]);
+    expect(view.moreClasses).toBe(5);
+  });
+
+  it('still lists the class of a drawn individual beyond the 50', () => {
+    const data = store(Array.from({ length: 55 }, (_, i) => `:i${i} a :C${i} .${i < 50 ? ` :j${i} a :C${i} .` : ''}`).join('\n'));
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [data] });
+    layer.show(ex('i54'));
+
+    const ids = layer.build(new Map()).classes.map((c) => c.iri);
+
+    expect(ids).toContain(ex('C54'));
   });
 
   it('lists none for a class that is a node, and none for owl:NamedIndividual', () => {
@@ -438,10 +468,10 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
     expect(view.classes).toEqual([]);
   });
 
-  it('names a class once, however many individuals have it, and only while one is drawn', () => {
+  it('names a class once, however many individuals have it, before any is drawn (#239) and while they are', () => {
     const many = store(':a a :Kind . :b a :Kind . :c a :Kind .');
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [many] });
-    expect(layer.build(new Map()).classes).toEqual([]);
+    expect(layer.build(new Map()).classes.map((c) => [c.iri, c.count])).toEqual([[ex('Kind'), 3]]);
 
     layer.showClass(ex('Kind'));
 
