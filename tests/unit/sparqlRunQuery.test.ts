@@ -359,4 +359,13 @@ describe('runQuery over named graphs (#224)', () => {
 
     expect(values(result, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
   });
+
+  it('also gives the default graph (the ontology) to GRAPH ?g, a side effect of the union, which FILTER(isIRI(?g)) leaves out', async () => {
+    const stores = [storeFromTurtle(':Thing a owl:Class .'), data()];
+    const all = await runQuery(stores, PREFIXES + 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }');
+    const named = await runQuery(stores, PREFIXES + 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } FILTER(isIRI(?g)) }');
+
+    expect(all.kind === 'bindings' && all.rows.some((row) => row.g?.termType === 'DefaultGraph')).toBe(true);
+    expect(values(named, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
+  });
 });

@@ -118,6 +118,7 @@ async function execute(stores: Store[], query: string, limit: number, signal: Ab
   const prepared = await prepare(query, limit);
   const engine = await getEngine();
   // The default graph is the union of all graphs (#224): data in named graphs (N-Quads, TriG) is seen by a query without GRAPH.
+  // A side effect of Comunica's option: GRAPH ?g also matches the default graph (the ontology); FILTER(isIRI(?g)) leaves it out.
   const result = await engine.query(prepared, { sources: stores as [Store, ...Store[]], unionDefaultGraph: true });
 
   switch (result.resultType) {
