@@ -2,6 +2,7 @@
  * The data added to an open ontology (#205): size tiers by file size, and the list of sources with the stores queries run over.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { gzipSync } from 'node:zlib';
 import { classifyDataSize, createDataSources, DATA_LOAD_LIMIT_BYTES, DATA_REFUSE_LIMIT_BYTES } from '../../src/sparql/dataSources';
 
 const MB = 1024 * 1024;
@@ -23,6 +24,11 @@ describe('classifyDataSize', () => {
     expect(classifyDataSize(5 * MB).message).toMatch(/5\.0 MB.*slow.*memory/i);
     expect(classifyDataSize(30 * MB).message).toMatch(/30\.0 MB.*too large/i);
     expect(classifyDataSize(10).message).toBeUndefined();
+  });
+
+  it('says what to do about data that is too large (#223), and speaks of what it is given to (a selection of files)', () => {
+    expect(classifyDataSize(30 * MB).message).toMatch(/Load fewer files \(one part, one batch\), or use a tool with a database/);
+    expect(classifyDataSize(5 * MB, 'These 3 files are 5.0 MB together').message).toMatch(/^These 3 files are 5\.0 MB together: loading/);
   });
 });
 
@@ -154,8 +160,118 @@ describe('addFile', () => {
   });
 });
 
+describe('addFile, compressed (#223)', () => {
+  const nquads = (n: number) => Array.from({ length: n }, (_, i) => `<http://example.org/d#i${i}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/d#Thing> .`).join('\n') + '\n';
+  /** A file as the browser gives it: its bytes as a stream, and a size that may be made larger than the bytes. */
+  const binaryFile = (name: string, bytes: Uint8Array, size = bytes.length) => ({
+    name,
+    size,
+    text: vi.fn(async () => new TextDecoder().decode(bytes)),
+    stream: vi.fn(() => new Blob([bytes]).stream()),
+  });
+  const utf8 = (text: string) => new TextEncoder().encode(text);
+  const subjects = (source: { store: { getSubjects: (p: null, o: null, g: null) => Array<{ value: string }> } }) =>
+    source.store.getSubjects(null, null, null).map((s) => s.value).sort();
+
+  it.each([
+    ['people.ttl.gz', 'people.ttl', ttl(4)],
+    ['part-0001.nq.gz', 'part-0001.nq', nquads(4)],
+  ])('reads %s as the same individuals as %s, telling the format from the name without .gz', async (gzName, plainName, text) => {
+    const sources = createDataSources();
+
+    const compressed = await sources.addFile(binaryFile(gzName, gzipSync(utf8(text))));
+    const plain = await sources.addFile(binaryFile(plainName, utf8(text)));
+
+    expect(compressed.name).toBe(gzName);
+    expect(compressed.triples).toBe(plain.triples);
+    expect(subjects(compressed)).toEqual(subjects(plain));
+    expect(compressed.bytes).toBe(utf8(text).length);
+  });
+
+  it('decompresses a gzip told by its first bytes whatever its name, and reads a .gz that is not compressed as it is', async () => {
+    const sources = createDataSources();
+
+    const renamed = await sources.addFile(binaryFile('people.ttl', gzipSync(utf8(ttl(2)))));
+    const plainGz = await sources.addFile(binaryFile('people.ttl.gz', utf8(ttl(2))));
+
+    expect([renamed.triples, plainGz.triples]).toEqual([4, 4]);
+  });
+
+  it('stops a file whose data passes the limit once decompressed, adds nothing, and says what to do', async () => {
+    const sources = createDataSources();
+    const bomb = binaryFile('part-0001.ttl.gz', gzipSync(utf8('#'.repeat(10 * MB + 1))));
+
+    const error = await sources.addFile(bomb).catch((e) => e);
+
+    expect(error.message).toMatch(/part-0001\.ttl\.gz.*more than 10\.0 MB of data once decompressed.*too large/i);
+    expect(error.message).toMatch(/Load fewer files.*database/i);
+    expect(sources.list()).toEqual([]);
+  });
+
+  it('stops at a lower limit when one is given, for what is left of a selection', async () => {
+    const sources = createDataSources();
+
+    await expect(sources.addFile(binaryFile('a.ttl.gz', gzipSync(utf8(ttl(50)))), { limitBytes: 100 })).rejects.toThrow(/more than/);
+    await expect(sources.addFile(binaryFile('a.ttl', utf8(ttl(50))), { limitBytes: 100 })).rejects.toThrow(/too large/);
+    expect(sources.list()).toEqual([]);
+  });
+
+  it('asks before reading a compressed file whose estimated data is large, saying it is an estimate', async () => {
+    const sources = createDataSources();
+    const confirm = vi.fn().mockResolvedValue(false);
+    const file = binaryFile('part-0001.nq.gz', gzipSync(utf8(nquads(2))), 0.5 * MB);
+
+    await expect(sources.addFile(file, { confirm })).rejects.toThrow('Cancelled');
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/compressed file is 0\.5 MB, some 5\.0 MB of data once decompressed/));
+    expect(file.stream).not.toHaveBeenCalled();
+  });
+
+  it('asks, and does not refuse, when only the estimate passes the limit: the read stops there if the data does', async () => {
+    const sources = createDataSources();
+    const confirm = vi.fn().mockResolvedValue(true);
+
+    const added = await sources.addFile(binaryFile('part-0001.nq.gz', gzipSync(utf8(nquads(2))), 2 * MB), { confirm });
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/stops/));
+    expect(added.triples).toBe(2);
+  });
+
+  it('refuses unread a compressed file that is above the limit compressed', async () => {
+    const sources = createDataSources();
+    const file = binaryFile('part-0001.nq.gz', gzipSync(utf8(nquads(2))), 11 * MB);
+
+    await expect(sources.addFile(file)).rejects.toThrow(/too large/);
+
+    expect(file.stream).not.toHaveBeenCalled();
+  });
+});
+
+describe('addUrl, compressed (#223)', () => {
+  it('downloads a .gz address, decompresses it, and tells the format from the address without .gz', async () => {
+    const sources = createDataSources();
+    const body = gzipSync(new TextEncoder().encode(ttl(3)));
+
+    const added = await sources.addUrl('https://example.org/run/people.ttl.gz', {
+      fetch: (async () => new Response(body, { headers: { 'content-type': 'application/gzip' } })) as never,
+    });
+
+    expect(added).toMatchObject({ name: 'people.ttl.gz', triples: 6 });
+  });
+
+  it('reads a .gz address the server already decompressed (Content-Encoding) as it is', async () => {
+    const sources = createDataSources();
+
+    const added = await sources.addUrl('https://example.org/run/people.ttl.gz', {
+      fetch: (async () => new Response(ttl(3), { headers: { 'content-type': 'text/plain' } })) as never,
+    });
+
+    expect(added.triples).toBe(6);
+  });
+});
+
 describe('addUrl', () => {
-  const response = (body: string, headers: Record<string, string> = { 'content-type': 'text/turtle' }, status = 200) => new Response(body, { status, headers });
+  const response =(body: string, headers: Record<string, string> = { 'content-type': 'text/turtle' }, status = 200) => new Response(body, { status, headers });
 
   it('downloads a URL, names the source after its file, and reads it in the format its content type says', async () => {
     const sources = createDataSources();

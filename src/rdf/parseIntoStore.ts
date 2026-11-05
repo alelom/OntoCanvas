@@ -29,7 +29,7 @@ export interface SlicedParseOptions extends ParseRdfOptions {
 /** rdf-parse's message for a format it cannot tell is a template that was never filled in; say what is wrong and what to do. */
 function describeParseError(error: Error): string {
   if (/none of the configured parsers|no valid extension could be detected/i.test(error.message)) {
-    return 'The format of this file could not be told from its name or its content type. Use a name that ends in .ttl, .rdf, .owl, .jsonld, .nt or .trig.';
+    return 'The format of this file could not be told from its name or its content type. Use a name that ends in .ttl, .rdf, .owl, .jsonld, .nt, .nq or .trig (with .gz after it for a compressed file).';
   }
   return `Failed to parse RDF: ${error.message}`;
 }
