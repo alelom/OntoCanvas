@@ -32,7 +32,7 @@ import {
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
 import { findOntologiesOfData, openDataOntologies } from './workflows/dataOntologies';
-import { showWarningBar } from './ui/warningBar';
+import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 
@@ -184,7 +184,10 @@ setupEventListeners();
 setOnExploreDataFiles((files) =>
   void exploreDataFiles(files, {
     openOntology: (ttl, name) => loadTtlAndRender(ttl, name, null),
-    showNote: showWarningBar,
+    showNote: (text) => {
+      setNotice('no-classes', null);
+      setNotice('workspace', text);
+    },
     addDataFiles: async (added) => session.sidePanel?.addDataFiles(added),
   })
 );

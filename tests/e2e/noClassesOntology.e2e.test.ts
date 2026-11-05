@@ -18,8 +18,8 @@ const TEST_FIXTURES_DIR = join(__dirname, '../fixtures');
 
 function isWarningVisible(page: Page): Promise<boolean> {
   return page.evaluate(() => {
-    const el = document.getElementById('warningMsg');
-    return !!el && el.style.display !== 'none';
+    // A note in the bottom bar's issues area (#239: it was a bar over the canvas).
+    return !!document.querySelector('#ontologyIssuesPopup [data-status-notice="no-classes"]');
   });
 }
 
@@ -61,7 +61,7 @@ describe('No classes ontology E2E', () => {
     await expect.poll(() => isWarningVisible(page), { timeout: 5000 }).toBe(true);
 
     const warningText = await page.evaluate(() => {
-      const el = document.getElementById('warningMsgText');
+      const el = document.querySelector('#ontologyIssuesPopup [data-status-notice="no-classes"]');
       return el?.textContent || '';
     });
 

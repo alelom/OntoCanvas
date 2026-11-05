@@ -4,6 +4,7 @@ import { fileDisplayName, type OntologyInfo } from './ontologyInfo';
 import { versionLabel, type OntologyVersion } from '../lib/ontologyVersion';
 import type { AvailableVersions, VersionEntry } from '../lib/ontologyVersions';
 import { hideVersionList, toggleVersionList } from './versionList';
+import { getNotices, onNoticesChange, type Notice } from './statusNotices';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
@@ -15,6 +16,8 @@ let currentOntologyVersion: OntologyVersion | null = null;
 let availableVersions: AvailableVersions | null = null;
 let onVersionChosen: (entry: VersionEntry) => void = () => {};
 let currentFilePath: string | null = null;
+/** The ontology's issues found last: drawn again with the notices when those change (#239). */
+let lastIssues: OntologyIssue[] = [];
 
 /**
  * Initialize the status bar component.
@@ -34,6 +37,7 @@ export function initStatusBar(): void {
   
   // Create issues button and popup
   createIssuesUI();
+  onNoticesChange(renderIssuesArea);
   
   // Update issues when clicking outside the popup
   document.addEventListener('click', (e) => {
@@ -97,34 +101,54 @@ export function updateStatusBar(store: Store | null, ontologyLocation: string | 
  * Refresh the issues display.
  */
 async function refreshIssues(): Promise<void> {
-  if (!currentStore || !issuesButton || !issuesPopup) return;
-  
-  const issues = await detectOntologyIssues(currentStore, currentOntologyLocation);
-  
-  if (issues.length === 0) {
+  if (!issuesButton || !issuesPopup) return;
+  lastIssues = currentStore ? await detectOntologyIssues(currentStore, currentOntologyLocation) : [];
+  renderIssuesArea();
+}
+
+/**
+ * Draws the issues area from the ontology's issues found last and the app's notices (#239): the notices change at once, and the
+ * issues are looked for again only when the ontology changes (finding them may fetch example images).
+ */
+function renderIssuesArea(): void {
+  if (!issuesButton || !issuesPopup) return;
+  const notices = getNotices();
+  const total = lastIssues.length + notices.length;
+  if (total === 0) {
     issuesButton.style.display = 'none';
     hideIssuesPopup();
     return;
   }
-  
-  // Show issues button
   issuesButton.style.display = '';
-  issuesButton.innerHTML = `⚠️ <u>issues (${issues.length})</u>`;
-  
-  // Update popup content
-  renderIssuesPopup(issues);
+  issuesButton.innerHTML = lastIssues.length ? `⚠️ <u>issues (${total})</u>` : `ℹ️ <u>notes (${total})</u>`;
+  issuesButton.title = 'Notes and issues of the open ontology and its data';
+  renderIssuesPopup(lastIssues, notices);
 }
 
+const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 /**
- * Render the issues popup content.
+ * Render the issues popup content: the app's notes first, then the ontology's issues by type.
  */
-function renderIssuesPopup(issues: OntologyIssue[]): void {
+function renderIssuesPopup(issues: OntologyIssue[], notices: Notice[]): void {
   if (!issuesPopup) return;
-  
+
   const grouped = groupIssuesByType(issues);
   const typeKeys = Object.keys(grouped).sort();
-  
-  let html = '<div style="font-weight: bold; margin-bottom: 12px; font-size: 13px;">Ontology Issues</div>';
+
+  let html = '';
+  if (notices.length) {
+    html += '<div style="font-weight: bold; margin-bottom: 8px; font-size: 13px;">Notes</div><div style="margin-bottom: 16px;">';
+    for (const notice of notices) {
+      html += `<div data-status-notice="${escapeHtml(notice.key)}" style="padding: 6px 8px; margin-bottom: 4px; background: #eaf2fb; border-left: 3px solid #1a5fb4; border-radius: 2px; font-size: 11px; color: #333;">${escapeHtml(notice.message)}</div>`;
+    }
+    html += '</div>';
+  }
+  if (!issues.length) {
+    issuesPopup.innerHTML = html;
+    return;
+  }
+  html += '<div style="font-weight: bold; margin-bottom: 12px; font-size: 13px;">Ontology Issues</div>';
   
   for (const typeKey of typeKeys) {
     const typeIssues = grouped[typeKey];

@@ -117,10 +117,6 @@ export function renderApp(): void {
       </span>
       </div>
       <div id="errorMsg" class="error" style="display: none;"></div>
-      <div id="warningMsg" class="warning" style="display: none;">
-        <span id="warningMsgText"></span>
-        <button id="warningMsgClose" type="button" title="Dismiss warning">×</button>
-      </div>
     </div>
     <div id="networkWrapper">
       <div id="network"></div>

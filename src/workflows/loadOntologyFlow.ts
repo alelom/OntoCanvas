@@ -41,7 +41,7 @@ import { refreshPropertyMenus } from '../ui/searchAutocomplete';
 import { updateStatusBar, updateOntologyInfoDisplay, updateOntologyVersionDisplay, updateAvailableVersions } from '../ui/statusBar';
 import { showValidationErrorModal } from '../ui/validationErrorModal';
 import { beginViewSettle } from '../ui/viewSettle';
-import { showWarningBar, hideWarningBar } from '../ui/warningBar';
+import { clearNotices, setNotice } from '../ui/statusNotices';
 import { debugWarn, debugLog, isDebugMode } from '../utils/debug';
 import { isEmbedded } from '../utils/embedMode';
 import { clearOntologyParamsFromAddressBar, getAllDisplayFileUrls, setOntologyUrlParamInAddressBar } from '../utils/urlParams';
@@ -146,13 +146,13 @@ export async function loadTtlAndRender(
   // before rendering, and the previous render's "settled" must not count for this load (#93).
   beginViewSettle();
   const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-  const warningMsg = document.getElementById('warningMsg') as HTMLElement;
   const vizControls = document.getElementById('vizControls') as HTMLElement;
   errorMsg.style.display = 'none';
   errorMsg.textContent = '';
   errorMsg.innerHTML = '';
   errorMsg.style.cursor = '';
-  warningMsg.style.display = 'none';
+  // The notes in the bottom bar were about the ontology before (#239).
+  clearNotices();
 
   try {
     // Store original TTL string to preserve format when saving
@@ -481,9 +481,9 @@ fileState.hasUnsavedChanges = false;
     }
     
     if (graphData.nodes.length === 0 && graphData.edges.length === 0 && !hasObjectPropertiesWithDomainRange) {
-      showWarningBar('The current file defines no classes, so the canvas is empty.');
+      setNotice('no-classes', 'The current file defines no classes, so the canvas is empty.');
     } else {
-      hideWarningBar();
+      setNotice('no-classes', null);
     }
 
     setTimeout(() => {
@@ -771,7 +771,7 @@ export async function loadFromUrl(url: string): Promise<void> {
     if (latestSource && (await fetchExternalOntologyTtl(latestSource, { timeoutMs: IMPORT_READ_TIMEOUT_MS }))) {
       urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(latestSource, servedFrom(latestSource)));
       if (urlDisplayConfig) {
-        showWarningBar('This version has no display settings of its own: the layout and colours of the latest version are used, so terms added or removed since may be placed oddly.');
+        setNotice('borrowed-display-config', 'This version has no display settings of its own: the layout and colours of the latest version are used, so terms added or removed since may be placed oddly.');
       }
     }
 
