@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from 'n3';
 import type { Network } from 'vis-network/esnext';
-import { initContextMenu, showContextMenu, hideContextMenu, setClassIndividualsProvider } from '../../src/ui/contextMenu';
+import { initContextMenu, showContextMenu, hideContextMenu, setClassIndividualsProvider, setImportedClassProvider, updateContextMenuData } from '../../src/ui/contextMenu';
 import type { GraphData } from '../../src/types';
 
 const rawData: GraphData = { nodes: [{ id: 'Sensor', label: 'Sensor', labellableRoot: null, uri: 'http://example.org/o#Sensor' }], edges: [] };
@@ -41,6 +41,37 @@ describe('the context menu with individuals drawn', () => {
 
   it('is not shown for an individual that an edge of a class passes under', () => {
     rightClick('__individual__http://example.org/o#s1', 'Sensor->Building:installedIn');
+    expect(menu().style.display).toBe('none');
+  });
+});
+
+describe('the context menu of a class node an import declares (#235)', () => {
+  const opened: string[] = [];
+  const classNode = '__individual_class__https://example.org/prov#FieldAssertion';
+
+  beforeEach(() => {
+    opened.length = 0;
+    initContextMenu(net, container, new Store(), rawData, () => {}, () => {}, () => {}, () => {});
+    updateContextMenuData(new Store(), rawData, null, async (url) => void opened.push(url));
+    setImportedClassProvider((classIri) => (classIri === 'https://example.org/prov#FieldAssertion' ? 'https://example.org/prov' : null));
+    hideContextMenu();
+  });
+
+  it('offers only "Open external ontology", which opens the ontology that declares it', async () => {
+    rightClick(classNode, null);
+
+    expect(menu().style.display).toBe('block');
+    expect(items()).toEqual(['Open external ontology']);
+    (menu().firstElementChild as HTMLElement).click();
+    await Promise.resolve();
+    expect(opened).toEqual(['https://example.org/prov']);
+  });
+
+  it('shows nothing for a stub of a class that no loaded ontology declares, nor for an individual', () => {
+    rightClick('__individual_class__https://example.org/other#Kind', null);
+    expect(menu().style.display).toBe('none');
+
+    rightClick('__individual__https://example.org/d#x', null);
     expect(menu().style.display).toBe('none');
   });
 });

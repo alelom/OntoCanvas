@@ -17,6 +17,7 @@ import {
   showContextMenu,
   setTermUriResolver,
   setClassIndividualsProvider,
+  setImportedClassProvider,
   setVersionPinnedUriResolver,
 } from './ui/contextMenu';
 import { versionPinnedUri } from './lib/versionPinnedUri';
@@ -128,6 +129,8 @@ renderApp();
 const dataSources = createDataSources();
 // The classes the ontologies loaded as context declare (its imports, #235): they name the classes of individuals.
 const importedClass = importedClassLookup(() => session.importedOntologies);
+// The node of such a class, drawn for its individuals, offers to open the ontology that declares it.
+setImportedClassProvider((classIri) => importedClass(classIri)?.definedBy ?? null);
 session.individualsLayer = createIndividualsLayer({
   // The data without its hidden graphs (#224): a hidden graph's individuals are not drawn.
   getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.visibleStores()] : dataSources.visibleStores()),

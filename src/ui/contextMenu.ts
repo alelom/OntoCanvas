@@ -18,7 +18,7 @@ import {
 import { copyTextToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/debug';
 import type { PinnedUri } from '../lib/versionPinnedUri';
-import { isIndividualNodeId, isIndividualEdgeId } from '../abox/individualsLayer';
+import { isIndividualNodeId, isIndividualEdgeId, INDIVIDUAL_CLASS_PREFIX } from '../abox/individualsLayer';
 import type { ClassIndividualsAction } from '../graph/classIndividuals';
 
 /**
@@ -87,6 +87,13 @@ let classIndividualsProvider: ((nodeId: string) => ClassIndividualsAction | null
 /** Register what the menu of a class node offers for the individuals of that class (#209); null for a class with none. */
 export function setClassIndividualsProvider(provider: ((nodeId: string) => ClassIndividualsAction | null) | null): void {
   classIndividualsProvider = provider;
+}
+
+let importedClassProvider: ((classIri: string) => string | null) | null = null;
+
+/** Register which ontology loaded as context declares a class (its IRI, or null): its node offers to open it (#235). */
+export function setImportedClassProvider(provider: ((classIri: string) => string | null) | null): void {
+  importedClassProvider = provider;
 }
 
 /** Register how "Copy URI" resolves a node/edge to its term URI. */
@@ -232,6 +239,24 @@ export function showContextMenu(
           const at = network.getEdgeAt(domPos);
           return at != null ? String(at) : null;
         })();
+
+  // The node of a class an import declares, drawn for its individuals (#235): the ontology that declares it can be opened.
+  const importedFrom =
+    resolvedNodeId?.startsWith(INDIVIDUAL_CLASS_PREFIX) && onOpenExternalOntologyCallback
+      ? (importedClassProvider?.(resolvedNodeId.slice(INDIVIDUAL_CLASS_PREFIX.length)) ?? null)
+      : null;
+  if (importedFrom) {
+    contextMenuElement.replaceChildren(
+      createMenuItem('Open external ontology', async () => {
+        await onOpenExternalOntologyCallback!(importedFrom);
+        hideContextMenu();
+      })
+    );
+    contextMenuElement.style.left = `${event.clientX}px`;
+    contextMenuElement.style.top = `${event.clientY}px`;
+    contextMenuElement.style.display = 'block';
+    return;
+  }
 
   // Individuals are drawn read-only (#209): no menu for them, which would paste or edit relationships on an id the ontology does not have.
   // A node wins over an edge ending under the click: the dashed edges of drawn individuals end at their class node.
