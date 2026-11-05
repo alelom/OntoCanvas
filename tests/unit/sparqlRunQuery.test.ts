@@ -360,12 +360,28 @@ describe('runQuery over named graphs (#224)', () => {
     expect(values(result, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
   });
 
-  it('also gives the default graph (the ontology) to GRAPH ?g, a side effect of the union, which FILTER(isIRI(?g)) leaves out', async () => {
-    const stores = [storeFromTurtle(':Thing a owl:Class .'), data()];
-    const all = await runQuery(stores, PREFIXES + 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }');
-    const named = await runQuery(stores, PREFIXES + 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } FILTER(isIRI(?g)) }');
+  it('counts a triple stated in two graphs once in a query without GRAPH, as the merge the spec defines (#237 review)', async () => {
+    const twice = new Store(
+      new Parser({ format: 'N-Quads' }).parse(
+        '<http://example.org/s1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Sensor> <http://example.org/g1> .\n' +
+          '<http://example.org/s1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Sensor> <http://example.org/g2> .\n'
+      )
+    );
 
-    expect(all.kind === 'bindings' && all.rows.some((row) => row.g?.termType === 'DefaultGraph')).toBe(true);
-    expect(values(named, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
+    const result = await runQuery([twice], PREFIXES + 'SELECT (COUNT(*) AS ?n) WHERE { ?s a :Sensor }');
+
+    expect(values(result, 'n')).toEqual(['1']);
+  });
+
+  it('gives GRAPH ?g the named graphs only, not the default graph (the ontology), as the spec says (#237 review)', async () => {
+    const result = await runQuery([storeFromTurtle(':Thing a owl:Class .'), data()], PREFIXES + 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }');
+
+    expect(values(result, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
+  });
+
+  it('counts a triple stated in two stores once, as one merged default graph', async () => {
+    const result = await runQuery([storeFromTurtle(':s1 a :Sensor .'), storeFromTurtle(':s1 a :Sensor .')], PREFIXES + 'SELECT (COUNT(*) AS ?n) WHERE { ?s a :Sensor }');
+
+    expect(values(result, 'n')).toEqual(['1']);
   });
 });
