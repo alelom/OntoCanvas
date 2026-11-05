@@ -397,7 +397,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
     searchInput.addEventListener('input', () => filter.schedule());
 
-    const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader }) : null;
+    const dataBlock = deps.dataSources && deps.dataLoader ? createDataBlock({ sources: deps.dataSources, loader: deps.dataLoader, getLabelStores: deps.getStores }) : null;
     container.append(note, originLine, ...(dataBlock ? [dataBlock] : []), drawnLine, controls, empty, detail);
     drawn = true;
     refresh();

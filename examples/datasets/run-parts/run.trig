@@ -1,0 +1,165 @@
+@prefix : <http://example.org/examples/run-parts#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+
+<http://example.org/examples/run-parts/batch/1> {
+:sensor1 a :Sensor;
+    rdfs:label "Sensor 1".
+:sensor2 a :Sensor;
+    rdfs:label "Sensor 2".
+:sensor3 a :Sensor;
+    rdfs:label "Sensor 3".
+:reading1 a :Reading;
+    rdfs:label "Reading 1";
+    :madeBy :sensor1;
+    :value 18.7;
+    :next :reading2.
+:reading2 a :Reading;
+    rdfs:label "Reading 2";
+    :madeBy :sensor2;
+    :value 19.4;
+    :next :reading3.
+:reading3 a :Reading;
+    rdfs:label "Reading 3";
+    :madeBy :sensor3;
+    :value 20.1;
+    :next :reading4.
+:reading4 a :Reading;
+    rdfs:label "Reading 4";
+    :madeBy :sensor1;
+    :value 20.8;
+    :next :reading5.
+:reading5 a :Reading;
+    rdfs:label "Reading 5";
+    :madeBy :sensor2;
+    :value 21.5;
+    :next :reading6.
+:reading6 a :Reading;
+    rdfs:label "Reading 6";
+    :madeBy :sensor3;
+    :value 22.2;
+    :next :reading7.
+:reading7 a :Reading;
+    rdfs:label "Reading 7";
+    :madeBy :sensor1;
+    :value 22.9;
+    :next :reading8.
+:reading8 a :Reading;
+    rdfs:label "Reading 8";
+    :madeBy :sensor2;
+    :value 18.6;
+    :next :reading9.
+:reading9 a :Reading;
+    rdfs:label "Reading 9";
+    :madeBy :sensor3;
+    :value 19.3;
+    :next :reading10.
+:reading10 a :Reading;
+    rdfs:label "Reading 10";
+    :madeBy :sensor1;
+    :value 20.0;
+    :next :reading11.
+:reading11 a :Reading;
+    rdfs:label "Reading 11";
+    :madeBy :sensor2;
+    :value 20.7;
+    :next :reading12.
+:reading12 a :Reading;
+    rdfs:label "Reading 12";
+    :madeBy :sensor3;
+    :value 21.4;
+    :next :reading13.
+:reading13 a :Reading;
+    rdfs:label "Reading 13";
+    :madeBy :sensor1;
+    :value 22.1;
+    :next :reading14.
+:reading14 a :Reading;
+    rdfs:label "Reading 14";
+    :madeBy :sensor2;
+    :value 22.8;
+    :next :reading15.
+:reading15 a :Reading;
+    rdfs:label "Reading 15";
+    :madeBy :sensor3;
+    :value 18.5;
+    :next :reading16.
+<http://example.org/examples/run-parts/batch/1> rdfs:label "Batch 1"
+}
+<http://example.org/examples/run-parts/batch/2> {
+:reading16 a :Reading;
+    rdfs:label "Reading 16";
+    :madeBy :sensor1;
+    :value 19.2;
+    :next :reading17.
+:reading17 a :Reading;
+    rdfs:label "Reading 17";
+    :madeBy :sensor2;
+    :value 19.9;
+    :next :reading18.
+:reading18 a :Reading;
+    rdfs:label "Reading 18";
+    :madeBy :sensor3;
+    :value 20.6;
+    :next :reading19.
+:reading19 a :Reading;
+    rdfs:label "Reading 19";
+    :madeBy :sensor1;
+    :value 21.3;
+    :next :reading20.
+:reading20 a :Reading;
+    rdfs:label "Reading 20";
+    :madeBy :sensor2;
+    :value 22.0;
+    :next :reading21.
+:reading21 a :Reading;
+    rdfs:label "Reading 21";
+    :madeBy :sensor3;
+    :value 22.7;
+    :next :reading22.
+:reading22 a :Reading;
+    rdfs:label "Reading 22";
+    :madeBy :sensor1;
+    :value 18.4;
+    :next :reading23.
+:reading23 a :Reading;
+    rdfs:label "Reading 23";
+    :madeBy :sensor2;
+    :value 19.1;
+    :next :reading24.
+:reading24 a :Reading;
+    rdfs:label "Reading 24";
+    :madeBy :sensor3;
+    :value 19.8;
+    :next :reading25.
+:reading25 a :Reading;
+    rdfs:label "Reading 25";
+    :madeBy :sensor1;
+    :value 20.5;
+    :next :reading26.
+:reading26 a :Reading;
+    rdfs:label "Reading 26";
+    :madeBy :sensor2;
+    :value 21.2;
+    :next :reading27.
+:reading27 a :Reading;
+    rdfs:label "Reading 27";
+    :madeBy :sensor3;
+    :value 21.9;
+    :next :reading28.
+:reading28 a :Reading;
+    rdfs:label "Reading 28";
+    :madeBy :sensor1;
+    :value 22.6;
+    :next :reading29.
+:reading29 a :Reading;
+    rdfs:label "Reading 29";
+    :madeBy :sensor2;
+    :value 18.3;
+    :next :reading30.
+:reading30 a :Reading;
+    rdfs:label "Reading 30";
+    :madeBy :sensor3;
+    :value 19.0.
+<http://example.org/examples/run-parts/batch/2> rdfs:label "Batch 2"
+}

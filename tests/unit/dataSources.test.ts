@@ -398,3 +398,55 @@ describe('addUrl', () => {
     await expect(sources.addUrl('file:///etc/passwd', { fetch: vi.fn() as never })).rejects.toThrow(/http/i);
   });
 });
+
+describe('named graphs (#224)', () => {
+  const nq = (...rows: Array<[string, string]>) =>
+    rows.map(([s, g]) => `<http://example.org/${s}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Thing> <http://example.org/${g}> .`).join('\n') + '\n';
+
+  it('lists the graphs of all the sources, and hides one from the visible stores only (queries keep every graph)', async () => {
+    const sources = createDataSources();
+    await sources.addText('a.nq', nq(['a', 'g1'], ['b', 'g2']), { path: 'a.nq' });
+    await sources.addText('b.nq', nq(['c', 'g2']), { path: 'b.nq' });
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    expect(sources.graphs().map((g) => [g.key, g.quads])).toEqual([['http://example.org/g1', 1], ['http://example.org/g2', 2]]);
+    sources.setGraphHidden('http://example.org/g2', true);
+
+    expect(sources.isGraphHidden('http://example.org/g2')).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(sources.visibleStores().reduce((n, s) => n + s.size, 0)).toBe(1);
+    expect(sources.stores().reduce((n, s) => n + s.size, 0)).toBe(3);
+    // Still listed, so it can be shown again.
+    expect(sources.graphs()).toHaveLength(2);
+
+    sources.setGraphHidden('http://example.org/g2', false);
+    expect(sources.visibleStores()).toEqual(sources.stores());
+  });
+
+  it('does not tell the listeners when a graph is set to what it already is', async () => {
+    const sources = createDataSources();
+    await sources.addText('a.nq', nq(['a', 'g1']), { path: 'a.nq' });
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    sources.setGraphHidden('http://example.org/g1', false);
+
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('forgets a hidden graph once no source holds it, and all of them on clear', async () => {
+    const sources = createDataSources();
+    const a = await sources.addText('a.nq', nq(['a', 'g1']), { path: 'a.nq' });
+    await sources.addText('b.nq', nq(['b', 'g2']), { path: 'b.nq' });
+    sources.setGraphHidden('http://example.org/g1', true);
+    sources.setGraphHidden('http://example.org/g2', true);
+
+    sources.remove(a.id);
+    expect(sources.isGraphHidden('http://example.org/g1')).toBe(false);
+    expect(sources.isGraphHidden('http://example.org/g2')).toBe(true);
+
+    sources.clear();
+    expect(sources.isGraphHidden('http://example.org/g2')).toBe(false);
+  });
+});

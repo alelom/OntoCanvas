@@ -339,3 +339,49 @@ describe('runQuery', () => {
     });
   });
 });
+
+describe('runQuery over named graphs (#224)', () => {
+  const NQ =
+    '<http://example.org/a> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Thing> <http://example.org/g1> .\n' +
+    '<http://example.org/b> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Thing> <http://example.org/g2> .\n';
+  const data = () => new Store(new Parser({ format: 'N-Quads' }).parse(NQ));
+  const values = (result: Awaited<ReturnType<typeof runQuery>>, name: string) =>
+    result.kind === 'bindings' ? result.rows.map((row) => row[name]?.value).sort() : [];
+
+  it('sees the statements of every named graph in a query without GRAPH: the default graph is their union', async () => {
+    const result = await runQuery([storeFromTurtle(':Thing a owl:Class .'), data()], PREFIXES + 'SELECT ?s WHERE { ?s a :Thing }');
+
+    expect(values(result, 's')).toEqual(['http://example.org/a', 'http://example.org/b']);
+  });
+
+  it('names the graph of each statement with GRAPH ?g', async () => {
+    const result = await runQuery([data()], PREFIXES + 'SELECT ?s ?g WHERE { GRAPH ?g { ?s a :Thing } }');
+
+    expect(values(result, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
+  });
+
+  it('counts a triple stated in two graphs once in a query without GRAPH, as the merge the spec defines (#237 review)', async () => {
+    const twice = new Store(
+      new Parser({ format: 'N-Quads' }).parse(
+        '<http://example.org/s1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Sensor> <http://example.org/g1> .\n' +
+          '<http://example.org/s1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Sensor> <http://example.org/g2> .\n'
+      )
+    );
+
+    const result = await runQuery([twice], PREFIXES + 'SELECT (COUNT(*) AS ?n) WHERE { ?s a :Sensor }');
+
+    expect(values(result, 'n')).toEqual(['1']);
+  });
+
+  it('gives GRAPH ?g the named graphs only, not the default graph (the ontology), as the spec says (#237 review)', async () => {
+    const result = await runQuery([storeFromTurtle(':Thing a owl:Class .'), data()], PREFIXES + 'SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }');
+
+    expect(values(result, 'g')).toEqual(['http://example.org/g1', 'http://example.org/g2']);
+  });
+
+  it('counts a triple stated in two stores once, as one merged default graph', async () => {
+    const result = await runQuery([storeFromTurtle(':s1 a :Sensor .'), storeFromTurtle(':s1 a :Sensor .')], PREFIXES + 'SELECT (COUNT(*) AS ?n) WHERE { ?s a :Sensor }');
+
+    expect(values(result, 'n')).toEqual(['1']);
+  });
+});

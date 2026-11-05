@@ -61,9 +61,10 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   }
 
   const host = createSidePanelHost(root);
+  // What the Individuals tab and the toolbar count show: the data without its hidden graphs (#224). Queries keep every graph.
   const stores = () => {
     const store = deps.getStore();
-    return store ? [store, ...(deps.dataSources?.stores() ?? [])] : [];
+    return store ? [store, ...(deps.dataSources?.visibleStores() ?? [])] : [];
   };
   // The reading of added data is the loader's, apart from any tab: the Individuals tab shows it beside the controls to add
   // data, and the Query tab shows it when an address (?data=) loads files while that is the tab shown (#211).

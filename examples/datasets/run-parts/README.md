@@ -1,7 +1,7 @@
 # A run in numbered parts
 
 The data of a batch process run as it is often produced: **numbered parts of gzip-compressed N-Quads**, one **named graph per
-batch** (issues #221, #222, #223). Open `vocabulary.ttl` as the ontology and add the parts as data. Its header says what you
+batch** (issues #221, #222, #223, #224). Open `vocabulary.ttl` as the ontology and add the parts as data. Its header says what you
 should see.
 
 | File | What it is |
@@ -10,6 +10,7 @@ should see.
 | `part-0001.nq.gz` | Batch 1: three sensors and readings 1 to 15 (81 triples), in graph `batch/1` |
 | `part-0002.nq.gz` | Batch 2: readings 16 to 30 (74 triples), in graph `batch/2` |
 | `part-0001.nq` | `part-0001.nq.gz` uncompressed, to compare: adding it gives the same individuals |
+| `run.trig` | Both batches in one TriG file, each graph labelled "Batch 1" / "Batch 2": the Individuals tab lists them, and unticking one leaves its individuals out (#224) |
 
 ## Try it
 

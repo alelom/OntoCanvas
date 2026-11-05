@@ -12,6 +12,7 @@
 import { DataFactory, type Store, type Quad, type Term } from 'n3';
 import type * as RDF from '@rdfjs/types';
 import { readCapped, whenStopped } from './readCapped';
+import { unionSource } from './unionSource';
 
 /** A term, or a quoted triple (RDF-star). */
 export type StoreTerm = Term | Quad;
@@ -117,7 +118,8 @@ export async function runQuery(stores: Store[], query: string, options: RunOptio
 async function execute(stores: Store[], query: string, limit: number, signal: AbortSignal | undefined): Promise<QueryResult> {
   const prepared = await prepare(query, limit);
   const engine = await getEngine();
-  const result = await engine.query(prepared, { sources: stores as [Store, ...Store[]] });
+  // One source over all the stores, whose default graph is the merge of every graph (#224): see unionSource.
+  const result = await engine.query(prepared, { sources: [unionSource(stores, DataFactory as unknown as RDF.DataFactory)] });
 
   switch (result.resultType) {
     case 'bindings': {

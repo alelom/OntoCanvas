@@ -11,7 +11,13 @@
 #   - picking several files shows one progress line, "Adding 2 of 2: part-0002.nq.gz…"
 #   - Reading 15 (the last of part 1) points to Reading 16 (the first of part 2): with part-0001.nq.gz alone, Reading 15 points
 #     to a reading the data does not describe; with part-0002.nq.gz alone, the readings are made by sensors it does not describe
-# Each part is one batch in a named graph of its own (batch/1, batch/2): listing and filtering the graphs is #224.
+# Each part is one batch in a named graph of its own (batch/1, batch/2), and run.trig holds both batches in one file, each graph
+# with a label (issue #224). Expected with run.trig added (or both parts):
+#   - under the sources, "Graphs" lists Batch 1 (82 quads) and Batch 2 (75 quads) with run.trig, or the two graph IRIs (81 and
+#     74 quads) with the parts, which state no label; each has a ticked checkbox
+#   - untick Batch 2: the list and the toolbar say 18 individuals (Reading 15, Sensor 3), and its readings are no longer drawn
+#   - queries still see both: in the Query tab, SELECT ?g (COUNT(*) AS ?n) WHERE { GRAPH ?g { ?s ?p ?o } } GROUP BY ?g gives
+#     both graphs, and a query without GRAPH sees the statements of both
 @prefix : <http://example.org/examples/run-parts#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .

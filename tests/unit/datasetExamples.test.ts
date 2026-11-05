@@ -60,6 +60,25 @@ describe('run-parts', () => {
     expect(part2.getQuads(`${NS}sensor1`, null, null, null)).toHaveLength(0);
   });
 
+  it('run.trig: both batches in one file, its graphs listed by label with their quads; hiding Batch 2 leaves 18 individuals (#224)', async () => {
+    const sources = await add('run.trig');
+
+    expect(sources.graphs().map((g) => [g.label, g.quads])).toEqual([['Batch 1', 82], ['Batch 2', 75]]);
+    sources.setGraphHidden('http://example.org/examples/run-parts/batch/2', true);
+    const visible = sources.visibleStores();
+    expect(new Set(visible.flatMap((s) => [...individualsOf(s)])).size).toBe(18);
+    expect([typed(visible, 'Sensor'), typed(visible, 'Reading')]).toEqual([3, 15]);
+  });
+
+  it('the two parts: their graphs listed by IRI, 81 and 74 quads, as they state no label (#224)', async () => {
+    const sources = await add('part-0001.nq.gz', 'part-0002.nq.gz');
+
+    expect(sources.graphs().map((g) => [g.iri, g.label, g.quads])).toEqual([
+      ['http://example.org/examples/run-parts/batch/1', null, 81],
+      ['http://example.org/examples/run-parts/batch/2', null, 74],
+    ]);
+  });
+
   it('keeps each part in a named graph of its own, one per batch', async () => {
     const [part1, part2] = (await add('part-0001.nq.gz', 'part-0002.nq.gz')).stores();
 

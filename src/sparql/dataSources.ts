@@ -7,6 +7,7 @@
  */
 import type { Store } from 'n3';
 import { parseIntoStoreInSlices, type SlicedParseOptions } from '../rdf/parseIntoStore';
+import { filterGraphs, listGraphs, type DataGraph } from './dataGraphs';
 import { DataTooLargeError, isGzipName, GZIP_ESTIMATE_RATIO, nameWithoutGz, readAsText } from './readDataBytes';
 
 export const DATA_LOAD_LIMIT_BYTES = 2 * 1024 * 1024;
@@ -82,8 +83,14 @@ export interface AddUrlOptions extends AddDataOptions {
 
 export interface DataSources {
   list(): DataSource[];
-  /** The stores queries run over together with the ontology's. */
+  /** The stores queries run over together with the ontology's: every graph. */
   stores(): Store[];
+  /** The stores without the hidden graphs (#224): what the Individuals tab and the graph show. */
+  visibleStores(): Store[];
+  /** The named graphs of the data, across the sources (#224). `labelStores`: where else a graph's label may be stated. */
+  graphs(labelStores?: Store[]): DataGraph[];
+  isGraphHidden(key: string): boolean;
+  setGraphHidden(key: string, hidden: boolean): void;
   addText(name: string, content: string, options?: AddDataOptions): Promise<DataSource>;
   /** The size of a file is known before it is read: a file above the limit is refused unread, a large one is asked about first. */
   addFile(file: DataFile, options?: AddDataOptions): Promise<DataSource>;
@@ -110,10 +117,27 @@ export function createDataSources(): DataSources {
   let nextId = 1;
   const listeners: Array<() => void> = [];
   const changed = () => listeners.forEach((listener) => listener());
+  /** The keys of the hidden graphs (#224). */
+  let hidden = new Set<string>();
+  /** A hidden graph that no source holds any more is forgotten, so a later source with it is shown. */
+  const forgetGoneGraphs = () => {
+    const held = new Set(listGraphs(sources.map((s) => s.store)).map((g) => g.key));
+    hidden = new Set([...hidden].filter((key) => held.has(key)));
+  };
 
   const self: DataSources = {
     list: () => [...sources],
     stores: () => sources.map((s) => s.store),
+    visibleStores: () => sources.map((s) => filterGraphs(s.store, hidden)),
+    graphs: (labelStores = []) => listGraphs(sources.map((s) => s.store), labelStores),
+    isGraphHidden: (key) => hidden.has(key),
+    setGraphHidden(key, hide) {
+      if (hidden.has(key) === hide) return;
+      hidden = new Set(hidden);
+      if (hide) hidden.add(key);
+      else hidden.delete(key);
+      changed();
+    },
     async addText(name, content, options = {}) {
       const bytes = options.byteLength ?? content.length;
       const { tier, message } = classifyDataSize(bytes);
@@ -202,11 +226,13 @@ export function createDataSources(): DataSources {
       const next = sources.filter((s) => s.id !== id);
       if (next.length === sources.length) return;
       sources = next;
+      forgetGoneGraphs();
       changed();
     },
     clear() {
       if (!sources.length) return;
       sources = [];
+      hidden = new Set();
       changed();
     },
     onChange: (listener) => void listeners.push(listener),

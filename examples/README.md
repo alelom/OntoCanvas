@@ -90,7 +90,7 @@ Data as batch processes produce it, one folder per dataset, with a README of its
 
 | Example (opens in OntoCanvas) | Shows | Issue | Source |
 |---|---|---|---|
-| [run-parts](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fvocabulary.ttl&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fpart-0001.nq.gz&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fpart-0002.nq.gz) | A run in two numbered parts of gzip-compressed N-Quads, one named graph per batch: decompressed in the browser, added several at once or by drag and drop | #222, #223 | [folder](datasets/run-parts/) |
+| [run-parts](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fvocabulary.ttl&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fpart-0001.nq.gz&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-parts%2Fpart-0002.nq.gz) | A run in two numbered parts of gzip-compressed N-Quads, one named graph per batch: decompressed in the browser, added several at once or by drag and drop; the graphs listed in the Individuals tab with a checkbox each, and seen by queries (`run.trig` has both batches in one file) | #222, #223, #224 | [folder](datasets/run-parts/) |
 
 ## Term URIs
 
