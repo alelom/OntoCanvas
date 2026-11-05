@@ -102,6 +102,21 @@ describe('addFile', () => {
     expect(sources.list().map((s) => s.name)).toEqual(['a.ttl']);
   });
 
+  it('says why files added while a read runs are not taken, beside the progress, until that read ends (#233 review)', async () => {
+    const data = loader();
+
+    const first = data.addFile(file('a.ttl', ttl(20000)));
+    await vi.waitFor(() => expect(data.loading()).toBe(true));
+    await data.addFiles([file('b.ttl', ttl(2)), file('c.ttl', ttl(2))]);
+
+    expect(data.status()).toMatch(/^Loading a\.ttl….*Wait for this read to finish, or Cancel it, to add more\.$/);
+    // The progress goes on with the note beside it.
+    await vi.waitFor(() => expect(data.status()).toMatch(/[\d,]+ triples.*Wait for this read/));
+    await first;
+    expect(data.status()).toBe('');
+    expect(sources.list().map((s) => s.name)).toEqual(['a.ttl']);
+  });
+
   it('does nothing about cancel when nothing is loading', () => {
     const data = loader();
 
@@ -282,6 +297,18 @@ describe('addUrls', () => {
     vi.stubGlobal('fetch', fetchFn);
     return fetchFn;
   }
+
+  it('gives each address what is left of the limit after those before it, as for a selection of files (#233 review)', async () => {
+    serve({ 'https://example.org/a.ttl': ttl(2), 'https://example.org/b.ttl': ttl(3) });
+    const addUrl = vi.spyOn(sources, 'addUrl');
+    const data = loader();
+
+    await data.addUrls(['https://example.org/a.ttl', 'https://example.org/b.ttl']);
+
+    const [first, second] = addUrl.mock.calls.map((call) => call[1]!.limitBytes!);
+    expect(first).toBe(10 * MB);
+    expect(second).toBe(10 * MB - sources.list()[0].bytes);
+  });
 
   it('adds each URL, in order', async () => {
     const fetchFn = serve({ 'https://example.org/a.ttl': ttl(2), 'https://example.org/b.ttl': ttl(3) });

@@ -4,7 +4,8 @@
  * (?data=<url>) loaded the files and no other tab was drawn. No DOM.
  *
  * Several files are added as one selection (#222): one progress line, one question about their total size, and Cancel stops
- * the rest. The total is judged as for one file, and each file may hold only what is left of the limit after those before it.
+ * the rest. The total is judged as for one file, and each file may hold only what is left of the limit after those before it;
+ * the addresses of ?data= share the limit the same way.
  */
 import type { Store } from 'n3';
 import {
@@ -72,6 +73,10 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
   let controller: AbortController | null = null;
   /** Counts the resets: a read that began before one has nothing left to say. */
   let generation = 0;
+  /** Said beside the progress once files were added while a read ran, which are not taken (a drop has no disabled state). */
+  let busyNote = '';
+  /** What the running read last said, without the note. */
+  let progressText = '';
 
   const set = (next: string): void => {
     status = next;
@@ -83,7 +88,11 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
    * Returns what is left in the status.
    */
   async function load(label: string, work: (read: Read) => Promise<string>): Promise<string> {
-    if (controller) return '';
+    if (controller) {
+      busyNote = ' Wait for this read to finish, or Cancel it, to add more.';
+      set(progressText + busyNote);
+      return '';
+    }
     if (!getStore()) {
       set('Open an ontology first: the data is added to it.');
       return status;
@@ -91,6 +100,8 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     const mine = new AbortController();
     const began = generation;
     controller = mine;
+    busyNote = '';
+    progressText = label;
     set(label);
     // What this read leaves in the status: kept apart from the shared one, which a reset or a later read may have changed.
     let outcome = '';
@@ -98,13 +109,18 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       outcome = await work({
         signal: mine.signal,
         progress: (what, triples) => {
-          if (began === generation) set(triples === undefined ? what : `${what} ${triples.toLocaleString('en')} triples`);
+          if (began !== generation) return;
+          progressText = triples === undefined ? what : `${what} ${triples.toLocaleString('en')} triples`;
+          set(progressText + busyNote);
         },
       });
     } catch (error) {
       outcome = describeFailure(error, mine.signal);
     } finally {
-      if (controller === mine) controller = null;
+      if (controller === mine) {
+        controller = null;
+        busyNote = '';
+      }
     }
     if (began !== generation) {
       // Reset while it ran: its status was cleared then, and the tabs only need to see that it is no longer loading.
@@ -115,9 +131,11 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     return outcome;
   }
 
-  const loadUrl = (url: string): Promise<string> =>
+  /** `limitBytes`: what is left of the limit after the addresses before it, for a list of them (as for a selection of files). */
+  const loadUrl = (url: string, limitBytes = DATA_REFUSE_LIMIT_BYTES, added?: (bytes: number) => void): Promise<string> =>
     load(`Loading ${url}…`, async ({ signal, progress }) => {
-      await sources.addUrl(url, { signal, confirm: ask, onProgress: (triples) => progress(`Loading ${url}…`, triples) });
+      const source = await sources.addUrl(url, { signal, confirm: ask, limitBytes, onProgress: (triples) => progress(`Loading ${url}…`, triples) });
+      added?.(source.bytes);
       return '';
     });
 
@@ -156,8 +174,9 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     addUrl: async (url) => void (await loadUrl(url)),
     async addUrls(urls) {
       const failures: string[] = [];
+      let budget = DATA_REFUSE_LIMIT_BYTES;
       for (const url of urls) {
-        const left = await loadUrl(url);
+        const left = await loadUrl(url, budget, (bytes) => (budget -= bytes));
         if (left) failures.push(`${url}: ${left}`);
       }
       set(failures.join('  '));
@@ -165,6 +184,7 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     cancel: () => controller?.abort(),
     reset() {
       generation++;
+      busyNote = '';
       const reading = controller;
       controller = null;
       reading?.abort();
