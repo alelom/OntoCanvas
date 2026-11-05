@@ -2,12 +2,13 @@
  * Writes the data of examples/datasets/run-parts (#221, #222, #223): a run of a batch process split into two numbered parts of
  * N-Quads, one named graph per batch, each part also gzip-compressed. The ontology, vocabulary.ttl, is written by hand.
  *
- *   node scripts/makeRunPartsExample.mjs            the two parts, plain and compressed, as committed
+ *   node scripts/makeRunPartsExample.mjs            the two parts, plain and compressed, and run.trig, as committed
  *   node scripts/makeRunPartsExample.mjs --large       also part-0003.nq.gz (not committed): adding it asks first, then loads
  *   node scripts/makeRunPartsExample.mjs --too-large   also part-0004.nq.gz (not committed): asks, then stops at the limit
  */
 import { writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
+import { Parser, Writer } from 'n3';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,7 +55,17 @@ function write(name, lines) {
 // Part 1: batch 1, the sensors and readings 1 to 15. Part 2: batch 2, readings 16 to 30; the last points to no reading.
 const part1 = write('part-0001.nq', [...sensors(batch(1)), ...readings(1, 15, batch(1))]);
 writeFileSync(join(dir, 'part-0001.nq'), part1);
-write('part-0002.nq', readings(16, 30, batch(2)).filter((line) => !line.includes(`${NS}reading31>`)));
+const part2 = write('part-0002.nq', readings(16, 30, batch(2)).filter((line) => !line.includes(`${NS}reading31>`)));
+
+// The whole run in one TriG file (#224): both batches, each graph with a label stated inside it.
+const graphLabel = (n) => `${batch(n)} <${LABEL}> ${literal(`Batch ${n}`)} ${batch(n)} .`;
+const quads = new Parser({ format: 'N-Quads' }).parse([part1, graphLabel(1), part2, graphLabel(2)].join('\n'));
+const writer = new Writer({ format: 'application/trig', prefixes: { '': NS, rdfs: 'http://www.w3.org/2000/01/rdf-schema#', xsd: 'http://www.w3.org/2001/XMLSchema#' } });
+writer.addQuads(quads);
+writer.end((error, trig) => {
+  if (error) throw error;
+  writeFileSync(join(dir, 'run.trig'), trig);
+});
 
 // Not committed, to try the size checks. Each estimate (20 times the compressed size) is over the 2 MB at which adding asks.
 if (process.argv.includes('--large')) {

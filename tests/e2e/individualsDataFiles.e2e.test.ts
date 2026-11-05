@@ -61,6 +61,19 @@ describe('adding data files: several, dropped, compressed', () => {
     expect(await page.locator('[data-data-status]').innerText()).toBe('');
   });
 
+  it('lists the named graphs of the data by label, and unticking one leaves its individuals out of the list and the count (#224)', async () => {
+    await removeAll();
+    await page.setInputFiles('[data-add-file-input]', join(DIR, 'run.trig'));
+    await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (33)');
+
+    expect(await page.locator('[data-data-graph]').allInnerTexts()).toEqual(['Batch 1 — 82 quads', 'Batch 2 — 75 quads']);
+    await page.locator('[data-data-graph]', { hasText: 'Batch 2' }).locator('input').uncheck();
+
+    await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (18)');
+    expect(await page.locator('[data-individuals-group-toggle] .individuals-group-title').allTextContents()).toEqual(['Reading (15)', 'Sensor (3)']);
+    expect(await page.locator('[data-data-graph]', { hasText: 'Batch 2' }).locator('input').isChecked()).toBe(false);
+  });
+
   it('adds a file dropped on the graph while the Individuals tab is open, outlining the graph while it is over it', async () => {
     await removeAll();
     const bytes = [...readFileSync(PART(2))];
