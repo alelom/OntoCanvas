@@ -26,7 +26,10 @@ import { attachEditorTestHook } from './e2e/editorTestHook';
 import {
   showOpenOntologyModal,
   hideOpenOntologyModal,
+  setOnExploreDataFiles,
 } from './ui/openOntologyModal';
+import { exploreDataFiles } from './workflows/exploreDataFiles';
+import { showWarningBar } from './ui/warningBar';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 
@@ -167,6 +170,14 @@ if (isEmbedded()) {
   if (openBtn) openBtn.style.display = '';
 }
 setupEventListeners();
+// Data files with no ontology to open first (#234): an empty workspace ontology, then the files as data.
+setOnExploreDataFiles((files) =>
+  void exploreDataFiles(files, {
+    openOntology: (ttl, name) => loadTtlAndRender(ttl, name, null),
+    showNote: showWarningBar,
+    addDataFiles: async (added) => session.sidePanel?.addDataFiles(added),
+  })
+);
 // Update serializer dropdown after DOM is ready (in case it was rendered)
 if (isDebugMode()) {
   setTimeout(() => updateSerializerDropdown(), 0);

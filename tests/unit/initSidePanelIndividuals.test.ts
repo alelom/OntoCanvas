@@ -317,3 +317,16 @@ describe('hiding a named graph of the data (#224)', () => {
     expect(toolbarButton().textContent).toBe('Individuals (2)');
   });
 });
+
+describe('addDataFiles (#234)', () => {
+  it('opens the Individuals tab and adds the files as one selection', async () => {
+    const { dataSources, panel } = mount();
+    const file = (name: string, turtle: string) => ({ name, size: turtle.length, text: async () => PREFIXES + turtle });
+
+    await panel.addDataFiles([file('a.ttl', ':a a :Room .'), file('b.ttl', ':b a :Room .')]);
+
+    expect(dataSources.list().map((s) => s.name)).toEqual(['a.ttl', 'b.ttl']);
+    expect(tabButton()!.getAttribute('aria-selected')).toBe('true');
+    expect(options()).toEqual([':Room (3)']);
+  });
+});

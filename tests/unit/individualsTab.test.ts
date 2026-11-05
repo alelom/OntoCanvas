@@ -61,6 +61,14 @@ describe('the groups', () => {
     expect(groupTitles()).toEqual([':Wall (2)', 'Chamber (1)']);
   });
 
+  it('names a type by its local name, with the IRI as its tooltip, when no prefix applies, as for data opened with no ontology (#234)', () => {
+    stores = [store(':Room a owl:Class .'), new Store(new Parser().parse('<http://other.example/run#r1> a <http://other.example/run#Reading> .'))];
+    mount();
+
+    expect(groupTitles()).toEqual(['Reading (1)']);
+    expect(toggles()[0].querySelector('.individuals-group-title')!.getAttribute('title')).toBe('http://other.example/run#Reading');
+  });
+
   it('has a row for the individuals that have no class, last', () => {
     stores = [...stores, store(':loose a owl:NamedIndividual .')];
     mount();

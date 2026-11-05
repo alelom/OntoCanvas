@@ -7,6 +7,7 @@
 import { DataFactory, type Store } from 'n3';
 import { countIndividuals, createIndividualIndex, NO_CLASS, type DescribedLink, type DescribedTerm, type IndividualDetail, type IndividualIndex } from '../../abox/individualIndex';
 import { formatTerm } from '../../sparql/formatTerm';
+import { extractLocalName } from '../../utils/localName';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
 import { debounced } from '../../utils/debounced';
 import type { DataSources } from '../../sparql/dataSources';
@@ -82,7 +83,13 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   const prefixes = () => withStandardPrefixes(deps.getPrefixes());
   const nameOf = (iri: string): string => formatTerm(DataFactory.namedNode(iri), prefixes()).text;
-  const classTitle = (iri: string): string => deps.getClassLabel?.(iri) ?? nameOf(iri);
+  /** A class's label in the graph, else its prefixed name, else its local name (no prefix applies, as for data opened with no ontology, #234). */
+  const classTitle = (iri: string): string => {
+    const label = deps.getClassLabel?.(iri);
+    if (label) return label;
+    const name = nameOf(iri);
+    return name.startsWith('<') ? extractLocalName(iri) || name : name;
+  };
 
   /** A button that selects a class or a property in the graph, when it is there; null otherwise (#216). */
   function schemaButton(iri: string, text: string, title: string): HTMLButtonElement | null {
@@ -169,7 +176,9 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     toggle.setAttribute('data-individuals-group-toggle', '');
     toggle.setAttribute('aria-expanded', String(open));
     toggle.title = open ? 'Hide the individuals of this type' : 'List the individuals of this type';
-    toggle.append(element('span', 'individuals-group-caret', open ? '▾' : '▸'), element('span', 'individuals-group-title', `${group === NO_CLASS ? 'No class' : classTitle(group)} (${count})`));
+    const title = element('span', 'individuals-group-title', `${group === NO_CLASS ? 'No class' : classTitle(group)} (${count})`);
+    if (group !== NO_CLASS) title.title = group;
+    toggle.append(element('span', 'individuals-group-caret', open ? '▾' : '▸'), title);
     toggle.addEventListener('click', () => {
       toggled.set(group, !open);
       renderList();

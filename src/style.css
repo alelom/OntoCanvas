@@ -828,6 +828,46 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 .query-data-status .query-status:empty {
   display: none;
 }
+/* "Explore data files…" on the start screen (#234): set apart from the ways to open an ontology. */
+.explore-data-start {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #ddd;
+}
+.explore-data-note {
+  margin: 0 0 8px;
+  color: #555;
+  font-size: 12px;
+}
+.explore-data-start button[data-explore-data] {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+/* The block while data files are dragged over it. */
+.explore-data-start.data-drop-active {
+  outline: 2px dashed #1a5fb4;
+  outline-offset: 4px;
+}
+/* A dataset added only in part (#225): soft when more parts may exist, strong when a part is known to be missing. */
+.query-data-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  padding: 4px 6px;
+  border: 1px solid #d5d9de;
+  background: #f6f8fa;
+}
+.query-data-parts.strong {
+  border-color: #e67e22;
+  background: #fdf2e3;
+}
+.query-data-parts[hidden] {
+  display: none;
+}
 /* The named graphs of the data, each with a checkbox (#224). */
 .query-data-graphs {
   margin-top: 4px;

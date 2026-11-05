@@ -13,7 +13,7 @@ import { attachDataDrop } from '../dataDrop';
 import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
-import type { DataSources } from '../../sparql/dataSources';
+import type { DataFile, DataSources } from '../../sparql/dataSources';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 
 export interface SidePanelDeps {
@@ -46,9 +46,11 @@ export interface SidePanel {
   addDataUrls(urls: string[]): Promise<void>;
   /** Opens the panel on the Individuals tab (#211). */
   openIndividuals(): void;
+  /** Opens the panel on the Individuals tab and adds the files as one selection (#234). */
+  addDataFiles(files: DataFile[]): Promise<void>;
 }
 
-const NO_PANEL: SidePanel = { refresh: () => {}, addDataUrls: async () => {}, openIndividuals: () => {} };
+const NO_PANEL: SidePanel = { refresh: () => {}, addDataUrls: async () => {}, openIndividuals: () => {}, addDataFiles: async () => {} };
 
 export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const root = document.getElementById('sidePanel');
@@ -151,5 +153,10 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       await dataLoader.addUrls(urls);
     },
     openIndividuals: () => host.open(individualsTab.id),
+    async addDataFiles(files) {
+      if (!files.length || !dataLoader) return;
+      host.open(individualsTab.id);
+      await dataLoader.addFiles(files);
+    },
   };
 }
