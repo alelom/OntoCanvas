@@ -9,10 +9,10 @@
 
 /**
  * How many times its compressed size a gzip of RDF is taken to be before it is read: for the question asked about a large file
- * only. Turtle compresses some five to ten times and N-Quads more, so this asks early rather than late; the read itself stops at
- * the limit, whatever the ratio turns out to be.
+ * only. Turtle compresses some five to ten times and N-Quads twenty or more (23 for examples/datasets/run-parts), so this asks
+ * early rather than late; the read itself stops at the limit, whatever the ratio turns out to be.
  */
-export const GZIP_ESTIMATE_RATIO = 10;
+export const GZIP_ESTIMATE_RATIO = 20;
 
 const GZ = /\.gz$/i;
 const GZ_BEFORE_QUERY = /\.gz(?=[?#]|$)/i;

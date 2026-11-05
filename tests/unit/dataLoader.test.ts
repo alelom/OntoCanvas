@@ -173,7 +173,7 @@ describe('addFiles (#222)', () => {
 
     await data.addFiles([file('part-0001.nq.gz', '', 0.2 * MB), file('part-0002.nq.gz', '', 0.2 * MB)]);
 
-    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/These 2 files are 0\.4 MB, some 4\.0 MB of data once decompressed \(an estimate\)/));
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/These 2 files are 0\.4 MB, some 8\.0 MB of data once decompressed \(an estimate\)/));
   });
 
   it('gives each file what is left of the limit after the files before it', async () => {

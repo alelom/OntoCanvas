@@ -223,7 +223,7 @@ describe('addFile, compressed (#223)', () => {
 
     await expect(sources.addFile(file, { confirm })).rejects.toThrow('Cancelled');
 
-    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/compressed file is 0\.5 MB, some 5\.0 MB of data once decompressed/));
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/compressed file is 0\.5 MB, some 10\.0 MB of data once decompressed/));
     expect(file.stream).not.toHaveBeenCalled();
   });
 
