@@ -63,8 +63,45 @@ describe('the pull request checks (test.yml)', () => {
   it('has one check, "Ready to merge", that waits for every other job and runs even when one failed', () => {
     const gate = wf.jobs['ready-to-merge'];
     expect(gate.name).toBe('Ready to merge');
-    expect(gate.if).toBe('always()');
+    expect(gate.if).toMatch(/^always\(\)/);
     expect(needsOf(gate).sort()).toEqual(Object.keys(wf.jobs).filter((j) => j !== 'ready-to-merge').sort());
+  });
+
+  describe('draft pull requests (#219)', () => {
+    const notDraft = "github.event_name != 'pull_request' || github.event.pull_request.draft == false";
+    const areaJobs = Object.entries(wf.jobs).filter(([id]) => id.startsWith('e2e-') && id !== 'e2e-select');
+
+    it('starts the checks again when a draft is marked ready for review (ready_for_review is not in the default types)', () => {
+      const types = (wf.on.pull_request as { types?: string[] } | null)?.types ?? [];
+      expect([...types].sort()).toEqual(['opened', 'ready_for_review', 'reopened', 'synchronize']);
+    });
+
+    it('skips the type-check and unit tests, and the selection of E2E areas, while the pull request is a draft', () => {
+      expect(wf.jobs['unit-tests'].if).toBe(notDraft);
+      expect(wf.jobs['e2e-select'].if).toBe(notDraft);
+    });
+
+    it('skips an E2E area with its selection: it needs the selection and has no status function that would run it anyway', () => {
+      expect(areaJobs.length).toBeGreaterThan(0);
+      for (const [id, job] of areaJobs) {
+        expect(needsOf(job), id).toEqual(['e2e-select']);
+        expect(job.if ?? '', id).not.toMatch(/always\(\)|failure\(\)|cancelled\(\)|success\(\)/);
+      }
+    });
+
+    it('does not show a green gate on a draft: "Ready to merge" is skipped with the draft, and still runs when a job failed', () => {
+      const gate = wf.jobs['ready-to-merge'];
+      expect(gate.if).toBe(`always() && (${notDraft})`);
+    });
+
+    it('keeps the public-repo hygiene check on drafts: it takes seconds, and a draft of a public repository is as public as any', () => {
+      expect(wf.jobs['hygiene'].if).toBeUndefined();
+    });
+
+    it('leaves a manual run and everything on main alone: they are not pull requests', () => {
+      expect(wf.on.workflow_dispatch).toBeDefined();
+      for (const file of ['main-verify.yml', 'release.yml', 'deploy.yml']) expect(JSON.stringify(workflows[file].on)).not.toContain('pull_request');
+    });
   });
 
   describe('the gate script', () => {
