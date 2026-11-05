@@ -1,3 +1,17 @@
+# [2.3.0](https://github.com/alelom/OntoCanvas/compare/v2.2.0...v2.3.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **individuals:** estimate compressed data at 20 times its size before asking, as N-Quads compresses 20 times or more ([#223](https://github.com/alelom/OntoCanvas/issues/223)) ([00d5159](https://github.com/alelom/OntoCanvas/commit/00d5159ff0ef2ad109b3f949a5edf51f64218925))
+* **individuals:** say why files added during a read are not taken, and let ?data= addresses share the limit ([#233](https://github.com/alelom/OntoCanvas/issues/233) review) ([ff1817f](https://github.com/alelom/OntoCanvas/commit/ff1817f3ee5518edbdb34f55d926f3bf58e48749))
+
+
+### Features
+
+* **individuals:** add several data files at once, and by drag and drop ([#222](https://github.com/alelom/OntoCanvas/issues/222)) ([0f93572](https://github.com/alelom/OntoCanvas/commit/0f93572f907b486a322b235a639fb180a196c3a7))
+* **individuals:** read gzip-compressed data files and addresses, with a size check on the decompressed data ([#223](https://github.com/alelom/OntoCanvas/issues/223)) ([19d607b](https://github.com/alelom/OntoCanvas/commit/19d607bf1f671231557f9f6d893a7ad49ef10cea))
+
 # [2.2.0](https://github.com/alelom/OntoCanvas/compare/v2.1.0...v2.2.0) (2026-11-03)
 
 
