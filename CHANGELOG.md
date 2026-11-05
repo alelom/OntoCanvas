@@ -1,3 +1,16 @@
+# [2.4.0](https://github.com/alelom/OntoCanvas/compare/v2.3.0...v2.4.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **sparql:** see the statements of named graphs in a query without GRAPH: the default graph is the union ([#224](https://github.com/alelom/OntoCanvas/issues/224)) ([7876dbe](https://github.com/alelom/OntoCanvas/commit/7876dbeab86609283c8d3883c19acdb4ad48a6d7))
+* **sparql:** the default graph is the merge of every graph, each triple once, and GRAPH ?g sees only named graphs ([#237](https://github.com/alelom/OntoCanvas/issues/237) review) ([f2e4cd2](https://github.com/alelom/OntoCanvas/commit/f2e4cd29008205951c1184b9c3306307060fedf5))
+
+
+### Features
+
+* **individuals:** list the named graphs of the data, with a checkbox that leaves a graph out of the list and the graph ([#224](https://github.com/alelom/OntoCanvas/issues/224)) ([602596f](https://github.com/alelom/OntoCanvas/commit/602596f1774e6320ea5af2883123f44dfd26da7b))
+
 # [2.3.0](https://github.com/alelom/OntoCanvas/compare/v2.2.0...v2.3.0) (2026-11-05)
 
 
