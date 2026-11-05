@@ -92,7 +92,7 @@ Run `npm run dev` (port 5173), then click a link to load the example:
   what a TTL file is anyway). A rendered page of a file that is not an example (a `.ts`, a `.md`) uses the head commit instead:
   `https://github.com/alelom/OntoCanvas/blob/<full sha>/<path>`.
 
-The PR number is only known once the PR exists: open the PR first, as a draft with the first commits (`gh pr create --draft`; see "Contribution workflow" in `AGENTS.md`), then put the links in
+The PR number is only known once the PR exists: open the PR first, as a draft with the first commits (`gh pr create --draft`; see the `pr-ready` skill for when it becomes ready), then put the links in
 (`gh pr edit <N> --body-file …`). The raw address must be URL-encoded inside `?onto=`. Generate the links rather than writing
 them by hand:
 
