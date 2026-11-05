@@ -45,7 +45,8 @@ OntoCanvas is a **personal open-source project on GitHub** ([alelom/OntoCanvas](
   checks the work for you before "ready": run the relevant unit tests and the E2E files the change touches locally first. Then
   `gh pr ready` starts the checks once, and **every later push to a ready PR runs them again**, so for another round of work turn
   the PR back into a draft (`gh pr ready --undo`) and mark it ready again when that is done. Do not mark a PR ready "to see what CI
-  says": that is what the local run is for.
+  says": that is what the local run is for. "Re-run all jobs" on a run that started while the PR was a draft still skips them (a
+  re-run reuses the original event, where the PR was a draft), so it proves nothing: mark the PR ready, or push, for a fresh run.
 - **A PR is mergeable when `Ready to merge` is green** (a draft runs none of the checks and cannot be merged). A ruleset on `main` requires that check (the type-check, the
   unit tests and the E2E areas the change touches). After the merge the whole unit and E2E suites run on `main` and
   gate the release and the deployment; a red `main` opens an issue labelled `main-red` (see `README.md`, Testing).
