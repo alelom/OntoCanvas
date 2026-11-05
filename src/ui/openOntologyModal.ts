@@ -1,5 +1,7 @@
 import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB, getRecentlyOpenedFromIndexedDB, type RecentlyOpenedEntry } from '../storage/lastOpened';
 import { EXAMPLE_ONTOLOGIES } from './exampleOntologies';
+import { attachDataDrop } from './dataDrop';
+import { createExploreDataStart } from './exploreDataStart';
 
 /**
  * Callback type for loading an ontology from a file.
@@ -32,6 +34,12 @@ let onLoadFromUrl: OnLoadFromUrlCallback | null = null;
 let onLoadLastOpenedFile: OnLoadLastOpenedFileCallback | null = null;
 let onLoadLastOpenedUrl: OnLoadLastOpenedUrlCallback | null = null;
 let onOpenRecentEntry: OnOpenRecentEntryCallback | null = null;
+let onExploreDataFiles: ((files: File[]) => void) | null = null;
+
+/** What "Explore data files…", or files dropped on the dialog, do (#234). */
+export function setOnExploreDataFiles(callback: (files: File[]) => void): void {
+  onExploreDataFiles = callback;
+}
 
 /**
  * Create a left-aligned row button matching the modal's "recent item" style.
@@ -238,8 +246,17 @@ export function initOpenOntologyModal(
     });
     const examplesSection = createCollapsibleSection('Example ontologies', examplesList);
 
+    // Data files with no ontology to open first (#234): picked, or dropped anywhere on the dialog.
+    const exploreData = (files: File[]) => {
+      if (!onExploreDataFiles) return;
+      hideModal();
+      onExploreDataFiles(files);
+    };
+    attachDataDrop(modalElement, { enabled: () => modalElement?.style.display !== 'none' && onExploreDataFiles !== null, onFiles: exploreData });
+
     modalContent.appendChild(title);
     modalContent.appendChild(buttonContainer);
+    modalContent.appendChild(createExploreDataStart(exploreData));
     modalContent.appendChild(recentSection);
     modalContent.appendChild(examplesSection);
     modalElement.appendChild(modalContent);
