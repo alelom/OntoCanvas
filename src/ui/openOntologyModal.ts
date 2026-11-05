@@ -1,6 +1,5 @@
 import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB, getRecentlyOpenedFromIndexedDB, type RecentlyOpenedEntry } from '../storage/lastOpened';
 import { EXAMPLE_ONTOLOGIES } from './exampleOntologies';
-import { attachDataDrop } from './dataDrop';
 import { createExploreDataStart } from './exploreDataStart';
 
 /**
@@ -36,7 +35,7 @@ let onLoadLastOpenedUrl: OnLoadLastOpenedUrlCallback | null = null;
 let onOpenRecentEntry: OnOpenRecentEntryCallback | null = null;
 let onExploreDataFiles: ((files: File[]) => void) | null = null;
 
-/** What "Explore data files…", or files dropped on the dialog, do (#234). */
+/** What "Explore data files…", or files dropped on its block, do (#234). */
 export function setOnExploreDataFiles(callback: (files: File[]) => void): void {
   onExploreDataFiles = callback;
 }
@@ -246,13 +245,12 @@ export function initOpenOntologyModal(
     });
     const examplesSection = createCollapsibleSection('Example ontologies', examplesList);
 
-    // Data files with no ontology to open first (#234): picked, or dropped anywhere on the dialog.
+    // Data files with no ontology to open first (#234): picked, or dropped on that block (not on the rest of the dialog).
     const exploreData = (files: File[]) => {
       if (!onExploreDataFiles) return;
       hideModal();
       onExploreDataFiles(files);
     };
-    attachDataDrop(modalElement, { enabled: () => modalElement?.style.display !== 'none' && onExploreDataFiles !== null, onFiles: exploreData });
 
     modalContent.appendChild(title);
     modalContent.appendChild(buttonContainer);

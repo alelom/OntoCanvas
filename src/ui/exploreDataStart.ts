@@ -1,8 +1,9 @@
 /**
  * "Explore data files…" on the start screen (#234): for data with no ontology to open first. The button picks several files
- * at once; the start screen also takes files dropped on it (see openOntologyModal). The files are added as data to an empty,
- * unsaved workspace ontology (src/workflows/exploreDataFiles.ts).
+ * at once, and the block takes files dropped on it. The files are added as data to an empty, unsaved workspace ontology
+ * (src/workflows/exploreDataFiles.ts).
  */
+import { attachDataDrop } from './dataDrop';
 
 /** The data formats the picker offers first; "All files" is still there for any other name. */
 export const DATA_FILE_ACCEPT = '.ttl,.nt,.nq,.trig,.jsonld,.rdf,.owl,.gz';
@@ -13,7 +14,7 @@ export function createExploreDataStart(onFiles: (files: File[]) => void): HTMLEl
 
   const note = document.createElement('p');
   note.className = 'explore-data-note';
-  note.textContent = 'No ontology to open? Explore data files on their own (or drop them here):';
+  note.textContent = 'No ontology to open? Explore data files on their own, or drop them on this box:';
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -34,6 +35,10 @@ export function createExploreDataStart(onFiles: (files: File[]) => void): HTMLEl
     input.value = '';
     if (files.length) onFiles(files);
   });
+
+  // Only this block takes a drop: the rest of the dialog is about opening an ontology, and an ontology dropped there must not
+  // become data in an empty workspace (#238 review).
+  attachDataDrop(block, { enabled: () => true, onFiles });
 
   block.append(note, button, input);
   return block;

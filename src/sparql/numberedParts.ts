@@ -19,14 +19,23 @@ export interface PartGroup {
 const OF_TOTAL = /^(.*?)(\d+)-of-(\d+)(\..*)?$/i;
 const PART = /^(.*?part)([-_.]?)(\d+)(\..*)?$/i;
 
+/** Above this a number is not a part number but a date or an id (`export-part-20240115`), and the gaps below it would be millions. */
+const MAX_PART_NUMBER = 100_000;
+/** Up to this many missing parts are listed by number; more are counted. */
+const MAX_LISTED = 20;
+
 const withoutGz = (name: string): string => name.replace(/\.gz$/i, '');
 
 function parse(fileName: string): { name: string; number: number; total: number | null } | null {
   const name = withoutGz(fileName);
   const of = OF_TOTAL.exec(name);
-  if (of) return { name: `${of[1]}N-of-${Number(of[3])}${of[4] ?? ''}`, number: Number(of[2]), total: Number(of[3]) };
+  if (of) {
+    const [number, total] = [Number(of[2]), Number(of[3])];
+    if (total > MAX_PART_NUMBER || number > total) return null;
+    return { name: `${of[1]}N-of-${total}${of[4] ?? ''}`, number, total };
+  }
   const part = PART.exec(name);
-  if (part) return { name: `${part[1]}${part[2]}N${part[4] ?? ''}`, number: Number(part[3]), total: null };
+  if (part && Number(part[3]) <= MAX_PART_NUMBER) return { name: `${part[1]}${part[2]}N${part[4] ?? ''}`, number: Number(part[3]), total: null };
   return null;
 }
 
@@ -56,12 +65,15 @@ const inWords = (numbers: number[]): string =>
 
 function sentence(group: PartGroup): { strong: boolean; text: string } | null {
   const { name, numbers, total, missing } = group;
-  const which = `${missing.length === 1 ? 'part' : 'parts'} ${inWords(missing)}`;
+  const last = numbers[numbers.length - 1];
+  const which =
+    missing.length > MAX_LISTED
+      ? `${missing.length} parts${total === null ? ` between ${missing[0] === 0 ? 0 : 1} and ${last}` : ''}`
+      : `${missing.length === 1 ? 'part' : 'parts'} ${inWords(missing)}`;
   if (total !== null) {
     if (!missing.length) return null;
     return { strong: true, text: `This looks like part of a dataset split into numbered parts (${name}): ${which} of ${total} ${missing.length === 1 ? 'is' : 'are'} missing. Add them.` };
   }
-  const last = numbers[numbers.length - 1];
   if (missing.length) {
     return { strong: true, text: `This looks like part of a dataset split into numbered parts (${name}): ${which}, and any after ${last}, may be missing. Add them, if they exist.` };
   }

@@ -35,6 +35,13 @@ describe('findPartGroups', () => {
     ]);
   });
 
+  it('does not take a large number for a part number: a date or an id after "part" (#238 review)', () => {
+    const started = performance.now();
+
+    expect(findPartGroups(['export-part-20240115.nq', 'x-1-of-4000000000.ttl', 'part-100001.nq'])).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
   it('finds nothing in names with no part number', () => {
     expect(findPartGroups(['people.ttl', 'data-2024.ttl', 'v2.nq'])).toEqual([]);
   });
@@ -63,6 +70,14 @@ describe('partsNotice', () => {
     expect(partsNotice(findPartGroups(['d-1-of-4.ttl', 'd-3-of-4.ttl']))!.text).toContain('parts 2 and 4 of 4 are missing');
     expect(partsNotice(findPartGroups(['d-1-of-2.ttl', 'd-2-of-2.ttl']))).toBeNull();
     expect(partsNotice([])).toBeNull();
+  });
+
+  it('counts the missing parts instead of listing them when there are many (#238 review)', () => {
+    const notice = partsNotice(findPartGroups(['part-1.nq', 'part-500.nq']))!;
+
+    expect(notice.text).toContain('498 parts between 1 and 500, and any after 500, may be missing');
+    expect(notice.text.length).toBeLessThan(300);
+    expect(partsNotice(findPartGroups(['d-1-of-90.ttl']))!.text).toContain('89 parts of 90 are missing');
   });
 
   it('lists several missing parts in words', () => {

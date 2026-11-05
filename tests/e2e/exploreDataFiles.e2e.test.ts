@@ -46,19 +46,34 @@ describe('starting from data files', () => {
     expect(await page.locator('[data-data-parts]').getAttribute('class')).not.toContain('strong');
   });
 
-  it('takes files dropped on the start screen the same way, and says which numbered part is missing (#225)', async () => {
+  it('takes files dropped on the "Explore data files" box the same way, and says which numbered part is missing (#225)', async () => {
     const transfer = await page.evaluateHandle((data) => {
       const dt = new DataTransfer();
       dt.items.add(new File([new Uint8Array(data)], 'part-0002.nq.gz'));
       return dt;
     }, [...readFileSync(PART(2))]);
 
-    await page.dispatchEvent('#openOntologyModal', 'dragover', { dataTransfer: transfer });
-    await page.dispatchEvent('#openOntologyModal', 'drop', { dataTransfer: transfer });
+    await page.dispatchEvent('#openOntologyModal .explore-data-start', 'dragover', { dataTransfer: transfer });
+    expect(await page.locator('#openOntologyModal .explore-data-start').getAttribute('class')).toContain('data-drop-active');
+    await page.dispatchEvent('#openOntologyModal .explore-data-start', 'drop', { dataTransfer: transfer });
 
     await page.waitForFunction(() => document.querySelectorAll('[data-data-list] li').length === 1);
     expect(await page.locator('[data-data-parts]').innerText()).toContain('part 1, and any after 2, may be missing');
     expect(await page.locator('[data-data-parts]').getAttribute('class')).toContain('strong');
+  });
+
+  it('does not take files dropped elsewhere on the dialog, which is for opening an ontology (#238 review)', async () => {
+    const transfer = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['@prefix : <http://example.org/o#> .'], 'ontology.ttl'));
+      return dt;
+    });
+
+    await page.dispatchEvent('#openOntologyModal h2', 'drop', { dataTransfer: transfer });
+
+    expect(await page.locator('#openOntologyModal').isVisible()).toBe(true);
+    expect(await page.evaluate(() => (window as any).__EDITOR_TEST__.getNodeIds?.().length ?? 0)).toBe(0);
+    expect(await page.locator('[data-data-list] li').count()).toBe(0);
   });
 
   it('clears the data when an ontology is opened afterwards', async () => {

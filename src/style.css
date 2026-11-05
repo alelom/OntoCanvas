@@ -845,8 +845,8 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   font-size: 14px;
   cursor: pointer;
 }
-/* The start screen while data files are dragged over it. */
-#openOntologyModal.data-drop-active > div {
+/* The block while data files are dragged over it. */
+.explore-data-start.data-drop-active {
   outline: 2px dashed #1a5fb4;
   outline-offset: 4px;
 }
