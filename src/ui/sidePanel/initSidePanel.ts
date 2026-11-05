@@ -9,6 +9,7 @@ import { createQueryTab } from './queryTab';
 import { createIndividualsTab } from './individualsTab';
 import { mountPanelButtons } from './panelButtons';
 import { createDataLoader } from '../../sparql/dataLoader';
+import { attachDataDrop } from '../dataDrop';
 import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
@@ -108,6 +109,12 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },
     { id: 'individualsPanelBtn', label: '', title: '', onClick: () => host.toggle(individualsTab.id) },
   ], { hideEdit: deps.isIndividualSelection });
+  // Data files dropped on the panel or the graph while the Individuals tab is open are added as one selection (#222).
+  if (dataLoader) {
+    const drop = { enabled: () => host.activeTabId() === individualsTab.id, onFiles: (files: File[]) => void dataLoader.addFiles(files) };
+    attachDataDrop(root, drop);
+    attachDataDrop(wrapper, drop);
+  }
   host.onChange((activeId) => {
     buttons.setPressed('queryPanelBtn', activeId === queryTab.id);
     buttons.setPressed('individualsPanelBtn', activeId === individualsTab.id);

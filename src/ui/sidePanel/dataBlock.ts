@@ -26,10 +26,11 @@ export function createDataBlock({ sources, loader }: DataBlockDeps): HTMLElement
 
   const addFile = element('button', undefined, 'From a file…');
   addFile.type = 'button';
-  addFile.title = 'Add the individuals of a file. They are not drawn and never saved.';
+  addFile.title = 'Add the individuals of one or more files (or drop the files on this tab or the graph). They are never saved.';
   addFile.setAttribute('data-add-file', '');
   const fileInput = element('input');
   fileInput.type = 'file';
+  fileInput.multiple = true;
   fileInput.hidden = true;
   fileInput.setAttribute('data-add-file-input', '');
   const urlInput = element('input');
@@ -84,9 +85,9 @@ export function createDataBlock({ sources, loader }: DataBlockDeps): HTMLElement
 
   addFile.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
-    const picked = fileInput.files?.[0];
+    const picked = Array.from(fileInput.files ?? []);
     fileInput.value = '';
-    if (picked) void loader.addFile(picked);
+    if (picked.length) void loader.addFiles(picked);
   });
   const submitUrl = (): void => {
     const url = urlInput.value.trim();

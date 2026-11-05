@@ -58,6 +58,18 @@ describe('the controls', () => {
     expect(q<HTMLElement>('[data-data-list]').hidden).toBe(true);
   });
 
+  it('take several files at once, each its own source (#222)', async () => {
+    const input = q<HTMLInputElement>('[data-add-file-input]');
+    expect(input.multiple).toBe(true);
+    expect(q('[data-add-file]').getAttribute('title')).toMatch(/drop/i);
+
+    Object.defineProperty(input, 'files', { value: [file('a.ttl', ttl(1)), file('b.ttl', ttl(2)), file('c.ttl', ttl(3))], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(items()).toHaveLength(3));
+
+    expect(items().map((text) => text.split(' ')[0])).toEqual(['a.ttl', 'b.ttl', 'c.ttl']);
+  });
+
   it('say "1 triple" in the singular', async () => {
     pick(file('one.ttl', '@prefix : <http://example.org/d#> . :a :b :c .'));
     await vi.waitFor(() => expect(items()).toHaveLength(1));

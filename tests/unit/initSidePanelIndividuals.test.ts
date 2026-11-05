@@ -258,3 +258,42 @@ describe('the Individuals tab and the graph (#216)', () => {
     expect(shown).toEqual([{ nodeIds: ['Room'], edgeIds: [], allEdgesOfAProperty: false }].map((m) => expect.objectContaining({ nodeIds: m.nodeIds, edgeIds: m.edgeIds })));
   });
 });
+
+describe('dropping data files (#222)', () => {
+  const turtleFile = (name: string, turtle: string) => ({ name, size: turtle.length, text: async () => PREFIXES + turtle });
+  function drop(on: HTMLElement, files: unknown[]): Event {
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { types: ['Files'], files, dropEffect: 'none' } });
+    on.dispatchEvent(event);
+    return event;
+  }
+  const names = (dataSources: ReturnType<typeof createDataSources>) => dataSources.list().map((s) => s.name);
+
+  it('adds the files dropped on the panel while the Individuals tab is open', async () => {
+    const { dataSources } = mount();
+    tabButton()!.click();
+
+    drop(panelEl(), [turtleFile('a.ttl', ':a a :Room .'), turtleFile('b.ttl', ':b a :Room .')]);
+
+    await expect.poll(() => names(dataSources)).toEqual(['a.ttl', 'b.ttl']);
+  });
+
+  it('adds the files dropped on the graph while the Individuals tab is open', async () => {
+    const { dataSources } = mount();
+    tabButton()!.click();
+
+    drop(document.getElementById('networkWrapper')!, [turtleFile('a.ttl', ':a a :Room .')]);
+
+    await expect.poll(() => names(dataSources)).toEqual(['a.ttl']);
+  });
+
+  it('leaves a drop alone while the Individuals tab is not open', async () => {
+    const { dataSources } = mount();
+
+    const event = drop(document.getElementById('networkWrapper')!, [turtleFile('a.ttl', ':a a :Room .')]);
+
+    expect(event.defaultPrevented).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(names(dataSources)).toEqual([]);
+  });
+});
