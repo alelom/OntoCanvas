@@ -1,3 +1,17 @@
+# [2.5.0](https://github.com/alelom/OntoCanvas/compare/v2.4.0...v2.5.0) (2026-11-05)
+
+
+### Bug Fixes
+
+* **individuals:** a large number is not a part number, many missing parts are counted, and only the explore box takes a drop ([#238](https://github.com/alelom/OntoCanvas/issues/238) review) ([d69e248](https://github.com/alelom/OntoCanvas/commit/d69e2487c611098fa87d667d2a298526f8d08dce))
+
+
+### Features
+
+* **individuals:** name a class by its local name, with its IRI as the tooltip, when no prefix applies ([#234](https://github.com/alelom/OntoCanvas/issues/234)) ([4ca8df3](https://github.com/alelom/OntoCanvas/commit/4ca8df350cf0871ea93689bae4223917e2ad390c))
+* **individuals:** start from data files, with no ontology to open first ([#234](https://github.com/alelom/OntoCanvas/issues/234)) ([4cf8c0f](https://github.com/alelom/OntoCanvas/commit/4cf8c0fdc331860f027ace4d5112b5828e18067a))
+* **individuals:** tell the user when a dataset split into numbered parts is added only in part ([#225](https://github.com/alelom/OntoCanvas/issues/225)) ([45886c0](https://github.com/alelom/OntoCanvas/commit/45886c053b8ef12a20b9d36a4c6f9533db7502c9))
+
 # [2.4.0](https://github.com/alelom/OntoCanvas/compare/v2.3.0...v2.4.0) (2026-11-05)
 
 
