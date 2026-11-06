@@ -48,6 +48,8 @@ export interface LayerNode {
   label: string;
   /** Plain text: the IRI, the classes and the data values. */
   title: string;
+  /** The addresses of the images its values name (#228). */
+  images?: string[];
 }
 
 export interface LayerEdge {
@@ -124,9 +126,11 @@ export interface IndividualsLayerOptions {
   autoMax?: number;
   /** What an ontology loaded as context (an import) says of a class with no node: its label and the ontology (#235). */
   classInfo?: (classIri: string) => { label: string | null; definedBy: string } | null;
+  /** The addresses of the images an individual's values name (#228): shown in its tooltip in the graph. */
+  imagesOf?: (iri: string) => string[];
 }
 
-export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX, classInfo }: IndividualsLayerOptions): IndividualsLayer {
+export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MAX_PER_EXPANSION, maxTotal = DEFAULT_MAX_TOTAL, autoMax = DEFAULT_AUTO_MAX, classInfo, imagesOf }: IndividualsLayerOptions): IndividualsLayer {
   /** The individuals asked for, in the order asked: one with its neighbours, or from a class. */
   const picked = new Set<string>();
   const listeners: Array<(change: LayerChange) => void> = [];
@@ -331,7 +335,10 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
         const missing = linked.filter((n) => !shown.has(n)).length;
         return missing ? `\nDouble-click: draw the ${missing} individual${missing === 1 ? '' : 's'} linked to it that ${missing === 1 ? 'is' : 'are'} not drawn.` : '\nEvery individual linked to it is drawn.';
       };
-      const nodes: LayerNode[] = [...shown].map((iri) => ({ id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) + doubleClickHint(iri) }));
+      const nodes: LayerNode[] = [...shown].map((iri) => {
+        const images = imagesOf?.(iri) ?? [];
+        return { id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) + doubleClickHint(iri), ...(images.length ? { images } : {}) };
+      });
       const classes = new Map<string, LayerClass>();
       const counts = countsOfClasses();
       const classOf = (iri: string): LayerClass => {

@@ -8,13 +8,16 @@ import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
 import { createIndividualsTab } from './individualsTab';
 import { mountPanelButtons } from './panelButtons';
-import { createDataLoader } from '../../sparql/dataLoader';
+import { createDataLoader, type DataPick } from '../../sparql/dataLoader';
 import { attachDataDrop } from '../dataDrop';
 import { countIndividuals } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
-import type { DataFile, DataSources } from '../../sparql/dataSources';
+import type { DataSources } from '../../sparql/dataSources';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
+import type { DataImages } from '../../abox/dataImages';
+import { syncFolderNotices } from '../folderNotices';
+import { setNotice } from '../statusNotices';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -34,6 +37,8 @@ export interface SidePanelDeps {
   individualsLayer?: IndividualsLayer;
   /** The open ontology file's name, and where it was opened from (#209): the Individuals tab says how many individuals it holds itself. */
   getOntologySource?: () => { name: string; title?: string } | null;
+  /** Where the images the values of the data name are (#228): shown in the detail of an individual. */
+  dataImages?: DataImages;
   /** True while what is selected in the graph is only individuals: the toolbar then has no Edit button (#209). */
   isIndividualSelection?: () => boolean;
   /** In an iframe the app is a read-only view: no panel. */
@@ -46,8 +51,8 @@ export interface SidePanel {
   addDataUrls(urls: string[]): Promise<void>;
   /** Opens the panel on the Individuals tab (#211). */
   openIndividuals(): void;
-  /** Opens the panel on the Individuals tab and adds the files as one selection (#234). */
-  addDataFiles(files: DataFile[]): Promise<void>;
+  /** Opens the panel on the Individuals tab and adds the folders, then the files as one selection (#234, #227). */
+  addData(pick: DataPick): Promise<void>;
   /** What is known of the classes changed (imports read in the background, #235): the Individuals tab names them again. Keeps the data. */
   schemaChanged(): void;
   /** Called with the progress of adding data ("Adding 2 of 3: …") and whether it goes on, for the loading screen (#239). */
@@ -60,7 +65,7 @@ const NO_PANEL: SidePanel = {
   refresh: () => {},
   addDataUrls: async () => {},
   openIndividuals: () => {},
-  addDataFiles: async () => {},
+  addData: async () => {},
   schemaChanged: () => {},
   onDataStatus: () => {},
   cancelData: () => {},
@@ -94,6 +99,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     showInGraph: deps.showInGraph,
     dataSources: deps.dataSources,
     dataLoader,
+    images: deps.dataImages,
     openIndividuals: () => host.open('individuals'),
   });
   host.registerTab(queryTab);
@@ -107,6 +113,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     dataLoader,
     layer: deps.individualsLayer,
     getOntologySource: deps.getOntologySource,
+    images: deps.dataImages,
     // A class or a property in the detail of an individual that is in the graph can be selected there (#216).
     schemaLinks:
       deps.getGraph && deps.showInGraph
@@ -126,9 +133,9 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },
     { id: 'individualsPanelBtn', label: '', title: '', onClick: () => host.toggle(individualsTab.id) },
   ], { hideEdit: deps.isIndividualSelection });
-  // Data files dropped on the panel or the graph while the Individuals tab is open are added as one selection (#222).
+  // Data files and folders dropped on the panel or the graph while the Individuals tab is open are added (#222, #227).
   if (dataLoader) {
-    const drop = { enabled: () => host.activeTabId() === individualsTab.id, onFiles: (files: File[]) => void dataLoader.addFiles(files) };
+    const drop = { enabled: () => host.activeTabId() === individualsTab.id, onDrop: (pick: DataPick) => void dataLoader.addPick(pick) };
     attachDataDrop(root, drop);
     attachDataDrop(wrapper, drop);
   }
@@ -148,6 +155,8 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     buttons.setTitle('individualsPanelBtn', title);
   };
   updateIndividualsButton();
+  // What a folder could not show, as a warning in the bottom bar that pops up on Windows (#240).
+  if (deps.dataSources) syncFolderNotices(deps.dataSources, setNotice);
   deps.dataSources?.onChange(() => {
     deps.individualsLayer?.invalidate();
     individualsTab.refresh();
@@ -175,10 +184,10 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       deps.individualsLayer?.invalidate();
       individualsTab.refresh();
     },
-    async addDataFiles(files) {
-      if (!files.length || !dataLoader) return;
+    async addData(pick) {
+      if ((!pick.files.length && !pick.folders.length) || !dataLoader) return;
       host.open(individualsTab.id);
-      await dataLoader.addFiles(files);
+      await dataLoader.addPick(pick);
     },
   };
 }

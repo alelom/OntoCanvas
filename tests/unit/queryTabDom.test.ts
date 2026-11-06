@@ -106,6 +106,25 @@ describe('query tab', () => {
     expect(status().textContent).toMatch(/2 rows/);
   });
 
+  it('previews the image a result names on hover, and says so in its place when none can be read (#228, #240 review)', async () => {
+    run.mockResolvedValue({ kind: 'bindings', variables: ['p'], rows: [{ p: literal('images/a.png') }, { p: literal('images/b.png') }] } satisfies QueryResult);
+    const images = { find: (value: string) => (value.endsWith('a.png') ? { url: 'https://example.org/a.png' } : { hint: 'No file.' }), linkedImages: () => [], imagesOf: () => [], diagnose: async (url: string) => ({ hint: `No image could be read at ${url}.` }) };
+    createQueryTab({ getStore: () => store, getPrefixes: () => currentPrefixes, run: (...args) => run(...args), loadEditor: neverLoads, images }).render(container);
+    editor().value = 'SELECT ?p WHERE { ?s ?x ?p }';
+    await clickRun();
+
+    // A hint has nothing to hover: only the first cell gets a preview.
+    const cells = [...container.querySelectorAll<HTMLElement>('[data-query-image]')];
+    expect(cells).toHaveLength(1);
+    cells[0].dispatchEvent(new MouseEvent('mouseenter'));
+    const img = cells[0].querySelector<HTMLImageElement>('.query-image-preview img')!;
+    expect(img.src).toBe('https://example.org/a.png');
+
+    img.dispatchEvent(new Event('error'));
+
+    await vi.waitFor(() => expect(cells[0].querySelector('.query-image-preview')!.textContent).toBe('No image could be read at https://example.org/a.png.'));
+  });
+
   it('shortens rdf, rdfs, owl and xsd names even when the file declares none of them', async () => {
     currentPrefixes = {};
     run.mockResolvedValue({

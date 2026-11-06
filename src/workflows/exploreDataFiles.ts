@@ -5,7 +5,7 @@
  *
  * The workspace is what the ontologies the data was made with can later be added to as imports (#236).
  */
-import type { DataFile } from '../sparql/dataSources';
+import type { DataPick } from '../sparql/dataLoader';
 
 /** The name the workspace is opened under: what the status bar and the Individuals tab call it. */
 export const WORKSPACE_NAME = 'Data files (no ontology)';
@@ -17,20 +17,26 @@ export const WORKSPACE_TTL = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
     rdfs:label "Data files, no ontology" .
 `;
 
+/**
+ * Says what "no ontology" means beside the note on the data's ontologies (#240): none is open for editing, while the ones the
+ * data names may still be read, as context only. "Exploring data files with no ontology" next to "Loaded the ontologies the data
+ * was made with" read as a contradiction.
+ */
 export const WORKSPACE_NOTE =
-  'Exploring data files with no ontology. The ontologies the data names are read as context on their own; opening an ontology from the toolbar instead clears the data.';
+  "Exploring data files with no ontology open for editing. The ontologies the data names, when they can be found, are read as context only, to name its classes: they can't be edited or saved. Opening an ontology from the toolbar clears the data.";
 
 export interface ExploreDataDeps {
   /** Opens an ontology from its text, as a file of that name would be. */
   openOntology(ttl: string, name: string): Promise<void>;
   showNote(text: string): void;
-  /** Adds the files as data, as one selection, in the Individuals tab. */
-  addDataFiles(files: DataFile[]): Promise<void>;
+  /** Adds the folders and the files as data, in the Individuals tab. */
+  addData(pick: DataPick): Promise<void>;
 }
 
-export async function exploreDataFiles(files: DataFile[], deps: ExploreDataDeps): Promise<void> {
+/** The files, or the folders (#227), picked or dropped on the start screen. */
+export async function exploreDataFiles(pick: DataPick, deps: ExploreDataDeps): Promise<void> {
   await deps.openOntology(WORKSPACE_TTL, WORKSPACE_NAME);
   // After the load: it replaces the load's own note about an ontology with no classes (see main.ts).
   deps.showNote(WORKSPACE_NOTE);
-  await deps.addDataFiles(files);
+  await deps.addData(pick);
 }

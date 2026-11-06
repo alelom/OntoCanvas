@@ -4,7 +4,9 @@ import { fileDisplayName, type OntologyInfo } from './ontologyInfo';
 import { versionLabel, type OntologyVersion } from '../lib/ontologyVersion';
 import type { AvailableVersions, VersionEntry } from '../lib/ontologyVersions';
 import { hideVersionList, toggleVersionList } from './versionList';
-import { getNotices, onNoticesChange, type Notice } from './statusNotices';
+import { getNotices, onNoticeAlert, onNoticesChange, type Notice, type NoticeLevel } from './statusNotices';
+import { renderLongPathSteps } from './sidePanel/imageProblem';
+import { popUpNotice } from './noticeModal';
 
 let statusBarElement: HTMLElement | null = null;
 let issuesButton: HTMLElement | null = null;
@@ -38,6 +40,8 @@ export function initStatusBar(): void {
   // Create issues button and popup
   createIssuesUI();
   onNoticesChange(renderIssuesArea);
+  // An error, or a warning that must not be missed, also pops up once (#240).
+  onNoticeAlert(popUpNotice);
   
   // Update issues when clicking outside the popup
   document.addEventListener('click', (e) => {
@@ -114,7 +118,7 @@ function renderIssuesArea(): void {
   if (!issuesButton || !issuesPopup) return;
   // What says something of the ontology without anything being wrong (an annotation property never used) is a note (#239).
   const problems = lastIssues.filter((issue) => !INFORMATIONAL_ISSUES.includes(issue.type));
-  const notices = [
+  const notices: Notice[] = [
     ...getNotices(),
     ...lastIssues.filter((issue) => INFORMATIONAL_ISSUES.includes(issue.type)).map((issue) => ({ key: `issue:${issue.type}:${issue.elementName}`, message: issue.message + '.' })),
   ];
@@ -125,15 +129,51 @@ function renderIssuesArea(): void {
     return;
   }
   issuesButton.style.display = '';
-  issuesButton.innerHTML = problems.length ? `⚠️ <u>issues (${total})</u>` : `ℹ️ <u>notes (${total})</u>`;
-  issuesButton.title = 'Notes and issues of the open ontology and its data';
+  // Each kind counted on its own, the worst first, and the worst gives the icon (#240): errors, warnings, the ontology's issues,
+  // then notes.
+  const count = (level: NoticeLevel) => notices.filter((notice) => (notice.level ?? 'note') === level).length;
+  const counts: Array<[string, number]> = [['errors', count('error')], ['warnings', count('warning')], ['issues', problems.length], ['notes', count('note')]];
+  const shown = counts.filter(([, n]) => n > 0);
+  const icon = count('error') ? '⛔' : count('warning') || problems.length ? '⚠️' : 'ℹ️';
+  issuesButton.innerHTML = `${icon} <u>${shown.map(([kind, n]) => `${kind} (${n})`).join(', ')}</u>`;
+  issuesButton.style.color = count('error') ? '#c01c28' : '#f39c12';
+  issuesButton.title = 'Errors, warnings and notes of the open ontology and its data';
   renderIssuesPopup(problems, notices);
+}
+
+/** How each level of notice is listed in the popup (#240): its heading and colours. */
+const LEVELS: Array<{ level: NoticeLevel; heading: string; background: string; border: string }> = [
+  { level: 'error', heading: 'Errors', background: '#fdecea', border: '#c01c28' },
+  { level: 'warning', heading: 'Warnings', background: '#fff3cd', border: '#f39c12' },
+  { level: 'note', heading: 'Notes', background: '#eaf2fb', border: '#1a5fb4' },
+];
+
+/** The app's notices, a section per level, the worst first; a notice with help has its steps folded under it. */
+function renderNotices(notices: Notice[]): HTMLElement[] {
+  return LEVELS.flatMap(({ level, heading, background, border }) => {
+    const ofLevel = notices.filter((notice) => (notice.level ?? 'note') === level);
+    if (!ofLevel.length) return [];
+    const section = document.createElement('div');
+    section.setAttribute('data-status-notices-level', level);
+    section.style.cssText = 'margin-bottom: 16px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight: bold; margin-bottom: 8px; font-size: 13px;';
+    title.textContent = heading;
+    section.append(title);
+    for (const notice of ofLevel) {
+      const item = document.createElement('div');
+      item.setAttribute('data-status-notice', notice.key);
+      item.style.cssText = `padding: 6px 8px; margin-bottom: 4px; background: ${background}; border-left: 3px solid ${border}; border-radius: 2px; font-size: 11px; color: #333;`;
+      item.append(notice.message);
+      if (notice.help?.kind === 'long-path') item.append(renderLongPathSteps(notice.help.folder));
+      section.append(item);
+    }
+    return [section];
+  });
 }
 
 /** The kinds of issue that say something of the ontology without anything being wrong: shown as notes (#239). */
 const INFORMATIONAL_ISSUES: OntologyIssue['type'][] = ['unused_annotation_property'];
-
-const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**
  * Render the issues popup content: the app's notes first, then the ontology's issues by type.
@@ -144,19 +184,9 @@ function renderIssuesPopup(issues: OntologyIssue[], notices: Notice[]): void {
   const grouped = groupIssuesByType(issues);
   const typeKeys = Object.keys(grouped).sort();
 
-  let html = '';
-  if (notices.length) {
-    html += '<div style="font-weight: bold; margin-bottom: 8px; font-size: 13px;">Notes</div><div style="margin-bottom: 16px;">';
-    for (const notice of notices) {
-      html += `<div data-status-notice="${escapeHtml(notice.key)}" style="padding: 6px 8px; margin-bottom: 4px; background: #eaf2fb; border-left: 3px solid #1a5fb4; border-radius: 2px; font-size: 11px; color: #333;">${escapeHtml(notice.message)}</div>`;
-    }
-    html += '</div>';
-  }
-  if (!issues.length) {
-    issuesPopup.innerHTML = html;
-    return;
-  }
-  html += '<div style="font-weight: bold; margin-bottom: 12px; font-size: 13px;">Ontology Issues</div>';
+  issuesPopup.replaceChildren(...renderNotices(notices));
+  if (!issues.length) return;
+  let html = '<div style="font-weight: bold; margin-bottom: 12px; font-size: 13px;">Ontology Issues</div>';
   
   for (const typeKey of typeKeys) {
     const typeIssues = grouped[typeKey];
@@ -175,7 +205,7 @@ function renderIssuesPopup(issues: OntologyIssue[], notices: Notice[]): void {
     html += `</div>`;
   }
   
-  issuesPopup.innerHTML = html;
+  issuesPopup.insertAdjacentHTML('beforeend', html);
 }
 
 /**

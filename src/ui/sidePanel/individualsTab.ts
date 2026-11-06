@@ -14,7 +14,9 @@ import type { DataSources } from '../../sparql/dataSources';
 import type { GraphMatch } from '../../sparql/graphMatches';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
+import type { DataImages, ImageFound } from '../../abox/dataImages';
 import { createDataBlock } from './dataBlock';
+import { renderImageProblem } from './imageProblem';
 import type { SidePanelTab } from './sidePanelHost';
 
 export interface IndividualsTabDeps {
@@ -35,6 +37,8 @@ export interface IndividualsTabDeps {
   schemaLinks?: { match: (iri: string) => GraphMatch | null; show: (match: GraphMatch) => void };
   /** The open ontology file's name (and where it was opened from, for a tooltip): the tab says how many individuals it holds itself. */
   getOntologySource?: () => { name: string; title?: string } | null;
+  /** With this, a value naming an image shows the image in the detail of an individual (#228). */
+  images?: DataImages;
 }
 
 export interface IndividualsTab extends SidePanelTab {
@@ -224,6 +228,27 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     return span;
   }
 
+  /** The image a value names, opening whole in a new tab when clicked; or the reason it is not shown. */
+  function imagePreview(value: string, found: ImageFound): HTMLElement {
+    if (!('url' in found)) return renderImageProblem(found);
+    const link = element('a', 'individual-image');
+    link.href = found.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = `${value}: open the image whole`;
+    const img = element('img');
+    img.alt = value;
+    img.src = found.url;
+    img.setAttribute('data-individuals-image', '');
+    // An image that does not load: why, in its place (a path too long, a file that cannot be read, one that is no image).
+    img.addEventListener('error', () => {
+      const why = deps.images?.diagnose(found.url) ?? Promise.resolve({ hint: `No image could be read at ${found.url}.` });
+      void why.then((problem) => link.replaceWith(renderImageProblem(problem)));
+    });
+    link.append(img);
+    return link;
+  }
+
   function renderLinks(title: string, attribute: string, links: DescribedLink[], total: number, side: 'object' | 'subject'): HTMLElement {
     const section = element('div', 'individual-links');
     section.setAttribute(attribute, '');
@@ -238,11 +263,31 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
           ? [property, ' ', renderTerm(link.object, link.objectIsIndividual)]
           : [renderTerm({ termType: 'NamedNode', value: link.subject }, true), ' ', property])
       );
+      // A value naming an image (#228): the image under it, or why it cannot be shown.
+      const image = side === 'object' && link.object.termType !== 'BlankNode' ? deps.images?.find(link.object.value, selected ?? undefined, link.predicate) : null;
+      if (image) row.append(imagePreview(link.object.value, image));
       rows.append(row);
     }
     if (total > links.length) rows.append(element('li', 'individual-more', `…and ${total - links.length} more`));
     section.append(rows);
     return section;
+  }
+
+  /** The images of the frames an individual is drawn from (#241), such as a title block's crop: each with the image individual it is kept on. */
+  function renderLinkedImages(iri: string): HTMLElement[] {
+    const linked = deps.images?.linkedImages(iri) ?? [];
+    if (!linked.length) return [];
+    const section = element('div', 'individual-links');
+    section.setAttribute('data-individuals-linked-images', '');
+    section.append(element('h5', undefined, `Images of it (${linked.length})`));
+    const rows = element('ul');
+    for (const { image, value, found } of linked) {
+      const row = element('li');
+      row.append(renderTerm({ termType: 'NamedNode', value: image }, true), imagePreview(value, found));
+      rows.append(row);
+    }
+    section.append(rows);
+    return [section];
   }
 
   function renderDetail(): void {
@@ -255,6 +300,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     detail.hidden = false;
     const heading = element('h4', undefined, described.labels[0] ?? nameOf(selected));
     const iri = element('p', 'individual-iri', selected);
+    iri.setAttribute('data-individuals-iri', '');
     const types = element('p', 'individual-types', described.types.length ? 'Class: ' : 'No class');
     described.types.forEach((type, i) => {
       if (i > 0) types.append(', ');
@@ -267,6 +313,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       types,
       ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
       ...(deps.layer ? neighboursButton(deps.layer, selected) : []),
+      ...renderLinkedImages(selected),
       renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
       renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
     );
