@@ -69,6 +69,12 @@ export function openOntologiesOfData(dataStores: Store[]): Promise<void> {
   return reading;
 }
 
+/**
+ * Settles once the ontologies of the data added so far are read (or could not be). An initial load waits for it under its
+ * loading screen, so the classes are drawn once, named, instead of being named again a moment after (#239).
+ */
+export const ontologiesOfDataRead = (): Promise<void> => reading;
+
 /** Reads the ontologies at `iris` (and their imports) as context. Says which were read and which could not be. */
 async function openDataOntologies(iris: string[]): Promise<{ opened: string[]; failed: string[] }> {
   const store = session.ttlStore;

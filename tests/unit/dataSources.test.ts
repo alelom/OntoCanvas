@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import { classifyDataSize, createDataSources, DATA_LOAD_LIMIT_BYTES, DATA_REFUSE_LIMIT_BYTES } from '../../src/sparql/dataSources';
+import { classifyDataSize, createDataSources, DATA_LOAD_LIMIT_BYTES, DATA_REFUSE_LIMIT_BYTES, whenSourceListChanges } from '../../src/sparql/dataSources';
 
 const MB = 1024 * 1024;
 const ttl = (n: number) =>
@@ -448,5 +448,20 @@ describe('named graphs (#224)', () => {
 
     sources.clear();
     expect(sources.isGraphHidden('http://example.org/g2')).toBe(false);
+  });
+});
+
+describe('whenSourceListChanges (#239 review)', () => {
+  it('calls back when a source is added or removed, not when a graph is shown or hidden', async () => {
+    const sources = createDataSources();
+    const changed = vi.fn();
+    whenSourceListChanges(sources, changed);
+
+    const a = await sources.addText('a.nq', '<http://e/a> <http://e/p> <http://e/o> <http://e/g> .\n', { path: 'a.nq' });
+    sources.setGraphHidden('http://e/g', true);
+    sources.setGraphHidden('http://e/g', false);
+    sources.remove(a.id);
+
+    expect(changed).toHaveBeenCalledTimes(2);
   });
 });

@@ -60,3 +60,13 @@ export function hideLoadingModal(): void {
   const modal = document.getElementById('loadingModal');
   if (modal) modal.style.display = 'none';
 }
+
+/** Runs `work` with the loading modal shown, and hides it after, however `work` ends. */
+export async function underLoadingScreen(work: () => Promise<void>): Promise<void> {
+  showLoadingModal();
+  try {
+    await work();
+  } finally {
+    hideLoadingModal();
+  }
+}

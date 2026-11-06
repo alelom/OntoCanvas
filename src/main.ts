@@ -7,7 +7,7 @@ import { renderApp } from './ui/appShell';
 import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
-import { createDataSources } from './sparql/dataSources';
+import { createDataSources, whenSourceListChanges } from './sparql/dataSources';
 import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from './abox/individualsLayer';
 import { getDataUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
@@ -31,7 +31,8 @@ import {
 } from './ui/openOntologyModal';
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
-import { openOntologiesOfData } from './workflows/dataOntologies';
+import { ontologiesOfDataRead, openOntologiesOfData } from './workflows/dataOntologies';
+import { underLoadingScreen } from './ui/modals';
 import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
@@ -129,7 +130,8 @@ registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm 
 renderApp();
 const dataSources = createDataSources();
 // The ontologies the data was made with are opened on their own, as context, whenever data is added (#236, #239).
-dataSources.onChange(() => void openOntologiesOfData(dataSources.stores()));
+// Only when a source is added or removed: showing or hiding a graph changes nothing they could name.
+whenSourceListChanges(dataSources, () => void openOntologiesOfData(dataSources.stores()));
 // The classes the ontologies loaded as context declare (its imports, #235): they name the classes of individuals.
 const importedClass = importedClassLookup(() => session.importedOntologies);
 // The node of such a class, drawn for its individuals, offers to open the ontology that declares it.
@@ -189,7 +191,11 @@ setOnExploreDataFiles((files) =>
       setNotice('no-classes', null);
       setNotice('workspace', text);
     },
-    addDataFiles: async (added) => session.sidePanel?.addDataFiles(added),
+    // Under the loading screen until the ontologies the data names are read: the classes are drawn once, named.
+    addDataFiles: (added) => underLoadingScreen(async () => {
+      await session.sidePanel?.addDataFiles(added);
+      await ontologiesOfDataRead();
+    }),
   })
 );
 // Update serializer dropdown after DOM is ready (in case it was rendered)
@@ -212,7 +218,12 @@ setTimeout(() => {
         hideOpenOntologyModal
       );
       // The data is added to the ontology that was just opened, so only once it is.
-      if (loaded && session.ttlStore) await session.sidePanel?.addDataUrls(dataUrls);
+      if (loaded && session.ttlStore && dataUrls.length) {
+        await underLoadingScreen(async () => {
+          await session.sidePanel?.addDataUrls(dataUrls);
+          await ontologiesOfDataRead();
+        });
+      }
       return loaded;
     },
     hasOntology: () => session.ttlStore !== null,

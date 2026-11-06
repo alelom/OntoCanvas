@@ -24,6 +24,27 @@ const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const MAX_ONTOLOGIES = 10;
 
 const isHttp = (iri: string): boolean => /^https?:\/\//i.test(iri);
+
+/**
+ * Whether an address is on this machine or a private network: loopback, link-local, private IPv4 ranges, IPv6 unique-local and
+ * link-local, and .local or .localhost names. The data added is not something the user looked at, so it must not make the
+ * page reach such hosts (#239 review); an ontology is read from the public web.
+ */
+export function isPrivateAddress(iri: string): boolean {
+  let host: string;
+  try {
+    host = new URL(iri).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  } catch {
+    return true;
+  }
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '0.0.0.0' || host === '::' || host === '::1') return true;
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 127 || a === 10 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  return /^(fc|fd|fe8|fe9|fea|feb)/.test(host) && host.includes(':');
+}
 const bare = (iri: string): string => iri.replace(/[#/]+$/, '');
 const namespaceOf = (iri: string): string => bare(iri.includes('#') ? iri.slice(0, iri.indexOf('#')) : iri.slice(0, iri.lastIndexOf('/')));
 
@@ -35,14 +56,22 @@ export function findDataOntologies(dataStores: Store[], loaded: Iterable<string>
   const found = new Map<string, DataOntology>();
   const add = (iri: string, via: DataOntology['via']): void => {
     const key = bare(iri);
-    if (found.size >= MAX_ONTOLOGIES || !isHttp(key) || skip.has(key) || found.has(key)) return;
+    if (found.size >= MAX_ONTOLOGIES || !isHttp(key) || isPrivateAddress(key) || skip.has(key) || found.has(key)) return;
     found.set(key, { iri: key, via });
   };
 
+  // Data that names any ontology says what it was made with, even when all of them are loaded already: no guessing then.
+  let named = false;
   for (const [predicate, via] of NAMED_BY) {
-    for (const store of dataStores) for (const object of store.getObjects(null, predicate, null)) if (object.termType === 'NamedNode') add(object.value, via);
+    for (const store of dataStores) {
+      for (const object of store.getObjects(null, predicate, null)) {
+        if (object.termType !== 'NamedNode' || !isHttp(object.value)) continue;
+        named = true;
+        add(object.value, via);
+      }
+    }
   }
-  if (found.size) return [...found.values()];
+  if (named) return [...found.values()];
 
   // Named nowhere: the namespaces of the classes and the properties, less the languages' own (rdf, rdfs, owl, xsd).
   const namespace = (iri: string): void => {
