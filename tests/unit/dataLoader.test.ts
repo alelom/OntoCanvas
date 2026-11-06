@@ -354,3 +354,126 @@ describe('addUrl', () => {
     expect(sources.list().map((s) => s.name)).toEqual(['places.ttl']);
   });
 });
+
+describe('addFolder (#227)', () => {
+  const contents = (data: Array<[string, string]>, images: string[] = [], skipped = 0) => ({
+    name: 'run-0001',
+    data: data.map(([path, text]) => ({ path, file: file(path.split('/').pop()!, text) as unknown as File })),
+    images: images.map((path) => ({ path, file: new Blob(['png']) as File })),
+    skipped,
+  });
+
+  it('adds each data file under its path in the folder, keeps the images, and says what it found', async () => {
+    const data = loader();
+
+    await data.addFolder(async () => contents([['part-0001.ttl', ttl(2)], ['sub/part-0002.ttl', ttl(3)]], ['images/a.png'], 4));
+
+    expect(sources.list().map((s) => [s.name, s.triples])).toEqual([['part-0001.ttl', 2], ['sub/part-0002.ttl', 3]]);
+    const [folder] = sources.folders();
+    expect(folder.name).toBe('run-0001');
+    expect([...folder.images.keys()]).toEqual(['images/a.png']);
+    expect(sources.list().every((s) => s.folder === folder.id)).toBe(true);
+    expect(data.status()).toBe('Added 2 data files from run-0001; 1 image kept for previews; 4 other files skipped.');
+  });
+
+  it('says how many files it has listed while it lists them, and stops on Cancel', async () => {
+    const data = loader();
+    const seen: string[] = [];
+    data.onChange(() => seen.push(data.status()));
+    let release!: () => void;
+
+    const added = data.addFolder(async ({ onCount, signal }) => {
+      onCount?.(120);
+      await new Promise<void>((resolve) => (release = resolve));
+      if (signal?.aborted) throw new Error('Cancelled');
+      return contents([['a.ttl', ttl(1)]]);
+    });
+    await vi.waitFor(() => expect(seen).toContain('Reading the folder… 120 files'));
+    data.cancel();
+    release();
+    await added;
+
+    expect(data.status()).toBe('Cancelled.');
+    expect(sources.list()).toEqual([]);
+    expect(sources.folders()).toEqual([]);
+  });
+
+  it('says a folder with no data files holds none, and keeps nothing of it', async () => {
+    const data = loader();
+
+    await data.addFolder(async () => contents([], ['a.png'], 2));
+
+    expect(data.status()).toMatch(/^run-0001 holds no data files/);
+    expect(sources.folders()).toEqual([]);
+  });
+
+  it('asks once about the total size of the folder, and adds nothing on a no', async () => {
+    confirm.mockResolvedValue(false);
+    const data = loader();
+    const big = 'x'.repeat(3 * MB);
+
+    await data.addFolder(async () => contents([['a.ttl', big]]));
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(sources.list()).toEqual([]);
+    expect(sources.folders()).toEqual([]);
+  });
+
+  it('lists a file that fails with the reason, adds the others, and keeps the folder', async () => {
+    const data = loader();
+
+    await data.addFolder(async () => contents([['bad.ttl', '@prefix broken'], ['good.ttl', ttl(1)]]));
+
+    expect(sources.list().map((s) => s.name)).toEqual(['good.ttl']);
+    expect(data.status()).toMatch(/^Added 1 data file from run-0001\.  bad\.ttl: /);
+    expect(sources.folders()).toHaveLength(1);
+  });
+
+  it('replaces a file picked on its own before by the copy in its folder, opened afterwards for the images', async () => {
+    const data = loader();
+    const text = ttl(2);
+    await data.addFile(file('part-0001.ttl', text));
+
+    await data.addFolder(async () => contents([['runs/part-0001.ttl', text]], ['images/a.png']));
+
+    expect(sources.list().map((s) => s.name)).toEqual(['runs/part-0001.ttl']);
+    expect(sources.folders()).toHaveLength(1);
+  });
+
+  it('gives nothing to say when the folder dialog was cancelled', async () => {
+    const data = loader();
+
+    await data.addFolder(async () => null);
+
+    expect(data.status()).toBe('');
+    expect(sources.list()).toEqual([]);
+  });
+});
+
+describe('one change for one selection (#227)', () => {
+  it('tells the listeners of the sources once for a folder of several files, not once each', async () => {
+    const data = loader();
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    await data.addFolder(async () => ({
+      name: 'run',
+      data: ['a.ttl', 'b.ttl', 'c.ttl'].map((path) => ({ path, file: file(path, ttl(1)) as unknown as File })),
+      images: [],
+      skipped: 0,
+    }));
+
+    expect(sources.list()).toHaveLength(3);
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('and once for several files picked', async () => {
+    const data = loader();
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    await data.addFiles([file('a.ttl', ttl(1)), file('b.ttl', ttl(1))]);
+
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+});

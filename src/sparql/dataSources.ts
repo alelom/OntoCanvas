@@ -50,10 +50,28 @@ export function tooLargeWhileReading(name: string, error: DataTooLargeError): st
 
 export interface DataSource {
   id: number;
+  /** The file's name, its address's last part, or its path inside the folder it came from (#227). */
   name: string;
   store: Store;
   triples: number;
+  /** The bytes of data read (decompressed). */
   bytes: number;
+  /** The size of the file on disk, for a file: tells a file added again from its folder (#227). */
+  size?: number;
+  /** The folder it came from (#227). */
+  folder?: number;
+  /** The address it was downloaded from: the base of the image paths in it (#228). */
+  url?: string;
+}
+
+/** A folder the data came from (#227): its images are kept, unread, for the image paths in the data (#228). */
+export interface DataFolder {
+  id: number;
+  name: string;
+  /** The image files by their path inside the folder. */
+  images: ReadonlyMap<string, Blob>;
+  /** How many of its files were neither data nor images. */
+  skipped: number;
 }
 
 export interface AddDataOptions extends SlicedParseOptions {
@@ -66,6 +84,14 @@ export interface AddDataOptions extends SlicedParseOptions {
    * passes what is left of the limit after the files before (#222).
    */
   limitBytes?: number;
+  /** The name to list it by, when not the file's: its path inside a folder (#227). */
+  name?: string;
+  /** The folder it comes from (#227). */
+  folder?: number;
+  /** The address it was downloaded from (#228); set by addUrl. */
+  url?: string;
+  /** The size of the file on disk; set by addFile. */
+  fileSize?: number;
 }
 
 /** A file as the browser gives it: enough of the File interface to read it later. */
@@ -97,8 +123,19 @@ export interface DataSources {
   /** Downloads a URL (http or https). The Content-Length, when the server gives one, is checked before the body is read. */
   addUrl(url: string, options?: AddUrlOptions): Promise<DataSource>;
   remove(id: number): void;
+  /** The folders the data came from (#227). */
+  folders(): DataFolder[];
+  /** Keeps a folder's images, before its files are added with its id. */
+  addFolder(name: string, images: ReadonlyMap<string, Blob>, skipped: number): DataFolder;
+  /** Takes out a folder and every file added from it. A folder is also taken out with the last of its files. */
+  removeFolder(id: number): void;
   clear(): void;
   onChange(listener: () => void): void;
+  /**
+   * Runs `work` telling the listeners once, at its end, of what it added or removed: the files of a selection or a folder redraw
+   * the graph and the Individuals tab once, not once each (#227).
+   */
+  batch<T>(work: () => Promise<T>): Promise<T>;
 }
 
 /**
@@ -115,8 +152,16 @@ const nameOfUrl = (url: string): string => {
 export function createDataSources(): DataSources {
   let sources: DataSource[] = [];
   let nextId = 1;
+  let folders: DataFolder[] = [];
+  let nextFolderId = 1;
   const listeners: Array<() => void> = [];
-  const changed = () => listeners.forEach((listener) => listener());
+  /** While a batch runs, the listeners are told once, at its end (#227). */
+  let batching = 0;
+  let changedInBatch = false;
+  const changed = () => {
+    if (batching) changedInBatch = true;
+    else listeners.forEach((listener) => listener());
+  };
   /** The keys of the hidden graphs (#224). */
   let hidden = new Set<string>();
   /** A hidden graph that no source holds any more is forgotten, so a later source with it is shown. */
@@ -144,7 +189,16 @@ export function createDataSources(): DataSources {
       if (tier === 'refuse') throw new Error(message);
       if (tier === 'confirm' && options.confirm && !(await options.confirm(message!))) throw new Error('Cancelled');
       const { store } = await parseIntoStoreInSlices(content, options);
-      const source: DataSource = { id: nextId++, name, store, triples: store.size, bytes };
+      const source: DataSource = {
+        id: nextId++,
+        name,
+        store,
+        triples: store.size,
+        bytes,
+        ...(options.fileSize !== undefined ? { size: options.fileSize } : {}),
+        ...(options.folder !== undefined ? { folder: options.folder } : {}),
+        ...(options.url ? { url: options.url } : {}),
+      };
       sources = [...sources, source];
       changed();
       return source;
@@ -174,7 +228,7 @@ export function createDataSources(): DataSources {
         text = await file.text();
       }
       // Already asked: the size is that of the data read. The format is told from the name without .gz.
-      return self.addText(file.name, text, { ...options, path: nameWithoutGz(options.path ?? file.name), byteLength: bytes, confirm: undefined });
+      return self.addText(options.name ?? file.name, text, { ...options, path: nameWithoutGz(options.path ?? file.name), byteLength: bytes, fileSize: file.size, confirm: undefined });
     },
     async addUrl(url, options = {}) {
       if (!/^https?:\/\//i.test(url)) throw new Error('Only http and https addresses can be added.');
@@ -220,16 +274,44 @@ export function createDataSources(): DataSources {
         path: nameWithoutGz(options.path ?? url),
         contentType: options.contentType ?? contentType,
         byteLength: Math.max(announced > 0 ? announced : 0, bytes),
+        url,
       });
     },
     remove(id) {
       const next = sources.filter((s) => s.id !== id);
       if (next.length === sources.length) return;
       sources = next;
+      // The folder goes with the last of its files: its images are of no use without the data that names them.
+      folders = folders.filter((f) => sources.some((s) => s.folder === f.id));
+      forgetGoneGraphs();
+      changed();
+    },
+    async batch(work) {
+      batching++;
+      try {
+        return await work();
+      } finally {
+        if (--batching === 0 && changedInBatch) {
+          changedInBatch = false;
+          changed();
+        }
+      }
+    },
+    folders: () => [...folders],
+    addFolder(name, images, skipped) {
+      const folder: DataFolder = { id: nextFolderId++, name, images, skipped };
+      folders = [...folders, folder];
+      return folder;
+    },
+    removeFolder(id) {
+      if (!folders.some((f) => f.id === id)) return;
+      folders = folders.filter((f) => f.id !== id);
+      sources = sources.filter((s) => s.folder !== id);
       forgetGoneGraphs();
       changed();
     },
     clear() {
+      folders = [];
       if (!sources.length) return;
       sources = [];
       hidden = new Set();

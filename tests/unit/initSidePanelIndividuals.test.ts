@@ -318,12 +318,12 @@ describe('hiding a named graph of the data (#224)', () => {
   });
 });
 
-describe('addDataFiles (#234)', () => {
+describe('addData (#234)', () => {
   it('opens the Individuals tab and adds the files as one selection', async () => {
     const { dataSources, panel } = mount();
     const file = (name: string, turtle: string) => ({ name, size: turtle.length, text: async () => PREFIXES + turtle });
 
-    await panel.addDataFiles([file('a.ttl', ':a a :Room .'), file('b.ttl', ':b a :Room .')]);
+    await panel.addData({ files: [file('a.ttl', ':a a :Room .'), file('b.ttl', ':b a :Room .')], folders: [] });
 
     expect(dataSources.list().map((s) => s.name)).toEqual(['a.ttl', 'b.ttl']);
     expect(tabButton()!.getAttribute('aria-selected')).toBe('true');
@@ -354,7 +354,7 @@ describe('onDataStatus (#239)', () => {
     const seen: string[] = [];
     panel.onDataStatus((status, loading) => seen.push(`${loading}|${status}`));
 
-    await panel.addDataFiles([{ name: 'a.ttl', size: 20, text: async () => PREFIXES + ':a a :Room .' }]);
+    await panel.addData({ files: [{ name: 'a.ttl', size: 20, text: async () => PREFIXES + ':a a :Room .' }], folders: [] });
 
     expect(seen[0]).toBe('true|Loading a.ttl…');
     expect(seen[seen.length - 1]).toBe('false|');
@@ -368,7 +368,7 @@ describe('cancelData (#239 fourth review)', () => {
     const statuses: string[] = [];
     panel.onDataStatus((status) => statuses.push(status));
 
-    const adding = panel.addDataFiles([{ name: 'big.ttl', size: 100, text: async () => big }]);
+    const adding = panel.addData({ files: [{ name: 'big.ttl', size: 100, text: async () => big }], folders: [] });
     await expect.poll(() => statuses.some((s) => s.startsWith('Loading big.ttl'))).toBe(true);
     panel.cancelData();
     await adding;

@@ -84,3 +84,26 @@ describe('partsNotice', () => {
     expect(partsNotice(findPartGroups(['part-1.nq', 'part-5.nq']))!.text).toContain('parts 2, 3 and 4, and any after 5, may be missing');
   });
 });
+
+describe('parts added from a folder (#227)', () => {
+  it('says nothing of parts after the last when every part came from a folder, which holds them all', () => {
+    const names = ['run/part-0001.nq.gz', 'run/part-0002.nq.gz'];
+
+    expect(partsNotice(findPartGroups(names, new Set(names)))).toBeNull();
+  });
+
+  it('still says a gap among them is missing, without "any after"', () => {
+    const names = ['run/part-0001.nq.gz', 'run/part-0003.nq.gz'];
+
+    expect(partsNotice(findPartGroups(names, new Set(names)))?.text).toBe(
+      'This looks like part of a dataset split into numbered parts (run/part-N.nq): part 2 may be missing. Add them, if they exist.'
+    );
+  });
+
+  it('says there may be more when one of the parts was picked on its own', () => {
+    // Part 2 at the root of a folder, part 1 picked on its own: one group.
+    const names = ['part-0001.nq.gz', 'part-0002.nq.gz'];
+
+    expect(findPartGroups(names, new Set(['part-0002.nq.gz'])).map((g) => g.moreMayExist)).toEqual([true]);
+  });
+});

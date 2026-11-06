@@ -8,7 +8,7 @@ import { attachDataDrop, DROP_ACTIVE_CLASS } from '../../src/ui/dataDrop';
 
 let target: HTMLElement;
 let enabled: boolean;
-let onFiles: ReturnType<typeof vi.fn>;
+let onDrop: ReturnType<typeof vi.fn>;
 
 const files = [{ name: 'a.ttl' }, { name: 'part-0001.nq.gz' }];
 
@@ -27,8 +27,8 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="t"><span id="inner"></span></div><div id="out"></div>';
   target = document.getElementById('t')!;
   enabled = true;
-  onFiles = vi.fn();
-  attachDataDrop(target, { enabled: () => enabled, onFiles });
+  onDrop = vi.fn();
+  attachDataDrop(target, { enabled: () => enabled, onDrop });
 });
 
 describe('attachDataDrop', () => {
@@ -36,7 +36,7 @@ describe('attachDataDrop', () => {
     const event = drag('drop');
 
     expect(event.defaultPrevented).toBe(true);
-    expect(onFiles).toHaveBeenCalledWith(files);
+    expect(onDrop).toHaveBeenCalledWith({ files, folders: [] });
   });
 
   it('accepts a drag of files (so the drop happens) and shows where they go, until the drag leaves', () => {
@@ -62,7 +62,7 @@ describe('attachDataDrop', () => {
   it('leaves alone a drag that carries no files, such as text', () => {
     expect(drag('dragover', 'text/plain').defaultPrevented).toBe(false);
     expect(drag('drop', 'text/plain').defaultPrevented).toBe(false);
-    expect(onFiles).not.toHaveBeenCalled();
+    expect(onDrop).not.toHaveBeenCalled();
   });
 
   it('leaves every drag alone while it is not enabled (the Individuals tab is not open)', () => {
@@ -71,12 +71,42 @@ describe('attachDataDrop', () => {
     expect(drag('dragover').defaultPrevented).toBe(false);
     expect(drag('drop').defaultPrevented).toBe(false);
     expect(target.classList.contains(DROP_ACTIVE_CLASS)).toBe(false);
-    expect(onFiles).not.toHaveBeenCalled();
+    expect(onDrop).not.toHaveBeenCalled();
   });
 
   it('takes a drop on an element inside the target', () => {
     drag('drop', 'Files', document.getElementById('inner')!);
 
-    expect(onFiles).toHaveBeenCalledWith(files);
+    expect(onDrop).toHaveBeenCalledWith({ files, folders: [] });
+  });
+});
+
+describe('a folder dropped (#227)', () => {
+  it('takes a folder as a folder, listed only when it is added, and the files beside it as files', async () => {
+    const dropped = new File(['x'], 'loose.ttl');
+    const folderEntry = {
+      name: 'run-0001',
+      isFile: false,
+      isDirectory: true,
+      createReader: () => {
+        let read = false;
+        return { readEntries: (ok: (e: unknown[]) => void) => ok(read ? [] : ((read = true), [{ name: 'part-0001.nq.gz', isFile: true, isDirectory: false, file: (cb: (f: File) => void) => cb(new File(['y'], 'part-0001.nq.gz')) }])) };
+      },
+    };
+    const items = [
+      { kind: 'file', webkitGetAsEntry: () => folderEntry, getAsFile: () => null },
+      { kind: 'file', webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => dropped },
+      { kind: 'string', webkitGetAsEntry: () => null, getAsFile: () => null },
+    ];
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { types: ['Files'], files: [], items, dropEffect: 'none' } });
+
+    target.dispatchEvent(event);
+
+    const pick = onDrop.mock.calls[0][0];
+    expect(pick.files).toEqual([dropped]);
+    expect(pick.folders).toHaveLength(1);
+    const contents = await pick.folders[0]({});
+    expect([contents.name, contents.data.map((f: { path: string }) => f.path)]).toEqual(['run-0001', ['part-0001.nq.gz']]);
   });
 });

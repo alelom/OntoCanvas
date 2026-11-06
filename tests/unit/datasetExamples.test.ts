@@ -11,6 +11,11 @@ import { createDataLoader } from '../../src/sparql/dataLoader';
 import { individualsOf } from '../../src/lib/instanceData';
 import { findDataOntologies } from '../../src/abox/dataOntologies';
 import { gunzipSync } from 'node:zlib';
+import { readdirSync } from 'node:fs';
+import { basename } from 'node:path';
+import { folderFromHandle, type DirectoryHandleLike } from '../../src/sparql/dataFolder';
+import { createDataImages } from '../../src/abox/dataImages';
+import { findPartGroups, partsNotice } from '../../src/sparql/numberedParts';
 
 const DIR = join(__dirname, '../../examples/datasets/run-parts');
 const NS = 'http://example.org/examples/run-parts#';
@@ -110,5 +115,63 @@ describe('adiro-run (#235, #236)', () => {
       { iri: 'https://w3id.org/adiro/adiro_provenance/2.2.0', via: 'prov:used' },
       { iri: 'https://w3id.org/adiro/adiro_geometry/3.1.0', via: 'prov:used' },
     ]);
+  });
+});
+
+describe('run-folder (#227, #228)', () => {
+  const ROOT_DIR = join(__dirname, '../../examples/datasets/run-folder');
+  const NS_RUN = 'http://example.org/examples/run-folder#';
+  const DATA_RUN = 'http://example.org/examples/run-folder/run-0001/';
+
+  /** The folder on disk as the folder picker gives it. */
+  const handleOf = (dir: string): DirectoryHandleLike => ({
+    kind: 'directory',
+    name: basename(dir),
+    async *values() {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        yield entry.isDirectory()
+          ? handleOf(path)
+          : { kind: 'file' as const, name: entry.name, getFile: async () => new File([readFileSync(path)], entry.name) };
+      }
+    },
+  });
+
+  async function open(dir: string) {
+    const sources = createDataSources();
+    const loader = createDataLoader({ sources, getStore: () => new Store(), confirm: async () => true });
+    await loader.addFolder((options) => folderFromHandle(handleOf(dir), options));
+    let next = 0;
+    return { sources, loader, images: createDataImages({ sources, createUrl: () => `blob:${++next}` }) };
+  }
+
+  it('runs/run-0001: four data files with the triples the README says, four images, the README skipped, 11 individuals, two graphs', async () => {
+    const { sources, loader } = await open(join(ROOT_DIR, 'runs/run-0001'));
+
+    expect(loader.status()).toBe('Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped.');
+    expect(sources.list().map((s) => [s.name, s.triples])).toEqual([['part-0001.nq.gz', 18], ['part-0002.nq.gz', 9], ['part-0003.nq.gz', 18], ['run.ttl', 4]]);
+    const stores = sources.stores();
+    expect(new Set(stores.flatMap((s) => [...individualsOf(s)])).size).toBe(11);
+    expect(sources.graphs().map((g) => [g.iri, g.quads])).toEqual([[`${DATA_RUN}batch/1`, 27], [`${DATA_RUN}batch/2`, 18], [null, 4]]);
+    // The folder holds every part: nothing said about missing ones.
+    const names = sources.list().map((s) => s.name);
+    expect(partsNotice(findPartGroups(names, new Set(names)))).toBeNull();
+  });
+
+  it("finds each titleblock's image in the folder, though the data names it from the folder above runs/; sheet 4 has none", async () => {
+    const { images } = await open(join(ROOT_DIR, 'runs/run-0001'));
+    const path = (n: number) => `runs/run-0001/images/sheet-${n}/titleblock.png`;
+    const imageOf = (n: number) => images.find(path(n), `${DATA_RUN}sheet-${n}/titleblock`, `${NS_RUN}imagePath`);
+
+    expect(imageOf(2)).toEqual({ url: expect.stringMatching(/^blob:/) });
+    expect(imageOf(4)).toEqual({ hint: expect.stringContaining('No file at this path') });
+  });
+
+  it('the folder above, run-folder: the same data, its own README skipped too, the images found from its root', async () => {
+    const { sources, loader, images } = await open(ROOT_DIR);
+
+    expect(loader.status()).toBe('Added 4 data files from run-folder; 4 images kept for previews; 2 other files skipped.');
+    expect(sources.list().map((s) => s.name)).toEqual(['runs/run-0001/part-0001.nq.gz', 'runs/run-0001/part-0002.nq.gz', 'runs/run-0001/part-0003.nq.gz', 'runs/run-0001/run.ttl']);
+    expect(images.find('runs/run-0001/images/sheet-1/titleblock.png')).toEqual({ url: expect.stringMatching(/^blob:/) });
   });
 });

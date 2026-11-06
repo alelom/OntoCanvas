@@ -12,7 +12,7 @@ export interface PartGroup {
   total: number | null;
   /** The numbers below the highest (or up to the total) that were not added. */
   missing: number[];
-  /** Whether parts after the highest may exist: always, unless the names say the total. */
+  /** Whether parts after the highest may exist: always, unless the names say the total or every part came from a folder (#227). */
   moreMayExist: boolean;
 }
 
@@ -39,23 +39,27 @@ function parse(fileName: string): { name: string; number: number; total: number 
   return null;
 }
 
-/** The numbered-part groups among the names, in order of first appearance. */
-export function findPartGroups(fileNames: string[]): PartGroup[] {
-  const groups = new Map<string, { numbers: Set<number>; total: number | null }>();
+/**
+ * The numbered-part groups among the names, in order of first appearance. `fromFolder`: the names of the files added from a folder
+ * (#227), which holds every part there is; a gap among them is still a missing part.
+ */
+export function findPartGroups(fileNames: string[], fromFolder: ReadonlySet<string> = new Set()): PartGroup[] {
+  const groups = new Map<string, { numbers: Set<number>; total: number | null; wholeFolder: boolean }>();
   for (const fileName of fileNames) {
     const part = parse(fileName);
     if (!part) continue;
-    const group = groups.get(part.name) ?? { numbers: new Set<number>(), total: part.total };
+    const group = groups.get(part.name) ?? { numbers: new Set<number>(), total: part.total, wholeFolder: true };
     group.numbers.add(part.number);
+    group.wholeFolder &&= fromFolder.has(fileName);
     groups.set(part.name, group);
   }
-  return [...groups].map(([name, { numbers: set, total }]) => {
+  return [...groups].map(([name, { numbers: set, total, wholeFolder }]) => {
     const numbers = [...set].sort((a, b) => a - b);
     const first = numbers[0] === 0 ? 0 : 1;
     const last = total ?? numbers[numbers.length - 1];
     const missing: number[] = [];
     for (let n = first; n <= last; n++) if (!set.has(n)) missing.push(n);
-    return { name, numbers, total, missing, moreMayExist: total === null };
+    return { name, numbers, total, missing, moreMayExist: total === null && !wholeFolder };
   });
 }
 
@@ -64,18 +68,19 @@ const inWords = (numbers: number[]): string =>
   numbers.length === 1 ? String(numbers[0]) : `${numbers.slice(0, -1).join(', ')} and ${numbers[numbers.length - 1]}`;
 
 function sentence(group: PartGroup): { strong: boolean; text: string } | null {
-  const { name, numbers, total, missing } = group;
+  const { name, numbers, total, missing, moreMayExist } = group;
   const last = numbers[numbers.length - 1];
   const which =
     missing.length > MAX_LISTED
       ? `${missing.length} parts${total === null ? ` between ${missing[0] === 0 ? 0 : 1} and ${last}` : ''}`
       : `${missing.length === 1 ? 'part' : 'parts'} ${inWords(missing)}`;
+  if (!missing.length && !moreMayExist) return null;
   if (total !== null) {
-    if (!missing.length) return null;
     return { strong: true, text: `This looks like part of a dataset split into numbered parts (${name}): ${which} of ${total} ${missing.length === 1 ? 'is' : 'are'} missing. Add them.` };
   }
   if (missing.length) {
-    return { strong: true, text: `This looks like part of a dataset split into numbered parts (${name}): ${which}, and any after ${last}, may be missing. Add them, if they exist.` };
+    const after = moreMayExist ? `, and any after ${last},` : '';
+    return { strong: true, text: `This looks like part of a dataset split into numbered parts (${name}): ${which}${after} may be missing. Add them, if they exist.` };
   }
   return { strong: false, text: `Parts ${numbers[0]} to ${last} of a dataset split into numbered parts (${name}) are added. There may be more: add them, if they exist.` };
 }

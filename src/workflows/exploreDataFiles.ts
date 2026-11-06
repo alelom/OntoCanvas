@@ -5,7 +5,7 @@
  *
  * The workspace is what the ontologies the data was made with can later be added to as imports (#236).
  */
-import type { DataFile } from '../sparql/dataSources';
+import type { DataPick } from '../sparql/dataLoader';
 
 /** The name the workspace is opened under: what the status bar and the Individuals tab call it. */
 export const WORKSPACE_NAME = 'Data files (no ontology)';
@@ -24,13 +24,14 @@ export interface ExploreDataDeps {
   /** Opens an ontology from its text, as a file of that name would be. */
   openOntology(ttl: string, name: string): Promise<void>;
   showNote(text: string): void;
-  /** Adds the files as data, as one selection, in the Individuals tab. */
-  addDataFiles(files: DataFile[]): Promise<void>;
+  /** Adds the folders and the files as data, in the Individuals tab. */
+  addData(pick: DataPick): Promise<void>;
 }
 
-export async function exploreDataFiles(files: DataFile[], deps: ExploreDataDeps): Promise<void> {
+/** The files, or the folders (#227), picked or dropped on the start screen. */
+export async function exploreDataFiles(pick: DataPick, deps: ExploreDataDeps): Promise<void> {
   await deps.openOntology(WORKSPACE_TTL, WORKSPACE_NAME);
   // After the load: it replaces the load's own note about an ontology with no classes (see main.ts).
   deps.showNote(WORKSPACE_NOTE);
-  await deps.addDataFiles(files);
+  await deps.addData(pick);
 }

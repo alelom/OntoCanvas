@@ -11,10 +11,10 @@ describe('exploreDataFiles', () => {
     const calls: string[] = [];
     const files = [{ name: 'a.nq', size: 1, text: async () => '' }];
 
-    await exploreDataFiles(files, {
+    await exploreDataFiles({ files, folders: [] }, {
       openOntology: async (ttl, name) => void calls.push(`open ${name} ${ttl === WORKSPACE_TTL}`),
       showNote: (text) => void calls.push(`note ${text}`),
-      addDataFiles: async (added) => void calls.push(`add ${added.map((f) => f.name).join(',')}`),
+      addData: async (added) => void calls.push(`add ${added.files.map((f) => f.name).join(',')}`),
     });
 
     expect(calls[0]).toBe(`open ${WORKSPACE_NAME} true`);
@@ -23,19 +23,19 @@ describe('exploreDataFiles', () => {
   });
 
   it('does not add the files when the workspace could not be opened', async () => {
-    const addDataFiles = vi.fn();
+    const addData = vi.fn();
 
     await expect(
-      exploreDataFiles([], {
+      exploreDataFiles({ files: [], folders: [] }, {
         openOntology: async () => {
           throw new Error('broken');
         },
         showNote: () => {},
-        addDataFiles,
+        addData,
       })
     ).rejects.toThrow('broken');
 
-    expect(addDataFiles).not.toHaveBeenCalled();
+    expect(addData).not.toHaveBeenCalled();
   });
 
   it('the workspace is a valid, empty ontology with a label, and no classes', () => {

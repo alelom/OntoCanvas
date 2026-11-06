@@ -14,6 +14,7 @@ import type { DataSources } from '../../sparql/dataSources';
 import type { GraphMatch } from '../../sparql/graphMatches';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
+import type { DataImages, ImageFound } from '../../abox/dataImages';
 import { createDataBlock } from './dataBlock';
 import type { SidePanelTab } from './sidePanelHost';
 
@@ -35,6 +36,8 @@ export interface IndividualsTabDeps {
   schemaLinks?: { match: (iri: string) => GraphMatch | null; show: (match: GraphMatch) => void };
   /** The open ontology file's name (and where it was opened from, for a tooltip): the tab says how many individuals it holds itself. */
   getOntologySource?: () => { name: string; title?: string } | null;
+  /** With this, a value naming an image shows the image in the detail of an individual (#228). */
+  images?: DataImages;
 }
 
 export interface IndividualsTab extends SidePanelTab {
@@ -224,6 +227,28 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     return span;
   }
 
+  /** The image a value names, opening whole in a new tab when clicked; or the reason it is not shown. */
+  function imagePreview(value: string, found: ImageFound): HTMLElement {
+    if (!('url' in found)) {
+      const note = element('div', 'individual-image-missing', found.hint);
+      note.setAttribute('data-individuals-image-missing', '');
+      return note;
+    }
+    const link = element('a', 'individual-image');
+    link.href = found.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = `${value}: open the image whole`;
+    const img = element('img');
+    img.alt = value;
+    img.src = found.url;
+    img.setAttribute('data-individuals-image', '');
+    // An address that does not answer with an image: said in its place.
+    img.addEventListener('error', () => link.replaceWith(element('div', 'individual-image-missing', `No image could be read at ${found.url}.`)));
+    link.append(img);
+    return link;
+  }
+
   function renderLinks(title: string, attribute: string, links: DescribedLink[], total: number, side: 'object' | 'subject'): HTMLElement {
     const section = element('div', 'individual-links');
     section.setAttribute(attribute, '');
@@ -238,6 +263,9 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
           ? [property, ' ', renderTerm(link.object, link.objectIsIndividual)]
           : [renderTerm({ termType: 'NamedNode', value: link.subject }, true), ' ', property])
       );
+      // A value naming an image (#228): the image under it, or why it cannot be shown.
+      const image = side === 'object' && link.object.termType !== 'BlankNode' ? deps.images?.find(link.object.value, selected ?? undefined, link.predicate) : null;
+      if (image) row.append(imagePreview(link.object.value, image));
       rows.append(row);
     }
     if (total > links.length) rows.append(element('li', 'individual-more', `…and ${total - links.length} more`));
