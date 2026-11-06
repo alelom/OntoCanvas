@@ -50,7 +50,7 @@ function boxOf(node: { id: string; x: number; y: number; label?: string; font?: 
   return { id: String(node.id), x: node.x, y: node.y, width: Math.max(80, Math.max(...lines.map((l) => l.length)) * size * 0.55 + 24), height: lines.length * size * 1.3 + 20 };
 }
 
-export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean; search?: IndividualSearchFilter | null } = {}): { moreClasses: number } {
+export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean; search?: IndividualSearchFilter | null; anchor?: { id: string; x: number; y: number } } = {}): { moreClasses: number } {
   // The classes of the data are drawn before any of their individuals is (#239), so only data with no individual adds nothing.
   const view = filterIndividualsBySearch(layer.build(classNodes), options.search ?? null);
   if (view.nodes.length === 0 && view.classes.length === 0) return { moreClasses: view.moreClasses };
@@ -64,6 +64,14 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
     const cls = classOf.get(node.id);
     if (cls) ringSize.set(cls, (ringSize.get(cls) ?? 0) + 1);
   }
+
+  // The individual whose neighbours were just drawn (#239) stays where it was, and the individuals linked to it start around it.
+  const pin = options.anchor && view.nodes.some((n) => n.id === options.anchor!.id) ? options.anchor : null;
+  const aroundPin = new Set<string>();
+  if (pin) for (const edge of view.edges) if (edge.type !== 'rdf:type') aroundPin.add(edge.from === pin.id ? edge.to : edge.to === pin.id ? edge.from : '');
+  aroundPin.delete('');
+  aroundPin.delete(pin?.id ?? '');
+  let aroundIndex = 0;
 
   addClassStubs(data, view.classes, view.edges);
   data.nodes.add(
@@ -79,6 +87,11 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
         font: { size: INDIVIDUAL_FONT_SIZE },
         borderWidth: 1,
       };
+      if (pin && node.id === pin.id) return { ...base, x: pin.x, y: pin.y };
+      if (pin && aroundPin.has(node.id)) {
+        const angle = (2 * Math.PI * aroundIndex++) / aroundPin.size;
+        return { ...base, x: pin.x + RING_RADIUS * Math.cos(angle), y: pin.y + RING_RADIUS * Math.sin(angle) };
+      }
       const cls = classOf.get(node.id);
       const anchor = cls ? (data.nodes.get(cls) as { x?: number; y?: number } | null) : null;
       if (!cls || typeof anchor?.x !== 'number' || typeof anchor.y !== 'number') return base;
@@ -89,7 +102,7 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       return { ...base, x: anchor.x + radius * Math.cos(angle), y: anchor.y + radius * Math.sin(angle) };
     })
   );
-  if (options.relax ?? true) relax(data, view);
+  if (options.relax ?? true) relax(data, view, pin ? { id: pin.id, around: aroundPin } : undefined);
   data.edges.add(
     view.edges.map((edge) => ({
       id: edge.id,
@@ -179,8 +192,10 @@ export function focusNodeIds(data: NetworkData, drawn: string[]): string[] {
 }
 
 /** Moves the individuals by force relaxation, anchored to the nodes the layout already placed; the rest are left to the canvas. */
-function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>): void {
-  const individualIds = new Set(view.nodes.map((n) => n.id));
+function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>, pinned?: { id: string; around: ReadonlySet<string> }): void {
+  // A pinned individual (#239) is held where it is, as the class nodes are; the individuals around it are not pulled back to
+  // their class, so they grow around it (their dashed edge to the class is still drawn).
+  const individualIds = new Set(view.nodes.map((n) => n.id).filter((id) => id !== pinned?.id));
   const fixed = (data.nodes.get() as Array<{ id: string; x?: number; y?: number; label?: string }>)
     .filter((n) => !individualIds.has(String(n.id)) && typeof n.x === 'number' && typeof n.y === 'number')
     .map((n) => boxOf(n as Parameters<typeof boxOf>[0]));
@@ -188,11 +203,11 @@ function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>): 
   if (fixed.length === 0) return;
   const centre = { x: fixed.reduce((sum, f) => sum + f.x, 0) / fixed.length, y: fixed.reduce((sum, f) => sum + f.y, 0) / fixed.length };
   // Each takes the room of its label (an ellipse at the font size drawn).
-  const movable = data.nodes.get(view.nodes.map((n) => n.id)).map((n: { id: string; x?: number; y?: number; label?: string }) => {
+  const movable = data.nodes.get([...individualIds]).map((n: { id: string; x?: number; y?: number; label?: string }) => {
     const { width, height } = boxOf({ id: String(n.id), x: 0, y: 0, label: n.label, font: { size: INDIVIDUAL_FONT_SIZE } });
     return { id: String(n.id), x: n.x ?? centre.x, y: n.y ?? centre.y, width: width - 24 + 30, height: height - 20 + 14 };
   });
-  const links = view.edges.map((e) => [e.from, e.to] as [string, string]);
+  const links = view.edges.filter((e) => !(e.type === 'rdf:type' && pinned?.around.has(e.from))).map((e) => [e.from, e.to] as [string, string]);
   const placed = relaxIndividuals({ movable, fixed, links });
   data.nodes.update([...placed].map(([id, p]) => ({ id, x: p.x, y: p.y })));
 }

@@ -87,6 +87,7 @@ describe('adding data files: several, dropped, compressed', () => {
     await page.waitForFunction((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(nodeId) !== null, id);
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());
     expect(await drawn()).toEqual([id]);
+    const before = await page.evaluate((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().getPositions([nodeId])[nodeId] as { x: number; y: number }, id);
     const at = await page.evaluate((nodeId) => {
       const net = (window as any).__EDITOR_TEST__.getNetwork();
       const dom = net.canvasToDOM(net.getPositions([nodeId])[nodeId]);
@@ -102,6 +103,14 @@ describe('adding data files: several, dropped, compressed', () => {
       ['reading14', 'reading15', 'reading16', 'sensor3'].map((n) => `__individual__http://example.org/examples/run-parts#${n}`)
     );
     expect(await page.evaluate(() => getComputedStyle(document.getElementById('addNodeModal')!).display)).toBe('none');
+    // It stays where it was, and selected, so it is found again after the redraw.
+    const after = await page.evaluate((nodeId) => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      return { position: net.getPositions([nodeId])[nodeId], selected: net.getSelectedNodes().map(String) };
+    }, id);
+    expect(after.selected).toEqual([id]);
+    expect(Math.round(after.position.x)).toBe(Math.round(before.x));
+    expect(Math.round(after.position.y)).toBe(Math.round(before.y));
   });
 
   it('adds a file dropped on the graph while the Individuals tab is open, outlining the graph while it is over it', async () => {

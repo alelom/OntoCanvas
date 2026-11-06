@@ -222,3 +222,25 @@ describe('focusNodeIds: what the view fits to after a draw (#216)', () => {
     expect(focusNodeIds(data, ['gone'])).toEqual([]);
   });
 });
+
+describe('the individual whose neighbours are drawn, kept where it was (#239)', () => {
+  const linked = new Store(new Parser().parse(`@prefix : <${NS}> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:a a :Room ; rdfs:label "A" ; :next :b , :c . :b a :Room ; rdfs:label "B" . :c a :Room ; rdfs:label "C" .`));
+  const id = (n: string) => `${INDIVIDUAL_PREFIX}${NS}${n}`;
+
+  it('stays at the position it had, and the individuals linked to it are placed around it', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [linked] });
+    layer.show(`${NS}a`);
+    layer.showNeighbours(`${NS}a`);
+    const data = { nodes: new DataSet<any>([{ id: 'Room', label: 'Room', x: 0, y: 0 }]), edges: new DataSet<any>() };
+
+    addIndividualsToNetworkData(data, layer, classNodesByUri(classNodes), { anchor: { id: id('a'), x: 900, y: -400 } });
+
+    const a = data.nodes.get(id('a')) as any;
+    expect([a.x, a.y]).toEqual([900, -400]);
+    for (const n of ['b', 'c']) {
+      const node = data.nodes.get(id(n)) as any;
+      expect(Math.hypot(node.x - 900, node.y + 400)).toBeLessThan(600);
+    }
+  });
+});

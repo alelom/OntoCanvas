@@ -507,3 +507,16 @@ describe('the double-click hint in the tooltip of an individual (#239)', () => {
     expect(titleOf(layer, 'd')).not.toMatch(/Double-click|linked to it/);
   });
 });
+
+describe('the individual whose neighbours are drawn (#239)', () => {
+  it('is told with the draw, so the canvas can keep it in place and selected', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [store(':a a :P ; :knows :b . :b a :P .')] });
+    const changes: Array<{ kind: string; anchor?: string }> = [];
+    layer.onChange((change) => changes.push({ kind: change.kind, anchor: change.anchor }));
+
+    layer.show(ex('a'));
+    layer.showNeighbours(ex('a'));
+
+    expect(changes).toEqual([{ kind: 'draw', anchor: undefined }, { kind: 'draw', anchor: ex('a') }]);
+  });
+});

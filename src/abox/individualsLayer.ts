@@ -73,6 +73,8 @@ export interface LayerClass {
 export interface LayerChange {
   kind: 'draw' | 'clear' | 'data';
   drawn: string[];
+  /** The individual whose neighbours a draw added (#239): the canvas keeps it where it was, and selected. */
+  anchor?: string;
 }
 
 export interface LayerView {
@@ -133,10 +135,10 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
   let hidden = false;
   const auto = (): boolean => !hidden && known().size > 0 && known().size <= autoMax;
   /** Tells the listeners; `before` is what was drawn before a draw, to say what it added. */
-  const changed = (kind: LayerChange['kind'], before?: ReadonlySet<string>): void => {
+  const changed = (kind: LayerChange['kind'], before?: ReadonlySet<string>, anchor?: string): void => {
     shownCache = null;
     const drawn = before ? [...computeShown().shown].filter((iri) => !before.has(iri)) : [];
-    listeners.forEach((listener) => listener({ kind, drawn }));
+    listeners.forEach((listener) => listener({ kind, drawn, ...(anchor ? { anchor } : {}) }));
   };
 
   const known = (): Set<string> => {
@@ -267,7 +269,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       if (places < 0) return;
       picked.add(iri);
       for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, Math.min(maxPerExpansion, places))) picked.add(neighbour);
-      changed('draw', before);
+      changed('draw', before, iri);
     },
     clear() {
       if (picked.size === 0 && !auto()) return;
