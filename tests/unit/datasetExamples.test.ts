@@ -141,7 +141,7 @@ describe('run-folder (#227, #228)', () => {
     const loader = createDataLoader({ sources, getStore: () => new Store(), confirm: async () => true });
     await loader.addFolder((options) => folderFromHandle(handleOf(dir), options));
     let next = 0;
-    return { sources, loader, images: createDataImages({ sources, createUrl: () => `blob:${++next}` }) };
+    return { sources, loader, images: createDataImages({ sources, createUrl: () => `blob:${++next}`, isWindows: () => false }) };
   }
 
   it('runs/run-0001: four data files with the triples the README says, four images, the README skipped, 26 individuals, two graphs', async () => {

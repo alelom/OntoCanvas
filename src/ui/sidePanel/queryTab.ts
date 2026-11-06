@@ -94,8 +94,10 @@ function addImageHover(td: HTMLElement, value: string, images: DataImages): void
   preview.append(img);
   td.append(preview);
   // Placed against the window: the cell clips what overflows it (the ellipsis of a long value).
-  // An address that does not answer with an image: said in its place, as in the detail of an individual.
-  img.addEventListener('error', () => preview.replaceChildren(`No image could be read at ${found.url}.`));
+  // An image that does not load: why, in its place, as in the detail of an individual, where the steps to see it are.
+  img.addEventListener('error', () => {
+    void images.diagnose(found.url).then((problem) => preview.replaceChildren(problem.help ? `${problem.hint} Select its individual for how to see it.` : problem.hint));
+  });
   td.addEventListener('mouseenter', () => {
     if (!img.src) img.src = found.url;
     const cell = td.getBoundingClientRect();

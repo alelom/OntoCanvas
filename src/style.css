@@ -906,6 +906,33 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   font-size: 11px;
   font-style: italic;
 }
+/* The steps to see an image whose path is too long on Windows: folded under the note, in plain type. */
+.individual-image-help {
+  margin-top: 3px;
+  color: #444;
+  font-style: normal;
+}
+.individual-image-help summary {
+  cursor: pointer;
+  color: #1a5fb4;
+}
+.individual-image-help ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.individual-image-help li {
+  display: list-item;
+  margin-bottom: 3px;
+}
+.individual-image-help p {
+  margin: 2px 0;
+}
+.individual-image-help code {
+  font-size: 11px;
+  background: #f2f2f2;
+  padding: 0 2px;
+  word-break: break-all;
+}
 /* A result cell naming an image (#228): the image while the pointer is over it. */
 .query-image-cell {
   text-decoration: underline dotted;

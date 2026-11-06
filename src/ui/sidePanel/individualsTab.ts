@@ -16,6 +16,7 @@ import type { DataLoader } from '../../sparql/dataLoader';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 import type { DataImages, ImageFound } from '../../abox/dataImages';
 import { createDataBlock } from './dataBlock';
+import { renderImageProblem } from './imageProblem';
 import type { SidePanelTab } from './sidePanelHost';
 
 export interface IndividualsTabDeps {
@@ -229,11 +230,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   /** The image a value names, opening whole in a new tab when clicked; or the reason it is not shown. */
   function imagePreview(value: string, found: ImageFound): HTMLElement {
-    if (!('url' in found)) {
-      const note = element('div', 'individual-image-missing', found.hint);
-      note.setAttribute('data-individuals-image-missing', '');
-      return note;
-    }
+    if (!('url' in found)) return renderImageProblem(found);
     const link = element('a', 'individual-image');
     link.href = found.url;
     link.target = '_blank';
@@ -243,8 +240,11 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     img.alt = value;
     img.src = found.url;
     img.setAttribute('data-individuals-image', '');
-    // An address that does not answer with an image: said in its place.
-    img.addEventListener('error', () => link.replaceWith(element('div', 'individual-image-missing', `No image could be read at ${found.url}.`)));
+    // An image that does not load: why, in its place (a path too long, a file that cannot be read, one that is no image).
+    img.addEventListener('error', () => {
+      const why = deps.images?.diagnose(found.url) ?? Promise.resolve({ hint: `No image could be read at ${found.url}.` });
+      void why.then((problem) => link.replaceWith(renderImageProblem(problem)));
+    });
     link.append(img);
     return link;
   }

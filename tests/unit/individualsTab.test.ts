@@ -9,6 +9,7 @@ import { createIndividualsTab, type IndividualsTab } from '../../src/ui/sidePane
 import { createDataSources } from '../../src/sparql/dataSources';
 import { createDataLoader } from '../../src/sparql/dataLoader';
 import type { DataImages } from '../../src/abox/dataImages';
+import { LONG_PATH_SUMMARY } from '../../src/ui/sidePanel/imageProblem';
 
 const NS = 'http://example.org/d#';
 const PREFIXES = `
@@ -244,9 +245,14 @@ describe('the detail', () => {
 
   describe('images (#228, #241)', () => {
     const images: DataImages = {
-      find: (value) => (value.endsWith('.png') ? (value.startsWith('missing') ? { hint: 'No file here.' } : { url: `blob:${value}` }) : null),
+      find: (value) =>
+        !value.endsWith('.png') ? null
+        : value.startsWith('missing') ? { hint: 'No file here.' }
+        : value.startsWith('deep') ? { hint: 'Maybe too long.', help: { kind: 'long-path', folder: 'run-0001' } }
+        : { url: `blob:${value}` },
       linkedImages: (iri) => (iri === NS + 'room101' ? [{ image: NS + 'crop1', value: 'runs/r/crop.png', found: { url: 'blob:crop' } }] : []),
       imagesOf: () => [],
+      diagnose: async () => ({ hint: 'Listed, not readable.', help: { kind: 'long-path', folder: 'run-0001' } }),
     };
     const mountWithImages = () => {
       tab = createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({ '': NS }), images });
@@ -273,6 +279,34 @@ describe('the detail', () => {
       expect(section.querySelector<HTMLImageElement>('[data-individuals-image]')!.src).toBe('blob:crop');
       section.querySelector<HTMLButtonElement>('[data-individuals-follow]')!.click();
       expect(q('[data-individuals-detail] [data-individuals-iri]').textContent).toBe(NS + 'crop1');
+    });
+
+    it('folds the steps to open the folder from a shorter path under a note that may be a long path, naming the folder opened', () => {
+      stores = [ONTOLOGY, store(':room101 a :Room ; rdfs:label "Room 101" ; :imagePath "deep.png" .')];
+      mountWithImages();
+
+      click('Room 101');
+
+      const note = q('[data-individuals-outgoing] [data-individuals-image-missing]');
+      expect(note.textContent).toContain('Maybe too long.');
+      const help = note.querySelector<HTMLDetailsElement>('[data-individuals-image-help]')!;
+      expect(help.open).toBe(false);
+      expect(help.querySelector('summary')!.textContent).toBe(LONG_PATH_SUMMARY);
+      expect([...help.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'In PowerShell, give the folder that holds run-0001 a free drive letter, such as X: subst X: "C:\\path\\to\\the folder that holds run-0001"',
+        'Open it again from there: From a folder… (or Explore a folder… on the start screen), and pick X:\\run-0001.',
+        'When you are done, subst X: /D takes the drive letter away.',
+      ]);
+    });
+
+    it('says why in place of an image that does not load, with the steps when there are some', async () => {
+      mountWithImages();
+      click('Room 101');
+
+      q('[data-individuals-linked-images] [data-individuals-image]').dispatchEvent(new Event('error'));
+
+      await vi.waitFor(() => expect(q('[data-individuals-linked-images] [data-individuals-image-missing]').textContent).toContain('Listed, not readable.'));
+      expect(container.querySelector('[data-individuals-linked-images] [data-individuals-image-help]')).not.toBeNull();
     });
 
     it('has no such heading for an individual with no linked image', () => {

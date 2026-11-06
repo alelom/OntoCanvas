@@ -12,8 +12,17 @@ import type { DataSource, DataSources } from '../sparql/dataSources';
 import { findInFolder, indexFolder, isImagePath, resolveAgainstUrl, type FolderIndex } from './imagePaths';
 import { isPrivateAddress } from './dataOntologies';
 
+/**
+ * Steps that let the user see the image after all: on Windows, a browser cannot read a file whose full path is longer than 260
+ * characters, so the folder is opened again from a shorter path. `folder`: the name of the folder opened.
+ */
+export type ImageHelp = { kind: 'long-path'; folder: string };
+
+/** Why an image cannot be shown, and what to do about it when something can be done. */
+export type ImageProblem = { hint: string; help?: ImageHelp };
+
 /** Where a value's image is, or why it cannot be shown. */
-export type ImageFound = { url: string } | { hint: string };
+export type ImageFound = { url: string } | ImageProblem;
 
 /** An image of an individual kept on another individual (#241): the image individual, its value naming the image, and where it is. */
 export interface LinkedImage {
@@ -35,12 +44,27 @@ export interface DataImages {
   linkedImages(iri: string): LinkedImage[];
   /** The addresses of the images an individual's values name, and of its linked images, for its tooltip; at most `max`. */
   imagesOf(iri: string, max?: number): string[];
+  /**
+   * Why an image address `find` gave did not load. For a file of a folder, its bytes are read to tell a file the browser cannot
+   * reach (on Windows, a path that is too long) from one that cannot be read, an empty one and one that is no image.
+   */
+  diagnose(url: string): Promise<ImageProblem>;
 }
 
 export const OPEN_FOLDER_HINT = "Open the data's folder (From a folder…) to see this image: a page cannot read the files beside a file picked on its own.";
 const NOT_FOUND_HINT = "No file at this path in the folder opened.";
 export const SEVERAL_FILES_HINT = 'This path is in several data files, each with its own image: select the individual to see the right one.';
 export const PRIVATE_ADDRESS_HINT = 'Not loaded: the address is on this machine or a private network, and the data, not you, names it.';
+export const NOT_FOUND_WINDOWS_HINT =
+  "No file at this path in the folder opened. If the file is there, its full path may be longer than 260 characters: on Windows, the browser leaves such files out when it opens a folder.";
+export const UNREADABLE_LONG_PATH_HINT = "The browser listed this image but couldn't read it. On Windows, this means its full path is longer than 260 characters.";
+export const MOVED_HINT = "The browser listed this image but couldn't read it: it may have been moved, renamed or deleted since the folder was opened. Open the folder again.";
+export const NOT_READABLE_HINT = "This image couldn't be read: it may be open in another program, not downloaded from the cloud yet, or not allowed to be read.";
+export const EMPTY_HINT = 'This image file is empty.';
+export const NOT_AN_IMAGE_HINT = "This file couldn't be shown as an image: it may be damaged, or not the kind of image its name says.";
+
+/** Whether the page runs on Windows, where a browser cannot read a path longer than 260 characters. */
+const runsOnWindows = (): boolean => typeof navigator !== 'undefined' && /Win/i.test((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? '');
 
 const GEOM = 'https://w3id.org/adiro/adiro_geometry#';
 const IMAGE_OF = `${GEOM}imageOf`;
@@ -57,11 +81,14 @@ export interface DataImagesOptions {
   getOntology?: () => { store: Store; location: string | null } | null;
   createUrl?: (blob: Blob) => string;
   revokeUrl?: (url: string) => void;
+  isWindows?: () => boolean;
 }
 
-export function createDataImages({ sources, getOntology, createUrl = (b) => URL.createObjectURL(b), revokeUrl = (u) => URL.revokeObjectURL(u) }: DataImagesOptions): DataImages {
+export function createDataImages({ sources, getOntology, createUrl = (b) => URL.createObjectURL(b), revokeUrl = (u) => URL.revokeObjectURL(u), isWindows = runsOnWindows }: DataImagesOptions): DataImages {
   /** The object URL of each folder file shown, by folder and path. */
   const urls = new Map<string, string>();
+  /** The file and the folder's name behind each object URL, to tell why one did not load. */
+  const files = new Map<string, { blob: Blob; folder: string }>();
   const keyOf = (folder: number, path: string) => `${folder}\u0000${path}`;
   sources.onChange(() => {
     const kept = new Set(sources.folders().map((f) => f.id));
@@ -69,6 +96,7 @@ export function createDataImages({ sources, getOntology, createUrl = (b) => URL.
       if (kept.has(Number(key.split('\u0000')[0]))) continue;
       revokeUrl(url);
       urls.delete(key);
+      files.delete(url);
     }
   });
 
@@ -104,7 +132,12 @@ export function createDataImages({ sources, getOntology, createUrl = (b) => URL.
       const path = findInFolder(value, indexOf(folder.images), from?.folder === folder.id ? dirOf(from.name) : '', folder.name);
       if (!path) continue;
       const key = keyOf(folder.id, path);
-      if (!urls.has(key)) urls.set(key, createUrl(folder.images.get(path)!));
+      if (!urls.has(key)) {
+        const blob = folder.images.get(path)!;
+        const url = createUrl(blob);
+        urls.set(key, url);
+        files.set(url, { blob, folder: folder.name });
+      }
       return urls.get(key)!;
     }
     return null;
@@ -138,7 +171,25 @@ export function createDataImages({ sources, getOntology, createUrl = (b) => URL.
         const url = resolveAgainstUrl(value, ontology.location);
         if (url) return { url };
       }
-      return { hint: sources.folders().length ? NOT_FOUND_HINT : OPEN_FOLDER_HINT };
+      const folders = sources.folders();
+      if (!folders.length) return { hint: OPEN_FOLDER_HINT };
+      if (!isWindows()) return { hint: NOT_FOUND_HINT };
+      // The browser leaves out of a folder the files whose path is too long, without a word: it may be one of them.
+      const fromFolder = holding.find((s) => s.folder !== undefined)?.folder;
+      return { hint: NOT_FOUND_WINDOWS_HINT, help: { kind: 'long-path', folder: (folders.find((f) => f.id === fromFolder) ?? folders[0]).name } };
+    },
+    async diagnose(url) {
+      const file = files.get(url);
+      if (!file) return { hint: `No image could be read at ${url}.` };
+      let bytes: ArrayBuffer;
+      try {
+        bytes = await file.blob.arrayBuffer();
+      } catch (error) {
+        const name = error instanceof DOMException ? error.name : '';
+        if (name === 'NotFoundError') return isWindows() ? { hint: UNREADABLE_LONG_PATH_HINT, help: { kind: 'long-path', folder: file.folder } } : { hint: MOVED_HINT };
+        return { hint: NOT_READABLE_HINT };
+      }
+      return { hint: bytes.byteLength ? NOT_AN_IMAGE_HINT : EMPTY_HINT };
     },
     linkedImages(iri) {
       const stores = allStores();

@@ -5,7 +5,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Parser, Store } from 'n3';
 import { createDataSources } from '../../src/sparql/dataSources';
-import { createDataImages, OPEN_FOLDER_HINT, PRIVATE_ADDRESS_HINT, SEVERAL_FILES_HINT } from '../../src/abox/dataImages';
+import {
+  createDataImages,
+  EMPTY_HINT,
+  MOVED_HINT,
+  NOT_AN_IMAGE_HINT,
+  NOT_FOUND_WINDOWS_HINT,
+  NOT_READABLE_HINT,
+  OPEN_FOLDER_HINT,
+  PRIVATE_ADDRESS_HINT,
+  SEVERAL_FILES_HINT,
+  UNREADABLE_LONG_PATH_HINT,
+} from '../../src/abox/dataImages';
 
 const NS = 'http://example.org/d#';
 const PATH = 'runs/run-0001/images/page-1/titleblock.png';
@@ -17,7 +28,7 @@ function setUp() {
   let next = 0;
   const createUrl = vi.fn(() => `blob:${++next}`);
   const revokeUrl = vi.fn();
-  return { sources, createUrl, revokeUrl, images: createDataImages({ sources, createUrl, revokeUrl }) };
+  return { sources, createUrl, revokeUrl, images: createDataImages({ sources, createUrl, revokeUrl, isWindows: () => false }) };
 }
 
 describe('createDataImages', () => {
@@ -116,6 +127,55 @@ describe('createDataImages', () => {
     for (let i = 0; i < 20; i++) images.find(`images/page-${i}/missing.png`);
 
     expect(keys.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
+  describe('why an image cannot be shown, told apart once it fails to load', () => {
+    /** A file the browser listed: its read gives these bytes, or fails with this DOMException name. */
+    const listed = (read: Uint8Array | string): Blob =>
+      ({ size: typeof read === 'string' ? 0 : read.length, type: 'image/png', arrayBuffer: () => (typeof read === 'string' ? Promise.reject(new DOMException('x', read)) : Promise.resolve(read.buffer)) }) as unknown as Blob;
+
+    async function open(image: Blob, isWindows: boolean) {
+      const sources = createDataSources();
+      const images = createDataImages({ sources, createUrl: () => 'blob:1', isWindows: () => isWindows });
+      const folder = sources.addFolder('run-0001', new Map([['images/page-1/titleblock.png', image]]), 0);
+      await sources.addFile(file('part-0001.ttl'), { name: 'part-0001.ttl', folder: folder.id });
+      return images;
+    }
+
+    it('on Windows, a listed file that cannot be found when read: its path is too long, with the steps for the folder opened', async () => {
+      const images = await open(listed('NotFoundError'), true);
+      images.find(PATH, `${NS}sheet1`, `${NS}imagePath`);
+
+      expect(await images.diagnose('blob:1')).toEqual({ hint: UNREADABLE_LONG_PATH_HINT, help: { kind: 'long-path', folder: 'run-0001' } });
+    });
+
+    it('elsewhere, the same failure: moved or deleted since the folder was opened', async () => {
+      const images = await open(listed('NotFoundError'), false);
+      images.find(PATH);
+
+      expect(await images.diagnose('blob:1')).toEqual({ hint: MOVED_HINT });
+    });
+
+    it('a file that cannot be read (open elsewhere, in the cloud only, not allowed), an empty one, and one that reads but is no image', async () => {
+      for (const [image, hint] of [[listed('NotReadableError'), NOT_READABLE_HINT], [listed(new Uint8Array()), EMPTY_HINT], [listed(new Uint8Array([1, 2, 3])), NOT_AN_IMAGE_HINT]] as const) {
+        const images = await open(image, true);
+        images.find(PATH);
+
+        expect(await images.diagnose('blob:1')).toEqual({ hint });
+      }
+    });
+
+    it('an address it did not make (an http image): only that it could not be read there', async () => {
+      const images = await open(listed(new Uint8Array([1])), true);
+
+      expect(await images.diagnose('https://example.org/a.png')).toEqual({ hint: 'No image could be read at https://example.org/a.png.' });
+    });
+
+    it('on Windows, a path matching no file of the folder may be one the browser left out for its length: the steps come with it', async () => {
+      const images = await open(listed(new Uint8Array([1])), true);
+
+      expect(images.find('runs/run-0001/images/page-9/titleblock.png', `${NS}sheet1`)).toEqual({ hint: NOT_FOUND_WINDOWS_HINT, help: { kind: 'long-path', folder: 'run-0001' } });
+    });
   });
 
   describe("a title block's crop, kept as ADIRO models it (#241)", () => {
