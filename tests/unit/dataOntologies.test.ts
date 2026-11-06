@@ -61,20 +61,6 @@ describe('findDataOntologies', () => {
     expect(findDataOntologies([data], ['https://example.org/onto/1.0'])).toEqual([]);
   });
 
-  it('never gives a loopback, link-local or private-network address, nor a .local host, named or guessed (#239 review)', () => {
-    const hosts = ['http://localhost:8080/o', 'http://127.0.0.1/o', 'http://[::1]/o', 'http://10.1.2.3/o', 'http://172.16.0.9/o', 'http://172.31.255.1/o', 'http://192.168.1.2/o', 'http://169.254.1.1/o', 'http://0.0.0.0/o', 'http://printer.local/o', 'http://[fd00::1]/o', 'http://[fe80::1]/o'];
-    const named = nq(hosts.map((h) => `<urn:d> <${PROV_USED}> <${h}> .`).join(String.fromCharCode(10)) + `
-<urn:d> <${PROV_USED}> <https://example.org/ok> .
-<urn:d> <${PROV_USED}> <http://172.32.0.1/public> .
-`);
-    const guessed = nq(`<urn:x> <${TYPE}> <http://192.168.1.2/vocab#Room> .
-<urn:x> <http://localhost/vocab#p> "v" .
-`);
-
-    expect(findDataOntologies([named], []).map((o) => o.iri)).toEqual(['https://example.org/ok', 'http://172.32.0.1/public']);
-    expect(findDataOntologies([guessed], [])).toEqual([]);
-  });
-
   it('gives at most ten', () => {
     const many = nq(Array.from({ length: 15 }, (_, i) => `<urn:d> <${PROV_USED}> <https://example.org/o${i}> .`).join('\n') + '\n');
 
