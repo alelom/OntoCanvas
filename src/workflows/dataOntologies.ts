@@ -7,7 +7,7 @@
  */
 import type { Store } from 'n3';
 import { session } from '../state/appState';
-import { dataOntologiesNote, findDataOntologies, type DataOntology } from '../abox/dataOntologies';
+import { dataOntologiesNote, findDataOntologies, publicAddressesOnly, type DataOntology } from '../abox/dataOntologies';
 import { setNotice } from '../ui/statusNotices';
 import { debugWarn } from '../utils/debug';
 import { loadOntologies } from '../lib/importedDeclarations';
@@ -83,7 +83,8 @@ async function openDataOntologies(iris: string[]): Promise<{ opened: string[]; f
   const loaded = new Set(loadedOntologyIris().map(bare));
   const read = await loadOntologies(
     iris.filter((iri) => !loaded.has(bare(iri))),
-    (url) => fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true }),
+    // Never a private address, at any level: an ontology the data names may import one (#239 second review).
+    publicAddressesOnly((url) => fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })),
     { exclude: [...loaded] }
   );
   // Another ontology was opened meanwhile: these were for the one before.

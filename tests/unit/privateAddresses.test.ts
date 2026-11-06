@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
-import { findDataOntologies, isPrivateAddress } from '../../src/abox/dataOntologies';
+import { findDataOntologies, isPrivateAddress, publicAddressesOnly } from '../../src/abox/dataOntologies';
 
 const nq = (text: string) => new Store(new Parser({ format: 'N-Quads' }).parse(text));
 const PROV_USED = 'http://www.w3.org/ns/prov#used';
@@ -25,6 +25,17 @@ const PRIVATE = [
   'http://app.localhost/o',
   'http://[fd00::1]/o',
   'http://[fe80::1]/o',
+  // Second review: an IPv4 address inside IPv6, a trailing dot, and the shared and special ranges.
+  'http://[::ffff:127.0.0.1]/o',
+  'http://[::ffff:10.0.0.1]/o',
+  'http://[::ffff:7f00:1]/o',
+  'http://localhost./o',
+  'http://printer.local./o',
+  'http://100.64.0.1/o',
+  'http://100.127.255.1/o',
+  'http://192.0.0.8/o',
+  'http://198.18.0.1/o',
+  'http://198.19.255.1/o',
 ];
 
 describe('isPrivateAddress', () => {
@@ -33,7 +44,7 @@ describe('isPrivateAddress', () => {
   });
 
   it('is false for the public web, the edges of the private ranges included', () => {
-    for (const iri of ['https://example.org/o', 'https://w3id.org/adiro/adiro_provenance/2.2.0', 'http://172.32.0.1/o', 'http://172.15.0.1/o', 'http://11.0.0.1/o', 'http://[2001:db8::1]/o']) {
+    for (const iri of ['https://example.org/o', 'https://w3id.org/adiro/adiro_provenance/2.2.0', 'http://172.32.0.1/o', 'http://172.15.0.1/o', 'http://11.0.0.1/o', 'http://[2001:db8::1]/o', 'http://100.63.0.1/o', 'http://100.128.0.1/o', 'http://198.20.0.1/o', 'http://[::ffff:8.8.8.8]/o', 'https://example.org./o']) {
       expect(isPrivateAddress(iri), iri).toBe(false);
     }
   });
@@ -50,5 +61,20 @@ describe('findDataOntologies and private addresses', () => {
     const guessed = nq(`<urn:x> <${TYPE}> <http://192.168.1.2/vocab#Room> .\n<urn:x> <http://localhost/vocab#p> "v" .\n`);
 
     expect(findDataOntologies([guessed], [])).toEqual([]);
+  });
+});
+
+describe('publicAddressesOnly (#239 second review)', () => {
+  it("fetches a public address, and never a private one: the imports of the data's ontologies are read through it, at every level", async () => {
+    const asked: string[] = [];
+    const fetchTtl = publicAddressesOnly(async (url) => {
+      asked.push(url);
+      return 'text';
+    });
+
+    expect(await fetchTtl('https://example.org/onto')).toBe('text');
+    expect(await fetchTtl('http://localhost:8080/onto')).toBeNull();
+    expect(await fetchTtl('http://[::ffff:10.0.0.1]/onto')).toBeNull();
+    expect(asked).toEqual(['https://example.org/onto']);
   });
 });

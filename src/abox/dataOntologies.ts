@@ -26,24 +26,46 @@ const MAX_ONTOLOGIES = 10;
 const isHttp = (iri: string): boolean => /^https?:\/\//i.test(iri);
 
 /**
- * Whether an address is on this machine or a private network: loopback, link-local, private IPv4 ranges, IPv6 unique-local and
- * link-local, and .local or .localhost names. The data added is not something the user looked at, so it must not make the
- * page reach such hosts (#239 review); an ontology is read from the public web.
+ * Whether an address is plainly on this machine or a private network: loopback, link-local, the private, shared (100.64/10) and
+ * special (192.0.0/24, 198.18/15) IPv4 ranges, the same inside IPv6 (::ffff:a.b.c.d), IPv6 unique-local and link-local, and
+ * .local or .localhost names, a trailing dot or not. The data added is not something the user looked at, so it must not make
+ * the page reach such hosts (#239 review). A name that resolves to such an address, or a redirect to one, cannot be told from
+ * the browser before the request.
  */
 export function isPrivateAddress(iri: string): boolean {
   let host: string;
   try {
-    host = new URL(iri).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    host = new URL(iri).hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
   } catch {
     return true;
   }
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '0.0.0.0' || host === '::' || host === '::1') return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '::' || host === '::1') return true;
+  // An IPv4 address inside IPv6 is that IPv4 address; the URL parser writes it in hex (::ffff:7f00:1).
+  const mapped = /^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/.exec(host);
+  if (mapped) {
+    host = mapped[1] ?? [parseInt(mapped[2], 16) >> 8, parseInt(mapped[2], 16) & 255, parseInt(mapped[3], 16) >> 8, parseInt(mapped[3], 16) & 255].join('.');
+  }
   const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
   if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 127 || a === 10 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+    const [a, b, c] = [Number(v4[1]), Number(v4[2]), Number(v4[3])];
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 0 && c === 0) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
   }
   return /^(fc|fd|fe8|fe9|fea|feb)/.test(host) && host.includes(':');
+}
+
+/** `fetchTtl` that never asks for a private address (#239 second review): the imports of the data's ontologies, at every level, are read through it. */
+export function publicAddressesOnly(fetchTtl: (url: string) => Promise<string | null>): (url: string) => Promise<string | null> {
+  return (url) => (isPrivateAddress(url) ? Promise.resolve(null) : fetchTtl(url));
 }
 const bare = (iri: string): string => iri.replace(/[#/]+$/, '');
 const namespaceOf = (iri: string): string => bare(iri.includes('#') ? iri.slice(0, iri.indexOf('#')) : iri.slice(0, iri.lastIndexOf('/')));
