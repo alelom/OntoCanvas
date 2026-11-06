@@ -29,6 +29,9 @@ example ontology, its "Try it" links (see the `feature-examples` skill), or the 
 under a heading such as "Still to do on this PR", and tick it off as it lands. Batch those pushes: every push to a ready PR
 runs CI again.
 
+Before handing a user-visible PR over, its body has the "Try it" table with an "Open on localhost" link on every row, so the
+user can test it with one click per check (the `feature-examples` skill, step 4). Don't hand it over without them.
+
 ## How
 
 ```bash
