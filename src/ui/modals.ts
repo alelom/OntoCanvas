@@ -48,7 +48,8 @@ export function getCardinalityFromEditModal(): { minCardinality?: number | null;
 /**
  * Show the loading modal
  */
-export function showLoadingModal(): void {
+export function showLoadingModal(text = OPENING_ONTOLOGY): void {
+  setLoadingText(text);
   const modal = document.getElementById('loadingModal');
   if (modal) modal.style.display = 'flex';
 }
@@ -61,9 +62,18 @@ export function hideLoadingModal(): void {
   if (modal) modal.style.display = 'none';
 }
 
-/** Runs `work` with the loading modal shown, and hides it after, however `work` ends. */
-export async function underLoadingScreen(work: () => Promise<void>): Promise<void> {
-  showLoadingModal();
+/** What the loading screen says by default. */
+export const OPENING_ONTOLOGY = 'Opening the ontology…';
+
+/** Sets what the loading screen says: the step being done (#239), such as "Adding the data…". */
+export function setLoadingText(text: string): void {
+  const el = document.getElementById('loadingModalText');
+  if (el) el.textContent = text;
+}
+
+/** Runs `work` with the loading modal shown, saying `text` (`work` may say the next steps), and hides it after, however `work` ends. */
+export async function underLoadingScreen(work: () => Promise<void>, text?: string): Promise<void> {
+  showLoadingModal(text);
   try {
     await work();
   } finally {

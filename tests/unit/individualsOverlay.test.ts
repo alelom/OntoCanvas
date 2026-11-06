@@ -121,6 +121,7 @@ describe('the stubs of classes that are not on the canvas (#216)', () => {
 
     const node = data.nodes.get(stubId) as any;
     expect(node.individualCount).toBe(2);
+    expect(node.title).toContain('Double-click it, or its count, to draw its individuals.');
     expect(node.x).toBeGreaterThan(100);
     expect(data.nodes.get().filter((n: any) => String(n.id).startsWith(INDIVIDUAL_PREFIX))).toEqual([]);
   });

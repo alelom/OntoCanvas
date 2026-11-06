@@ -102,11 +102,18 @@ const inWords = (names: string[]): string => (names.length < 2 ? names.join('') 
  */
 export function dataOntologiesNote(opened: DataOntology[], failed: DataOntology[]): string | null {
   const names = (list: DataOntology[]) => inWords(list.map((o) => ontologyName(o.iri)));
-  const named = failed.filter((o) => o.via !== 'namespace');
-  const guessed = failed.filter((o) => o.via === 'namespace');
+  const isGuess = (o: DataOntology) => o.via === 'namespace';
+  const what = '(read-only, for the names of its classes; not saved)';
   const parts: string[] = [];
-  if (opened.length) parts.push(`Read as context: ${names(opened)}. They name the data's classes, and are never saved.`);
-  if (named.length) parts.push(`The data names ${names(named)}, which could not be read: the address may not answer with RDF, or may not let this page read it.`);
-  if (guessed.length) parts.push(`No ontology could be read at the namespaces of its classes and properties (${names(guessed)}).`);
+  const openedNamed = opened.filter((o) => !isGuess(o));
+  const openedGuessed = opened.filter(isGuess);
+  const failedNamed = failed.filter((o) => !isGuess(o));
+  const failedGuessed = failed.filter(isGuess);
+  if (openedNamed.length) parts.push(`Loaded the ontologies the data was made with: ${names(openedNamed)} ${what}.`);
+  if (openedGuessed.length) parts.push(`Loaded from the namespaces of the data's classes: ${names(openedGuessed)} ${what}.`);
+  if (failedNamed.length) {
+    parts.push(`Could not load ${names(failedNamed)}, which the data says it was made with: the address may not answer with RDF, or may not let this page read it.`);
+  }
+  if (failedGuessed.length) parts.push(`No ontology found at the namespaces of the data's classes (${names(failedGuessed)}).`);
   return parts.length ? parts.join(' ') : null;
 }

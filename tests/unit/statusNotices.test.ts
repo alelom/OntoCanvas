@@ -5,7 +5,8 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { clearNotices, getNotices, onNoticesChange, setNotice } from '../../src/ui/statusNotices';
-import { initStatusBar } from '../../src/ui/statusBar';
+import { initStatusBar, updateStatusBar } from '../../src/ui/statusBar';
+import { Parser, Store } from 'n3';
 
 describe('the notices', () => {
   beforeEach(() => clearNotices());
@@ -60,5 +61,28 @@ describe('the notices in the bottom bar', () => {
     clearNotices();
 
     expect(button().style.display).toBe('none');
+  });
+});
+
+describe('an unused annotation property, a note and not an issue (#239)', () => {
+  const button = () => document.getElementById('ontologyIssuesBtn')!;
+  const popup = () => document.getElementById('ontologyIssuesPopup')!;
+
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="app"><div id="info"></div></div>';
+    clearNotices();
+    initStatusBar();
+  });
+
+  it('is listed under Notes and counted as a note: it says something of the ontology, not that something is wrong', async () => {
+    const store = new Store(new Parser().parse('@prefix owl: <http://www.w3.org/2002/07/owl#> . <http://example.org/o#depiction> a owl:AnnotationProperty .'));
+
+    updateStatusBar(store, null);
+
+    await vi.waitFor(() => expect(button().style.display).toBe(''));
+    expect(button().textContent).toContain('notes (1)');
+    expect(popup().textContent).toContain('Notes');
+    expect(popup().textContent).toMatch(/Annotation property "depiction" is defined but never used/);
+    expect(popup().textContent).not.toContain('Ontology Issues');
   });
 });

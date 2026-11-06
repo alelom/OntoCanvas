@@ -32,7 +32,8 @@ import {
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
 import { ontologiesOfDataRead, openOntologiesOfData } from './workflows/dataOntologies';
-import { underLoadingScreen } from './ui/modals';
+import { setLoadingText, underLoadingScreen } from './ui/modals';
+
 import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
@@ -64,6 +65,10 @@ import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyM
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { applyFilter } from './graph/applyFilter';
 import { classIndividualsAction, classIriOfNode } from './graph/classIndividuals';
+
+/** What the loading screen says while the data is added, then while the ontologies it names are read (#239). */
+const ADDING_DATA = 'Adding the data…';
+const READING_DATA_ONTOLOGIES = 'Reading the ontologies the data names…';
 
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setClassIndividualsProvider((nodeId) => {
@@ -170,6 +175,10 @@ session.sidePanel = initSidePanel({
   getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? importedClass(classIri)?.label ?? null,
   embedded: isEmbedded(),
 });
+// The loading screen over an initial load says how adding the data goes ("Adding 2 of 3: …", #239).
+session.sidePanel.onDataStatus((status, loading) => {
+  if (loading && status) setLoadingText(status);
+});
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {
   appEl.classList.add('embed-no-menu');
@@ -194,8 +203,9 @@ setOnExploreDataFiles((files) =>
     // Under the loading screen until the ontologies the data names are read: the classes are drawn once, named.
     addDataFiles: (added) => underLoadingScreen(async () => {
       await session.sidePanel?.addDataFiles(added);
+      setLoadingText(READING_DATA_ONTOLOGIES);
       await ontologiesOfDataRead();
-    }),
+    }, ADDING_DATA),
   })
 );
 // Update serializer dropdown after DOM is ready (in case it was rendered)
@@ -221,8 +231,9 @@ setTimeout(() => {
       if (loaded && session.ttlStore && dataUrls.length) {
         await underLoadingScreen(async () => {
           await session.sidePanel?.addDataUrls(dataUrls);
+          setLoadingText(READING_DATA_ONTOLOGIES);
           await ontologiesOfDataRead();
-        });
+        }, ADDING_DATA);
       }
       return loaded;
     },

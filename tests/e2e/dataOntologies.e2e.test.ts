@@ -68,7 +68,7 @@ describe('the ontologies the data was made with', () => {
     letAnswer();
 
     await page.waitForFunction(() =>
-      /Read as context: o 1\.0/.test(document.querySelector('#ontologyIssuesPopup [data-status-notice="data-ontologies"]')?.textContent ?? '')
+      /Loaded the ontologies the data was made with: o 1\.0/.test(document.querySelector('#ontologyIssuesPopup [data-status-notice="data-ontologies"]')?.textContent ?? '')
     );
     await page.waitForFunction(() => document.querySelector('[data-individuals-group-toggle] .individuals-group-title')?.textContent === 'Field assertion (2)');
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());

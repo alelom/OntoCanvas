@@ -322,7 +322,14 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     build(classNodeByUri) {
       const { shown, cut } = computeShown();
 
-      const nodes: LayerNode[] = [...shown].map((iri) => ({ id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) }));
+      // What a double-click on it draws (#239): the individuals linked to it that are not drawn yet.
+      const doubleClickHint = (iri: string): string => {
+        const linked = neighboursOf(iri);
+        if (!linked.length) return '';
+        const missing = linked.filter((n) => !shown.has(n)).length;
+        return missing ? `\nDouble-click: draw the ${missing} individual${missing === 1 ? '' : 's'} linked to it that ${missing === 1 ? 'is' : 'are'} not drawn.` : '\nEvery individual linked to it is drawn.';
+      };
+      const nodes: LayerNode[] = [...shown].map((iri) => ({ id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) + doubleClickHint(iri) }));
       const classes = new Map<string, LayerClass>();
       const counts = countsOfClasses();
       const classOf = (iri: string): LayerClass => {

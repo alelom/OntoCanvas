@@ -43,7 +43,7 @@ describe('starting from data files', () => {
     // In the bottom bar's notes, which it replaces the "no classes" note in.
     // Beside it, the note that no ontology was found at the namespaces of the data's classes (#239): the example names none.
     await page.waitForFunction(() => (document.getElementById('ontologyIssuesBtn')?.textContent ?? '').includes('notes (2)'));
-    expect(await page.locator('#ontologyIssuesPopup [data-status-notice="data-ontologies"]').textContent()).toContain('No ontology could be read at the namespaces');
+    expect(await page.locator('#ontologyIssuesPopup [data-status-notice="data-ontologies"]').textContent()).toContain("No ontology found at the namespaces of the data's classes");
     expect(await page.locator('#ontologyIssuesPopup [data-status-notice="no-classes"]').count()).toBe(0);
     expect(await page.locator('#ontologyIssuesPopup [data-status-notice="workspace"]').textContent()).toMatch(/no ontology/i);
     // Parts 1 and 2 with no gap: the softer notice.

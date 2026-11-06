@@ -486,3 +486,24 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
     expect(isIndividualNodeId('Room')).toBe(false);
   });
 });
+
+describe('the double-click hint in the tooltip of an individual (#239)', () => {
+  const linked = store(':a a :P ; :knows :b , :c . :b a :P . :c a :P . :d a :P .');
+  const titleOf = (layer: ReturnType<typeof createIndividualsLayer>, name: string) => layer.build(new Map()).nodes.find((n) => n.iri === ex(name))!.title;
+
+  it('says how many linked individuals a double-click draws, then that every one is drawn', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [linked] });
+    layer.show(ex('a'));
+    expect(titleOf(layer, 'a')).toContain('Double-click: draw the 2 individuals linked to it that are not drawn.');
+
+    layer.showNeighbours(ex('a'));
+    expect(titleOf(layer, 'a')).toContain('Every individual linked to it is drawn.');
+  });
+
+  it('says nothing of the kind for an individual linked to none', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [linked] });
+    layer.show(ex('d'));
+
+    expect(titleOf(layer, 'd')).not.toMatch(/Double-click|linked to it/);
+  });
+});

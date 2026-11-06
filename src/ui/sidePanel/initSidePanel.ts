@@ -50,9 +50,18 @@ export interface SidePanel {
   addDataFiles(files: DataFile[]): Promise<void>;
   /** What is known of the classes changed (imports read in the background, #235): the Individuals tab names them again. Keeps the data. */
   schemaChanged(): void;
+  /** Called with the progress of adding data ("Adding 2 of 3: …") and whether it goes on, for the loading screen (#239). */
+  onDataStatus(listener: (status: string, loading: boolean) => void): void;
 }
 
-const NO_PANEL: SidePanel = { refresh: () => {}, addDataUrls: async () => {}, openIndividuals: () => {}, addDataFiles: async () => {}, schemaChanged: () => {} };
+const NO_PANEL: SidePanel = {
+  refresh: () => {},
+  addDataUrls: async () => {},
+  openIndividuals: () => {},
+  addDataFiles: async () => {},
+  schemaChanged: () => {},
+  onDataStatus: () => {},
+};
 
 export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const root = document.getElementById('sidePanel');
@@ -155,6 +164,9 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       await dataLoader.addUrls(urls);
     },
     openIndividuals: () => host.open(individualsTab.id),
+    onDataStatus(listener) {
+      dataLoader?.onChange(() => listener(dataLoader.status(), dataLoader.loading()));
+    },
     schemaChanged() {
       deps.individualsLayer?.invalidate();
       individualsTab.refresh();

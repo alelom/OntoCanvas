@@ -347,3 +347,16 @@ describe('schemaChanged (#235)', () => {
     expect(dataSources.list()).toHaveLength(1);
   });
 });
+
+describe('onDataStatus (#239)', () => {
+  it('tells the progress of adding data, for the loading screen', async () => {
+    const { panel } = mount();
+    const seen: string[] = [];
+    panel.onDataStatus((status, loading) => seen.push(`${loading}|${status}`));
+
+    await panel.addDataFiles([{ name: 'a.ttl', size: 20, text: async () => PREFIXES + ':a a :Room .' }]);
+
+    expect(seen[0]).toBe('true|Loading a.ttl…');
+    expect(seen[seen.length - 1]).toBe('false|');
+  });
+});

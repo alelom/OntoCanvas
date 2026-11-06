@@ -97,21 +97,27 @@ describe('dataOntologiesNote (#239: opened on their own, told in the bottom bar)
   const named = (iri: string) => ({ iri, via: 'prov:used' as const });
   const guessed = (iri: string) => ({ iri, via: 'namespace' as const });
 
-  it('says what was read as context', () => {
-    expect(dataOntologiesNote([named('https://w3id.org/adiro/adiro_drawing_metadata/7.0.1'), guessed('https://example.org/onto')], [])).toBe(
-      "Read as context: adiro_drawing_metadata 7.0.1 and onto. They name the data's classes, and are never saved."
+  it('says which ontologies the data was made with were loaded, and what for', () => {
+    expect(dataOntologiesNote([named('https://w3id.org/adiro/adiro_provenance/2.2.0'), named('https://w3id.org/adiro/adiro_geometry/3.1.0')], [])).toBe(
+      'Loaded the ontologies the data was made with: adiro_provenance 2.2.0 and adiro_geometry 3.1.0 (read-only, for the names of its classes; not saved).'
     );
   });
 
-  it('says that what the data names could not be read, and why that may be', () => {
+  it("says apart which were found at the namespaces of the data's classes", () => {
+    expect(dataOntologiesNote([guessed('https://example.org/onto')], [])).toBe(
+      "Loaded from the namespaces of the data's classes: onto (read-only, for the names of its classes; not saved)."
+    );
+  });
+
+  it('says that what the data names could not be loaded, and why that may be', () => {
     expect(dataOntologiesNote([], [named('https://example.org/onto/1.0')])).toBe(
-      'The data names onto 1.0, which could not be read: the address may not answer with RDF, or may not let this page read it.'
+      'Could not load onto 1.0, which the data says it was made with: the address may not answer with RDF, or may not let this page read it.'
     );
   });
 
   it('says more quietly that a guess found nothing: the data named no ontology', () => {
     expect(dataOntologiesNote([], [guessed('http://example.org/examples/run-parts'), guessed('https://example.org/vocab')])).toBe(
-      'No ontology could be read at the namespaces of its classes and properties (run-parts and vocab).'
+      "No ontology found at the namespaces of the data's classes (run-parts and vocab)."
     );
   });
 

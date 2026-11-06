@@ -112,18 +112,26 @@ async function refreshIssues(): Promise<void> {
  */
 function renderIssuesArea(): void {
   if (!issuesButton || !issuesPopup) return;
-  const notices = getNotices();
-  const total = lastIssues.length + notices.length;
+  // What says something of the ontology without anything being wrong (an annotation property never used) is a note (#239).
+  const problems = lastIssues.filter((issue) => !INFORMATIONAL_ISSUES.includes(issue.type));
+  const notices = [
+    ...getNotices(),
+    ...lastIssues.filter((issue) => INFORMATIONAL_ISSUES.includes(issue.type)).map((issue) => ({ key: `issue:${issue.type}:${issue.elementName}`, message: issue.message + '.' })),
+  ];
+  const total = problems.length + notices.length;
   if (total === 0) {
     issuesButton.style.display = 'none';
     hideIssuesPopup();
     return;
   }
   issuesButton.style.display = '';
-  issuesButton.innerHTML = lastIssues.length ? `⚠️ <u>issues (${total})</u>` : `ℹ️ <u>notes (${total})</u>`;
+  issuesButton.innerHTML = problems.length ? `⚠️ <u>issues (${total})</u>` : `ℹ️ <u>notes (${total})</u>`;
   issuesButton.title = 'Notes and issues of the open ontology and its data';
-  renderIssuesPopup(lastIssues, notices);
+  renderIssuesPopup(problems, notices);
 }
+
+/** The kinds of issue that say something of the ontology without anything being wrong: shown as notes (#239). */
+const INFORMATIONAL_ISSUES: OntologyIssue['type'][] = ['unused_annotation_property'];
 
 const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

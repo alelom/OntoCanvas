@@ -147,9 +147,12 @@ function stubNode(c: LayerClass, at?: { x: number; y: number }) {
     // A class an import declares is named by it, with the ontology above as for imported terms (#111, #235); an undeclared
     // one keeps the dashed border of a stub.
     label: c.definedBy ? `(defined by: ${definedByName(c.definedBy)})\n${c.label}` : c.label,
-    title: c.definedBy
-      ? `${c.iri}\nDeclared in ${c.definedBy}, an ontology loaded as context. A class of the individuals in the loaded data that is not a node of this graph.`
-      : `${c.iri}\nA class of the individuals in the loaded data that is not a node of this graph.`,
+    title:
+      (c.definedBy
+        ? `${c.iri}\nDeclared in ${c.definedBy}, an ontology loaded as context. A class of the individuals in the loaded data that is not a node of this graph.`
+        : `${c.iri}\nA class of the individuals in the loaded data that is not a node of this graph.`) +
+      // What a double-click on it does (#239), as its count badge.
+      (c.count ? '\nDouble-click it, or its count, to draw its individuals.' : ''),
     shape: 'box',
     color: { background: '#f4f6f6', border: '#aab7b8', highlight: { background: '#eaeded', border: '#7b8a8b' } },
     font: { size: 18, color: '#7b8a8b' },
