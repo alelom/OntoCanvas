@@ -1,3 +1,24 @@
+# [2.6.0](https://github.com/alelom/OntoCanvas/compare/v2.5.0...v2.6.0) (2026-11-06)
+
+
+### Bug Fixes
+
+* **individuals:** Cancel on the loading screen, a capped wait for the data's ontologies, and IPv6 outside global unicast is private ([#239](https://github.com/alelom/OntoCanvas/issues/239) third and fourth reviews) ([a331265](https://github.com/alelom/OntoCanvas/commit/a3312652622e310e5f7b46190e8ac62b8aefe4df))
+* **individuals:** close the bypasses of the private-address filter, and filter the imports of the data's ontologies too ([#239](https://github.com/alelom/OntoCanvas/issues/239) second review) ([2130524](https://github.com/alelom/OntoCanvas/commit/2130524df8b4138731327bac2a8915ffd0714677))
+* **individuals:** the data's ontologies are never read from this machine or a private network, no guessing when the data names any, and initial loads wait for them ([#239](https://github.com/alelom/OntoCanvas/issues/239) review) ([d5363c3](https://github.com/alelom/OntoCanvas/commit/d5363c35b7c041071ff7051e1bee001669716a75))
+
+
+### Features
+
+* **individuals:** "Open external ontology" on the node of a class an import declares ([#235](https://github.com/alelom/OntoCanvas/issues/235)) ([f7e1219](https://github.com/alelom/OntoCanvas/commit/f7e121968a9187a627d40f917aa9b2339b7e92dc))
+* **individuals:** double-click to draw linked individuals, a loading screen that says the step, and clearer notes ([#239](https://github.com/alelom/OntoCanvas/issues/239)) ([cf446fe](https://github.com/alelom/OntoCanvas/commit/cf446fe683755c9a3cf787cb8ee5ab693d49fc43))
+* **individuals:** draw each class of the data that is not in the graph, with the count badge that draws its individuals, and shorten long names on the canvas ([4027ade](https://github.com/alelom/OntoCanvas/commit/4027ade5a4b61bbb86fc82ddefb9fd33a22129bb))
+* **individuals:** name the classes of individuals by the imported ontologies, and draw them as labelled class nodes ([#235](https://github.com/alelom/OntoCanvas/issues/235)) ([1e668b1](https://github.com/alelom/OntoCanvas/commit/1e668b1e262f2768a2dc8baa046934c861d49c4e)), closes [#104](https://github.com/alelom/OntoCanvas/issues/104)
+* **individuals:** offer to open the ontologies the data was made with, and read them as context on request ([#236](https://github.com/alelom/OntoCanvas/issues/236)) ([9459874](https://github.com/alelom/OntoCanvas/commit/94598749f4076ae776f92e38779dbe66ff62a391))
+* **individuals:** open the ontologies the data names on their own, as imports are, and say in the bottom bar what was read ([#236](https://github.com/alelom/OntoCanvas/issues/236)) ([c3ae8e8](https://github.com/alelom/OntoCanvas/commit/c3ae8e83106ad56ad846cab840c488ba7a3341ef))
+* **individuals:** the individual double-clicked stays where it was, selected, with its neighbours around it ([#239](https://github.com/alelom/OntoCanvas/issues/239)) ([2af5990](https://github.com/alelom/OntoCanvas/commit/2af5990e429c7843628e6c981d3d93931229881b))
+* **ui:** non-blocking notes move from the bar over the canvas to the bottom bar's issues area ([230c53e](https://github.com/alelom/OntoCanvas/commit/230c53edb7f59cd57334e1f96db07ee36ab21e1b)), closes [#136](https://github.com/alelom/OntoCanvas/issues/136) [#234](https://github.com/alelom/OntoCanvas/issues/234) [#236](https://github.com/alelom/OntoCanvas/issues/236)
+
 # [2.5.0](https://github.com/alelom/OntoCanvas/compare/v2.4.0...v2.5.0) (2026-11-05)
 
 
