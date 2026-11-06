@@ -40,7 +40,12 @@ describe('starting from data files', () => {
     await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (33)');
     expect(await page.locator('#openOntologyModal').isHidden()).toBe(true);
     expect(await page.locator('[data-data-list] li').allInnerTexts()).toEqual([expect.stringContaining('part-0001.nq.gz'), expect.stringContaining('part-0002.nq.gz')]);
-    expect(await page.locator('#warningMsg').innerText()).toMatch(/no ontology/i);
+    // In the bottom bar's notes, which it replaces the "no classes" note in.
+    // Beside it, the note that no ontology was found at the namespaces of the data's classes (#239): the example names none.
+    await page.waitForFunction(() => (document.getElementById('ontologyIssuesBtn')?.textContent ?? '').includes('notes (2)'));
+    expect(await page.locator('#ontologyIssuesPopup [data-status-notice="data-ontologies"]').textContent()).toContain("No ontology found at the namespaces of the data's classes");
+    expect(await page.locator('#ontologyIssuesPopup [data-status-notice="no-classes"]').count()).toBe(0);
+    expect(await page.locator('#ontologyIssuesPopup [data-status-notice="workspace"]').textContent()).toMatch(/no ontology/i);
     // Parts 1 and 2 with no gap: the softer notice.
     expect(await page.locator('[data-data-parts]').innerText()).toContain('There may be more');
     expect(await page.locator('[data-data-parts]').getAttribute('class')).not.toContain('strong');

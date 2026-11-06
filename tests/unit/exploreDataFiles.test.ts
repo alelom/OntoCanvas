@@ -18,7 +18,7 @@ describe('exploreDataFiles', () => {
     });
 
     expect(calls[0]).toBe(`open ${WORKSPACE_NAME} true`);
-    expect(calls[1]).toMatch(/^note .*no ontology.*Open an ontology.*clears the data/i);
+    expect(calls[1]).toMatch(/^note .*no ontology.*read as context on their own.*clears the data/i);
     expect(calls[2]).toBe('add a.nq');
   });
 

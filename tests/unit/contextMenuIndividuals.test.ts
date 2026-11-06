@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Store } from 'n3';
 import type { Network } from 'vis-network/esnext';
-import { initContextMenu, showContextMenu, hideContextMenu, setClassIndividualsProvider } from '../../src/ui/contextMenu';
+import { initContextMenu, showContextMenu, hideContextMenu, setClassIndividualsProvider, setImportedClassProvider, updateContextMenuData } from '../../src/ui/contextMenu';
 import type { GraphData } from '../../src/types';
 
 const rawData: GraphData = { nodes: [{ id: 'Sensor', label: 'Sensor', labellableRoot: null, uri: 'http://example.org/o#Sensor' }], edges: [] };
@@ -41,6 +41,49 @@ describe('the context menu with individuals drawn', () => {
 
   it('is not shown for an individual that an edge of a class passes under', () => {
     rightClick('__individual__http://example.org/o#s1', 'Sensor->Building:installedIn');
+    expect(menu().style.display).toBe('none');
+  });
+});
+
+describe('the context menu of a class node an import declares (#235)', () => {
+  const opened: string[] = [];
+  const classNode = '__individual_class__https://example.org/prov#FieldAssertion';
+
+  beforeEach(() => {
+    opened.length = 0;
+    initContextMenu(net, container, new Store(), rawData, () => {}, () => {}, () => {}, () => {});
+    updateContextMenuData(new Store(), rawData, null, async (url) => void opened.push(url));
+    setImportedClassProvider((classIri) => (classIri === 'https://example.org/prov#FieldAssertion' ? 'https://example.org/prov' : null));
+    hideContextMenu();
+  });
+
+  it('offers to draw its individuals (#239), and "Open external ontology", which opens the ontology that declares it', async () => {
+    setClassIndividualsProvider((nodeId) =>
+      nodeId === classNode ? { label: 'Show 50 individuals (0 displayed/184 total)', title: '', disabled: false, adds: 50, displayed: 0, run: () => {} } : null
+    );
+    rightClick(classNode, null);
+
+    expect(items()).toEqual(['Show 50 individuals (0 displayed/184 total)', 'Open external ontology']);
+    setClassIndividualsProvider(() => null);
+    rightClick(classNode, null);
+
+    expect(menu().style.display).toBe('block');
+    expect(items()).toEqual(['Open external ontology']);
+    (menu().lastElementChild as HTMLElement).click();
+    await Promise.resolve();
+    expect(opened).toEqual(['https://example.org/prov']);
+  });
+
+  it('offers only its individuals for a class that no loaded ontology declares, and shows nothing for an individual', () => {
+    setClassIndividualsProvider(() => ({ label: 'Show 3 individuals (0 displayed/3 total)', title: '', disabled: false, adds: 3, displayed: 0, run: () => {} }));
+    rightClick('__individual_class__https://example.org/other#Kind', null);
+    expect(items()).toEqual(['Show 3 individuals (0 displayed/3 total)']);
+    setClassIndividualsProvider(() => null);
+    hideContextMenu();
+    rightClick('__individual_class__https://example.org/other#Kind', null);
+    expect(menu().style.display).toBe('none');
+
+    rightClick('__individual__https://example.org/d#x', null);
     expect(menu().style.display).toBe('none');
   });
 });

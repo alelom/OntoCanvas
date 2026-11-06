@@ -74,10 +74,8 @@ const open = async (url: string) => {
   await waitForAppReady(page);
 };
 const wrapChars = () => page.evaluate(() => (document.getElementById('wrapChars') as HTMLInputElement).value);
-const warning = () => page.evaluate(() => {
-  const bar = document.getElementById('warningMsg')!;
-  return bar.style.display === 'none' ? null : document.getElementById('warningMsgText')!.textContent;
-});
+/** The note in the bottom bar's issues area that the display config is borrowed (#239: it was a bar over the canvas). */
+const warning = () => page.evaluate(() => document.querySelector('#ontologyIssuesPopup [data-status-notice="borrowed-display-config"]')?.textContent ?? null);
 
 describe('display config of a version opened by its version IRI (#136)', () => {
   it('is the one published next to the release file the version IRI redirects to', async () => {

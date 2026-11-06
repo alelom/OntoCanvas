@@ -7,7 +7,7 @@ import { renderApp } from './ui/appShell';
 import { initSidePanel } from './ui/sidePanel/initSidePanel';
 import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
-import { createDataSources } from './sparql/dataSources';
+import { createDataSources, whenSourceListChanges } from './sparql/dataSources';
 import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from './abox/individualsLayer';
 import { getDataUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
@@ -17,6 +17,7 @@ import {
   showContextMenu,
   setTermUriResolver,
   setClassIndividualsProvider,
+  setImportedClassProvider,
   setVersionPinnedUriResolver,
 } from './ui/contextMenu';
 import { versionPinnedUri } from './lib/versionPinnedUri';
@@ -29,7 +30,11 @@ import {
   setOnExploreDataFiles,
 } from './ui/openOntologyModal';
 import { exploreDataFiles } from './workflows/exploreDataFiles';
-import { showWarningBar } from './ui/warningBar';
+import { importedClassLookup } from './abox/importedClasses';
+import { ontologiesOfDataRead, openOntologiesOfData } from './workflows/dataOntologies';
+import { setLoadingCancel, setLoadingText, underLoadingScreen, withinMs } from './ui/modals';
+
+import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
 import { handleUrlParameterLoad } from './lib/urlParamLoader';
 
@@ -59,11 +64,33 @@ import { setupEventListeners } from './ui/eventListeners';
 import { deleteDataPropertyWithConfirm, initDataPropsMenu, showEditDataPropertyModal } from './ui/dataPropertyModals';
 import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from './ui/editModals';
 import { applyFilter } from './graph/applyFilter';
-import { classIndividualsAction } from './graph/classIndividuals';
+import { classIndividualsAction, classIriOfNode } from './graph/classIndividuals';
+
+/** What the loading screen says while the data is added, then while the ontologies it names are read (#239). */
+const ADDING_DATA = 'Adding the data…';
+const READING_DATA_ONTOLOGIES = 'Reading the ontologies the data names…';
+/** The longest the loading screen waits for the ontologies the data names: they name the classes when they come, later. */
+const DATA_ONTOLOGIES_WAIT_MS = 3000;
+
+/**
+ * Adds data on an initial load (?data=, Explore data files…) under the loading screen, with a Cancel while the data is read
+ * (the screen covers the Individuals tab's), then waits a little for the ontologies the data names, so the classes are
+ * usually drawn once, named (#239).
+ */
+function addDataUnderLoadingScreen(add: () => Promise<unknown>): Promise<void> {
+  return underLoadingScreen(async () => {
+    setLoadingCancel(() => session.sidePanel?.cancelData());
+    await add();
+    setLoadingCancel(null);
+    setLoadingText(READING_DATA_ONTOLOGIES);
+    await withinMs(ontologiesOfDataRead(), DATA_ONTOLOGIES_WAIT_MS);
+  }, ADDING_DATA);
+}
 
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setClassIndividualsProvider((nodeId) => {
-  const uri = resolveTerm('node', nodeId)?.uri;
+  // A class node of the graph, or the node of a class of the data that is not in it (#239).
+  const uri = resolveTerm('node', nodeId)?.uri ?? classIriOfNode(nodeId, []);
   return uri && session.individualsLayer ? classIndividualsAction(session.individualsLayer, uri) : null;
 });
 setVersionPinnedUriResolver((kind, id) =>
@@ -124,12 +151,20 @@ document.addEventListener('click', (e) => {
 registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm });
 renderApp();
 const dataSources = createDataSources();
+// The ontologies the data was made with are opened on their own, as context, whenever data is added (#236, #239).
+// Only when a source is added or removed: showing or hiding a graph changes nothing they could name.
+whenSourceListChanges(dataSources, () => void openOntologiesOfData(dataSources.stores()));
+// The classes the ontologies loaded as context declare (its imports, #235): they name the classes of individuals.
+const importedClass = importedClassLookup(() => session.importedOntologies);
+// The node of such a class, drawn for its individuals, offers to open the ontology that declares it.
+setImportedClassProvider((classIri) => importedClass(classIri)?.definedBy ?? null);
 session.individualsLayer = createIndividualsLayer({
   // The data without its hidden graphs (#224): a hidden graph's individuals are not drawn.
   getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.visibleStores()] : dataSources.visibleStores()),
+  classInfo: importedClass,
 });
 // Drawing or clearing individuals redraws the graph where it is; after a draw the user started, the view fits what was drawn (#216).
-session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined));
+session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined, change.anchor));
 session.sidePanel = initSidePanel({
   getStore: () => session.ttlStore,
   getPrefixes: () => session.currentPrefixMap,
@@ -154,8 +189,12 @@ session.sidePanel = initSidePanel({
     const edges = network.getSelectedEdges().map(String);
     return nodes.length + edges.length > 0 && nodes.every(isIndividualNodeId) && edges.every(isIndividualEdgeId);
   },
-  getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? null,
+  getClassLabel: (classIri) => session.rawData.nodes.find((n) => n.uri === classIri)?.label ?? importedClass(classIri)?.label ?? null,
   embedded: isEmbedded(),
+});
+// The loading screen over an initial load says how adding the data goes ("Adding 2 of 3: …", #239).
+session.sidePanel.onDataStatus((status, loading) => {
+  if (loading && status) setLoadingText(status);
 });
 const appEl = document.getElementById('app');
 if (appEl && (!getShouldShowTopMenu() || isEmbedded())) {
@@ -174,8 +213,12 @@ setupEventListeners();
 setOnExploreDataFiles((files) =>
   void exploreDataFiles(files, {
     openOntology: (ttl, name) => loadTtlAndRender(ttl, name, null),
-    showNote: showWarningBar,
-    addDataFiles: async (added) => session.sidePanel?.addDataFiles(added),
+    showNote: (text) => {
+      setNotice('no-classes', null);
+      setNotice('workspace', text);
+    },
+    // Under the loading screen until the ontologies the data names are read: the classes are drawn once, named.
+    addDataFiles: (added) => addDataUnderLoadingScreen(async () => session.sidePanel?.addDataFiles(added)),
   })
 );
 // Update serializer dropdown after DOM is ready (in case it was rendered)
@@ -198,7 +241,9 @@ setTimeout(() => {
         hideOpenOntologyModal
       );
       // The data is added to the ontology that was just opened, so only once it is.
-      if (loaded && session.ttlStore) await session.sidePanel?.addDataUrls(dataUrls);
+      if (loaded && session.ttlStore && dataUrls.length) {
+        await addDataUnderLoadingScreen(async () => session.sidePanel?.addDataUrls(dataUrls));
+      }
       return loaded;
     },
     hasOntology: () => session.ttlStore !== null,

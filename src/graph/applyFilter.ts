@@ -29,7 +29,8 @@ import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
 import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds } from './individualsOverlay';
 import { addIndividualCounts } from './classIndividuals';
-import { isIndividualNodeId } from '../abox/individualsLayer';
+import { setNotice } from '../ui/statusNotices';
+import { INDIVIDUAL_PREFIX, isIndividualNodeId } from '../abox/individualsLayer';
 import { setupDragCoupling } from './dataPropertyDragCoupling';
 import { expandWithExternalRefs } from './externalExpansion';
 import { setupNetworkSelectionAndNavigation } from './networkSelection';
@@ -41,8 +42,12 @@ import { Network } from 'vis-network/esnext';
  * `fitTo`: the IRIs of individuals the user has just drawn (#216). With the view preserved, the view then fits them and the
  * classes they are joined to, in place of staying where it was: a batch drawn past the viewport is seen. A redraw that is not
  * a draw (a search, a filter, the individuals drawn by themselves when a file opens) leaves the view alone.
+ * `anchor`: the IRI of the individual whose neighbours were just drawn (#239): it stays where it was, the view fits it with them,
+ * and it is selected, so it is found again after the redraw.
  */
-export function applyFilter(preserveView = false, fitTo?: string[]): void {
+export function applyFilter(preserveView = false, fitTo?: string[], anchor?: string): void {
+  const anchorId = anchor ? INDIVIDUAL_PREFIX + anchor : null;
+  const anchorAt = anchorId ? canvasState.network?.getPositions([anchorId])[anchorId] : undefined;
   // Don't return early - we need to initialize the network even with no nodes
   // so that Add node/Add edge buttons and double-click work
 
@@ -188,7 +193,13 @@ export function applyFilter(preserveView = false, fitTo?: string[]): void {
   if (session.individualsLayer) {
     const classNodes = classNodesByUri(graphDataForBuild.nodes);
     addIndividualCounts(data.nodes, session.individualsLayer, classNodes);
-    addIndividualsToNetworkData(data, session.individualsLayer, classNodes, { relax: canvasState.relaxIndividuals, search: canvasState.individualSearch });
+    const { moreClasses } = addIndividualsToNetworkData(data, session.individualsLayer, classNodes, {
+      relax: canvasState.relaxIndividuals,
+      search: canvasState.individualSearch,
+      anchor: anchorId && anchorAt ? { id: anchorId, x: anchorAt.x, y: anchorAt.y } : undefined,
+    });
+    // The classes of the data beyond the limit are not drawn as nodes of their own (#239): said in the bottom bar.
+    setNotice('more-data-classes', moreClasses ? `${moreClasses} more classes of the loaded data are not drawn as nodes: draw their individuals from the Individuals tab.` : null);
   }
   if (canvasState.network && session.ttlStore) {
     updateContextMenuData(session.ttlStore, graphDataForBuild, session.externalOntologyReferences, openExternalOntology);
@@ -299,6 +310,8 @@ export function applyFilter(preserveView = false, fitTo?: string[]): void {
     if (w > 0 && h > 0) canvasState.network.setSize(`${w}px`, `${h}px`);
     if (preserveView && savedScale !== null && savedPosition !== null) {
       const focus = fitTo ? focusNodeIds(data, fitTo) : [];
+      const keep = anchorId && data.nodes.get(anchorId) ? anchorId : null;
+      if (keep && focus.length && !focus.includes(keep)) focus.push(keep);
       requestAnimationFrame(() => {
         const net = canvasState.network;
         net?.moveTo({
@@ -306,6 +319,11 @@ export function applyFilter(preserveView = false, fitTo?: string[]): void {
           scale: savedScale!,
           animation: false,
         });
+        // Selecting from code raises no select event: the selection line in the bottom bar is updated here.
+        if (net && keep) {
+          net.selectNodes([keep]);
+          updateSelectionInfoDisplay(net);
+        }
         if (net && focus.length > 0) {
           // The view glides to what was drawn; it has settled when it gets there (or after a moment, whatever the animation does).
           net.once('animationFinished', () => viewSettled(settleToken));

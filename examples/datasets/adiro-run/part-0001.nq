@@ -1,0 +1,41 @@
+<urn:example:run:1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/ns/prov#Activity> <urn:example:run:1> .
+<urn:example:run:1> <http://www.w3.org/2000/01/rdf-schema#label> "Example run" <urn:example:run:1> .
+<urn:example:run:1> <http://www.w3.org/ns/prov#used> <https://w3id.org/adiro/adiro_drawing_metadata/7.0.1> <urn:example:run:1> .
+<urn:example:run:1> <http://www.w3.org/ns/prov#used> <https://w3id.org/adiro/adiro_provenance/2.2.0> <urn:example:run:1> .
+<urn:example:run:1> <http://www.w3.org/ns/prov#used> <https://w3id.org/adiro/adiro_geometry/3.1.0> <urn:example:run:1> .
+<urn:example:run:1/file1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#DrawingFile> <urn:example:run:1> .
+<urn:example:run:1/file1> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing 1.pdf" <urn:example:run:1> .
+<urn:example:run:1/file1/page/1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FilePage> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1> <https://w3id.org/adiro/adiro_provenance#belongsToFile> <urn:example:run:1/file1> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/drawing> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingSheet> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/drawing> <http://www.w3.org/2000/01/rdf-schema#label> "Sheet 1" <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/drawing> <https://w3id.org/adiro/adiro_drawing_metadata#isOnPage> <urn:example:run:1/file1/page/1> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/titleblock> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_drawing_metadata#Titleblock> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/titleblock> <http://www.w3.org/2000/01/rdf-schema#label> "Titleblock 1" <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/titleblock/box> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_geometry#BoundingBox> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/frame> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_geometry#CoordinateFrame> <urn:example:run:1> .
+<urn:example:run:1/file1/page/1/frame> <https://w3id.org/adiro/adiro_geometry#describesPage> <urn:example:run:1/file1/page/1> <urn:example:run:1> .
+<urn:example:run:1/file1/assertion/1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:run:1> .
+<urn:example:run:1/file1/assertion/1> <http://www.w3.org/2000/01/rdf-schema#label> "Project number, sheet 1" <urn:example:run:1> .
+<urn:example:run:1/file1/assertion/2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:run:1> .
+<urn:example:run:1/file1/assertion/2> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing number, sheet 1" <urn:example:run:1> .
+<urn:example:run:1/file1/assertion/3> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:run:1> .
+<urn:example:run:1/file1/assertion/3> <http://www.w3.org/2000/01/rdf-schema#label> "Revision, sheet 1" <urn:example:run:1> .
+<urn:example:run:1/file2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#DrawingFile> <urn:example:run:1> .
+<urn:example:run:1/file2> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing 2.pdf" <urn:example:run:1> .
+<urn:example:run:1/file2/page/1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FilePage> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1> <https://w3id.org/adiro/adiro_provenance#belongsToFile> <urn:example:run:1/file2> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/drawing> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingSheet> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/drawing> <http://www.w3.org/2000/01/rdf-schema#label> "Sheet 2" <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/drawing> <https://w3id.org/adiro/adiro_drawing_metadata#isOnPage> <urn:example:run:1/file2/page/1> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/titleblock> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_drawing_metadata#Titleblock> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/titleblock> <http://www.w3.org/2000/01/rdf-schema#label> "Titleblock 2" <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/titleblock/box> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_geometry#BoundingBox> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/frame> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_geometry#CoordinateFrame> <urn:example:run:1> .
+<urn:example:run:1/file2/page/1/frame> <https://w3id.org/adiro/adiro_geometry#describesPage> <urn:example:run:1/file2/page/1> <urn:example:run:1> .
+<urn:example:run:1/file2/assertion/1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:run:1> .
+<urn:example:run:1/file2/assertion/1> <http://www.w3.org/2000/01/rdf-schema#label> "Project number, sheet 2" <urn:example:run:1> .
+<urn:example:run:1/file2/assertion/2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:run:1> .
+<urn:example:run:1/file2/assertion/2> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing number, sheet 2" <urn:example:run:1> .
+<urn:example:run:1/file2/assertion/3> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:run:1> .
+<urn:example:run:1/file2/assertion/3> <http://www.w3.org/2000/01/rdf-schema#label> "Revision, sheet 2" <urn:example:run:1> .

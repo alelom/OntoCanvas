@@ -6,6 +6,7 @@
 import type { DataSet } from 'vis-data';
 import { INDIVIDUAL_PREFIX, type IndividualsLayer, type LayerClass } from '../abox/individualsLayer';
 import { extractLocalName } from '../utils/localName';
+import { definedByName } from '../abox/importedClasses';
 import { relaxIndividuals, type FixedBox } from './individualsRelax';
 import { filterIndividualsBySearch, type IndividualSearchFilter } from '../abox/individualSearch';
 
@@ -18,6 +19,18 @@ const INDIVIDUAL_FONT_SIZE = 14;
 /** Where the stubs of classes with no node go: a column this far right of the class nodes, this far apart (#216). */
 const STUB_OFFSET = 280;
 const STUB_STEP = 130;
+/** Class stubs per column, and the distance between columns. */
+const STUB_ROWS = 10;
+const STUB_COLUMN = 340;
+/** The longest name an individual shows on the canvas; a longer one is cut in the middle. */
+const MAX_LABEL = 30;
+
+/** `text` up to MAX_LABEL characters: a longer one keeps its start and end around an ellipsis (a hash stays told apart by both). */
+export function shortLabel(text: string, max = MAX_LABEL): string {
+  if (text.length <= max) return text;
+  const tail = Math.floor((max - 1) / 3);
+  return `${text.slice(0, max - 1 - tail)}…${text.slice(text.length - tail)}`;
+}
 /** Room added between two stubs for each individual of them: a crowd around one must not run into the crowd of the next. */
 const STUB_PER_INDIVIDUAL = 14;
 const RING_RADIUS = 160;
@@ -37,9 +50,10 @@ function boxOf(node: { id: string; x: number; y: number; label?: string; font?: 
   return { id: String(node.id), x: node.x, y: node.y, width: Math.max(80, Math.max(...lines.map((l) => l.length)) * size * 0.55 + 24), height: lines.length * size * 1.3 + 20 };
 }
 
-export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean; search?: IndividualSearchFilter | null } = {}): void {
-  if (layer.isEmpty()) return;
+export function addIndividualsToNetworkData(data: NetworkData, layer: IndividualsLayer, classNodes: Map<string, string>, options: { relax?: boolean; search?: IndividualSearchFilter | null; anchor?: { id: string; x: number; y: number } } = {}): { moreClasses: number } {
+  // The classes of the data are drawn before any of their individuals is (#239), so only data with no individual adds nothing.
   const view = filterIndividualsBySearch(layer.build(classNodes), options.search ?? null);
+  if (view.nodes.length === 0 && view.classes.length === 0) return { moreClasses: view.moreClasses };
 
   // Each individual goes on a ring around its first drawn class that has a position; the others are left to the layout.
   const classOf = new Map<string, string>();
@@ -51,18 +65,33 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
     if (cls) ringSize.set(cls, (ringSize.get(cls) ?? 0) + 1);
   }
 
+  // The individual whose neighbours were just drawn (#239) stays where it was, and the individuals linked to it start around it.
+  const pin = options.anchor && view.nodes.some((n) => n.id === options.anchor!.id) ? options.anchor : null;
+  const aroundPin = new Set<string>();
+  if (pin) for (const edge of view.edges) if (edge.type !== 'rdf:type') aroundPin.add(edge.from === pin.id ? edge.to : edge.to === pin.id ? edge.from : '');
+  aroundPin.delete('');
+  aroundPin.delete(pin?.id ?? '');
+  let aroundIndex = 0;
+
   addClassStubs(data, view.classes, view.edges);
   data.nodes.add(
     view.nodes.map((node) => {
+      // A long name (a hash, an id) is cut in the middle on the canvas; the tooltip keeps it whole (#239).
+      const label = shortLabel(node.label);
       const base = {
         id: node.id,
-        label: node.label,
-        title: node.title,
+        label,
+        title: label === node.label ? node.title : `${node.label}\n${node.title}`,
         shape: 'ellipse',
         color: { background: '#fdebd0', border: '#e67e22', highlight: { background: '#fad7a0', border: '#d35400' } },
         font: { size: INDIVIDUAL_FONT_SIZE },
         borderWidth: 1,
       };
+      if (pin && node.id === pin.id) return { ...base, x: pin.x, y: pin.y };
+      if (pin && aroundPin.has(node.id)) {
+        const angle = (2 * Math.PI * aroundIndex++) / aroundPin.size;
+        return { ...base, x: pin.x + RING_RADIUS * Math.cos(angle), y: pin.y + RING_RADIUS * Math.sin(angle) };
+      }
       const cls = classOf.get(node.id);
       const anchor = cls ? (data.nodes.get(cls) as { x?: number; y?: number } | null) : null;
       if (!cls || typeof anchor?.x !== 'number' || typeof anchor.y !== 'number') return base;
@@ -73,7 +102,7 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       return { ...base, x: anchor.x + radius * Math.cos(angle), y: anchor.y + radius * Math.sin(angle) };
     })
   );
-  if (options.relax ?? true) relax(data, view);
+  if (options.relax ?? true) relax(data, view, pin ? { id: pin.id, around: aroundPin } : undefined);
   data.edges.add(
     view.edges.map((edge) => ({
       id: edge.id,
@@ -87,6 +116,7 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       smooth: false,
     }))
   );
+  return { moreClasses: view.moreClasses };
 }
 
 /**
@@ -100,26 +130,51 @@ function addClassStubs(data: NetworkData, classes: LayerClass[], edges: Array<{ 
   const placed = (data.nodes.get() as Array<{ id: string; x?: number; y?: number; label?: string; font?: { size?: number } }>)
     .filter((n) => typeof n.x === 'number' && typeof n.y === 'number')
     .map((n) => boxOf(n as Parameters<typeof boxOf>[0]));
-  const right = Math.max(...placed.map((b) => b.x + b.width / 2));
+  // Beside the graph, or from the origin when the graph is empty (data opened with no ontology, #234); left to the canvas when
+  // the graph has nodes that are not placed yet.
+  if (!placed.length && data.nodes.length > 0) {
+    data.nodes.add(classes.map((c) => stubNode(c)));
+    return;
+  }
+  const right = placed.length ? Math.max(...placed.map((b) => b.x + b.width / 2)) : -STUB_OFFSET;
   const middle = placed.length ? (Math.min(...placed.map((b) => b.y - b.height / 2)) + Math.max(...placed.map((b) => b.y + b.height / 2))) / 2 : 0;
-  // Each stub is as far from the one before as the crowds of the two need.
+  // In columns of STUB_ROWS (the classes of the data may be many, #239); in a column, each stub is as far from the one before as
+  // the crowds of the two need.
   const crowd = classes.map((c) => edges.filter((e) => e.to === c.id).length);
-  const offsets: number[] = [];
-  classes.forEach((_, i) => offsets.push(i === 0 ? 0 : offsets[i - 1] + STUB_STEP + (STUB_PER_INDIVIDUAL * (crowd[i - 1] + crowd[i])) / 2));
-  const centre = offsets[offsets.length - 1] / 2;
-  data.nodes.add(
-    classes.map((c, i) => ({
-      id: c.id,
-      label: c.label,
-      title: `${c.iri}\nA class of the drawn individuals that is not a node of this graph.`,
-      shape: 'box',
-      color: { background: '#f4f6f6', border: '#aab7b8', highlight: { background: '#eaeded', border: '#7b8a8b' } },
-      font: { size: 18, color: '#7b8a8b' },
-      borderWidth: 1,
-      borderDashes: [5, 5],
-      ...(placed.length ? { x: right + STUB_OFFSET, y: middle + offsets[i] - centre } : {}),
-    }))
-  );
+  const position = new Map<string, { x: number; y: number }>();
+  for (let start = 0; start < classes.length; start += STUB_ROWS) {
+    const column = classes.slice(start, start + STUB_ROWS);
+    const offsets: number[] = [];
+    column.forEach((_, i) => offsets.push(i === 0 ? 0 : offsets[i - 1] + STUB_STEP + (STUB_PER_INDIVIDUAL * (crowd[start + i - 1] + crowd[start + i])) / 2));
+    const centre = offsets[offsets.length - 1] / 2;
+    const x = right + STUB_OFFSET + (start / STUB_ROWS) * STUB_COLUMN;
+    column.forEach((c, i) => position.set(c.id, { x, y: middle + offsets[i] - centre }));
+  }
+  data.nodes.add(classes.map((c) => stubNode(c, position.get(c.id))));
+}
+
+/** The node of a class of the data that is no node of the graph, where it goes when that is known. */
+function stubNode(c: LayerClass, at?: { x: number; y: number }) {
+  return {
+    id: c.id,
+    // A class an import declares is named by it, with the ontology above as for imported terms (#111, #235); an undeclared
+    // one keeps the dashed border of a stub.
+    label: c.definedBy ? `(defined by: ${definedByName(c.definedBy)})\n${c.label}` : c.label,
+    title:
+      (c.definedBy
+        ? `${c.iri}\nDeclared in ${c.definedBy}, an ontology loaded as context. A class of the individuals in the loaded data that is not a node of this graph.`
+        : `${c.iri}\nA class of the individuals in the loaded data that is not a node of this graph.`) +
+      // What a double-click on it does (#239), as its count badge.
+      (c.count ? '\nDouble-click it, or its count, to draw its individuals.' : ''),
+    shape: 'box',
+    color: { background: '#f4f6f6', border: '#aab7b8', highlight: { background: '#eaeded', border: '#7b8a8b' } },
+    font: { size: 18, color: '#7b8a8b' },
+    borderWidth: 1,
+    borderDashes: c.definedBy ? false : [5, 5],
+    ...at,
+    // The count of its individuals, drawn as the badge that draws them (#239).
+    ...(c.count ? { individualCount: c.count } : {}),
+  };
 }
 
 /**
@@ -137,8 +192,10 @@ export function focusNodeIds(data: NetworkData, drawn: string[]): string[] {
 }
 
 /** Moves the individuals by force relaxation, anchored to the nodes the layout already placed; the rest are left to the canvas. */
-function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>): void {
-  const individualIds = new Set(view.nodes.map((n) => n.id));
+function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>, pinned?: { id: string; around: ReadonlySet<string> }): void {
+  // A pinned individual (#239) is held where it is, as the class nodes are; the individuals around it are not pulled back to
+  // their class, so they grow around it (their dashed edge to the class is still drawn).
+  const individualIds = new Set(view.nodes.map((n) => n.id).filter((id) => id !== pinned?.id));
   const fixed = (data.nodes.get() as Array<{ id: string; x?: number; y?: number; label?: string }>)
     .filter((n) => !individualIds.has(String(n.id)) && typeof n.x === 'number' && typeof n.y === 'number')
     .map((n) => boxOf(n as Parameters<typeof boxOf>[0]));
@@ -146,11 +203,11 @@ function relax(data: NetworkData, view: ReturnType<IndividualsLayer['build']>): 
   if (fixed.length === 0) return;
   const centre = { x: fixed.reduce((sum, f) => sum + f.x, 0) / fixed.length, y: fixed.reduce((sum, f) => sum + f.y, 0) / fixed.length };
   // Each takes the room of its label (an ellipse at the font size drawn).
-  const movable = data.nodes.get(view.nodes.map((n) => n.id)).map((n: { id: string; x?: number; y?: number; label?: string }) => {
+  const movable = data.nodes.get([...individualIds]).map((n: { id: string; x?: number; y?: number; label?: string }) => {
     const { width, height } = boxOf({ id: String(n.id), x: 0, y: 0, label: n.label, font: { size: INDIVIDUAL_FONT_SIZE } });
     return { id: String(n.id), x: n.x ?? centre.x, y: n.y ?? centre.y, width: width - 24 + 30, height: height - 20 + 14 };
   });
-  const links = view.edges.map((e) => [e.from, e.to] as [string, string]);
+  const links = view.edges.filter((e) => !(e.type === 'rdf:type' && pinned?.around.has(e.from))).map((e) => [e.from, e.to] as [string, string]);
   const placed = relaxIndividuals({ movable, fixed, links });
   data.nodes.update([...placed].map(([id, p]) => ({ id, x: p.x, y: p.y })));
 }

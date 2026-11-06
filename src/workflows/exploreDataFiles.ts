@@ -18,7 +18,7 @@ export const WORKSPACE_TTL = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
 `;
 
 export const WORKSPACE_NOTE =
-  'Exploring data files with no ontology: the classes of the individuals are drawn as faded stubs. Open an ontology to see them in full; that clears the data.';
+  'Exploring data files with no ontology. The ontologies the data names are read as context on their own; opening an ontology from the toolbar instead clears the data.';
 
 export interface ExploreDataDeps {
   /** Opens an ontology from its text, as a file of that name would be. */
@@ -30,7 +30,7 @@ export interface ExploreDataDeps {
 
 export async function exploreDataFiles(files: DataFile[], deps: ExploreDataDeps): Promise<void> {
   await deps.openOntology(WORKSPACE_TTL, WORKSPACE_NAME);
-  // After the load, whose own note (an ontology with no classes) this replaces.
+  // After the load: it replaces the load's own note about an ontology with no classes (see main.ts).
   deps.showNote(WORKSPACE_NOTE);
   await deps.addDataFiles(files);
 }

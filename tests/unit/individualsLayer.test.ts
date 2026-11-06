@@ -403,9 +403,59 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
 
     const view = layer.build(roomOnly);
 
-    expect(view.classes).toEqual([{ iri: ex('Kind'), id: INDIVIDUAL_CLASS_PREFIX + ex('Kind'), label: 'A kind' }]);
+    expect(view.classes).toEqual([{ iri: ex('Kind'), id: INDIVIDUAL_CLASS_PREFIX + ex('Kind'), label: 'A kind', count: 1 }]);
     const types = view.edges.filter((e) => e.type === 'rdf:type').map((e) => e.to).sort();
     expect(types).toEqual(['Room', INDIVIDUAL_CLASS_PREFIX + ex('Kind')]);
+  });
+
+  it('names a class an import declares by its label there, and says which ontology defines it (#235)', () => {
+    const layer = createIndividualsLayer({
+      autoMax: 0,
+      getStores: () => [store(':a a :Assertion ; rdfs:label "A" .')],
+      classInfo: (iri) => (iri === ex('Assertion') ? { label: 'Field assertion', definedBy: 'https://example.org/prov' } : null),
+    });
+    layer.show(ex('a'));
+
+    expect(layer.build(roomOnly).classes).toEqual([
+      { iri: ex('Assertion'), id: INDIVIDUAL_CLASS_PREFIX + ex('Assertion'), label: 'Field assertion', definedBy: 'https://example.org/prov', count: 1 },
+    ]);
+  });
+
+  it('keeps the label from the data for an imported class whose import gives none', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [typed], classInfo: () => ({ label: null, definedBy: 'https://example.org/k' }) });
+    layer.show(ex('a'));
+
+    expect(layer.build(roomOnly).classes[0]).toMatchObject({ label: 'A kind', definedBy: 'https://example.org/k' });
+  });
+
+  it('lists every class of the individuals in the data that is not a node, with its count, though none is drawn (#239)', () => {
+    const data = store(':a a :Kind . :b a :Kind . :c a :Other , :Room . :d a <http://www.w3.org/2002/07/owl#NamedIndividual> .');
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [data] });
+
+    const view = layer.build(roomOnly);
+
+    expect(view.nodes).toEqual([]);
+    expect(view.classes.map((c) => [c.label, c.count])).toEqual([['Kind', 2], ['Other', 1]]);
+    expect(view.moreClasses).toBe(0);
+  });
+
+  it('lists the 50 classes with the most individuals, and says how many more there are', () => {
+    const data = store(Array.from({ length: 55 }, (_, i) => `:i${i} a :C${i} .${i < 3 ? ` :j${i} a :C${i} .` : ''}`).join('\n'));
+    const view = createIndividualsLayer({ autoMax: 0, getStores: () => [data] }).build(new Map());
+
+    expect(view.classes).toHaveLength(50);
+    expect(view.classes.slice(0, 3).map((c) => c.count)).toEqual([2, 2, 2]);
+    expect(view.moreClasses).toBe(5);
+  });
+
+  it('still lists the class of a drawn individual beyond the 50', () => {
+    const data = store(Array.from({ length: 55 }, (_, i) => `:i${i} a :C${i} .${i < 50 ? ` :j${i} a :C${i} .` : ''}`).join('\n'));
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [data] });
+    layer.show(ex('i54'));
+
+    const ids = layer.build(new Map()).classes.map((c) => c.iri);
+
+    expect(ids).toContain(ex('C54'));
   });
 
   it('lists none for a class that is a node, and none for owl:NamedIndividual', () => {
@@ -418,10 +468,10 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
     expect(view.classes).toEqual([]);
   });
 
-  it('names a class once, however many individuals have it, and only while one is drawn', () => {
+  it('names a class once, however many individuals have it, before any is drawn (#239) and while they are', () => {
     const many = store(':a a :Kind . :b a :Kind . :c a :Kind .');
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [many] });
-    expect(layer.build(new Map()).classes).toEqual([]);
+    expect(layer.build(new Map()).classes.map((c) => [c.iri, c.count])).toEqual([[ex('Kind'), 3]]);
 
     layer.showClass(ex('Kind'));
 
@@ -434,5 +484,39 @@ describe('the classes of drawn individuals that are not on the canvas (#216)', (
   it('is read-only like an individual: its id is one of an individual', () => {
     expect(isIndividualNodeId(INDIVIDUAL_CLASS_PREFIX + ex('Kind'))).toBe(true);
     expect(isIndividualNodeId('Room')).toBe(false);
+  });
+});
+
+describe('the double-click hint in the tooltip of an individual (#239)', () => {
+  const linked = store(':a a :P ; :knows :b , :c . :b a :P . :c a :P . :d a :P .');
+  const titleOf = (layer: ReturnType<typeof createIndividualsLayer>, name: string) => layer.build(new Map()).nodes.find((n) => n.iri === ex(name))!.title;
+
+  it('says how many linked individuals a double-click draws, then that every one is drawn', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [linked] });
+    layer.show(ex('a'));
+    expect(titleOf(layer, 'a')).toContain('Double-click: draw the 2 individuals linked to it that are not drawn.');
+
+    layer.showNeighbours(ex('a'));
+    expect(titleOf(layer, 'a')).toContain('Every individual linked to it is drawn.');
+  });
+
+  it('says nothing of the kind for an individual linked to none', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [linked] });
+    layer.show(ex('d'));
+
+    expect(titleOf(layer, 'd')).not.toMatch(/Double-click|linked to it/);
+  });
+});
+
+describe('the individual whose neighbours are drawn (#239)', () => {
+  it('is told with the draw, so the canvas can keep it in place and selected', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [store(':a a :P ; :knows :b . :b a :P .')] });
+    const changes: Array<{ kind: string; anchor?: string }> = [];
+    layer.onChange((change) => changes.push({ kind: change.kind, anchor: change.anchor }));
+
+    layer.show(ex('a'));
+    layer.showNeighbours(ex('a'));
+
+    expect(changes).toEqual([{ kind: 'draw', anchor: undefined }, { kind: 'draw', anchor: ex('a') }]);
   });
 });

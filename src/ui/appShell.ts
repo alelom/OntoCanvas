@@ -117,10 +117,6 @@ export function renderApp(): void {
       </span>
       </div>
       <div id="errorMsg" class="error" style="display: none;"></div>
-      <div id="warningMsg" class="warning" style="display: none;">
-        <span id="warningMsgText"></span>
-        <button id="warningMsgClose" type="button" title="Dismiss warning">×</button>
-      </div>
     </div>
     <div id="networkWrapper">
       <div id="network"></div>
@@ -501,8 +497,9 @@ export function renderApp(): void {
     </div>
     <div id="loadingModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 20000;">
       <div style="background: white; border-radius: 8px; padding: 32px; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);">
-        <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Loading ontology...</div>
+        <div id="loadingModalText" style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Opening the ontology…</div>
         <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        <button id="loadingModalCancel" type="button" hidden style="margin-top: 16px;">Cancel</button>
       </div>
     </div>
     <style>

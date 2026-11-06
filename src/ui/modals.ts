@@ -48,7 +48,9 @@ export function getCardinalityFromEditModal(): { minCardinality?: number | null;
 /**
  * Show the loading modal
  */
-export function showLoadingModal(): void {
+export function showLoadingModal(text = OPENING_ONTOLOGY): void {
+  setLoadingText(text);
+  setLoadingCancel(null);
   const modal = document.getElementById('loadingModal');
   if (modal) modal.style.display = 'flex';
 }
@@ -59,4 +61,45 @@ export function showLoadingModal(): void {
 export function hideLoadingModal(): void {
   const modal = document.getElementById('loadingModal');
   if (modal) modal.style.display = 'none';
+}
+
+/** What the loading screen says by default. */
+export const OPENING_ONTOLOGY = 'Opening the ontology…';
+
+/** Sets what the loading screen says: the step being done (#239), such as "Adding the data…". */
+export function setLoadingText(text: string): void {
+  const el = document.getElementById('loadingModalText');
+  if (el) el.textContent = text;
+}
+
+/**
+ * Shows a Cancel button on the loading screen that calls `onCancel`, or hides it with null (#239 fourth review): a step that
+ * reads files or downloads can take a while, and the screen covers the Cancel of the Individuals tab.
+ */
+export function setLoadingCancel(onCancel: (() => void) | null): void {
+  const button = document.getElementById('loadingModalCancel') as HTMLButtonElement | null;
+  if (!button) return;
+  button.hidden = onCancel === null;
+  button.onclick = onCancel;
+}
+
+/** Settles when `work` does, or after `ms`, whichever comes first: a wait under the loading screen is never longer. */
+export function withinMs(work: Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    void work.finally(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/** Runs `work` with the loading modal shown, saying `text` (`work` may say the next steps), and hides it after, however `work` ends. */
+export async function underLoadingScreen(work: () => Promise<void>, text?: string): Promise<void> {
+  showLoadingModal(text);
+  try {
+    await work();
+  } finally {
+    hideLoadingModal();
+  }
 }

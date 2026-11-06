@@ -330,3 +330,50 @@ describe('addDataFiles (#234)', () => {
     expect(options()).toEqual([':Room (3)']);
   });
 });
+
+describe('schemaChanged (#235)', () => {
+  it('names the classes again (labels from imports read later) and keeps the data', async () => {
+    let label: string | null = null;
+    const dataSources = createDataSources();
+    const panel = initSidePanel({ getStore: () => ontology, getPrefixes: () => ({ '': 'http://example.org/d#' }), dataSources, getClassLabel: () => label, embedded: false });
+    tabButton()!.click();
+    await dataSources.addText('more.ttl', PREFIXES + ':room2 a :Room .', { path: 'more.ttl' });
+    expect(options()).toEqual([':Room (2)']);
+
+    label = 'A room';
+    panel.schemaChanged();
+
+    expect(options()).toEqual(['A room (2)']);
+    expect(dataSources.list()).toHaveLength(1);
+  });
+});
+
+describe('onDataStatus (#239)', () => {
+  it('tells the progress of adding data, for the loading screen', async () => {
+    const { panel } = mount();
+    const seen: string[] = [];
+    panel.onDataStatus((status, loading) => seen.push(`${loading}|${status}`));
+
+    await panel.addDataFiles([{ name: 'a.ttl', size: 20, text: async () => PREFIXES + ':a a :Room .' }]);
+
+    expect(seen[0]).toBe('true|Loading a.ttl…');
+    expect(seen[seen.length - 1]).toBe('false|');
+  });
+});
+
+describe('cancelData (#239 fourth review)', () => {
+  it('stops adding data, as the Cancel of the Individuals tab does', async () => {
+    const { dataSources, panel } = mount();
+    const big = PREFIXES + Array.from({ length: 20000 }, (_, i) => `:r${i} a :Room .`).join('\n');
+    const statuses: string[] = [];
+    panel.onDataStatus((status) => statuses.push(status));
+
+    const adding = panel.addDataFiles([{ name: 'big.ttl', size: 100, text: async () => big }]);
+    await expect.poll(() => statuses.some((s) => s.startsWith('Loading big.ttl'))).toBe(true);
+    panel.cancelData();
+    await adding;
+
+    expect(dataSources.list()).toEqual([]);
+    expect(statuses[statuses.length - 1]).toBe('Cancelled.');
+  });
+});

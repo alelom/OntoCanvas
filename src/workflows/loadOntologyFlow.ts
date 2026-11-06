@@ -6,7 +6,7 @@ import { fetchExternalOntologyTtl, getReferencedExternalClassesFromStore, preloa
 import { getEdgeTypes, resolveLayoutMode } from '../graph';
 import { applyAnnotationPropertyOrder } from '../lib/annotationStyle';
 import { latestDisplayConfigSource } from '../lib/displayConfigFallback';
-import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn } from '../lib/importedDeclarations';
+import { loadImportedOntologies, readImportedDeclarations, mergeImportedDeclarations, mergeChangesWhatIsDrawn, type ImportedOntology } from '../lib/importedDeclarations';
 import { loadOntologyFromContent } from '../lib/loadOntology';
 import { forgetOntologyDirectory } from '../lib/ontologyDirectory';
 import { fetchOntologyFromUrl } from '../lib/ontologyUrlLoader';
@@ -41,7 +41,7 @@ import { refreshPropertyMenus } from '../ui/searchAutocomplete';
 import { updateStatusBar, updateOntologyInfoDisplay, updateOntologyVersionDisplay, updateAvailableVersions } from '../ui/statusBar';
 import { showValidationErrorModal } from '../ui/validationErrorModal';
 import { beginViewSettle } from '../ui/viewSettle';
-import { showWarningBar, hideWarningBar } from '../ui/warningBar';
+import { clearNotices, setNotice } from '../ui/statusNotices';
 import { debugWarn, debugLog, isDebugMode } from '../utils/debug';
 import { isEmbedded } from '../utils/embedMode';
 import { clearOntologyParamsFromAddressBar, getAllDisplayFileUrls, setOntologyUrlParamInAddressBar } from '../utils/urlParams';
@@ -57,6 +57,29 @@ import { DataFactory, type Term } from 'n3';
 export const IMPORT_READ_TIMEOUT_MS = 8000;
 
 export const IMPORT_READ_MAX_BYTES = 5_000_000;
+
+/**
+ * Makes `imported` the ontologies read as context, never written to the open ontology: the prefixes they declare, the
+ * properties they declare merged into the lists and menus (#104), and the names of the classes of individuals (#235).
+ * Its imports are read this way, and so are the ontologies the data names, once the user opens them (#236).
+ */
+export function applyImportedOntologies(imported: ImportedOntology[]): void {
+  session.importedOntologies = imported;
+  // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
+  setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
+  session.importedDeclarations = readImportedDeclarations(imported);
+  const before = { objectProperties: session.objectProperties, dataProperties: session.dataProperties, annotationProperties: session.annotationProperties };
+  const merged = mergeImportedDeclarations(before, session.importedDeclarations);
+  session.objectProperties = merged.objectProperties;
+  session.dataProperties = merged.dataProperties;
+  session.annotationProperties = merged.annotationProperties;
+  refreshPropertyMenus();
+  // The Individuals tab and the drawn individuals are named again, which redraws when individuals are drawn.
+  session.sidePanel?.schemaChanged();
+  // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
+  // uses came from an import; properties added as context are never drawn.
+  if (mergeChangesWhatIsDrawn(before, merged)) actions.applyFilter(true);
+}
 
 /**
  * Read what the loaded ontology's imports declare, in the background, and merge it into the property lists
@@ -77,19 +100,9 @@ export function startLoadingImportedDeclarations(store: NonNullable<typeof sessi
         fetchExternalOntologyTtl(url, { timeoutMs: IMPORT_READ_TIMEOUT_MS, maxBytes: IMPORT_READ_MAX_BYTES, fetchStandardVocabularies: true })
       );
       if (store !== session.ttlStore || imported.length === 0) return;
-      session.importedOntologies = imported;
-      // Prefixes the imports declare name the namespaces they bring in (PROV through aec_provenance, #137).
-      setImportedPrefixes(Object.assign({}, ...imported.map((o) => o.prefixes ?? {})));
-      session.importedDeclarations = readImportedDeclarations(imported);
-      const before = { objectProperties: session.objectProperties, dataProperties: session.dataProperties, annotationProperties: session.annotationProperties };
-      const merged = mergeImportedDeclarations(before, session.importedDeclarations);
-      session.objectProperties = merged.objectProperties;
-      session.dataProperties = merged.dataProperties;
-      session.annotationProperties = merged.annotationProperties;
-      refreshPropertyMenus();
-      // Redrawing clears the user's selection, so only do it when the labels or ranges of properties the file
-      // uses came from an import; properties added as context are never drawn.
-      if (mergeChangesWhatIsDrawn(before, merged)) actions.applyFilter(true);
+      // Ontologies the data names, opened meanwhile (#236), are kept after the imports.
+      const openedMeanwhile = session.importedOntologies.filter((o) => !imported.some((i) => i.url === o.url));
+      applyImportedOntologies([...imported, ...openedMeanwhile]);
     } catch (err) {
       debugWarn('Could not read the declarations of the imports:', err);
     } finally {
@@ -133,13 +146,13 @@ export async function loadTtlAndRender(
   // before rendering, and the previous render's "settled" must not count for this load (#93).
   beginViewSettle();
   const errorMsg = document.getElementById('errorMsg') as HTMLElement;
-  const warningMsg = document.getElementById('warningMsg') as HTMLElement;
   const vizControls = document.getElementById('vizControls') as HTMLElement;
   errorMsg.style.display = 'none';
   errorMsg.textContent = '';
   errorMsg.innerHTML = '';
   errorMsg.style.cursor = '';
-  warningMsg.style.display = 'none';
+  // The notes in the bottom bar were about the ontology before (#239).
+  clearNotices();
 
   try {
     // Store original TTL string to preserve format when saving
@@ -468,9 +481,9 @@ fileState.hasUnsavedChanges = false;
     }
     
     if (graphData.nodes.length === 0 && graphData.edges.length === 0 && !hasObjectPropertiesWithDomainRange) {
-      showWarningBar('The current file defines no classes, so the canvas is empty.');
+      setNotice('no-classes', 'The current file defines no classes, so the canvas is empty.');
     } else {
-      hideWarningBar();
+      setNotice('no-classes', null);
     }
 
     setTimeout(() => {
@@ -758,7 +771,7 @@ export async function loadFromUrl(url: string): Promise<void> {
     if (latestSource && (await fetchExternalOntologyTtl(latestSource, { timeoutMs: IMPORT_READ_TIMEOUT_MS }))) {
       urlDisplayConfig = await firstDisplayConfig(getAllDisplayFileUrls(latestSource, servedFrom(latestSource)));
       if (urlDisplayConfig) {
-        showWarningBar('This version has no display settings of its own: the layout and colours of the latest version are used, so terms added or removed since may be placed oddly.');
+        setNotice('borrowed-display-config', 'This version has no display settings of its own: the layout and colours of the latest version are used, so terms added or removed since may be placed oddly.');
       }
     }
 

@@ -239,3 +239,14 @@ export function createDataSources(): DataSources {
   };
   return self;
 }
+
+/** Calls `listener` when a source is added or removed, not on other changes (a graph shown or hidden, #224). */
+export function whenSourceListChanges(sources: DataSources, listener: () => void): void {
+  let seen = '';
+  sources.onChange(() => {
+    const now = sources.list().map((s) => s.id).join(' ');
+    if (now === seen) return;
+    seen = now;
+    listener();
+  });
+}

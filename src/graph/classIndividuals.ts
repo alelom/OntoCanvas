@@ -3,7 +3,7 @@
  * class in batches like the type header of the Individuals tab, and the count of individuals the node carries. Display only.
  */
 import type { DataSet } from 'vis-data';
-import type { IndividualsLayer } from '../abox/individualsLayer';
+import { INDIVIDUAL_CLASS_PREFIX, isIndividualNodeId, type IndividualsLayer } from '../abox/individualsLayer';
 
 export interface ClassIndividualsAction {
   label: string;
@@ -36,4 +36,14 @@ export function addIndividualCounts(nodes: DataSet<any>, layer: IndividualsLayer
     if (total > 0 && nodes.get(nodeId)) updates.push({ id: nodeId, individualCount: total });
   }
   if (updates.length) nodes.update(updates);
+}
+
+/**
+ * The class a node stands for: a class node of the graph, by its IRI, or the node of a class of the data that is no node of the
+ * graph (#239). Null for anything else. Its count badge and its menu draw the individuals of that class.
+ */
+export function classIriOfNode(nodeId: string, graphNodes: Array<{ id: string; uri?: string | null }>): string | null {
+  if (nodeId.startsWith(INDIVIDUAL_CLASS_PREFIX)) return nodeId.slice(INDIVIDUAL_CLASS_PREFIX.length);
+  if (isIndividualNodeId(nodeId)) return null;
+  return graphNodes.find((n) => n.id === nodeId)?.uri ?? null;
 }

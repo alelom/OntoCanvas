@@ -74,6 +74,47 @@ describe('adding data files: several, dropped, compressed', () => {
     expect(await page.locator('[data-data-graph]', { hasText: 'Batch 2' }).locator('input').isChecked()).toBe(false);
   });
 
+  it('draws the individuals linked to one when it is double-clicked, and offers to add no node (#239)', async () => {
+    await removeAll();
+    await page.setInputFiles('[data-add-file-input]', [PART(1), PART(2)]);
+    // 33 individuals, more than are drawn by themselves: none is drawn.
+    await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (33)');
+    await page.click('[data-individuals-group="http://example.org/examples/run-parts#Reading"] [data-individuals-group-toggle]');
+    const row = page.locator('[data-individuals-list] li', { has: page.locator('[data-individuals-item][title="http://example.org/examples/run-parts#reading15"]') });
+    await row.locator('[data-individuals-show-in-graph]').click();
+    const id = '__individual__http://example.org/examples/run-parts#reading15';
+    const drawn = () => page.evaluate(() => ((window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds() as string[]).filter((n) => n.startsWith('__individual__')).sort());
+    await page.waitForFunction((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.get(nodeId) !== null, id);
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.isViewSettled());
+    expect(await drawn()).toEqual([id]);
+    const before = await page.evaluate((nodeId) => (window as any).__EDITOR_TEST__.getNetwork().getPositions([nodeId])[nodeId] as { x: number; y: number }, id);
+    const at = await page.evaluate((nodeId) => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      const dom = net.canvasToDOM(net.getPositions([nodeId])[nodeId]);
+      const rect = document.getElementById('network')!.getBoundingClientRect();
+      return { x: rect.left + dom.x, y: rect.top + dom.y };
+    }, id);
+
+    await page.mouse.dblclick(at.x, at.y);
+
+    // Reading 15 follows Reading 14, points to Reading 16, and is made by Sensor 3.
+    await page.waitForFunction(() => ((window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds() as string[]).filter((n) => n.startsWith('__individual__')).length === 4);
+    expect(await drawn()).toEqual(
+      ['reading14', 'reading15', 'reading16', 'sensor3'].map((n) => `__individual__http://example.org/examples/run-parts#${n}`)
+    );
+    expect(await page.evaluate(() => getComputedStyle(document.getElementById('addNodeModal')!).display)).toBe('none');
+    // It stays where it was, and selected, so it is found again after the redraw.
+    const after = await page.evaluate((nodeId) => {
+      const net = (window as any).__EDITOR_TEST__.getNetwork();
+      return { position: net.getPositions([nodeId])[nodeId], selected: net.getSelectedNodes().map(String) };
+    }, id);
+    expect(after.selected).toEqual([id]);
+    // The selection line in the bottom bar follows it (selecting from code raises no select event).
+    expect(await page.locator('#info').innerText()).toContain('reading15');
+    expect(Math.round(after.position.x)).toBe(Math.round(before.x));
+    expect(Math.round(after.position.y)).toBe(Math.round(before.y));
+  });
+
   it('adds a file dropped on the graph while the Individuals tab is open, outlining the graph while it is over it', async () => {
     await removeAll();
     const bytes = [...readFileSync(PART(2))];

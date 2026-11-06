@@ -15,6 +15,7 @@ import { getMainOntologyBase } from '../../src/ontology/ontologyBase';
 import {
   getImportUrls,
   loadImportedOntologies,
+  loadOntologies,
   readImportedDeclarations,
   mergeImportedDeclarations,
   mergeChangesWhatIsDrawn,
@@ -393,5 +394,25 @@ describe('mergeChangesWhatIsDrawn', () => {
   it('is false when there is nothing to merge', () => {
     const local = { ...empty, objectProperties: [op({ name: 'a' })] };
     expect(mergeChangesWhatIsDrawn(local, mergeImportedDeclarations(local, empty))).toBe(false);
+  });
+});
+
+describe('loadOntologies (#236)', () => {
+  it('reads the ontologies at the addresses given, and their imports, skipping the ones to leave out', async () => {
+    const { fetchTtl, asked } = fakeFetch(await servedByIri());
+
+    const read = await loadOntologies(['http://example.org/extended'], fetchTtl, { exclude: [] });
+
+    expect(read.map((o) => o.url).sort()).toEqual(['http://example.org/base', 'http://example.org/extended']);
+    expect(asked.sort()).toEqual(['http://example.org/base', 'http://example.org/extended']);
+  });
+
+  it('does not read again what is to be left out (what is loaded already), nor its imports through it', async () => {
+    const { fetchTtl, asked } = fakeFetch(await servedByIri());
+
+    const read = await loadOntologies(['http://example.org/extended', 'http://example.org/base#'], fetchTtl, { exclude: ['http://example.org/base'] });
+
+    expect(read.map((o) => o.url)).toEqual(['http://example.org/extended']);
+    expect(asked).toEqual(['http://example.org/extended']);
   });
 });

@@ -7,7 +7,8 @@ import { showAddNodeModal } from '../ui/addNodeModal';
 import { hideCanvasTooltip, pickTooltip, showCanvasTooltip } from '../ui/canvasTooltip';
 import { attachClassExpressionMarks } from '../ui/classExpressionInteraction';
 import { attachIndividualCountBadges } from '../ui/individualCountBadges';
-import { classIndividualsAction } from './classIndividuals';
+import { classIndividualsAction, classIriOfNode } from './classIndividuals';
+import { individualDoubleClick } from './individualDoubleClick';
 import { showContextMenu } from '../ui/contextMenu';
 import { hideEdgeLinesUnderNodes } from '../ui/edgeNodeClipping';
 import { openEditModalForNode, openEditModalForEdge } from '../ui/editModals';
@@ -31,7 +32,8 @@ export function setupNetworkSelectionAndNavigation(
   );
   // The count of individuals on a class node, a badge that draws them when clicked (#209).
   const individualBadges = attachIndividualCountBadges(net as unknown as Parameters<typeof attachIndividualCountBadges>[0], (nodeId) => {
-    const uri = session.currentGraphDataForBuild?.nodes.find((n) => n.id === nodeId)?.uri;
+    // A class node of the graph, or the node of a class of the data that is not in it (#239).
+    const uri = classIriOfNode(nodeId, session.currentGraphDataForBuild?.nodes ?? []);
     return uri && session.individualsLayer ? classIndividualsAction(session.individualsLayer, uri) : null;
   });
   // Edge lines stop at node outlines, even under semi-transparent (imported) nodes (#71).
@@ -236,13 +238,17 @@ export function setupNetworkSelectionAndNavigation(
 
   const handleNativeDblclick = (e: MouseEvent) => {
     if (!session.ttlStore || !canvasState.network) return;
-    // Embedded mode is read-only: no edit modals, and no create-node on empty-canvas double-click.
-    if (isEmbedded()) return;
     const target = e.target as HTMLElement;
     if (target.closest?.('.vis-manipulation')) return;
     const rect = container.getBoundingClientRect();
     const domPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const nodeAt = net.getNodeAt(domPos);
+    // An individual draws the individuals linked to it, a class node of the data its individuals (#239). Taken here, the one
+    // double-click handler that looks at what is under the pointer, before the redraw it causes moves the nodes: a later look
+    // would find the canvas empty there and offer to add a node. Display only, so in an embedded view too.
+    if (nodeAt != null && session.individualsLayer && individualDoubleClick(String(nodeAt), session.individualsLayer)) return;
+    // Embedded mode is read-only: no edit modals, and no create-node on empty-canvas double-click.
+    if (isEmbedded()) return;
     if (nodeAt != null) {
       const nodeId = String(nodeAt);
       // Individuals are drawn read-only (#209).
