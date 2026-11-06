@@ -3,7 +3,7 @@
  * A run writes its image paths relative to the folder above `runs/`, not to the data file.
  */
 import { describe, it, expect } from 'vitest';
-import { findInFolder, isImagePath, pathParts, resolveAgainstUrl } from '../../src/abox/imagePaths';
+import { findInFolder, indexFolder, isImagePath, pathParts, resolveAgainstUrl } from '../../src/abox/imagePaths';
 
 describe('isImagePath', () => {
   it('reads the extension, whatever its case, before any query', () => {
@@ -15,6 +15,16 @@ describe('isImagePath', () => {
 describe('pathParts', () => {
   it('reads backslashes, %20, . and ..', () => {
     expect(pathParts('.\\images\\page%201\\..\\page 2\\a.png')).toEqual(['images', 'page 2', 'a.png']);
+  });
+
+  it("decodes every character a batch run encodes (Python's quote with / kept), and a % not followed by hex stays", () => {
+    expect(pathParts('Plans%20%26%20Sections/Issue%20%233/A-101%2C%20rev%20B%2B%3B%3D%40%24%3A.pdf_p1.png')).toEqual(['Plans & Sections', 'Issue #3', 'A-101, rev B+;=@$:.pdf_p1.png']);
+    expect(pathParts('100%25/50% off/a.png')).toEqual(['100%', '50% off', 'a.png']);
+  });
+
+  it('reads a query or a fragment only when it is written as such, not when it is encoded in a name', () => {
+    expect(pathParts('images/a.png?v=2#top')).toEqual(['images', 'a.png']);
+    expect(pathParts('Issue%20%233/a%3Fb.png')).toEqual(['Issue #3', 'a?b.png']);
   });
 });
 
@@ -43,6 +53,18 @@ describe('findInFolder', () => {
     expect(findInFolder('images/page-1/titleblock.png', twice)).toBeNull();
   });
 
+  it('finds a crop kept under a drawing path with &, # and a comma, as a batch run writes it (percent-encoded)', () => {
+    const run = new Set(['images/Plans & Sections/Issue #3/A-101, rev B.pdf_p1.png']);
+    const value = 'runs/20261105T1030Z_5cd7106d/images/Plans%20%26%20Sections/Issue%20%233/A-101%2C%20rev%20B.pdf_p1.png';
+    expect(findInFolder(value, run, '', '20261105T1030Z_5cd7106d')).toBe('images/Plans & Sections/Issue #3/A-101, rev B.pdf_p1.png');
+  });
+
+  it('accepts the index of a folder, made once for many values', () => {
+    const index = indexFolder(['runs/run-0001/images/page-1/titleblock.png', 'runs/run-0002/images/page-9/titleblock.png']);
+    expect(findInFolder('images/page-1/titleblock.png', index)).toBe('runs/run-0001/images/page-1/titleblock.png');
+    expect(findInFolder('images/page-2/titleblock.png', index)).toBeNull();
+  });
+
   it('does not take an address, or a file the folder does not hold', () => {
     expect(findInFolder('https://example.org/images/page-1/titleblock.png', RUN)).toBeNull();
     expect(findInFolder('file:///C:/runs/images/page-1/titleblock.png', RUN)).toBeNull();
@@ -59,6 +81,10 @@ describe('resolveAgainstUrl', () => {
 
   it('without the folders the path and the address have in common', () => {
     expect(resolveAgainstUrl('runs/run-0001/images/page-1/titleblock.png', PART)).toBe('https://example.org/data/runs/run-0001/images/page-1/titleblock.png');
+  });
+
+  it('encodes each part of the address again: a # or ? in a name is not a fragment or a query', () => {
+    expect(resolveAgainstUrl('runs/run-0001/images/Plans%20%26%20Sections/Issue%20%233/a%3Fb.png', PART)).toBe('https://example.org/data/runs/run-0001/images/Plans%20%26%20Sections/Issue%20%233/a%3Fb.png');
   });
 
   it('keeps an http address, and gives nothing for another scheme', () => {

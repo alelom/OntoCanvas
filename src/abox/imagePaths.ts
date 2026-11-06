@@ -13,16 +13,30 @@ const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 /** A value naming an image by its extension, before any query or fragment. */
 export const isImagePath = (value: string): boolean => IMAGE_PATH.test(value.split(/[?#]/)[0].trim());
 
-/** The parts of a relative path: `\` read as `/`, `%20` decoded, `.` dropped and `..` applied. */
-export function pathParts(value: string): string[] {
-  let text = value.trim().replace(/\\/g, '/');
+/** A part of a path decoded: every %XX, `&`, `#` and `,` too, as a batch run encodes them (Python's `quote`); a lone % stays. */
+function decodePart(part: string): string {
   try {
-    text = decodeURI(text);
+    return decodeURIComponent(part);
   } catch {
-    // A lone % is part of the name.
+    return part.replace(/%[0-9a-f]{2}/gi, (escape) => {
+      try {
+        return decodeURIComponent(escape);
+      } catch {
+        return escape;
+      }
+    });
   }
+}
+
+/**
+ * The parts of a relative path: `\` read as `/`, each part decoded, `.` dropped and `..` applied. A query or a fragment is cut
+ * before decoding, so a `#` or `?` encoded in a name stays in it.
+ */
+export function pathParts(value: string): string[] {
+  const text = value.trim().replace(/\\/g, '/').split(/[?#]/)[0];
   const parts: string[] = [];
-  for (const part of text.split(/[?#]/)[0].split('/')) {
+  for (const raw of text.split('/')) {
+    const part = decodePart(raw);
     if (part === '' || part === '.') continue;
     if (part === '..') parts.pop();
     else parts.push(part);
@@ -30,8 +44,24 @@ export function pathParts(value: string): string[] {
   return parts;
 }
 
+/** A folder's image paths, indexed once for the many values looked up in it: the paths, and the paths by file name. */
+export interface FolderIndex {
+  paths: ReadonlySet<string>;
+  byName: ReadonlyMap<string, readonly string[]>;
+}
+
+export function indexFolder(paths: Iterable<string>): FolderIndex {
+  const set = new Set(paths);
+  const byName = new Map<string, string[]>();
+  for (const path of set) {
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    byName.set(name, [...(byName.get(name) ?? []), path]);
+  }
+  return { paths: set, byName };
+}
+
 /**
- * The file of a folder an image path names, or null. `paths` are the folder's files, relative to it; `fromDir` is the folder of
+ * The file of a folder an image path names, or null. `folder` is the folder's files, relative to it (or their index); `fromDir` is the folder of
  * the data file the value is in, relative to the same; `folderName` is the folder's own name. In this order:
  * 1. relative to the data file's own folder;
  * 2. relative to the folder;
@@ -40,10 +70,11 @@ export function pathParts(value: string): string[] {
  * 4. relative to a folder inside the one opened: one file only ends with the value.
  * A value that is an address (`https:`, `file:`) is not a path of the folder.
  */
-export function findInFolder(value: string, paths: ReadonlySet<string>, fromDir = '', folderName = ''): string | null {
+export function findInFolder(value: string, folder: ReadonlySet<string> | FolderIndex, fromDir = '', folderName = ''): string | null {
   if (SCHEME.test(value.trim())) return null;
   const parts = pathParts(value);
   if (!parts.length) return null;
+  const { paths, byName } = folder instanceof Set ? indexFolder(folder) : (folder as FolderIndex);
   const fromData = pathParts(`${fromDir}/${value}`).join('/');
   if (paths.has(fromData)) return fromData;
   const fromRoot = parts.join('/');
@@ -53,7 +84,7 @@ export function findInFolder(value: string, paths: ReadonlySet<string>, fromDir 
     const below = parts.slice(at + 1).join('/');
     if (paths.has(below)) return below;
   }
-  const ending = [...paths].filter((path) => path.endsWith(`/${fromRoot}`));
+  const ending = (byName.get(parts[parts.length - 1]) ?? []).filter((path) => path.endsWith(`/${fromRoot}`));
   return ending.length === 1 ? ending[0] : null;
 }
 
@@ -73,9 +104,11 @@ export function resolveAgainstUrl(value: string, dataUrl: string): string | null
   }
   const parts = pathParts(text);
   if (!parts.length) return null;
-  const dir = base.pathname.split('/').filter(Boolean).map((p) => decodeURIComponent(p));
+  const dir = base.pathname.split('/').filter(Boolean).map(decodePart);
+  // Each part encoded again: a decoded `#` or `?` would start a fragment or a query.
+  const address = (from: number) => new URL(parts.slice(from).map(encodeURIComponent).join('/'), base).href;
   for (let shared = Math.min(dir.length, parts.length - 1); shared > 0; shared--) {
-    if (dir.slice(dir.length - shared).every((p, i) => p === parts[i])) return new URL(parts.slice(shared).join('/'), base).href;
+    if (dir.slice(dir.length - shared).every((p, i) => p === parts[i])) return address(shared);
   }
-  return new URL(parts.join('/'), base).href;
+  return address(0);
 }

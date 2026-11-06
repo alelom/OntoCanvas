@@ -1,11 +1,15 @@
 /**
- * Writes examples/datasets/run-folder (#227, #228): the folder of a made-up run as a batch process leaves it. Three parts of
- * gzip-compressed N-Quads in two named graphs, a Turtle file about the run, an image of each sheet's titleblock, and a README.
- * The image paths in the data are relative to the folder above runs/, as real runs write them: `runs/run-0001/images/…`.
+ * Writes examples/datasets/run-folder (#227, #228, #241): the folder of a made-up run as a batch process leaves it. Three parts of
+ * gzip-compressed N-Quads in two named graphs, a Turtle file about the run, the crop of each sheet's titleblock, and a README.
+ *
+ * The crops are kept as ADIRO models them and as real runs write them: an image individual (aprov:DrawingFile) is
+ * geom:imageOf the crop's frame, which geom:coversRegion the titleblock's bounding box. Its aprov:storageLocation is the crop's
+ * path relative to the folder above runs/, `runs/run-0001/images/<the drawing's path>_p<page>.png`, percent-encoded with `/` kept
+ * (Python's `quote`), since drawing paths have spaces, `&`, `#` and commas.
  *
  *   node scripts/makeRunFolderExample.mjs
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync, gzipSync } from 'node:zlib';
@@ -17,6 +21,21 @@ const DATA = 'http://example.org/examples/run-folder/run-0001/';
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
 const XSD_INT = 'http://www.w3.org/2001/XMLSchema#integer';
+const XSD_ANY_URI = 'http://www.w3.org/2001/XMLSchema#anyURI';
+const GEOM = 'https://w3id.org/adiro/adiro_geometry#';
+const APROV = 'https://w3id.org/adiro/adiro_provenance#';
+
+/** The drawing each sheet was read from, by its path in the project: where its crop is kept, under images/. */
+const DRAWINGS = {
+  1: 'Plans & Sections/A-101.pdf',
+  2: 'Plans & Sections/A-102, rev B.pdf',
+  3: 'Issue #3/A-103.pdf',
+  4: 'Elevations/A-104.pdf',
+  5: 'Elevations/North Wing/A-105.pdf',
+};
+const cropPath = (n) => `runs/run-0001/images/${DRAWINGS[n]}_p1.png`;
+/** Python's `quote(path, safe="/")`, as the batch process writes aprov:storageLocation. */
+const quote = (path) => [...Buffer.from(path, 'utf8')].map((b) => (/[A-Za-z0-9_.~\/-]/.test(String.fromCharCode(b)) ? String.fromCharCode(b) : `%${b.toString(16).toUpperCase().padStart(2, '0')}`)).join('');
 
 const write = (path, content) => {
   mkdirSync(dirname(path), { recursive: true });
@@ -29,10 +48,13 @@ const iri = (v) => `<${v}>`;
 const literal = (v) => JSON.stringify(String(v));
 const quad = (s, p, o, g) => `${iri(s)} ${iri(p)} ${o} ${iri(g)} .`;
 
-/** One sheet of the run, with its titleblock: the titleblock names its image by a path relative to the folder above runs/. */
+/** One sheet of the run, with its titleblock, the titleblock's bounding box, the crop's frame and the crop: 16 triples. */
 function sheet(n, graph) {
   const s = `${DATA}sheet-${n}`;
-  const tb = `${DATA}sheet-${n}/titleblock`;
+  const tb = `${s}/titleblock`;
+  const box = `${tb}/box`;
+  const frame = `${tb}/frame`;
+  const crop = `${tb}/image`;
   return [
     quad(s, RDF_TYPE, iri(`${NS}Sheet`), graph),
     quad(s, RDFS_LABEL, literal(`Sheet ${n}`), graph),
@@ -42,7 +64,14 @@ function sheet(n, graph) {
     quad(s, `${NS}hasTitleblock`, iri(tb), graph),
     quad(tb, RDF_TYPE, iri(`${NS}Titleblock`), graph),
     quad(tb, RDFS_LABEL, literal(`Titleblock of sheet ${n}`), graph),
-    quad(tb, `${NS}imagePath`, literal(`runs/run-0001/images/sheet-${n}/titleblock.png`), graph),
+    quad(tb, `${GEOM}hasBoundingBox`, iri(box), graph),
+    quad(box, RDF_TYPE, iri(`${GEOM}BoundingBox`), graph),
+    quad(frame, RDF_TYPE, iri(`${GEOM}CoordinateFrame`), graph),
+    quad(frame, `${GEOM}coversRegion`, iri(box), graph),
+    quad(crop, RDF_TYPE, iri(`${APROV}DrawingFile`), graph),
+    quad(crop, RDFS_LABEL, literal(`Crop of the titleblock of sheet ${n}`), graph),
+    quad(crop, `${GEOM}imageOf`, iri(frame), graph),
+    quad(crop, `${APROV}storageLocation`, `${literal(quote(cropPath(n)))}^^${iri(XSD_ANY_URI)}`, graph),
   ];
 }
 
@@ -51,7 +80,6 @@ const BATCH_2 = `${DATA}batch/2`;
 const parts = [
   [...sheet(1, BATCH_1), ...sheet(2, BATCH_1)],
   sheet(3, BATCH_1),
-  // Sheet 4's image is not in the folder: its detail says so.
   [...sheet(4, BATCH_2), ...sheet(5, BATCH_2)],
 ];
 parts.forEach((lines, i) => write(join(RUN, `part-000${i + 1}.nq.gz`), gzipSync(Buffer.from(`${lines.join('\n')}\n`, 'utf8'), { level: 9 })));
@@ -131,4 +159,6 @@ function titleblock(n) {
   });
 }
 
-for (const n of [1, 2, 3, 5]) write(join(RUN, `images/sheet-${n}/titleblock.png`), titleblock(n));
+// Sheet 4's crop is not in the folder: its detail says so.
+rmSync(join(RUN, 'images'), { recursive: true, force: true });
+for (const n of [1, 2, 3, 5]) write(join(ROOT, cropPath(n)), titleblock(n));

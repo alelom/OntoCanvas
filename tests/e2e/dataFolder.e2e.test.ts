@@ -46,23 +46,23 @@ describe('a folder of data, with its images', () => {
 
     await page.setInputFiles('#openOntologyModal [data-explore-folder-input]', RUN_DIR);
 
-    await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (11)');
+    await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (26)');
     expect(await page.locator('[data-data-status]').innerText()).toBe('Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped.');
     expect(await page.locator('[data-data-list] li').allInnerTexts()).toEqual([
       expect.stringContaining('📁 run-0001 — 4 data files, 4 images'),
-      expect.stringContaining('part-0001.nq.gz — 18 triples'),
-      expect.stringContaining('part-0002.nq.gz — 9 triples'),
-      expect.stringContaining('part-0003.nq.gz — 18 triples'),
+      expect.stringContaining('part-0001.nq.gz — 32 triples'),
+      expect.stringContaining('part-0002.nq.gz — 16 triples'),
+      expect.stringContaining('part-0003.nq.gz — 32 triples'),
       expect.stringContaining('run.ttl — 4 triples'),
     ]);
     expect(await page.locator('[data-data-parts]').isHidden()).toBe(true);
   });
 
-  it("shows a titleblock's image in its detail, found though the data names it from the folder above runs/, and says when there is none", async () => {
+  it("shows a titleblock's crop in its detail, through ADIRO's frame links, under a drawing path with & and a comma, and says when there is none", async () => {
     await showTitleblock(2);
 
-    const image = page.locator('[data-individuals-detail] [data-individuals-image]');
-    await page.waitForFunction(() => (document.querySelector('[data-individuals-detail] [data-individuals-image]') as HTMLImageElement | null)?.naturalWidth === 320);
+    const image = page.locator('[data-individuals-detail] [data-individuals-linked-images] [data-individuals-image]');
+    await page.waitForFunction(() => (document.querySelector('[data-individuals-detail] [data-individuals-linked-images] [data-individuals-image]') as HTMLImageElement | null)?.naturalWidth === 320);
     expect(await image.getAttribute('src')).toMatch(/^blob:/);
 
     await showTitleblock(4);
@@ -82,7 +82,7 @@ describe('a folder of data, with its images', () => {
     await page.click('#queryPanelBtn');
     await page.locator('[data-query-editor][data-editor="codemirror"] .cm-content').click();
     await page.keyboard.press('Control+a');
-    await page.keyboard.type('SELECT ?path WHERE { ?tb <http://example.org/examples/run-folder#imagePath> ?path } ORDER BY ?path');
+    await page.keyboard.type('SELECT ?path WHERE { ?crop <https://w3id.org/adiro/adiro_provenance#storageLocation> ?path } ORDER BY ?path');
     await page.click('[data-query-run]');
     await page.locator('.query-results tbody tr').nth(4).waitFor();
 
@@ -103,6 +103,6 @@ describe('a folder of data, with its images', () => {
     await showTitleblock(1);
 
     expect(await page.locator('[data-individuals-detail] [data-individuals-image-missing]').innerText()).toContain("Open the data's folder (From a folder…)");
-    expect(await page.locator('[data-individuals-detail] [data-individuals-image]').count()).toBe(0);
+    expect(await page.locator('[data-individuals-detail] [data-individuals-linked-images] [data-individuals-image]').count()).toBe(0);
   });
 });

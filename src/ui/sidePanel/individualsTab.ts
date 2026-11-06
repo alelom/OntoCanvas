@@ -273,6 +273,23 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     return section;
   }
 
+  /** The images of the frames an individual is drawn from (#241), such as a title block's crop: each with the image individual it is kept on. */
+  function renderLinkedImages(iri: string): HTMLElement[] {
+    const linked = deps.images?.linkedImages(iri) ?? [];
+    if (!linked.length) return [];
+    const section = element('div', 'individual-links');
+    section.setAttribute('data-individuals-linked-images', '');
+    section.append(element('h5', undefined, `Images of it (${linked.length})`));
+    const rows = element('ul');
+    for (const { image, value, found } of linked) {
+      const row = element('li');
+      row.append(renderTerm({ termType: 'NamedNode', value: image }, true), imagePreview(value, found));
+      rows.append(row);
+    }
+    section.append(rows);
+    return [section];
+  }
+
   function renderDetail(): void {
     if (selected === null) {
       detail.hidden = true;
@@ -283,6 +300,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     detail.hidden = false;
     const heading = element('h4', undefined, described.labels[0] ?? nameOf(selected));
     const iri = element('p', 'individual-iri', selected);
+    iri.setAttribute('data-individuals-iri', '');
     const types = element('p', 'individual-types', described.types.length ? 'Class: ' : 'No class');
     described.types.forEach((type, i) => {
       if (i > 0) types.append(', ');
@@ -295,6 +313,7 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       types,
       ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
       ...(deps.layer ? neighboursButton(deps.layer, selected) : []),
+      ...renderLinkedImages(selected),
       renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
       renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
     );

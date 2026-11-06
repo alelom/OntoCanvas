@@ -120,7 +120,6 @@ describe('adiro-run (#235, #236)', () => {
 
 describe('run-folder (#227, #228)', () => {
   const ROOT_DIR = join(__dirname, '../../examples/datasets/run-folder');
-  const NS_RUN = 'http://example.org/examples/run-folder#';
   const DATA_RUN = 'http://example.org/examples/run-folder/run-0001/';
 
   /** The folder on disk as the folder picker gives it. */
@@ -145,33 +144,48 @@ describe('run-folder (#227, #228)', () => {
     return { sources, loader, images: createDataImages({ sources, createUrl: () => `blob:${++next}` }) };
   }
 
-  it('runs/run-0001: four data files with the triples the README says, four images, the README skipped, 11 individuals, two graphs', async () => {
+  it('runs/run-0001: four data files with the triples the README says, four images, the README skipped, 26 individuals, two graphs', async () => {
     const { sources, loader } = await open(join(ROOT_DIR, 'runs/run-0001'));
 
     expect(loader.status()).toBe('Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped.');
-    expect(sources.list().map((s) => [s.name, s.triples])).toEqual([['part-0001.nq.gz', 18], ['part-0002.nq.gz', 9], ['part-0003.nq.gz', 18], ['run.ttl', 4]]);
+    expect(sources.list().map((s) => [s.name, s.triples])).toEqual([['part-0001.nq.gz', 32], ['part-0002.nq.gz', 16], ['part-0003.nq.gz', 32], ['run.ttl', 4]]);
     const stores = sources.stores();
-    expect(new Set(stores.flatMap((s) => [...individualsOf(s)])).size).toBe(11);
-    expect(sources.graphs().map((g) => [g.iri, g.quads])).toEqual([[`${DATA_RUN}batch/1`, 27], [`${DATA_RUN}batch/2`, 18], [null, 4]]);
+    expect(new Set(stores.flatMap((s) => [...individualsOf(s)])).size).toBe(26);
+    expect(sources.graphs().map((g) => [g.iri, g.quads])).toEqual([[`${DATA_RUN}batch/1`, 48], [`${DATA_RUN}batch/2`, 32], [null, 4]]);
     // The folder holds every part: nothing said about missing ones.
     const names = sources.list().map((s) => s.name);
     expect(partsNotice(findPartGroups(names, new Set(names)))).toBeNull();
   });
 
-  it("finds each titleblock's image in the folder, though the data names it from the folder above runs/; sheet 4 has none", async () => {
-    const { images } = await open(join(ROOT_DIR, 'runs/run-0001'));
-    const path = (n: number) => `runs/run-0001/images/sheet-${n}/titleblock.png`;
-    const imageOf = (n: number) => images.find(path(n), `${DATA_RUN}sheet-${n}/titleblock`, `${NS_RUN}imagePath`);
+  const titleblock = (n: number) => `${DATA_RUN}sheet-${n}/titleblock`;
 
-    expect(imageOf(2)).toEqual({ url: expect.stringMatching(/^blob:/) });
-    expect(imageOf(4)).toEqual({ hint: expect.stringContaining('No file at this path') });
+  it("gives each titleblock its crop, through ADIRO's frame links, found under drawing paths with &, # and commas; sheet 4 has none", async () => {
+    const { images } = await open(join(ROOT_DIR, 'runs/run-0001'));
+
+    expect(images.linkedImages(titleblock(2))).toEqual([
+      { image: `${titleblock(2)}/image`, value: 'runs/run-0001/images/Plans%20%26%20Sections/A-102%2C%20rev%20B.pdf_p1.png', found: { url: expect.stringMatching(/^blob:/) } },
+    ]);
+    expect(images.linkedImages(titleblock(3))[0].found).toEqual({ url: expect.stringMatching(/^blob:/) });
+    expect(images.linkedImages(titleblock(4))[0].found).toEqual({ hint: expect.stringContaining('No file at this path') });
+    expect(images.imagesOf(titleblock(5))).toEqual([expect.stringMatching(/^blob:/)]);
   });
 
-  it('the folder above, run-folder: the same data, its own README skipped too, the images found from its root', async () => {
+  it('the folder above, run-folder: the same data, its own README skipped too, the crops found from its root', async () => {
     const { sources, loader, images } = await open(ROOT_DIR);
 
     expect(loader.status()).toBe('Added 4 data files from run-folder; 4 images kept for previews; 2 other files skipped.');
     expect(sources.list().map((s) => s.name)).toEqual(['runs/run-0001/part-0001.nq.gz', 'runs/run-0001/part-0002.nq.gz', 'runs/run-0001/part-0003.nq.gz', 'runs/run-0001/run.ttl']);
-    expect(images.find('runs/run-0001/images/sheet-1/titleblock.png')).toEqual({ url: expect.stringMatching(/^blob:/) });
+    expect(images.find('runs/run-0001/images/Issue%20%233/A-103.pdf_p1.png')).toEqual({ url: expect.stringMatching(/^blob:/) });
+    expect(images.imagesOf(titleblock(1))).toEqual([expect.stringMatching(/^blob:/)]);
+  });
+
+  it('by address, the crops resolve next to the parts, with the # of a folder name kept in the path', async () => {
+    const sources = createDataSources();
+    const base = 'https://example.org/run-folder/runs/run-0001/';
+    const fetch = async (url: string) => new Response(new Uint8Array(readFileSync(join(ROOT_DIR, 'runs/run-0001', basename(url)))));
+    await sources.addUrl(`${base}part-0002.nq.gz`, { fetch });
+    const images = createDataImages({ sources });
+
+    expect(images.linkedImages(titleblock(3))[0].found).toEqual({ url: `${base}images/Issue%20%233/A-103.pdf_p1.png` });
   });
 });

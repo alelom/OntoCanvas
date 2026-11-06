@@ -8,6 +8,7 @@ import { Parser, Store } from 'n3';
 import { createIndividualsTab, type IndividualsTab } from '../../src/ui/sidePanel/individualsTab';
 import { createDataSources } from '../../src/sparql/dataSources';
 import { createDataLoader } from '../../src/sparql/dataLoader';
+import type { DataImages } from '../../src/abox/dataImages';
 
 const NS = 'http://example.org/d#';
 const PREFIXES = `
@@ -239,6 +240,48 @@ describe('the detail', () => {
 
     expect(q('[data-individuals-incoming]').textContent).toContain(':room101');
     expect(q('[data-individuals-incoming]').textContent).toContain(':hasPart');
+  });
+
+  describe('images (#228, #241)', () => {
+    const images: DataImages = {
+      find: (value) => (value.endsWith('.png') ? (value.startsWith('missing') ? { hint: 'No file here.' } : { url: `blob:${value}` }) : null),
+      linkedImages: (iri) => (iri === NS + 'room101' ? [{ image: NS + 'crop1', value: 'runs/r/crop.png', found: { url: 'blob:crop' } }] : []),
+      imagesOf: () => [],
+    };
+    const mountWithImages = () => {
+      tab = createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({ '': NS }), images });
+      tab.render(container);
+    };
+
+    it('shows the image a value names under it, or why it cannot', () => {
+      stores = [ONTOLOGY, store(':room101 a :Room ; rdfs:label "Room 101" ; :imagePath "a.png" , "missing.png" .')];
+      mountWithImages();
+
+      click('Room 101');
+
+      expect(q<HTMLImageElement>('[data-individuals-outgoing] [data-individuals-image]').src).toBe('blob:a.png');
+      expect(q('[data-individuals-outgoing] [data-individuals-image-missing]').textContent).toBe('No file here.');
+    });
+
+    it("shows the images of the frames it is drawn from under their own heading, each with the image individual it comes from", () => {
+      mountWithImages();
+
+      click('Room 101');
+
+      const section = q('[data-individuals-linked-images]');
+      expect(section.querySelector('h5')!.textContent).toBe('Images of it (1)');
+      expect(section.querySelector<HTMLImageElement>('[data-individuals-image]')!.src).toBe('blob:crop');
+      section.querySelector<HTMLButtonElement>('[data-individuals-follow]')!.click();
+      expect(q('[data-individuals-detail] [data-individuals-iri]').textContent).toBe(NS + 'crop1');
+    });
+
+    it('has no such heading for an individual with no linked image', () => {
+      mountWithImages();
+
+      click('North wall');
+
+      expect(container.querySelector('[data-individuals-linked-images]')).toBeNull();
+    });
   });
 
   it('follows a link to another individual', () => {

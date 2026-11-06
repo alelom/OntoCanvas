@@ -278,11 +278,12 @@ export function createDataSources(): DataSources {
       });
     },
     remove(id) {
-      const next = sources.filter((s) => s.id !== id);
-      if (next.length === sources.length) return;
-      sources = next;
-      // The folder goes with the last of its files: its images are of no use without the data that names them.
-      folders = folders.filter((f) => sources.some((s) => s.folder === f.id));
+      const gone = sources.find((s) => s.id === id);
+      if (!gone) return;
+      sources = sources.filter((s) => s !== gone);
+      // The folder goes with the last of its files: its images are of no use without the data that names them. Only that
+      // file's folder: one whose files are still being added has none yet (#240 review).
+      if (gone.folder !== undefined && !sources.some((s) => s.folder === gone.folder)) folders = folders.filter((f) => f.id !== gone.folder);
       forgetGoneGraphs();
       changed();
     },

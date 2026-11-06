@@ -495,6 +495,17 @@ describe('folders (#227)', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a folder whose files are still being added when another file is taken out (#240 review)', async () => {
+    const sources = createDataSources();
+    await add(sources, 'picked.ttl');
+    const folder = sources.addFolder('run', new Map(), 0);
+
+    sources.remove(sources.list()[0].id);
+    await add(sources, 'a.ttl', folder.id);
+
+    expect(sources.folders().map((f) => f.name)).toEqual(['run']);
+  });
+
   it('takes a folder out with the last of its files', async () => {
     const sources = createDataSources();
     const folder = sources.addFolder('run', new Map(), 0);
