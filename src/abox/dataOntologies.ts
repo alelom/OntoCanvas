@@ -39,7 +39,7 @@ export function isPrivateAddress(iri: string): boolean {
   } catch {
     return true;
   }
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '::' || host === '::1') return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
   // An IPv4 address inside IPv6 is that IPv4 address; the URL parser writes it in hex (::ffff:7f00:1).
   const mapped = /^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/.exec(host);
   if (mapped) {
@@ -60,7 +60,13 @@ export function isPrivateAddress(iri: string): boolean {
       (a === 198 && (b === 18 || b === 19))
     );
   }
-  return /^(fc|fd|fe8|fe9|fea|feb)/.test(host) && host.includes(':');
+  // Any other IPv6 address is public only in global unicast (2000::/3): that closes the rarer spellings of a local one
+  // (IPv4-compatible, NAT64, site-local) as a class (#239 third review).
+  if (host.includes(':')) {
+    const first = host.split(':')[0];
+    return !(first.length === 4 && /^[23]/.test(first));
+  }
+  return false;
 }
 
 /** `fetchTtl` that never asks for a private address (#239 second review): the imports of the data's ontologies, at every level, are read through it. */

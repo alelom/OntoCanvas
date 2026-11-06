@@ -319,7 +319,11 @@ export function applyFilter(preserveView = false, fitTo?: string[], anchor?: str
           scale: savedScale!,
           animation: false,
         });
-        if (net && keep) net.selectNodes([keep]);
+        // Selecting from code raises no select event: the selection line in the bottom bar is updated here.
+        if (net && keep) {
+          net.selectNodes([keep]);
+          updateSelectionInfoDisplay(net);
+        }
         if (net && focus.length > 0) {
           // The view glides to what was drawn; it has settled when it gets there (or after a moment, whatever the animation does).
           net.once('animationFinished', () => viewSettled(settleToken));

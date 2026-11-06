@@ -499,6 +499,7 @@ export function renderApp(): void {
       <div style="background: white; border-radius: 8px; padding: 32px; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);">
         <div id="loadingModalText" style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Opening the ontology…</div>
         <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        <button id="loadingModalCancel" type="button" hidden style="margin-top: 16px;">Cancel</button>
       </div>
     </div>
     <style>

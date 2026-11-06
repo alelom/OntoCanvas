@@ -52,6 +52,8 @@ export interface SidePanel {
   schemaChanged(): void;
   /** Called with the progress of adding data ("Adding 2 of 3: …") and whether it goes on, for the loading screen (#239). */
   onDataStatus(listener: (status: string, loading: boolean) => void): void;
+  /** Stops adding data, as the Cancel of the Individuals tab does: for the loading screen that covers it (#239). */
+  cancelData(): void;
 }
 
 const NO_PANEL: SidePanel = {
@@ -61,6 +63,7 @@ const NO_PANEL: SidePanel = {
   addDataFiles: async () => {},
   schemaChanged: () => {},
   onDataStatus: () => {},
+  cancelData: () => {},
 };
 
 export function initSidePanel(deps: SidePanelDeps): SidePanel {
@@ -164,6 +167,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       await dataLoader.addUrls(urls);
     },
     openIndividuals: () => host.open(individualsTab.id),
+    cancelData: () => dataLoader?.cancel(),
     onDataStatus(listener) {
       dataLoader?.onChange(() => listener(dataLoader.status(), dataLoader.loading()));
     },

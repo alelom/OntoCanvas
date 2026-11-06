@@ -4,13 +4,14 @@
  * are drawn once, named, behind it; hidden after, however the work ends.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { setLoadingText, showLoadingModal, underLoadingScreen } from '../../src/ui/modals';
+import { setLoadingCancel, setLoadingText, showLoadingModal, underLoadingScreen, withinMs } from '../../src/ui/modals';
+import { vi } from 'vitest';
 
 const modal = () => document.getElementById('loadingModal')!;
 const text = () => document.getElementById('loadingModalText')!.textContent;
 
 beforeEach(() => {
-  document.body.innerHTML = '<div id="loadingModal" style="display: none"><div id="loadingModalText"></div></div>';
+  document.body.innerHTML = '<div id="loadingModal" style="display: none"><div id="loadingModalText"></div><button id="loadingModalCancel" hidden>Cancel</button></div>';
 });
 
 describe('the text of the loading screen (#239)', () => {
@@ -53,5 +54,48 @@ describe('underLoadingScreen', () => {
     ).rejects.toThrow('broken');
 
     expect(modal().style.display).toBe('none');
+  });
+});
+
+describe('Cancel on the loading screen (#239 fourth review)', () => {
+  const cancel = () => document.getElementById('loadingModalCancel') as HTMLButtonElement;
+
+  it('is shown while a step can be cancelled, and calls it', () => {
+    const onCancel = vi.fn();
+    showLoadingModal();
+    expect(cancel().hidden).toBe(true);
+
+    setLoadingCancel(onCancel);
+    expect(cancel().hidden).toBe(false);
+    cancel().click();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    setLoadingCancel(null);
+    expect(cancel().hidden).toBe(true);
+  });
+
+  it('is hidden again when the loading screen is shown for another step', () => {
+    setLoadingCancel(() => {});
+    showLoadingModal();
+
+    expect(cancel().hidden).toBe(true);
+  });
+});
+
+describe('withinMs (#239 fourth review)', () => {
+  it('settles when the work does, or after the time, whichever comes first', async () => {
+    vi.useFakeTimers();
+    let done = false;
+    const never = new Promise<void>(() => {});
+    const waited = withinMs(never, 3000).then(() => (done = true));
+
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await waited;
+    expect(done).toBe(true);
+    vi.useRealTimers();
+
+    await expect(withinMs(Promise.resolve(), 3000)).resolves.toBeUndefined();
   });
 });

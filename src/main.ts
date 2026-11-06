@@ -32,7 +32,7 @@ import {
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
 import { ontologiesOfDataRead, openOntologiesOfData } from './workflows/dataOntologies';
-import { setLoadingText, underLoadingScreen } from './ui/modals';
+import { setLoadingCancel, setLoadingText, underLoadingScreen, withinMs } from './ui/modals';
 
 import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
@@ -69,6 +69,23 @@ import { classIndividualsAction, classIriOfNode } from './graph/classIndividuals
 /** What the loading screen says while the data is added, then while the ontologies it names are read (#239). */
 const ADDING_DATA = 'Adding the data…';
 const READING_DATA_ONTOLOGIES = 'Reading the ontologies the data names…';
+/** The longest the loading screen waits for the ontologies the data names: they name the classes when they come, later. */
+const DATA_ONTOLOGIES_WAIT_MS = 3000;
+
+/**
+ * Adds data on an initial load (?data=, Explore data files…) under the loading screen, with a Cancel while the data is read
+ * (the screen covers the Individuals tab's), then waits a little for the ontologies the data names, so the classes are
+ * usually drawn once, named (#239).
+ */
+function addDataUnderLoadingScreen(add: () => Promise<unknown>): Promise<void> {
+  return underLoadingScreen(async () => {
+    setLoadingCancel(() => session.sidePanel?.cancelData());
+    await add();
+    setLoadingCancel(null);
+    setLoadingText(READING_DATA_ONTOLOGIES);
+    await withinMs(ontologiesOfDataRead(), DATA_ONTOLOGIES_WAIT_MS);
+  }, ADDING_DATA);
+}
 
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setClassIndividualsProvider((nodeId) => {
@@ -201,11 +218,7 @@ setOnExploreDataFiles((files) =>
       setNotice('workspace', text);
     },
     // Under the loading screen until the ontologies the data names are read: the classes are drawn once, named.
-    addDataFiles: (added) => underLoadingScreen(async () => {
-      await session.sidePanel?.addDataFiles(added);
-      setLoadingText(READING_DATA_ONTOLOGIES);
-      await ontologiesOfDataRead();
-    }, ADDING_DATA),
+    addDataFiles: (added) => addDataUnderLoadingScreen(async () => session.sidePanel?.addDataFiles(added)),
   })
 );
 // Update serializer dropdown after DOM is ready (in case it was rendered)
@@ -229,11 +242,7 @@ setTimeout(() => {
       );
       // The data is added to the ontology that was just opened, so only once it is.
       if (loaded && session.ttlStore && dataUrls.length) {
-        await underLoadingScreen(async () => {
-          await session.sidePanel?.addDataUrls(dataUrls);
-          setLoadingText(READING_DATA_ONTOLOGIES);
-          await ontologiesOfDataRead();
-        }, ADDING_DATA);
+        await addDataUnderLoadingScreen(async () => session.sidePanel?.addDataUrls(dataUrls));
       }
       return loaded;
     },

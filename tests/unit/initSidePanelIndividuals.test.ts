@@ -360,3 +360,20 @@ describe('onDataStatus (#239)', () => {
     expect(seen[seen.length - 1]).toBe('false|');
   });
 });
+
+describe('cancelData (#239 fourth review)', () => {
+  it('stops adding data, as the Cancel of the Individuals tab does', async () => {
+    const { dataSources, panel } = mount();
+    const big = PREFIXES + Array.from({ length: 20000 }, (_, i) => `:r${i} a :Room .`).join('\n');
+    const statuses: string[] = [];
+    panel.onDataStatus((status) => statuses.push(status));
+
+    const adding = panel.addDataFiles([{ name: 'big.ttl', size: 100, text: async () => big }]);
+    await expect.poll(() => statuses.some((s) => s.startsWith('Loading big.ttl'))).toBe(true);
+    panel.cancelData();
+    await adding;
+
+    expect(dataSources.list()).toEqual([]);
+    expect(statuses[statuses.length - 1]).toBe('Cancelled.');
+  });
+});

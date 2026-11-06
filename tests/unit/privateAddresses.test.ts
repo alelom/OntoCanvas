@@ -2,7 +2,7 @@
  * The addresses added data may make the page request (#239 review): never one on this machine or a private network, whether
  * the data names it or it is guessed from a namespace. The private addresses here are made up; this file is left out of the
  * public-repo hygiene scan by name (scripts/ci/internal-names.config.json), as internalNameScan.test.ts is, because its test
- * data is exactly what that scan looks for.
+ * data is exactly what that scan looks for. Keep only made-up private-range test data here: nothing else in this file is scanned.
  */
 import { describe, it, expect } from 'vitest';
 import { Parser, Store } from 'n3';
@@ -36,6 +36,12 @@ const PRIVATE = [
   'http://192.0.0.8/o',
   'http://198.18.0.1/o',
   'http://198.19.255.1/o',
+  // Third review: any IPv6 address outside global unicast (2000::/3) is not public.
+  'http://[::7f00:1]/o',
+  'http://[::127.0.0.1]/o',
+  'http://[64:ff9b::7f00:1]/o',
+  'http://[::ffff:0:7f00:1]/o',
+  'http://[fec0::1]/o',
 ];
 
 describe('isPrivateAddress', () => {
@@ -44,7 +50,7 @@ describe('isPrivateAddress', () => {
   });
 
   it('is false for the public web, the edges of the private ranges included', () => {
-    for (const iri of ['https://example.org/o', 'https://w3id.org/adiro/adiro_provenance/2.2.0', 'http://172.32.0.1/o', 'http://172.15.0.1/o', 'http://11.0.0.1/o', 'http://[2001:db8::1]/o', 'http://100.63.0.1/o', 'http://100.128.0.1/o', 'http://198.20.0.1/o', 'http://[::ffff:8.8.8.8]/o', 'https://example.org./o']) {
+    for (const iri of ['https://example.org/o', 'https://w3id.org/adiro/adiro_provenance/2.2.0', 'http://172.32.0.1/o', 'http://172.15.0.1/o', 'http://11.0.0.1/o', 'http://[2001:db8::1]/o', 'http://100.63.0.1/o', 'http://100.128.0.1/o', 'http://198.20.0.1/o', 'http://[::ffff:8.8.8.8]/o', 'https://example.org./o', 'http://[2606:4700::1111]/o', 'http://[3fff::1]/o']) {
       expect(isPrivateAddress(iri), iri).toBe(false);
     }
   });
