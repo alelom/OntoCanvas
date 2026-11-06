@@ -113,7 +113,7 @@ describe('createDataImages', () => {
     const { images } = setUp();
 
     expect(images.find('http://localhost:8080/a.png')).toEqual({ hint: PRIVATE_ADDRESS_HINT });
-    expect(images.find('http://192.168.1.10/a.png')).toEqual({ hint: PRIVATE_ADDRESS_HINT });
+    expect(images.find('http://169.254.10.10/a.png')).toEqual({ hint: PRIVATE_ADDRESS_HINT });
     expect(images.imagesOf('http://localhost:8080/a.png')).toEqual([]);
   });
 
