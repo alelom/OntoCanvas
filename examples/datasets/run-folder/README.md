@@ -32,8 +32,9 @@ Each crop is kept under the path of the drawing it was cut from, `images/<the dr
 1. Open OntoCanvas with no ontology. In the start screen choose **Explore a folder…** and pick `run-folder` or `runs/run-0001`
    (or drop either folder on that box). In Chrome and Edge the browser asks "Let site view files?"; nothing is uploaded.
 2. The Individuals tab lists the folder with its four data files: "📁 run-0001 — 4 data files, 4 images", and the status says
-   "Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped." (`run-folder` gives the same, with its
-   own README skipped too.) No notice about missing parts: the folder holds them all.
+   "Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped; 1 image its data names isn't in the
+   folder." (`run-folder` gives the same, with its own README skipped too.) The image missing is sheet 4's. No notice about
+   missing parts: the folder holds them all.
 3. 26 individuals: 5 of each of `Sheet`, `Titleblock`, `BoundingBox`, `CoordinateFrame` and `DrawingFile`, and the `Run`. The
    graphs `batch/1` (48 quads) and `batch/2` (32 quads) are listed.
 4. Pick **Titleblock of sheet 2**: its detail shows the crop under "Images of it (1)", with the crop's individual above it.

@@ -356,11 +356,23 @@ describe('addUrl', () => {
 });
 
 describe('addFolder (#227)', () => {
-  const contents = (data: Array<[string, string]>, images: string[] = [], skipped = 0) => ({
+  const contents = (data: Array<[string, string]>, images: string[] = [], skipped = 0, unreadable: string[] = []) => ({
     name: 'run-0001',
     data: data.map(([path, text]) => ({ path, file: file(path.split('/').pop()!, text) as unknown as File })),
     images: images.map((path) => ({ path, file: new Blob(['png']) as File })),
     skipped,
+    unreadable,
+  });
+
+  it("counts the images its data names that the folder doesn't hold, and the files it couldn't open, in the status and on the folder", async () => {
+    const data = loader();
+    const named = `@prefix : <http://example.org/d#> .
+:a :image "images/a.png" . :b :image "images/b.png" . :c :image "runs/run-0001/images/c.png" . :d :image "https://example.org/d.png" .`;
+
+    await data.addFolder(async () => contents([['part-0001.ttl', named]], ['images/a.png'], 0, ['images/x/']));
+
+    expect(data.status()).toBe("Added 1 data file from run-0001; 1 image kept for previews; 2 images its data names aren't in the folder; 1 file or folder couldn't be opened.");
+    expect(sources.folders().map((f) => [f.missingImages, f.unreadable])).toEqual([[2, 1]]);
   });
 
   it('adds each data file under its path in the folder, keeps the images, and says what it found', async () => {
@@ -461,6 +473,7 @@ describe('one change for one selection (#227)', () => {
       data: ['a.ttl', 'b.ttl', 'c.ttl'].map((path) => ({ path, file: file(path, ttl(1)) as unknown as File })),
       images: [],
       skipped: 0,
+      unreadable: [],
     }));
 
     expect(sources.list()).toHaveLength(3);

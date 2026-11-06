@@ -147,7 +147,7 @@ describe('run-folder (#227, #228)', () => {
   it('runs/run-0001: four data files with the triples the README says, four images, the README skipped, 26 individuals, two graphs', async () => {
     const { sources, loader } = await open(join(ROOT_DIR, 'runs/run-0001'));
 
-    expect(loader.status()).toBe('Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped.');
+    expect(loader.status()).toBe("Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped; 1 image its data names isn't in the folder.");
     expect(sources.list().map((s) => [s.name, s.triples])).toEqual([['part-0001.nq.gz', 32], ['part-0002.nq.gz', 16], ['part-0003.nq.gz', 32], ['run.ttl', 4]]);
     const stores = sources.stores();
     expect(new Set(stores.flatMap((s) => [...individualsOf(s)])).size).toBe(26);
@@ -173,7 +173,7 @@ describe('run-folder (#227, #228)', () => {
   it('the folder above, run-folder: the same data, its own README skipped too, the crops found from its root', async () => {
     const { sources, loader, images } = await open(ROOT_DIR);
 
-    expect(loader.status()).toBe('Added 4 data files from run-folder; 4 images kept for previews; 2 other files skipped.');
+    expect(loader.status()).toBe("Added 4 data files from run-folder; 4 images kept for previews; 2 other files skipped; 1 image its data names isn't in the folder.");
     expect(sources.list().map((s) => s.name)).toEqual(['runs/run-0001/part-0001.nq.gz', 'runs/run-0001/part-0002.nq.gz', 'runs/run-0001/part-0003.nq.gz', 'runs/run-0001/run.ttl']);
     expect(images.find('runs/run-0001/images/Issue%20%233/A-103.pdf_p1.png')).toEqual({ url: expect.stringMatching(/^blob:/) });
     expect(images.imagesOf(titleblock(1))).toEqual([expect.stringMatching(/^blob:/)]);

@@ -25,9 +25,12 @@ export function renderImageProblem(problem: ImageProblem): HTMLElement {
   note.className = 'individual-image-missing';
   note.setAttribute('data-individuals-image-missing', '');
   note.append(problem.hint);
-  if (problem.help?.kind !== 'long-path') return note;
+  if (problem.help?.kind === 'long-path') note.append(renderLongPathSteps(problem.help.folder));
+  return note;
+}
 
-  const { folder } = problem.help;
+/** The steps to open a folder again from a shorter path, folded: `folder` is the name of the folder opened. */
+export function renderLongPathSteps(folder: string): HTMLDetailsElement {
   const details = document.createElement('details');
   details.className = 'individual-image-help';
   details.setAttribute('data-individuals-image-help', '');
@@ -42,6 +45,5 @@ export function renderImageProblem(problem: ImageProblem): HTMLElement {
   const alternative = document.createElement('p');
   alternative.append('Or copy ', code(folder), ' to a short path, such as ', code('C:\\data\\'), ', and open the copy.');
   details.append(summary, steps, alternative);
-  note.append(details);
-  return note;
+  return details;
 }

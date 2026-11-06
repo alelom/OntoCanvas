@@ -17,8 +17,13 @@ export const WORKSPACE_TTL = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
     rdfs:label "Data files, no ontology" .
 `;
 
+/**
+ * Says what "no ontology" means beside the note on the data's ontologies (#240): none is open for editing, while the ones the
+ * data names may still be read, as context only. "Exploring data files with no ontology" next to "Loaded the ontologies the data
+ * was made with" read as a contradiction.
+ */
 export const WORKSPACE_NOTE =
-  'Exploring data files with no ontology. The ontologies the data names are read as context on their own; opening an ontology from the toolbar instead clears the data.';
+  "Exploring data files with no ontology open for editing. The ontologies the data names, when they can be found, are read as context only, to name its classes: they can't be edited or saved. Opening an ontology from the toolbar clears the data.";
 
 export interface ExploreDataDeps {
   /** Opens an ontology from its text, as a file of that name would be. */

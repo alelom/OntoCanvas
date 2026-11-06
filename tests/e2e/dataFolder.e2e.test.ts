@@ -47,8 +47,8 @@ describe('a folder of data, with its images', () => {
     await page.setInputFiles('#openOntologyModal [data-explore-folder-input]', RUN_DIR);
 
     await page.waitForFunction(() => document.getElementById('individualsPanelBtn')?.textContent === 'Individuals (26)');
-    expect(await page.locator('[data-data-status]').innerText()).toBe('Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped.');
-    expect(await page.locator('[data-data-list] li').allInnerTexts()).toEqual([
+    expect(await page.locator('[data-data-status]').innerText()).toBe("Added 4 data files from run-0001; 4 images kept for previews; 1 other file skipped; 1 image its data names isn't in the folder.");
+    expect(await page.locator('[data-data-list] > li').allInnerTexts()).toEqual([
       expect.stringContaining('📁 run-0001 — 4 data files, 4 images'),
       expect.stringContaining('part-0001.nq.gz — 32 triples'),
       expect.stringContaining('part-0002.nq.gz — 16 triples'),
@@ -56,6 +56,19 @@ describe('a folder of data, with its images', () => {
       expect.stringContaining('run.ttl — 4 triples'),
     ]);
     expect(await page.locator('[data-data-parts]').isHidden()).toBe(true);
+  });
+
+  it("warns in the bottom bar of the image its data names that the folder doesn't hold, popped up on Windows only (#240)", async () => {
+    const warning = page.locator('#ontologyIssuesPopup [data-status-notice^="folder-images:"]');
+    expect(await warning.textContent()).toContain("run-0001: 1 image its data names isn't in the folder.");
+    expect(await page.locator('#ontologyIssuesBtn').textContent()).toContain('warnings (');
+
+    const onWindows = await page.evaluate(() => /Win/i.test(navigator.platform));
+    expect(await page.locator('[data-notice-modal]').count()).toBe(onWindows ? 1 : 0);
+    if (!onWindows) return;
+    expect(await page.locator('[data-notice-modal] [data-notice-modal-mute]').count()).toBe(1);
+    await page.click('[data-notice-modal-close]');
+    expect(await page.locator('[data-notice-modal]').count()).toBe(0);
   });
 
   it("shows a titleblock's crop in its detail, through ADIRO's frame links, under a drawing path with & and a comma, and says when there is none", async () => {

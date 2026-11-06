@@ -26,6 +26,9 @@ const file = (name: string, relativePath?: string): File => {
 
 /** A tree as nested objects: a string is a file, an object a folder. */
 type Tree = { [name: string]: Tree | string };
+/** A file, or a folder, the browser lists but cannot open (on Windows, a path longer than 260 characters). */
+const UNREADABLE = '!unreadable';
+const UNREADABLE_DIR = '!unreadable-dir';
 
 function handleOf(name: string, tree: Tree, opened: string[] = []): DirectoryHandleLike {
   return {
@@ -33,8 +36,12 @@ function handleOf(name: string, tree: Tree, opened: string[] = []): DirectoryHan
     name,
     async *values() {
       for (const [child, value] of Object.entries(tree)) {
-        if (typeof value === 'string') {
-          const handle: FileHandleLike = { kind: 'file', name: child, getFile: async () => (opened.push(child), file(child)) };
+        if (value === UNREADABLE_DIR) {
+          // A folder the browser cannot list, as one whose path is too long on Windows.
+          yield { kind: 'directory', name: child, values: async function* () { throw new DOMException('gone', 'NotFoundError'); } } as DirectoryHandleLike;
+        } else if (typeof value === 'string') {
+          const getFile = value === UNREADABLE ? () => Promise.reject(new DOMException('gone', 'NotFoundError')) : async () => (opened.push(child), file(child));
+          const handle: FileHandleLike = { kind: 'file', name: child, getFile };
           yield handle;
         } else {
           yield handleOf(child, value, opened);
@@ -47,7 +54,9 @@ function handleOf(name: string, tree: Tree, opened: string[] = []): DirectoryHan
 /** A dropped folder whose reader gives two entries at a time, as browsers give them in batches. */
 function entryOf(name: string, tree: Tree): DroppedEntryLike {
   const children = Object.entries(tree).map(([child, value]): DroppedEntryLike =>
-    typeof value === 'string' ? { name: child, isFile: true, isDirectory: false, file: (ok) => ok(file(child)) } : entryOf(child, value)
+    value === UNREADABLE ? { name: child, isFile: true, isDirectory: false, file: (_ok, fail) => fail?.(new DOMException('gone', 'NotFoundError')) }
+    : typeof value === 'string' ? { name: child, isFile: true, isDirectory: false, file: (ok) => ok(file(child)) }
+    : entryOf(child, value as Tree)
   );
   return {
     name,
@@ -109,6 +118,14 @@ describe('folderFromHandle (the folder picker)', () => {
     expect(opened.sort()).toEqual(['crop.JPG', 'part-0002.nq.gz', 'part-0010.nq.gz', 'run.ttl', 'titleblock.png']);
   });
 
+  it('counts a file or a folder it cannot open, and lists the rest (#240: a crop whose path is too long failed the whole folder)', async () => {
+    const contents = await folderFromHandle(handleOf('run', { 'part-0001.nq.gz': '', images: { a: { 'titleblock.png': UNREADABLE }, b: UNREADABLE_DIR } }));
+
+    expect(contents.data.map((f) => f.path)).toEqual(['part-0001.nq.gz']);
+    expect(contents.images).toEqual([]);
+    expect(contents.unreadable).toEqual(['images/a/titleblock.png', 'images/b/']);
+  });
+
   it('counts the files as it lists them, and stops on Cancel', async () => {
     const counts: number[] = [];
     await folderFromHandle(handleOf('f', { 'a.ttl': '', 'b.ttl': '' }), { onCount: (n) => counts.push(n) });
@@ -136,6 +153,13 @@ describe('folderFromDroppedEntry (a folder dropped on the page)', () => {
     expect(contents.images.map((f) => f.path)).toEqual(['images/page-1/crop.JPG', 'images/page-1/titleblock.png']);
     expect(contents.skipped).toBe(5);
   });
+
+  it('counts a file it cannot open, and lists the rest', async () => {
+    const contents = await folderFromDroppedEntry(entryOf('run', { 'a.ttl': '', images: { 'titleblock.png': UNREADABLE } }));
+
+    expect(contents.data.map((f) => f.path)).toEqual(['a.ttl']);
+    expect(contents.unreadable).toEqual(['images/titleblock.png']);
+  });
 });
 
 describe('folderFromInput (<input webkitdirectory>)', () => {
@@ -159,8 +183,8 @@ describe('folderFromInput (<input webkitdirectory>)', () => {
 
 describe('folderSummary', () => {
   it('says what was added, kept and skipped, leaving out what is none', () => {
-    const contents = { name: 'run-0001', data: [], images: [{}, {}], skipped: 1 } as never;
+    const contents = { name: 'run-0001', data: [], images: [{}, {}], skipped: 1, unreadable: [] } as never;
     expect(folderSummary(contents, 3)).toBe('Added 3 data files from run-0001; 2 images kept for previews; 1 other file skipped.');
-    expect(folderSummary({ name: 'f', data: [], images: [], skipped: 0 }, 1)).toBe('Added 1 data file from f.');
+    expect(folderSummary({ name: 'f', data: [], images: [], skipped: 0, unreadable: [] }, 1)).toBe('Added 1 data file from f.');
   });
 });

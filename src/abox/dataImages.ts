@@ -11,6 +11,7 @@ import type { Store } from 'n3';
 import type { DataSource, DataSources } from '../sparql/dataSources';
 import { findInFolder, indexFolder, isImagePath, resolveAgainstUrl, type FolderIndex } from './imagePaths';
 import { isPrivateAddress } from './dataOntologies';
+import { runsOnWindows } from '../utils/platform';
 
 /**
  * Steps that let the user see the image after all: on Windows, a browser cannot read a file whose full path is longer than 260
@@ -62,9 +63,6 @@ export const MOVED_HINT = "The browser listed this image but couldn't read it: i
 export const NOT_READABLE_HINT = "This image couldn't be read: it may be open in another program, not downloaded from the cloud yet, or not allowed to be read.";
 export const EMPTY_HINT = 'This image file is empty.';
 export const NOT_AN_IMAGE_HINT = "This file couldn't be shown as an image: it may be damaged, or not the kind of image its name says.";
-
-/** Whether the page runs on Windows, where a browser cannot read a path longer than 260 characters. */
-const runsOnWindows = (): boolean => typeof navigator !== 'undefined' && /Win/i.test((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform ?? '');
 
 const GEOM = 'https://w3id.org/adiro/adiro_geometry#';
 const IMAGE_OF = `${GEOM}imageOf`;

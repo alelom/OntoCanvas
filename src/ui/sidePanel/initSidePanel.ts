@@ -16,6 +16,8 @@ import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql
 import type { DataSources } from '../../sparql/dataSources';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 import type { DataImages } from '../../abox/dataImages';
+import { syncFolderNotices } from '../folderNotices';
+import { setNotice } from '../statusNotices';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -153,6 +155,8 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     buttons.setTitle('individualsPanelBtn', title);
   };
   updateIndividualsButton();
+  // What a folder could not show, as a warning in the bottom bar that pops up on Windows (#240).
+  if (deps.dataSources) syncFolderNotices(deps.dataSources, setNotice);
   deps.dataSources?.onChange(() => {
     deps.individualsLayer?.invalidate();
     individualsTab.refresh();

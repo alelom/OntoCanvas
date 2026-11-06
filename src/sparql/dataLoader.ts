@@ -15,10 +15,13 @@ import {
   DATA_REFUSE_LIMIT_BYTES,
   megabytes,
   type DataFile,
+  type DataFolder,
+  type DataSource,
   type DataSources,
 } from './dataSources';
 import { estimateDataBytes, isGzipName } from './readDataBytes';
 import { DATA_EXTENSIONS, folderSummary, type FolderLister } from './dataFolder';
+import { findInFolder, indexFolder, isImagePath } from '../abox/imagePaths';
 
 /** Data picked or dropped: files, and folders not listed yet (#227). */
 export interface DataPick {
@@ -199,7 +202,7 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       const { tier, message } = judgeSelection(data.map((f) => ({ name: f.path, size: f.file.size })));
       if (tier === 'refuse') return message!;
       if (tier === 'confirm' && !(await ask(message!))) return '';
-      const folder = sources.addFolder(contents.name, new Map(contents.images.map((f) => [f.path, f.file])), contents.skipped);
+      const folder = sources.addFolder(contents.name, new Map(contents.images.map((f) => [f.path, f.file])), contents.skipped, contents.unreadable.length);
       // A file picked on its own before, whose folder is now opened for its images: replaced by the folder's copy, once that is in.
       const picked = sources.list().filter((s) => s.folder === undefined && data.some((f) => f.file.name === s.name && f.file.size === s.size));
       const labelOf = (i: number) => `Adding ${i + 1} of ${data.length} from ${contents.name}: ${data[i].path}…`;
@@ -211,7 +214,9 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       // With none of its files, the folder is not kept: its images would be of no use.
       if (!fromFolder.length) sources.removeFolder(folder.id);
       if (failures === 'Cancelled.') return failures;
-      return [fromFolder.length ? folderSummary(contents, fromFolder.length) : '', ...failures].filter(Boolean).join('  ');
+      const missing = fromFolder.length ? missingImages(fromFolder, folder) : 0;
+      if (missing) sources.setMissingImages(folder.id, missing);
+      return [fromFolder.length ? folderSummary(contents, fromFolder.length, missing) : '', ...failures].filter(Boolean).join('  ');
     }));
   }
 
@@ -246,6 +251,24 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     },
     onChange: (listener) => void listeners.push(listener),
   };
+}
+
+/**
+ * How many image paths the folder's data files name that the folder does not hold (addresses aside): on Windows, perhaps files
+ * the browser left out of the folder, their path being longer than 260 characters.
+ */
+function missingImages(files: DataSource[], folder: DataFolder): number {
+  const index = indexFolder(folder.images.keys());
+  const missing = new Set<string>();
+  for (const file of files) {
+    const dir = file.name.slice(0, Math.max(0, file.name.lastIndexOf('/')));
+    for (const quad of file.store.getQuads(null, null, null, null)) {
+      const value = quad.object.value;
+      if (quad.object.termType === 'BlankNode' || !isImagePath(value) || /^[a-z][a-z0-9+.-]*:/i.test(value.trim())) continue;
+      if (!findInFolder(value, index, dir, folder.name)) missing.add(value);
+    }
+  }
+  return missing.size;
 }
 
 /** "Cancelled" is the user's Cancel, or a no to the question about a large file (nothing to say then). */

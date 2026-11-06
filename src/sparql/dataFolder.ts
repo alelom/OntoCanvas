@@ -25,6 +25,11 @@ export interface FolderContents {
   images: FolderFile[];
   /** How many other files there are: not data, not images, or hidden. */
   skipped: number;
+  /**
+   * The files, and the folders (ending in `/`), the browser listed but could not open: on Windows, those whose full path is longer
+   * than 260 characters. Left out, so the rest of the folder is still added.
+   */
+  unreadable: string[];
 }
 
 export const DATA_EXTENSIONS = ['.ttl', '.turtle', '.nt', '.nq', '.trig', '.jsonld', '.rdf', '.owl', '.n3'];
@@ -65,8 +70,18 @@ const byPath = (a: FolderFile, b: FolderFile): number => naturally.compare(a.pat
 
 /** Sorts the files as they are listed, opening only those that are kept. */
 function createCollector(name: string, signal?: AbortSignal, onCount?: (files: number) => void) {
-  const contents: FolderContents = { name, data: [], images: [], skipped: 0 };
+  const contents: FolderContents = { name, data: [], images: [], skipped: 0, unreadable: [] };
   let seen = 0;
+  /** The file, or null when the browser cannot open it (a DOMException: on Windows, a path too long). */
+  const open = async (path: string, file: () => Promise<File> | File): Promise<File | null> => {
+    try {
+      return await file();
+    } catch (error) {
+      if (!(error instanceof DOMException)) throw error;
+      contents.unreadable.push(path);
+      return null;
+    }
+  };
   return {
     /** `file` is called only for a file that is kept. */
     async add(path: string, file: () => Promise<File> | File): Promise<void> {
@@ -74,9 +89,19 @@ function createCollector(name: string, signal?: AbortSignal, onCount?: (files: n
       if (++seen > MAX_FOLDER_FILES) throw new FolderTooLargeError(name);
       onCount?.(seen);
       if (isSkippedPath(path)) contents.skipped++;
-      else if (isDataFileName(path)) contents.data.push({ path, file: await file() });
-      else if (isImageFileName(path)) contents.images.push({ path, file: await file() });
-      else contents.skipped++;
+      else if (isDataFileName(path) || isImageFileName(path)) {
+        const opened = await open(path, file);
+        if (opened) (isDataFileName(path) ? contents.data : contents.images).push({ path, file: opened });
+      } else contents.skipped++;
+    },
+    /** Lists a subfolder with `walk`; one the browser cannot list is counted, and the rest of the folder still is. */
+    async folder(path: string, walk: () => Promise<void>): Promise<void> {
+      try {
+        await walk();
+      } catch (error) {
+        if (!(error instanceof DOMException)) throw error;
+        contents.unreadable.push(path);
+      }
     },
     done(): FolderContents {
       contents.data.sort(byPath);
@@ -123,7 +148,8 @@ export async function folderFromHandle(handle: DirectoryHandleLike, options: Lis
   const walk = async (dir: DirectoryHandleLike, prefix: string): Promise<void> => {
     for await (const entry of dir.values()) {
       if (entry.kind === 'directory') {
-        if (!isSkippedFolder(entry.name)) await walk(entry, `${prefix}${entry.name}/`);
+        const path = `${prefix}${entry.name}/`;
+        if (!isSkippedFolder(entry.name)) await collector.folder(path, () => walk(entry, path));
       } else {
         await collector.add(`${prefix}${entry.name}`, () => entry.getFile());
       }
@@ -153,7 +179,8 @@ export async function folderFromDroppedEntry(entry: DroppedEntryLike, options: L
       if (!batch.length) return;
       for (const child of batch) {
         if (child.isDirectory) {
-          if (!isSkippedFolder(child.name)) await walk(child, `${prefix}${child.name}/`);
+          const path = `${prefix}${child.name}/`;
+          if (!isSkippedFolder(child.name)) await collector.folder(path, () => walk(child, path));
         } else if (child.isFile) {
           await collector.add(`${prefix}${child.name}`, () => fileOf(child));
         }
@@ -164,11 +191,16 @@ export async function folderFromDroppedEntry(entry: DroppedEntryLike, options: L
   return collector.done();
 }
 
-/** "3 data files", "1 image", "12 other files skipped": what was found, said once the folder is added. */
-export function folderSummary(contents: FolderContents, added: number): string {
+/**
+ * "3 data files", "1 image", "12 other files skipped": what was found, said once the folder is added; with the images its data names
+ * that it does not hold, and what the browser could not open.
+ */
+export function folderSummary(contents: FolderContents, added: number, missingImages = 0): string {
   const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`;
   const parts = [`Added ${plural(added, 'data file', 'data files')} from ${contents.name}`];
   if (contents.images.length) parts.push(`${plural(contents.images.length, 'image', 'images')} kept for previews`);
   if (contents.skipped) parts.push(`${plural(contents.skipped, 'other file', 'other files')} skipped`);
+  if (missingImages) parts.push(`${plural(missingImages, "image its data names isn't", "images its data names aren't")} in the folder`);
+  if (contents.unreadable.length) parts.push(`${plural(contents.unreadable.length, 'file or folder', 'files or folders')} couldn't be opened`);
   return `${parts.join('; ')}.`;
 }

@@ -72,6 +72,10 @@ export interface DataFolder {
   images: ReadonlyMap<string, Blob>;
   /** How many of its files were neither data nor images. */
   skipped: number;
+  /** How many files and folders the browser listed but could not open: on Windows, a path longer than 260 characters. */
+  unreadable: number;
+  /** How many image paths its data names that it does not hold: perhaps files the browser left out, their path being too long. */
+  missingImages: number;
 }
 
 export interface AddDataOptions extends SlicedParseOptions {
@@ -126,7 +130,9 @@ export interface DataSources {
   /** The folders the data came from (#227). */
   folders(): DataFolder[];
   /** Keeps a folder's images, before its files are added with its id. */
-  addFolder(name: string, images: ReadonlyMap<string, Blob>, skipped: number): DataFolder;
+  addFolder(name: string, images: ReadonlyMap<string, Blob>, skipped: number, unreadable?: number): DataFolder;
+  /** Records how many image paths a folder's data names that it does not hold, once its files are added. */
+  setMissingImages(id: number, missing: number): void;
   /** Takes out a folder and every file added from it. A folder is also taken out with the last of its files. */
   removeFolder(id: number): void;
   clear(): void;
@@ -299,10 +305,14 @@ export function createDataSources(): DataSources {
       }
     },
     folders: () => [...folders],
-    addFolder(name, images, skipped) {
-      const folder: DataFolder = { id: nextFolderId++, name, images, skipped };
+    addFolder(name, images, skipped, unreadable = 0) {
+      const folder: DataFolder = { id: nextFolderId++, name, images, skipped, unreadable, missingImages: 0 };
       folders = [...folders, folder];
       return folder;
+    },
+    setMissingImages(id, missing) {
+      folders = folders.map((f) => (f.id === id ? { ...f, missingImages: missing } : f));
+      changed();
     },
     removeFolder(id) {
       if (!folders.some((f) => f.id === id)) return;

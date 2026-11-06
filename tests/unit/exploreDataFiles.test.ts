@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { Parser } from 'n3';
-import { exploreDataFiles, WORKSPACE_NAME, WORKSPACE_TTL } from '../../src/workflows/exploreDataFiles';
+import { exploreDataFiles, WORKSPACE_NAME, WORKSPACE_NOTE, WORKSPACE_TTL } from '../../src/workflows/exploreDataFiles';
 
 describe('exploreDataFiles', () => {
   it('opens the workspace first, then says what it is, then adds the files, in that order', async () => {
@@ -18,7 +18,7 @@ describe('exploreDataFiles', () => {
     });
 
     expect(calls[0]).toBe(`open ${WORKSPACE_NAME} true`);
-    expect(calls[1]).toMatch(/^note .*no ontology.*read as context on their own.*clears the data/i);
+    expect(calls[1]).toBe(`note ${WORKSPACE_NOTE}`);
     expect(calls[2]).toBe('add a.nq');
   });
 
@@ -44,5 +44,13 @@ describe('exploreDataFiles', () => {
     expect(quads.some((q) => q.object.value === 'http://www.w3.org/2002/07/owl#Ontology')).toBe(true);
     expect(quads.some((q) => q.object.value === 'http://www.w3.org/2002/07/owl#Class')).toBe(false);
     expect(quads.find((q) => q.predicate.value.endsWith('#label'))?.object.value).toBe('Data files, no ontology');
+  });
+});
+
+describe('the note (#240)', () => {
+  it("says no ontology is open for editing, and that the data's own ontologies are read as context only: not a contradiction", () => {
+    expect(WORKSPACE_NOTE).toMatch(/^Exploring data files with no ontology open for editing\./);
+    expect(WORKSPACE_NOTE).toContain('read as context only');
+    expect(WORKSPACE_NOTE).not.toContain('on their own');
   });
 });

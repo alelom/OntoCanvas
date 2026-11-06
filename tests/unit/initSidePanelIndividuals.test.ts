@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Parser, Store } from 'n3';
 import { initSidePanel } from '../../src/ui/sidePanel/initSidePanel';
 import { createDataSources } from '../../src/sparql/dataSources';
+import { clearNotices, getNotices } from '../../src/ui/statusNotices';
 
 const PREFIXES = '@prefix : <http://example.org/d#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .\n';
 const store = (turtle: string) => new Store(new Parser().parse(PREFIXES + turtle));
@@ -375,5 +376,23 @@ describe('cancelData (#239 fourth review)', () => {
 
     expect(dataSources.list()).toEqual([]);
     expect(statuses[statuses.length - 1]).toBe('Cancelled.');
+  });
+});
+
+describe("a folder's images it couldn't see, in the bottom bar (#240)", () => {
+  it('sets a warning for a folder whose data names images it does not hold, and takes it out with the folder', async () => {
+    clearNotices();
+    const { dataSources, panel } = mount();
+
+    await panel.addData({
+      files: [],
+      folders: [async () => ({ name: 'run-0001', data: [{ path: 'part-0001.ttl', file: { name: 'part-0001.ttl', size: 100, text: async () => `${PREFIXES}:a :image "images/a.png" .` } as unknown as File }], images: [], skipped: 0, unreadable: [] })],
+    });
+
+    const [notice] = getNotices();
+    expect(notice).toMatchObject({ key: expect.stringMatching(/^folder-images:/), level: 'warning', message: expect.stringMatching(/^run-0001: 1 image its data names isn't in the folder\./) });
+
+    dataSources.removeFolder(dataSources.folders()[0].id);
+    expect(getNotices()).toEqual([]);
   });
 });

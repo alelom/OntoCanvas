@@ -333,6 +333,71 @@ body.embed-no-menu #ontologyIssuesPopup {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   min-width: 320px;
 }
+/* The small modal of an error, or a warning that must not be missed (#240): over the loading screen too. */
+.notice-modal {
+  z-index: 10001;
+}
+.notice-modal-content {
+  max-width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.notice-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.notice-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+/* The only way out besides Escape: a round button, easy to see and to hit. */
+.notice-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid #c8c8c8;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #333;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+}
+.notice-modal-close:hover {
+  background: #dcdcdc;
+  border-color: #999;
+  color: #000;
+}
+.notice-modal-close:focus-visible {
+  outline: 2px solid #1a5fb4;
+  outline-offset: 2px;
+}
+.notice-modal-item {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-left: 3px solid #f39c12;
+  background: #fff3cd;
+  border-radius: 2px;
+}
+.notice-modal-item.notice-error {
+  border-left-color: #c01c28;
+  background: #fdecea;
+}
+.notice-modal-mute {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #444;
+}
 .rename-modal-header {
   display: flex;
   align-items: center;
