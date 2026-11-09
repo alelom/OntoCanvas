@@ -1,3 +1,19 @@
+# [2.7.0](https://github.com/alelom/OntoCanvas/compare/v2.6.0...v2.7.0) (2026-11-09)
+
+
+### Bug Fixes
+
+* **individuals:** find crops under paths with & # and commas, show a title block's crop on it, and the [#240](https://github.com/alelom/OntoCanvas/issues/240) review ([#228](https://github.com/alelom/OntoCanvas/issues/228), [#241](https://github.com/alelom/OntoCanvas/issues/241)) ([46d9663](https://github.com/alelom/OntoCanvas/commit/46d96638d3a7871c40d3090d8fd4e0313bda97c5))
+* **individuals:** the [#240](https://github.com/alelom/OntoCanvas/issues/240) review: an SVG from a folder isn't opened as a page, a folder's value looks in its folder only, ../ by address ([61462a3](https://github.com/alelom/OntoCanvas/commit/61462a333c59e9b469a4ef2b6f558a7fbf277195))
+
+
+### Features
+
+* **individuals:** open a local folder of data, and show the images its values name ([#226](https://github.com/alelom/OntoCanvas/issues/226), [#227](https://github.com/alelom/OntoCanvas/issues/227), [#228](https://github.com/alelom/OntoCanvas/issues/228)) ([1af7d93](https://github.com/alelom/OntoCanvas/commit/1af7d93718567952b088c7f58b8a547b2b9e7381))
+* **individuals:** say why an image of the data cannot be shown, with the steps for a path too long on Windows ([1b708fe](https://github.com/alelom/OntoCanvas/commit/1b708fe3a40a4777dfa28b0845cd694f5c06fcb4))
+* **ui:** a folder's warning names the class of the images it couldn't load, and the notes on the data's ontologies are one ([d8b9817](https://github.com/alelom/OntoCanvas/commit/d8b98173f6af80d53c38d73b9dd8d641d1fc6877))
+* **ui:** notices have levels, and an error or a warning that must not be missed pops up; a folder says which images it couldn't see ([2ab3e76](https://github.com/alelom/OntoCanvas/commit/2ab3e7694cda2975c6555464457520c9650df2e3))
+
 # [2.6.0](https://github.com/alelom/OntoCanvas/compare/v2.5.0...v2.6.0) (2026-11-06)
 
 
