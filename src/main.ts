@@ -9,6 +9,7 @@ import { historyKeyOf } from './sparql/queryHistory';
 import { selectInGraph } from './graph/selectResults';
 import { createDataSources, whenSourceListChanges } from './sparql/dataSources';
 import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from './abox/individualsLayer';
+import { createDataImages } from './abox/dataImages';
 import { getDataUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
@@ -158,10 +159,16 @@ whenSourceListChanges(dataSources, () => void openOntologiesOfData(dataSources.s
 const importedClass = importedClassLookup(() => session.importedOntologies);
 // The node of such a class, drawn for its individuals, offers to open the ontology that declares it.
 setImportedClassProvider((classIri) => importedClass(classIri)?.definedBy ?? null);
+// The images the values of the data name (#228): from its folder, next to its address, or against where the ontology was opened.
+const dataImages = createDataImages({
+  sources: dataSources,
+  getOntology: () => (session.ttlStore ? { store: session.ttlStore, location: fileState.loadedFilePath } : null),
+});
 session.individualsLayer = createIndividualsLayer({
   // The data without its hidden graphs (#224): a hidden graph's individuals are not drawn.
   getStores: () => (session.ttlStore ? [session.ttlStore, ...dataSources.visibleStores()] : dataSources.visibleStores()),
   classInfo: importedClass,
+  imagesOf: (iri) => dataImages.imagesOf(iri),
 });
 // Drawing or clearing individuals redraws the graph where it is; after a draw the user started, the view fits what was drawn (#216).
 session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined, change.anchor));
@@ -181,6 +188,7 @@ session.sidePanel = initSidePanel({
   },
   dataSources,
   individualsLayer: session.individualsLayer,
+  dataImages,
   getOntologySource: () => (fileState.loadedFileName ? { name: fileState.loadedFileName, title: fileState.loadedFilePath ?? undefined } : null),
   isIndividualSelection: () => {
     const network = canvasState.network;
@@ -209,16 +217,16 @@ if (isEmbedded()) {
   if (openBtn) openBtn.style.display = '';
 }
 setupEventListeners();
-// Data files with no ontology to open first (#234): an empty workspace ontology, then the files as data.
-setOnExploreDataFiles((files) =>
-  void exploreDataFiles(files, {
+// Data files or a folder with no ontology to open first (#234, #227): an empty workspace ontology, then the data.
+setOnExploreDataFiles((pick) =>
+  void exploreDataFiles(pick, {
     openOntology: (ttl, name) => loadTtlAndRender(ttl, name, null),
     showNote: (text) => {
       setNotice('no-classes', null);
       setNotice('workspace', text);
     },
     // Under the loading screen until the ontologies the data names are read: the classes are drawn once, named.
-    addDataFiles: (added) => addDataUnderLoadingScreen(async () => session.sidePanel?.addDataFiles(added)),
+    addData: (pick) => addDataUnderLoadingScreen(async () => session.sidePanel?.addData(pick)),
   })
 );
 // Update serializer dropdown after DOM is ready (in case it was rendered)

@@ -1,6 +1,6 @@
 ---
 name: feature-examples
-description: Use when preparing or opening a PR in OntoCanvas that adds a user-visible feature or fixes an important user-visible bug. Add small example ontologies (TTL) under examples/, pin them with a unit test, index them in examples/README.md, and put a "Try it" table in the PR body whose links open each example on a local dev server (http://localhost:5173/?onto=<raw URL>). Skip it for minor fixes, refactors, test-only, CI or docs changes.
+description: Use when preparing or opening a PR in OntoCanvas that adds a user-visible feature or fixes an important user-visible bug. Add small example ontologies (TTL) under examples/, pin them with a unit test, index them in examples/README.md, and always put a "Try it" table in the PR body where every row has a link that opens it on a local dev server (http://localhost:5173/?onto=<raw URL>, or the start screen for a local file or folder to pick), so a review is one click per check. Skip it for minor fixes, refactors, test-only, CI or docs changes.
 ---
 
 # Example ontologies for feature PRs
@@ -69,7 +69,17 @@ The editor link works once the PR is merged to `main`; during review, use the PR
 
 ## 4. Add "Try it" to the PR body
 
-Add a section like the one in PR #218 or #213:
+**Always a table, and every row ends with an "Open on localhost" link.** The links are what makes a review fast: the reviewer runs
+`npm run dev` once and clicks, instead of reading steps and typing addresses. A "Try it" written as prose, or a row with no link,
+is a defect, the same as a dead link. This holds for every user-visible PR, whatever the feature reads:
+
+- **An ontology, data, or both by address:** the link opens it (`?onto=<raw URL>`, `&data=<raw URL>` once per data file).
+- **A flow that starts from a local file or folder** (a picker or a drop, which no address can hand to a page): the link opens the
+  state just before the pick, the start screen (`http://localhost:5173/`) or the ontology the file is added to (`?onto=…`), and
+  the row says what to pick, by its path in the clone. Say once, above the table, why those rows can't open the file themselves.
+- **One row per thing to check**, with what to look for: the exact text, label or mark the reviewer should see, not "it works".
+
+Add a section like the one in PR #218, #239 or #240:
 
 ```markdown
 ## Try it
@@ -109,6 +119,7 @@ links of step 3) is the lasting reference once the PR is merged.
 
 ## 5. Check before handing over
 
+- "Try it" is a table and every row has its "Open on localhost" link (step 4).
 - Every address in the PR body answers HTTP 200, the raw example links and the ones inside `?onto=` (decoded) alike:
   `curl -s -o /dev/null -w "%{http_code}" -L <raw URL>`. A link that is right today and wrong after the merge is the failure to
   look for: the PR ref is the form that stays right, so a branch name in the body is a defect.

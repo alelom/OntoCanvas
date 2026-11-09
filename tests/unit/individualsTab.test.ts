@@ -8,6 +8,9 @@ import { Parser, Store } from 'n3';
 import { createIndividualsTab, type IndividualsTab } from '../../src/ui/sidePanel/individualsTab';
 import { createDataSources } from '../../src/sparql/dataSources';
 import { createDataLoader } from '../../src/sparql/dataLoader';
+import type { DataImages } from '../../src/abox/dataImages';
+import { LONG_PATH_SUMMARY } from '../../src/ui/sidePanel/imageProblem';
+import { forgetUrl, markNotOpenable } from '../../src/utils/openableUrls';
 
 const NS = 'http://example.org/d#';
 const PREFIXES = `
@@ -239,6 +242,98 @@ describe('the detail', () => {
 
     expect(q('[data-individuals-incoming]').textContent).toContain(':room101');
     expect(q('[data-individuals-incoming]').textContent).toContain(':hasPart');
+  });
+
+  describe('images (#228, #241)', () => {
+    const images: DataImages = {
+      find: (value) =>
+        !value.endsWith('.png') ? null
+        : value.startsWith('missing') ? { hint: 'No file here.' }
+        : value.startsWith('deep') ? { hint: 'Maybe too long.', help: { kind: 'long-path', folder: 'run-0001' } }
+        : { url: `blob:${value}` },
+      linkedImages: (iri) => (iri === NS + 'room101' ? [{ image: NS + 'crop1', value: 'runs/r/crop.png', found: { url: 'blob:crop' } }] : []),
+      imagesOf: () => [],
+      diagnose: async () => ({ hint: 'Listed, not readable.', help: { kind: 'long-path', folder: 'run-0001' } }),
+    };
+    const mountWithImages = () => {
+      tab = createIndividualsTab({ getStores: () => stores, getPrefixes: () => ({ '': NS }), images });
+      tab.render(container);
+    };
+
+    it('shows the image a value names under it, or why it cannot', () => {
+      stores = [ONTOLOGY, store(':room101 a :Room ; rdfs:label "Room 101" ; :imagePath "a.png" , "missing.png" .')];
+      mountWithImages();
+
+      click('Room 101');
+
+      expect(q<HTMLImageElement>('[data-individuals-outgoing] [data-individuals-image]').src).toBe('blob:a.png');
+      expect(q('[data-individuals-outgoing] [data-individuals-image-missing]').textContent).toBe('No file here.');
+    });
+
+    it("links an image to open it whole, but not one that must not open as a page: an SVG from a folder (#240 review)", () => {
+      stores = [ONTOLOGY, store(':room101 a :Room ; rdfs:label "Room 101" ; :imagePath "a.png" .')];
+      mountWithImages();
+      click('Room 101');
+      expect(q<HTMLAnchorElement>('[data-individuals-outgoing] a.individual-image').getAttribute('href')).toBe('blob:a.png');
+
+      markNotOpenable('blob:a.png');
+      click('Room 101');
+      const link = q<HTMLAnchorElement>('[data-individuals-outgoing] a.individual-image');
+      expect(link.hasAttribute('href')).toBe(false);
+      expect(link.querySelector<HTMLImageElement>('img')!.src).toBe('blob:a.png');
+      forgetUrl('blob:a.png');
+    });
+
+    it("shows the images of the frames it is drawn from under their own heading, each with the image individual it comes from", () => {
+      mountWithImages();
+
+      click('Room 101');
+
+      const section = q('[data-individuals-linked-images]');
+      expect(section.querySelector('h5')!.textContent).toBe('Images of it (1)');
+      expect(section.querySelector<HTMLImageElement>('[data-individuals-image]')!.src).toBe('blob:crop');
+      section.querySelector<HTMLButtonElement>('[data-individuals-follow]')!.click();
+      expect(q('[data-individuals-detail] [data-individuals-iri]').textContent).toBe(NS + 'crop1');
+    });
+
+    it('folds the steps to open the folder from a shorter path under a note that may be a long path, naming the folder opened', () => {
+      stores = [ONTOLOGY, store(':room101 a :Room ; rdfs:label "Room 101" ; :imagePath "deep.png" .')];
+      mountWithImages();
+
+      click('Room 101');
+
+      const note = q('[data-individuals-outgoing] [data-individuals-image-missing]');
+      expect(note.textContent).toContain('Maybe too long.');
+      const help = note.querySelector<HTMLDetailsElement>('[data-individuals-image-help]')!;
+      expect(help.open).toBe(false);
+      expect(help.querySelector('summary')!.textContent).toBe(LONG_PATH_SUMMARY);
+      expect([...help.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'In a PowerShell window (no administrator rights needed: open it as yourself, not "as administrator", or the browser won\'t see the drive), give the folder that holds run-0001 a free drive letter, such as X: subst X: "C:\\path\\to\\the folder that holds run-0001"',
+        'Open it again from there: From a folder… (or Explore a folder… on the start screen), and pick X:\\run-0001.',
+        'When you are done, subst X: /D takes the drive letter away.',
+      ]);
+      expect(help.querySelector('[data-individuals-image-help-long-paths]')!.textContent).toBe(
+        "Turning on Windows long paths (LongPathsEnabled) doesn't help: Chrome and Edge don't use that setting, so their limit stays at 260 characters."
+      );
+    });
+
+    it('says why in place of an image that does not load, with the steps when there are some', async () => {
+      mountWithImages();
+      click('Room 101');
+
+      q('[data-individuals-linked-images] [data-individuals-image]').dispatchEvent(new Event('error'));
+
+      await vi.waitFor(() => expect(q('[data-individuals-linked-images] [data-individuals-image-missing]').textContent).toContain('Listed, not readable.'));
+      expect(container.querySelector('[data-individuals-linked-images] [data-individuals-image-help]')).not.toBeNull();
+    });
+
+    it('has no such heading for an individual with no linked image', () => {
+      mountWithImages();
+
+      click('North wall');
+
+      expect(container.querySelector('[data-individuals-linked-images]')).toBeNull();
+    });
   });
 
   it('follows a link to another individual', () => {

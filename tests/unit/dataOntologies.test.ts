@@ -85,14 +85,25 @@ describe('dataOntologiesNote (#239: opened on their own, told in the bottom bar)
 
   it('says which ontologies the data was made with were loaded, and what for', () => {
     expect(dataOntologiesNote([named('https://w3id.org/adiro/adiro_provenance/2.2.0'), named('https://w3id.org/adiro/adiro_geometry/3.1.0')], [])).toBe(
-      'Loaded the ontologies the data was made with: adiro_provenance 2.2.0 and adiro_geometry 3.1.0 (read-only, for the names of its classes; not saved).'
+      "Loaded the ontologies the data was made with: adiro_provenance 2.2.0 and adiro_geometry 3.1.0, read as context only, to name its classes: they can't be edited or saved."
     );
   });
 
   it("says apart which were found at the namespaces of the data's classes", () => {
     expect(dataOntologiesNote([guessed('https://example.org/onto')], [])).toBe(
-      "Loaded from the namespaces of the data's classes: onto (read-only, for the names of its classes; not saved)."
+      "Loaded from the namespaces of the data's classes: onto, read as context only, to name its classes: they can't be edited or saved."
     );
+  });
+
+  it('with no ontology open (data files explored on their own, #240), says to open an ontology first for the full context', () => {
+    expect(dataOntologiesNote([named('https://w3id.org/adiro/adiro_geometry/3.1.0')], [], { noOntologyOpen: true })).toBe(
+      "Loaded the ontologies the data was made with: adiro_geometry 3.1.0, read as context only, to name its classes: they can't be edited or saved. " +
+        'Open an ontology first, and the data after it, to see the individuals in their full ontology context.'
+    );
+  });
+
+  it('with no ontology open, says nothing more when none was loaded: the note on the workspace says it', () => {
+    expect(dataOntologiesNote([], [named('https://example.org/onto/1.0')], { noOntologyOpen: true })).not.toContain('Open an ontology first');
   });
 
   it('says that what the data names could not be loaded, and why that may be', () => {

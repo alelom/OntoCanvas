@@ -127,21 +127,26 @@ const inWords = (names: string[]): string => (names.length < 2 ? names.join('') 
 /**
  * The note in the bottom bar about the ontologies of the data, read on their own (#239); null when none was tried. One the data
  * names that could not be read is a problem worth its reason; a namespace guessed at that holds no ontology is only said.
+ * With no ontology open (data files explored on their own), it also says how to see the individuals in their full context: it
+ * takes the place of the note on the workspace then, which said the same in a way that read as a contradiction (#240).
  */
-export function dataOntologiesNote(opened: DataOntology[], failed: DataOntology[]): string | null {
+export const OPEN_ONTOLOGY_FIRST = 'Open an ontology first, and the data after it, to see the individuals in their full ontology context.';
+
+export function dataOntologiesNote(opened: DataOntology[], failed: DataOntology[], { noOntologyOpen = false } = {}): string | null {
   const names = (list: DataOntology[]) => inWords(list.map((o) => ontologyName(o.iri)));
   const isGuess = (o: DataOntology) => o.via === 'namespace';
-  const what = '(read-only, for the names of its classes; not saved)';
+  const what = ", read as context only, to name its classes: they can't be edited or saved";
   const parts: string[] = [];
   const openedNamed = opened.filter((o) => !isGuess(o));
   const openedGuessed = opened.filter(isGuess);
   const failedNamed = failed.filter((o) => !isGuess(o));
   const failedGuessed = failed.filter(isGuess);
-  if (openedNamed.length) parts.push(`Loaded the ontologies the data was made with: ${names(openedNamed)} ${what}.`);
-  if (openedGuessed.length) parts.push(`Loaded from the namespaces of the data's classes: ${names(openedGuessed)} ${what}.`);
+  if (openedNamed.length) parts.push(`Loaded the ontologies the data was made with: ${names(openedNamed)}${what}.`);
+  if (openedGuessed.length) parts.push(`Loaded from the namespaces of the data's classes: ${names(openedGuessed)}${what}.`);
   if (failedNamed.length) {
     parts.push(`Could not load ${names(failedNamed)}, which the data says it was made with: the address may not answer with RDF, or may not let this page read it.`);
   }
   if (failedGuessed.length) parts.push(`No ontology found at the namespaces of the data's classes (${names(failedGuessed)}).`);
+  if (noOntologyOpen && opened.length) parts.push(OPEN_ONTOLOGY_FIRST);
   return parts.length ? parts.join(' ') : null;
 }

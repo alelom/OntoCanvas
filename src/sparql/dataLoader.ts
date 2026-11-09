@@ -15,9 +15,20 @@ import {
   DATA_REFUSE_LIMIT_BYTES,
   megabytes,
   type DataFile,
+  type DataFolder,
+  type DataSource,
   type DataSources,
 } from './dataSources';
 import { estimateDataBytes, isGzipName } from './readDataBytes';
+import { DATA_EXTENSIONS, folderSummary, type FolderLister } from './dataFolder';
+import { findInFolder, indexFolder, isAddress, isImagePath } from '../abox/imagePaths';
+import { depictedClasses } from '../abox/dataImages';
+
+/** Data picked or dropped: files, and folders not listed yet (#227). */
+export interface DataPick {
+  files: DataFile[];
+  folders: FolderLister[];
+}
 
 export interface DataLoaderDeps {
   sources: DataSources;
@@ -34,6 +45,13 @@ export interface DataLoader {
   addFile(file: DataFile): Promise<void>;
   /** The files one after the other, as one selection (#222); a failure is told at the end, with the others' results kept. */
   addFiles(files: DataFile[]): Promise<void>;
+  /**
+   * The data files of a folder, as one selection (#227), its images kept for previews (#228). The folder is listed inside the read,
+   * so the progress and Cancel cover a slow listing (a cloud-synced folder); `list` gives null when there is nothing to add.
+   */
+  addFolder(list: FolderLister): Promise<void>;
+  /** What was picked or dropped: each folder, then the files as one selection. */
+  addPick(pick: DataPick): Promise<void>;
   addUrl(url: string): Promise<void>;
   /** The URLs one after the other; a failure is told at the end, with the others' results kept. */
   addUrls(urls: string[]): Promise<void>;
@@ -139,38 +157,88 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       return '';
     });
 
-  async function addFiles(files: DataFile[]): Promise<void> {
-    if (!files.length) return;
+  /**
+   * Adds the files one after the other, each holding what is left of the limit after those before it. Returns the failures, each
+   * with its file's name when there are several, or 'Cancelled.'.
+   */
+  async function addEach(files: Array<{ file: DataFile; name: string; folder?: number }>, { signal, progress }: Read, labelOf: (i: number) => string): Promise<string[] | 'Cancelled.'> {
+    const failures: string[] = [];
+    let left = DATA_REFUSE_LIMIT_BYTES;
+    for (let i = 0; i < files.length; i++) {
+      if (signal.aborted) return 'Cancelled.';
+      const label = labelOf(i);
+      progress(label);
+      const { file, name, folder } = files[i];
+      try {
+        const added = await sources.addFile(file, { signal, limitBytes: left, name, folder, onProgress: (triples) => progress(label, triples) });
+        left -= added.bytes;
+      } catch (error) {
+        const failure = describeFailure(error, signal);
+        if (failure === 'Cancelled.') return failure;
+        if (failure) failures.push(files.length === 1 ? failure : `${name}: ${failure}`);
+      }
+    }
+    return failures;
+  }
+
+  /** Returns what is left in the status, as `load` does. */
+  async function addFiles(files: DataFile[]): Promise<string> {
+    if (!files.length) return '';
     const one = files.length === 1;
     const labelOf = (i: number) => (one ? `Loading ${files[i].name}…` : `Adding ${i + 1} of ${files.length}: ${files[i].name}…`);
-    await load(labelOf(0), async ({ signal, progress }) => {
+    return load(labelOf(0), (read) => sources.batch(async () => {
       const { tier, message } = judgeSelection(files);
       if (tier === 'refuse') return message!;
       if (tier === 'confirm' && !(await ask(message!))) return '';
-      const failures: string[] = [];
-      let left = DATA_REFUSE_LIMIT_BYTES;
-      for (let i = 0; i < files.length; i++) {
-        if (signal.aborted) return 'Cancelled.';
-        const label = labelOf(i);
-        progress(label);
-        try {
-          const added = await sources.addFile(files[i], { signal, limitBytes: left, onProgress: (triples) => progress(label, triples) });
-          left -= added.bytes;
-        } catch (error) {
-          const failure = describeFailure(error, signal);
-          if (failure === 'Cancelled.') return failure;
-          if (failure) failures.push(one ? failure : `${files[i].name}: ${failure}`);
-        }
+      const failures = await addEach(files.map((file) => ({ file, name: file.name })), read, labelOf);
+      return failures === 'Cancelled.' ? failures : failures.join('  ');
+    }));
+  }
+
+  /** Returns what is left in the status, as `load` does. */
+  async function addFolder(list: FolderLister): Promise<string> {
+    return load('Reading the folder…', (read) => sources.batch(async () => {
+      const contents = await list({ signal: read.signal, onCount: (files) => read.progress(`Reading the folder… ${files.toLocaleString('en')} files`) });
+      if (!contents) return '';
+      if (!contents.data.length) return `${contents.name} holds no data files (${DATA_EXTENSIONS.join(', ')}, compressed with .gz or not).`;
+      const { data } = contents;
+      const { tier, message } = judgeSelection(data.map((f) => ({ name: f.path, size: f.file.size })));
+      if (tier === 'refuse') return message!;
+      if (tier === 'confirm' && !(await ask(message!))) return '';
+      const folder = sources.addFolder(contents.name, new Map(contents.images.map((f) => [f.path, f.file])), contents.skipped, contents.unreadable.length);
+      // A file picked on its own before, whose folder is now opened for its images: replaced by the folder's copy, once that is in.
+      const picked = sources.list().filter((s) => s.folder === undefined && data.some((f) => f.file.name === s.name && f.file.size === s.size));
+      const labelOf = (i: number) => `Adding ${i + 1} of ${data.length} from ${contents.name}: ${data[i].path}…`;
+      const failures = await addEach(data.map((f) => ({ file: f.file, name: f.path, folder: folder.id })), read, labelOf);
+      const fromFolder = sources.list().filter((s) => s.folder === folder.id);
+      for (const s of picked) {
+        if (fromFolder.some((f) => f.size === s.size && (f.name === s.name || f.name.endsWith(`/${s.name}`)))) sources.remove(s.id);
       }
-      return failures.join('  ');
-    });
+      // With none of its files, the folder is not kept: its images would be of no use.
+      if (!fromFolder.length) sources.removeFolder(folder.id);
+      if (failures === 'Cancelled.') return failures;
+      const { missing, classes } = fromFolder.length ? missingImages(fromFolder, folder) : { missing: 0, classes: [] };
+      if (missing) sources.setMissingImages(folder.id, missing, classes);
+      return [fromFolder.length ? folderSummary(contents, fromFolder.length, missing) : '', ...failures].filter(Boolean).join('  ');
+    }));
   }
 
   return {
     status: () => status,
     loading: () => controller !== null,
-    addFile: (file) => addFiles([file]),
-    addFiles,
+    addFile: async (file) => void (await addFiles([file])),
+    addFiles: async (files) => void (await addFiles(files)),
+    addFolder: async (list) => void (await addFolder(list)),
+    async addPick({ files, folders }) {
+      // Each read sets the status to what it leaves: what every one said is kept, as addUrls does (#240 review).
+      const said: string[] = [];
+      for (const add of [...folders.map((folder) => () => addFolder(folder)), () => addFiles(files)]) {
+        const left = await add();
+        if (left) said.push(left);
+        if (left === 'Cancelled.') break;
+      }
+      if (said.length > 1) set(said.join('  '));
+    },
     addUrl: async (url) => void (await loadUrl(url)),
     async addUrls(urls) {
       const failures: string[] = [];
@@ -192,6 +260,29 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     },
     onChange: (listener) => void listeners.push(listener),
   };
+}
+
+/**
+ * How many image paths the folder's data files name that the folder does not hold (addresses aside): on Windows, perhaps files
+ * the browser left out of the folder, their path being longer than 260 characters. With the classes of what they show, for the
+ * warning to name them (#240).
+ */
+function missingImages(files: DataSource[], folder: DataFolder): { missing: number; classes: string[] } {
+  const index = indexFolder(folder.images.keys());
+  const stores = files.map((f) => f.store);
+  const missing = new Set<string>();
+  const classes = new Set<string>();
+  for (const file of files) {
+    const dir = file.name.slice(0, Math.max(0, file.name.lastIndexOf('/')));
+    for (const quad of file.store.getQuads(null, null, null, null)) {
+      const value = quad.object.value;
+      if (quad.object.termType === 'BlankNode' || !isImagePath(value) || isAddress(value)) continue;
+      if (findInFolder(value, index, dir, folder.name)) continue;
+      missing.add(value);
+      depictedClasses(stores, quad.subject.value).forEach((c) => classes.add(c));
+    }
+  }
+  return { missing: missing.size, classes: [...classes] };
 }
 
 /** "Cancelled" is the user's Cancel, or a no to the question about a large file (nothing to say then). */

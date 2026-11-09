@@ -333,6 +333,71 @@ body.embed-no-menu #ontologyIssuesPopup {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   min-width: 320px;
 }
+/* The small modal of an error, or a warning that must not be missed (#240): over the loading screen too. */
+.notice-modal {
+  z-index: 10001;
+}
+.notice-modal-content {
+  max-width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.notice-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.notice-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+/* The only way out besides Escape: a round button, easy to see and to hit. */
+.notice-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid #c8c8c8;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #333;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+}
+.notice-modal-close:hover {
+  background: #dcdcdc;
+  border-color: #999;
+  color: #000;
+}
+.notice-modal-close:focus-visible {
+  outline: 2px solid #1a5fb4;
+  outline-offset: 2px;
+}
+.notice-modal-item {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-left: 3px solid #f39c12;
+  background: #fff3cd;
+  border-radius: 2px;
+}
+.notice-modal-item.notice-error {
+  border-left-color: #c01c28;
+  background: #fdecea;
+}
+.notice-modal-mute {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #444;
+}
 .rename-modal-header {
   display: flex;
   align-items: center;
@@ -807,6 +872,18 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   font-size: 14px;
   cursor: pointer;
 }
+/* A whole folder, and the folder of the last visit (#227). */
+.explore-data-start button[data-explore-folder],
+.explore-data-start button[data-explore-folder-reopen] {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.explore-data-start button[hidden],
+.query-data-add button[hidden] {
+  display: none;
+}
 /* The block while data files are dragged over it. */
 .explore-data-start.data-drop-active {
   outline: 2px dashed #1a5fb4;
@@ -861,6 +938,87 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   justify-content: space-between;
   gap: 6px;
   align-items: center;
+}
+/* A folder of data (#227), with its files under it. */
+.query-data-list li.query-data-folder {
+  font-weight: 600;
+}
+.query-data-list li.query-data-in-folder {
+  padding-left: 14px;
+}
+/* The image a value of an individual names (#228). */
+.individual-links li:has(> .individual-image, > .individual-image-missing) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4px;
+}
+.individual-image {
+  display: block;
+  flex-basis: 100%;
+  margin: 4px 0 6px;
+}
+.individual-image img {
+  max-width: 100%;
+  max-height: 180px;
+  border: 1px solid #ddd;
+  background: #fff;
+}
+.individual-image-missing {
+  flex-basis: 100%;
+  margin: 2px 0 4px;
+  color: #777;
+  font-size: 11px;
+  font-style: italic;
+}
+/* The steps to see an image whose path is too long on Windows: folded under the note, in plain type. */
+.individual-image-help {
+  margin-top: 3px;
+  color: #444;
+  font-style: normal;
+}
+.individual-image-help summary {
+  cursor: pointer;
+  color: #1a5fb4;
+}
+.individual-image-help ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.individual-image-help li {
+  display: list-item;
+  margin-bottom: 3px;
+}
+.individual-image-help p {
+  margin: 2px 0;
+}
+.individual-image-help code {
+  font-size: 11px;
+  background: #f2f2f2;
+  padding: 0 2px;
+  word-break: break-all;
+}
+/* A result cell naming an image (#228): the image while the pointer is over it. */
+.query-image-cell {
+  text-decoration: underline dotted;
+}
+/* Placed by the script against the window: the cell clips what overflows it. */
+.query-image-preview {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.query-image-cell:hover .query-image-preview {
+  display: block;
+}
+.query-image-preview img {
+  display: block;
+  max-width: 240px;
+  max-height: 180px;
 }
 .query-results {
   border-collapse: collapse;

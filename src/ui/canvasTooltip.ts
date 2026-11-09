@@ -9,6 +9,13 @@
  */
 import { autoAdvance, carouselCounter, createCarousel, stepCarousel, CAROUSEL_INTERVAL_MS, type CarouselState } from '../lib/imageCarousel';
 import { previewBoxSize, tooltipPlacement } from '../lib/tooltipLayout';
+import { isOpenableUrl } from '../utils/openableUrls';
+
+/** Links `a` to an image, unless it must not be opened as a page (an SVG from a folder, #240 review). */
+function linkTo(a: HTMLAnchorElement, url: string): void {
+  if (isOpenableUrl(url)) a.href = url;
+  else a.removeAttribute('href');
+}
 
 /** What a tooltip shows: text, then the term's example images (absolute addresses, in display order). */
 export interface TooltipContent {
@@ -154,14 +161,14 @@ function renderImages(parent: HTMLElement, images: string[], box: { width: numbe
       missing.replaceChildren();
       if (!ok) {
         const a = document.createElement('a');
-        a.href = url;
+        linkTo(a, url);
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.textContent = url;
         missing.append('Image not available', document.createElement('br'), a);
       }
       missing.classList.toggle('is-shown', !ok);
-      link.href = url;
+      linkTo(link, url);
       if (counter) counter.textContent = carouselCounter(state);
       scheduleNext();
     };
@@ -220,7 +227,7 @@ export function showCanvasTooltip(content: string | TooltipContent, clientX: num
     note.className = 'canvas-tooltip-image-note';
     images.forEach((url, i) => {
       const a = document.createElement('a');
-      a.href = url;
+      linkTo(a, url);
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = images.length === 1 ? 'Example image' : `Example image ${i + 1}`;

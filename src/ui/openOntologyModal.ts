@@ -1,6 +1,7 @@
 import { getLastFileFromIndexedDB, getLastUrlFromIndexedDB, getRecentlyOpenedFromIndexedDB, type RecentlyOpenedEntry } from '../storage/lastOpened';
 import { EXAMPLE_ONTOLOGIES } from './exampleOntologies';
 import { createExploreDataStart } from './exploreDataStart';
+import type { DataPick } from '../sparql/dataLoader';
 
 /**
  * Callback type for loading an ontology from a file.
@@ -33,10 +34,10 @@ let onLoadFromUrl: OnLoadFromUrlCallback | null = null;
 let onLoadLastOpenedFile: OnLoadLastOpenedFileCallback | null = null;
 let onLoadLastOpenedUrl: OnLoadLastOpenedUrlCallback | null = null;
 let onOpenRecentEntry: OnOpenRecentEntryCallback | null = null;
-let onExploreDataFiles: ((files: File[]) => void) | null = null;
+let onExploreDataFiles: ((pick: DataPick) => void) | null = null;
 
-/** What "Explore data files…", or files dropped on its block, do (#234). */
-export function setOnExploreDataFiles(callback: (files: File[]) => void): void {
+/** What "Explore data files…" and "Explore a folder…", or files and folders dropped on its block, do (#234, #227). */
+export function setOnExploreDataFiles(callback: (pick: DataPick) => void): void {
   onExploreDataFiles = callback;
 }
 
@@ -246,10 +247,10 @@ export function initOpenOntologyModal(
     const examplesSection = createCollapsibleSection('Example ontologies', examplesList);
 
     // Data files with no ontology to open first (#234): picked, or dropped on that block (not on the rest of the dialog).
-    const exploreData = (files: File[]) => {
+    const exploreData = (pick: DataPick) => {
       if (!onExploreDataFiles) return;
       hideModal();
-      onExploreDataFiles(files);
+      onExploreDataFiles(pick);
     };
 
     modalContent.appendChild(title);

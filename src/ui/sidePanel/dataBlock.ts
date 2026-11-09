@@ -1,13 +1,14 @@
 /**
  * The controls to add individuals to the open ontology, in the Individuals tab (#205, moved from the Query tab in #211): a
- * file or a URL, the progress with Cancel, why a file was not added, what was added with a Remove button, a notice when a
+ * file, a folder (#227) or a URL, the progress with Cancel, why a file was not added, what was added with a Remove button, a notice when a
  * dataset split into numbered parts is added only in part (#225), and the named graphs of the data with a checkbox each (#224).
  * The reading is the data loader's, so the Query tab can show the same status; this only draws it.
  */
 import type { Store } from 'n3';
-import type { DataSource, DataSources } from '../../sparql/dataSources';
+import type { DataFolder, DataSource, DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
 import { findPartGroups, partsNotice } from '../../sparql/numberedParts';
+import { createFolderControls } from '../folderPicker';
 
 export interface DataBlockDeps {
   sources: DataSources;
@@ -46,8 +47,10 @@ export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDe
   const addUrl = element('button', undefined, 'Add');
   addUrl.type = 'button';
   addUrl.setAttribute('data-add-url', '');
+  // A whole folder (#227): its data files, and its images for previews (#228).
+  const folder = createFolderControls('From a folder…', 'data-add-folder', (list) => void loader.addFolder(list));
   const adders = element('div', 'query-data-add');
-  adders.append(addFile, fileInput, urlInput, addUrl);
+  adders.append(addFile, fileInput, folder.button, folder.input, folder.reopen, urlInput, addUrl);
 
   const status = element('span', 'query-status');
   status.setAttribute('data-data-status', '');
@@ -79,7 +82,9 @@ export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDe
   parts.append(partsText, addParts, dismissParts);
   let dismissed: string | null = null;
   const renderParts = (): void => {
-    const notice = partsNotice(findPartGroups(sources.list().map((s) => s.name)));
+    const added = sources.list();
+    const fromFolder = new Set(added.filter((s) => s.folder !== undefined).map((s) => s.name));
+    const notice = partsNotice(findPartGroups(added.map((s) => s.name), fromFolder));
     parts.hidden = !notice || notice.text === dismissed;
     parts.classList.toggle('strong', !!notice?.strong);
     partsText.textContent = notice?.text ?? '';
@@ -115,19 +120,43 @@ export function createDataBlock({ sources, loader, getLabelStores }: DataBlockDe
     );
   };
 
+  const sourceRow = (source: DataSource): HTMLElement => {
+    const remove = element('button', undefined, 'Remove');
+    remove.type = 'button';
+    remove.title = 'Take these individuals out of the queries and the list';
+    remove.setAttribute('data-data-remove', '');
+    remove.addEventListener('click', () => sources.remove(source.id));
+    const item = element('li', source.folder !== undefined ? 'query-data-in-folder' : undefined);
+    item.append(element('span', undefined, `${source.name} — ${plural(source.triples, 'triple', 'triples')}`), remove);
+    return item;
+  };
+  /** A folder's row (#227), above its files: what it holds, and a button that takes it all out. */
+  const folderRow = (folder: DataFolder, files: number): HTMLElement => {
+    const remove = element('button', undefined, 'Remove folder');
+    remove.type = 'button';
+    remove.title = 'Take every file of this folder out of the queries and the list';
+    remove.setAttribute('data-data-folder-remove', '');
+    remove.addEventListener('click', () => sources.removeFolder(folder.id));
+    const held = [plural(files, 'data file', 'data files'), ...(folder.images.size ? [plural(folder.images.size, 'image', 'images')] : [])];
+    const item = element('li', 'query-data-folder');
+    item.setAttribute('data-data-folder', '');
+    item.title = folder.skipped ? `${plural(folder.skipped, 'other file was', 'other files were')} skipped` : '';
+    item.append(element('span', undefined, `📁 ${folder.name} — ${held.join(', ')}`), remove);
+    return item;
+  };
   const renderList = (): void => {
     const added = sources.list();
     list.hidden = added.length === 0;
+    // Each folder's files under its row, where its first file was added.
+    const shown = new Set<number>();
     list.replaceChildren(
-      ...added.map((source: DataSource) => {
-        const remove = element('button', undefined, 'Remove');
-        remove.type = 'button';
-        remove.title = 'Take these individuals out of the queries and the list';
-        remove.setAttribute('data-data-remove', '');
-        remove.addEventListener('click', () => sources.remove(source.id));
-        const item = element('li');
-        item.append(element('span', undefined, `${source.name} — ${plural(source.triples, 'triple', 'triples')}`), remove);
-        return item;
+      ...added.flatMap((source: DataSource) => {
+        if (source.folder === undefined) return [sourceRow(source)];
+        if (shown.has(source.folder)) return [];
+        shown.add(source.folder);
+        const folder = sources.folders().find((f) => f.id === source.folder);
+        const files = added.filter((s) => s.folder === source.folder);
+        return [...(folder ? [folderRow(folder, files.length)] : []), ...files.map(sourceRow)];
       })
     );
   };

@@ -465,3 +465,110 @@ describe('whenSourceListChanges (#239 review)', () => {
     expect(changed).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('folders (#227)', () => {
+  const add = async (sources: ReturnType<typeof createDataSources>, name: string, folder?: number) =>
+    sources.addFile({ name: name.split('/').pop()!, size: 10, text: async () => ttl(1) }, { name, folder });
+
+  it('keeps the path inside the folder as the name, the folder, and the size of the file on disk', async () => {
+    const sources = createDataSources();
+    const folder = sources.addFolder('run', new Map([['images/a.png', new Blob()]]), 0);
+
+    await add(sources, 'sub/part-0001.ttl', folder.id);
+
+    expect(sources.list().map((s) => [s.name, s.folder, s.size])).toEqual([['sub/part-0001.ttl', folder.id, 10]]);
+  });
+
+  it('takes a folder out with all its files, and leaves the others', async () => {
+    const sources = createDataSources();
+    const folder = sources.addFolder('run', new Map(), 0);
+    await add(sources, 'a.ttl', folder.id);
+    await add(sources, 'b.ttl', folder.id);
+    await add(sources, 'picked.ttl');
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    sources.removeFolder(folder.id);
+
+    expect(sources.list().map((s) => s.name)).toEqual(['picked.ttl']);
+    expect(sources.folders()).toEqual([]);
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a folder whose files are still being added when another file is taken out (#240 review)', async () => {
+    const sources = createDataSources();
+    await add(sources, 'picked.ttl');
+    const folder = sources.addFolder('run', new Map(), 0);
+
+    sources.remove(sources.list()[0].id);
+    await add(sources, 'a.ttl', folder.id);
+
+    expect(sources.folders().map((f) => f.name)).toEqual(['run']);
+  });
+
+  it('takes a folder out with the last of its files', async () => {
+    const sources = createDataSources();
+    const folder = sources.addFolder('run', new Map(), 0);
+    await add(sources, 'a.ttl', folder.id);
+    await add(sources, 'b.ttl', folder.id);
+    const [a, b] = sources.list();
+
+    sources.remove(a.id);
+    expect(sources.folders()).toHaveLength(1);
+    sources.remove(b.id);
+    expect(sources.folders()).toEqual([]);
+  });
+
+  it('forgets the folders when cleared', async () => {
+    const sources = createDataSources();
+    const folder = sources.addFolder('run', new Map(), 0);
+    await add(sources, 'a.ttl', folder.id);
+
+    sources.clear();
+
+    expect(sources.folders()).toEqual([]);
+  });
+
+  it('keeps the address a source was downloaded from, the base of its image paths (#228)', async () => {
+    const sources = createDataSources();
+    const fetch = vi.fn(async () => new Response(ttl(1), { headers: { 'content-type': 'text/turtle' } }));
+
+    await sources.addUrl('https://example.org/runs/part-0001.ttl', { fetch });
+
+    expect(sources.list()[0].url).toBe('https://example.org/runs/part-0001.ttl');
+  });
+});
+
+describe('batch (#227)', () => {
+  it('tells the listeners once, at its end, of all it added and removed', async () => {
+    const sources = createDataSources();
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    await sources.batch(async () => {
+      await sources.addText('a.ttl', ttl(1), { path: 'a.ttl' });
+      await sources.addText('b.ttl', ttl(1), { path: 'b.ttl' });
+      sources.remove(sources.list()[0].id);
+      expect(changed).not.toHaveBeenCalled();
+    });
+
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(sources.list().map((s) => s.name)).toEqual(['b.ttl']);
+  });
+
+  it('tells them even when the work fails, and nothing when nothing changed', async () => {
+    const sources = createDataSources();
+    const changed = vi.fn();
+    sources.onChange(changed);
+
+    await sources.batch(async () => undefined);
+    expect(changed).not.toHaveBeenCalled();
+    await expect(
+      sources.batch(async () => {
+        await sources.addText('a.ttl', ttl(1), { path: 'a.ttl' });
+        throw new Error('broken');
+      })
+    ).rejects.toThrow('broken');
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+});

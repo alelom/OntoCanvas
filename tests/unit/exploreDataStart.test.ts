@@ -37,7 +37,7 @@ describe('createExploreDataStart', () => {
 
     input().dispatchEvent(new Event('change'));
 
-    expect(onFiles).toHaveBeenCalledWith(files);
+    expect(onFiles).toHaveBeenCalledWith({ files, folders: [] });
     expect(input().value).toBe('');
   });
 
@@ -63,11 +63,56 @@ describe('createExploreDataStart', () => {
     expect(drop(outside).defaultPrevented).toBe(false);
     expect(onFiles).not.toHaveBeenCalled();
     expect(drop(block.querySelector('.explore-data-note')!).defaultPrevented).toBe(true);
-    expect(onFiles).toHaveBeenCalledWith(files);
+    expect(onFiles).toHaveBeenCalledWith({ files, folders: [] });
   });
 
   it('says that files can be dropped too, and that they are never saved', () => {
     expect(block.textContent).toMatch(/drop/i);
     expect(block.querySelector('[data-explore-data]')!.getAttribute('title')).toMatch(/never saved/i);
+  });
+});
+
+describe('a folder from the start screen (#227)', () => {
+  it('"Explore a folder…" hands over the folder picked, listed when it is added, and says the files stay on the computer', async () => {
+    const folderButton = block.querySelector<HTMLButtonElement>('[data-explore-folder]')!;
+    const folderInput = block.querySelector<HTMLInputElement>('[data-explore-folder-input]')!;
+    expect(folderButton.title).toMatch(/nothing is uploaded/);
+    expect(folderInput.webkitdirectory).toBe(true);
+    const file = new File(['x'], 'part-0001.nq.gz');
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'run-0001/part-0001.nq.gz' });
+    Object.defineProperty(folderInput, 'files', { value: [file], configurable: true });
+
+    folderInput.dispatchEvent(new Event('change'));
+
+    const pick = onFiles.mock.calls[0][0];
+    expect(pick.files).toEqual([]);
+    const contents = await pick.folders[0]({});
+    expect([contents.name, contents.data.map((f: { path: string }) => f.path)]).toEqual(['run-0001', ['part-0001.nq.gz']]);
+  });
+
+  it('uses the file input where the browser has no folder picker', () => {
+    const picker = vi.spyOn(block.querySelector<HTMLInputElement>('[data-explore-folder-input]')!, 'click').mockImplementation(() => {});
+
+    block.querySelector<HTMLButtonElement>('[data-explore-folder]')!.click();
+
+    expect(picker).toHaveBeenCalled();
+  });
+
+  it('uses the folder picker where the browser has one, and does nothing when it is closed without a folder', async () => {
+    const handle = { kind: 'directory', name: 'run-0001', values: async function* () {} };
+    const showDirectoryPicker = vi.fn().mockResolvedValueOnce(handle).mockRejectedValueOnce(new DOMException('closed', 'AbortError'));
+    vi.stubGlobal('showDirectoryPicker', showDirectoryPicker);
+    try {
+      block.querySelector<HTMLButtonElement>('[data-explore-folder]')!.click();
+      await vi.waitFor(() => expect(onFiles).toHaveBeenCalledTimes(1));
+      expect(showDirectoryPicker).toHaveBeenCalledWith({ id: 'ontocanvas-data', mode: 'read' });
+      expect((await onFiles.mock.calls[0][0].folders[0]({})).name).toBe('run-0001');
+
+      block.querySelector<HTMLButtonElement>('[data-explore-folder]')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(onFiles).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

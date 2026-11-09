@@ -13,6 +13,8 @@ import { describeMatch, matchTableToGraph, type GraphIndex, type GraphMatch } fr
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
+import type { DataImages } from '../../abox/dataImages';
+import { isImagePath } from '../../abox/imagePaths';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
 
@@ -38,6 +40,8 @@ export interface QueryTabDeps {
   dataSources?: DataSources;
   /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
   dataLoader?: DataLoader;
+  /** Where the images the values name are (#228): a cell naming one shows it on hover. */
+  images?: DataImages;
   /** Opens the Individuals tab, where the data is added and removed (#211). */
   openIndividuals?: () => void;
 }
@@ -75,7 +79,34 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
   return el;
 }
 
-function renderTable(view: Extract<ResultView, { kind: 'table' }>): HTMLElement {
+/**
+ * A value naming an image (#228): the image shows while the pointer is over the cell, read only then. A value whose image cannot
+ * be found shows nothing more than its text.
+ */
+function addImageHover(td: HTMLElement, value: string, images: DataImages): void {
+  const found = images.find(value);
+  if (!found || !('url' in found)) return;
+  td.classList.add('query-image-cell');
+  td.setAttribute('data-query-image', '');
+  const preview = element('span', 'query-image-preview');
+  const img = element('img');
+  img.alt = value;
+  preview.append(img);
+  td.append(preview);
+  // Placed against the window: the cell clips what overflows it (the ellipsis of a long value).
+  // An image that does not load: why, in its place, as in the detail of an individual, where the steps to see it are.
+  img.addEventListener('error', () => {
+    void images.diagnose(found.url).then((problem) => preview.replaceChildren(problem.help ? `${problem.hint} Select its individual for how to see it.` : problem.hint));
+  });
+  td.addEventListener('mouseenter', () => {
+    if (!img.src) img.src = found.url;
+    const cell = td.getBoundingClientRect();
+    preview.style.left = `${Math.max(0, Math.min(cell.left, window.innerWidth - 260))}px`;
+    preview.style.top = `${cell.bottom}px`;
+  });
+}
+
+function renderTable(view: Extract<ResultView, { kind: 'table' }>, images?: DataImages): HTMLElement {
   const table = element('table', 'query-results');
   const headRow = element('tr');
   for (const column of view.columns) headRow.append(element('th', undefined, `?${column}`));
@@ -90,6 +121,7 @@ function renderTable(view: Extract<ResultView, { kind: 'table' }>): HTMLElement 
       const inFull = cell?.kind === 'iri' && cell.text.startsWith('<');
       const td = element('td', cell ? `term-${cell.kind}${inFull ? ' term-iri-full' : ''}` : 'term-unbound', cell?.text ?? '');
       if (cell) td.title = cell.title;
+      if (images && cell && (cell.kind === 'iri' || cell.kind === 'literal') && isImagePath(cell.title)) addImageHover(td, cell.title, images);
       tr.append(td);
     }
     body.append(tr);
@@ -332,7 +364,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
-          result.replaceChildren(...showInGraphRow(view), renderTable(view));
+          result.replaceChildren(...showInGraphRow(view), renderTable(view, deps.images));
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;

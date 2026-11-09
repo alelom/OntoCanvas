@@ -1,0 +1,8 @@
+# The run itself (#227): plain Turtle beside the compressed parts, in no named graph.
+@prefix : <http://example.org/examples/run-folder#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/run-folder/run-0001/run> a prov:Activity, :Run ;
+    rdfs:label "Run 0001" ;
+    prov:startedAtTime "2026-11-06T09:00:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .
