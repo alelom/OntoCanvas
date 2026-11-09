@@ -1,3 +1,15 @@
+# [2.8.0](https://github.com/alelom/OntoCanvas/compare/v2.7.0...v2.8.0) (2026-11-09)
+
+
+### Bug Fixes
+
+* **individuals:** the [#242](https://github.com/alelom/OntoCanvas/issues/242) review: a link between individuals named by its relationship, what refers to an individual followed only when it is one ([cf9b165](https://github.com/alelom/OntoCanvas/commit/cf9b16565cd619b7b17c3cc8774462400c2b507f))
+
+
+### Features
+
+* **individuals:** the graph search finds individuals not drawn, picking one opens its record card, and a relationship name can select its instances ([b8158d2](https://github.com/alelom/OntoCanvas/commit/b8158d2a21b8f60c49355a5e1bbd0c0f5143f3be))
+
 # [2.7.0](https://github.com/alelom/OntoCanvas/compare/v2.6.0...v2.7.0) (2026-11-09)
 
 
