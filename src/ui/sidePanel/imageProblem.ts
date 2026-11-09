@@ -38,12 +38,17 @@ export function renderLongPathSteps(folder: string): HTMLDetailsElement {
   summary.textContent = LONG_PATH_SUMMARY;
   const steps = document.createElement('ol');
   steps.append(
-    step('In PowerShell, give the folder that holds ', code(folder), ' a free drive letter, such as X: ', code(`subst X: "C:\\path\\to\\the folder that holds ${folder}"`)),
+    // A drive letter belongs to the session that made it: one made "as administrator" is not seen by the browser.
+    step('In a PowerShell window (no administrator rights needed: open it as yourself, not "as administrator", or the browser won\'t see the drive), give the folder that holds ', code(folder), ' a free drive letter, such as X: ', code(`subst X: "C:\\path\\to\\the folder that holds ${folder}"`)),
     step('Open it again from there: ', code('From a folder…'), ' (or ', code('Explore a folder…'), ' on the start screen), and pick ', code(`X:\\${folder}`), '.'),
     step('When you are done, ', code('subst X: /D'), ' takes the drive letter away.')
   );
   const alternative = document.createElement('p');
   alternative.append('Or copy ', code(folder), ' to a short path, such as ', code('C:\\data\\'), ', and open the copy.');
-  details.append(summary, steps, alternative);
+  // Windows lifts the limit only for a program whose manifest says longPathAware, and Chrome's and Edge's don't.
+  const longPaths = document.createElement('p');
+  longPaths.setAttribute('data-individuals-image-help-long-paths', '');
+  longPaths.append('Turning on Windows long paths (', code('LongPathsEnabled'), ") doesn't help: Chrome and Edge don't use that setting, so their limit stays at 260 characters.");
+  details.append(summary, steps, alternative, longPaths);
   return details;
 }

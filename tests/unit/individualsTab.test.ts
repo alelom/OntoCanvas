@@ -293,10 +293,13 @@ describe('the detail', () => {
       expect(help.open).toBe(false);
       expect(help.querySelector('summary')!.textContent).toBe(LONG_PATH_SUMMARY);
       expect([...help.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
-        'In PowerShell, give the folder that holds run-0001 a free drive letter, such as X: subst X: "C:\\path\\to\\the folder that holds run-0001"',
+        'In a PowerShell window (no administrator rights needed: open it as yourself, not "as administrator", or the browser won\'t see the drive), give the folder that holds run-0001 a free drive letter, such as X: subst X: "C:\\path\\to\\the folder that holds run-0001"',
         'Open it again from there: From a folder… (or Explore a folder… on the start screen), and pick X:\\run-0001.',
         'When you are done, subst X: /D takes the drive letter away.',
       ]);
+      expect(help.querySelector('[data-individuals-image-help-long-paths]')!.textContent).toBe(
+        "Turning on Windows long paths (LongPathsEnabled) doesn't help: Chrome and Edge don't use that setting, so their limit stays at 260 characters."
+      );
     });
 
     it('says why in place of an image that does not load, with the steps when there are some', async () => {
