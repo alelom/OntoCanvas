@@ -98,6 +98,12 @@ describe('which files are data, images, or skipped', () => {
     expect(['.hidden.ttl', 'sub/.git/x.ttl', '~$notes.docx', 'part-1.nq.gz.partial', 'a.ttl.crdownload'].every(isSkippedPath)).toBe(true);
     expect(isSkippedPath('run.part03.trig')).toBe(false);
   });
+
+  it("skips what is in a project's node_modules, as the picker and a drop do: the folder input (Firefox, Safari) too (#240 review)", () => {
+    expect(isSkippedPath('node_modules/pkg/vocab.ttl')).toBe(true);
+    expect(isSkippedPath('sub/node_modules/a.jsonld')).toBe(true);
+    expect(isSkippedPath('node_modules.ttl')).toBe(false);
+  });
 });
 
 describe('folderFromHandle (the folder picker)', () => {

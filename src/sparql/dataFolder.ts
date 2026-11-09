@@ -56,14 +56,18 @@ export const isDataFileName = (path: string): boolean => DATA_EXTENSIONS.include
 
 export const isImageFileName = (path: string): boolean => IMAGE_EXTENSIONS.includes(extensionOf(baseName(path)));
 
-/** Hidden (a part starting with a dot), an Office lock file (`~$…`), or a download in progress. */
-export function isSkippedPath(path: string): boolean {
-  const name = baseName(path);
-  return path.split('/').some((part) => part.startsWith('.')) || name.startsWith('~$') || /\.(partial|crdownload|part|download|tmp)$/i.test(name);
-}
-
 /** A folder not worth going into: hidden, or a project's installed packages. */
 const isSkippedFolder = (name: string): boolean => name.startsWith('.') || name === 'node_modules';
+
+/**
+ * Hidden (a part starting with a dot), in a folder not worth going into (the folder input lists those too, #240 review), an
+ * Office lock file (`~$…`), or a download in progress.
+ */
+export function isSkippedPath(path: string): boolean {
+  const name = baseName(path);
+  const folders = path.split('/').slice(0, -1);
+  return name.startsWith('.') || folders.some(isSkippedFolder) || name.startsWith('~$') || /\.(partial|crdownload|part|download|tmp)$/i.test(name);
+}
 
 const naturally = new Intl.Collator(undefined, { numeric: true });
 const byPath = (a: FolderFile, b: FolderFile): number => naturally.compare(a.path, b.path);

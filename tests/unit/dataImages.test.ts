@@ -18,6 +18,7 @@ import {
   SEVERAL_FILES_HINT,
   UNREADABLE_LONG_PATH_HINT,
 } from '../../src/abox/dataImages';
+import { isOpenableUrl } from '../../src/utils/openableUrls';
 
 const NS = 'http://example.org/d#';
 const PATH = 'runs/run-0001/images/page-1/titleblock.png';
@@ -176,6 +177,48 @@ describe('createDataImages', () => {
       const images = await open(listed(new Uint8Array([1])), true);
 
       expect(images.find('runs/run-0001/images/page-9/titleblock.png', `${NS}sheet1`)).toEqual({ hint: NOT_FOUND_WINDOWS_HINT, help: { kind: 'long-path', folder: 'run-0001' } });
+    });
+  });
+
+  describe('several folders open (#240 review)', () => {
+    const TB = `@prefix : <${NS}> .\n:a :imagePath "images/a.png" .\n`;
+    const TB2 = `@prefix : <${NS}> .\n:b :imagePath "images/a.png" .\n`;
+
+    it("does not show another folder's image for a value of a folder that doesn't hold its file", async () => {
+      const { sources, images } = setUp();
+      const first = sources.addFolder('run-0001', new Map([['images/a.png', new Blob()]]), 0);
+      const second = sources.addFolder('run-0002', new Map(), 0);
+      await sources.addFile({ name: 'a.ttl', size: TB.length, text: async () => TB }, { name: 'a.ttl', folder: first.id });
+      await sources.addFile({ name: 'b.ttl', size: TB2.length, text: async () => TB2 }, { name: 'b.ttl', folder: second.id });
+
+      expect(images.find('images/a.png', `${NS}a`, `${NS}imagePath`)).toEqual({ url: 'blob:1' });
+      expect(images.find('images/a.png', `${NS}b`, `${NS}imagePath`)).toEqual({ hint: expect.stringContaining('No file at this path') });
+    });
+
+    it("still finds a picked file's image in a folder opened afterwards", async () => {
+      const { sources, images } = setUp();
+      await sources.addFile({ name: 'a.ttl', size: TB.length, text: async () => TB });
+      sources.addFolder('run-0001', new Map([['images/a.png', new Blob()]]), 0);
+
+      expect(images.find('images/a.png', `${NS}a`, `${NS}imagePath`)).toEqual({ url: 'blob:1' });
+    });
+  });
+
+  describe('an SVG from a folder (#240 review)', () => {
+    it('is shown, but not to be opened as a page: it would run its scripts as the app', async () => {
+      const svg = `@prefix : <${NS}> .\n:a :imagePath "images/a.svg" ; :other "images/b.png" .\n`;
+      const { sources, images } = setUp();
+      const folder = sources.addFolder('run-0001', new Map([['images/a.svg', new Blob(['<svg/>'], { type: 'image/svg+xml' })], ['images/b.png', new Blob()]]), 0);
+      await sources.addFile({ name: 'a.ttl', size: svg.length, text: async () => svg }, { name: 'a.ttl', folder: folder.id });
+
+      const shown = images.find('images/a.svg', `${NS}a`) as { url: string };
+      const png = images.find('images/b.png', `${NS}a`) as { url: string };
+      expect(isOpenableUrl(shown.url)).toBe(false);
+      expect(isOpenableUrl(png.url)).toBe(true);
+      expect(isOpenableUrl('https://example.org/a.svg')).toBe(true);
+
+      sources.removeFolder(folder.id);
+      expect(isOpenableUrl(shown.url)).toBe(true);
     });
   });
 

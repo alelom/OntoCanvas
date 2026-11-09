@@ -375,6 +375,16 @@ describe('addFolder (#227)', () => {
     expect(sources.folders().map((f) => [f.missingImages, f.unreadable])).toEqual([[2, 1]]);
   });
 
+  it('keeps what each folder of a drop said, and the files with it, in the status: not only the last one (#240 review)', async () => {
+    const data = loader();
+    const run = (name: string, text: string) => async () => ({ ...contents([['part-0001.ttl', text]]), name });
+
+    await data.addPick({ folders: [run('run-0001', ttl(2)), run('run-0002', 'not turtle {')], files: [file('more.ttl', ttl(1)) as unknown as File] });
+
+    // run-0001's summary, then run-0002's failure; the file added after them left nothing to say.
+    expect(data.status()).toBe('Added 1 data file from run-0001.  Failed to parse RDF: Unexpected "not" on line 1.');
+  });
+
   it('records the classes of what the missing images show, once each, for the warning to name them (#240)', async () => {
     const data = loader();
     const named = `@prefix : <http://example.org/d#> .

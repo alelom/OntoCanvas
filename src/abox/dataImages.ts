@@ -12,6 +12,7 @@ import type { DataSource, DataSources } from '../sparql/dataSources';
 import { findInFolder, indexFolder, isImagePath, resolveAgainstUrl, type FolderIndex } from './imagePaths';
 import { isPrivateAddress } from './dataOntologies';
 import { runsOnWindows } from '../utils/platform';
+import { forgetUrl, markNotOpenable } from '../utils/openableUrls';
 
 /**
  * Steps that let the user see the image after all: on Windows, a browser cannot read a file whose full path is longer than 260
@@ -114,6 +115,7 @@ export function createDataImages({ sources, getOntology, createUrl = (b) => URL.
     for (const [key, url] of urls) {
       if (kept.has(Number(key.split('\u0000')[0]))) continue;
       revokeUrl(url);
+      forgetUrl(url);
       urls.delete(key);
       files.delete(url);
     }
@@ -143,17 +145,22 @@ export function createDataImages({ sources, getOntology, createUrl = (b) => URL.
     return index;
   };
 
-  /** The image of a value in a folder, for data from the file `from` (its path in the folder), or in any folder. */
+  /**
+   * The image of a value in a folder: for data from a folder's file `from`, in that folder only (runs reuse their relative paths,
+   * so another folder's file of the same path is another image, #240 review); otherwise in any folder.
+   */
   function inFolders(value: string, from?: DataSource): string | null {
     const folders = sources.folders();
-    const ordered = from?.folder !== undefined ? [...folders.filter((f) => f.id === from.folder), ...folders.filter((f) => f.id !== from.folder)] : folders;
-    for (const folder of ordered) {
+    const searched = from?.folder !== undefined ? folders.filter((f) => f.id === from.folder) : folders;
+    for (const folder of searched) {
       const path = findInFolder(value, indexOf(folder.images), from?.folder === folder.id ? dirOf(from.name) : '', folder.name);
       if (!path) continue;
       const key = keyOf(folder.id, path);
       if (!urls.has(key)) {
         const blob = folder.images.get(path)!;
         const url = createUrl(blob);
+        // Shown in an <img> only: opened as a page, an SVG's scripts would run as the app.
+        if (blob.type === 'image/svg+xml' || /\.svg$/i.test(path)) markNotOpenable(url);
         urls.set(key, url);
         files.set(url, { blob, folder: folder.name });
       }
@@ -182,8 +189,9 @@ export function createDataImages({ sources, getOntology, createUrl = (b) => URL.
         if (urls.size === 1) return { url: [...urls][0] };
         if (urls.size > 1) return { hint: SEVERAL_FILES_HINT };
       }
-      // A file picked on its own whose folder was opened afterwards, or the ontology's own individuals.
-      const anywhere = inFolders(value);
+      // A file picked on its own whose folder was opened afterwards, or the ontology's own individuals; not data from a folder,
+      // whose own folder was looked in.
+      const anywhere = holding.some((s) => s.folder !== undefined) ? null : inFolders(value);
       if (anywhere) return { url: anywhere };
       const ontology = getOntology?.();
       if (ontology?.location && /^https?:/i.test(ontology.location) && holds(ontology.store, value, subject, predicate)) {

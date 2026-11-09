@@ -6,9 +6,18 @@ import { describe, it, expect } from 'vitest';
 import { findInFolder, indexFolder, isImagePath, pathParts, resolveAgainstUrl } from '../../src/abox/imagePaths';
 
 describe('isImagePath', () => {
-  it('reads the extension, whatever its case, before any query', () => {
+  it("reads the extension, whatever its case, before an address's query", () => {
     expect(['images/a.png', 'B.JPG', 'c.jpeg', 'https://x.org/d.svg?v=2', 'e.webp', 'f.gif'].every(isImagePath)).toBe(true);
     expect(['a.ttl', 'png', 'https://x.org/image', 'a.png.txt'].some(isImagePath)).toBe(false);
+  });
+
+  it('reads a plain path whole: a # or ? in a name is part of it (#240 review)', () => {
+    expect(isImagePath('images/Issue #3/a.png')).toBe(true);
+    expect(isImagePath('images/what?/a.png')).toBe(true);
+  });
+
+  it('takes a Windows path with a drive letter for a path, not an address', () => {
+    expect(isImagePath('C:\\data\\run-0001\\images\\a.png')).toBe(true);
   });
 });
 
@@ -22,8 +31,8 @@ describe('pathParts', () => {
     expect(pathParts('100%25/50% off/a.png')).toEqual(['100%', '50% off', 'a.png']);
   });
 
-  it('reads a query or a fragment only when it is written as such, not when it is encoded in a name', () => {
-    expect(pathParts('images/a.png?v=2#top')).toEqual(['images', 'a.png']);
+  it('keeps a # or ? in a name, written plain or encoded: a path has no query or fragment (#240 review)', () => {
+    expect(pathParts('images/Issue #3/a.png')).toEqual(['images', 'Issue #3', 'a.png']);
     expect(pathParts('Issue%20%233/a%3Fb.png')).toEqual(['Issue #3', 'a?b.png']);
   });
 });
@@ -65,6 +74,15 @@ describe('findInFolder', () => {
     expect(findInFolder('images/page-2/titleblock.png', index)).toBeNull();
   });
 
+  it('finds a plain path with a # in a name (#240 review)', () => {
+    expect(findInFolder('images/Issue #3/a.png', new Set(['images/Issue #3/a.png']))).toBe('images/Issue #3/a.png');
+  });
+
+  it('finds an absolute Windows path through the name of the folder opened, or by its ending (#240 review)', () => {
+    expect(findInFolder('C:\\data\\run-0001\\images\\page-1\\titleblock.png', RUN, '', 'run-0001')).toBe('images/page-1/titleblock.png');
+    expect(findInFolder('D:/elsewhere/images/page-2/titleblock.png', new Set(['images/page-2/titleblock.png']), '', 'run-0001')).toBe('images/page-2/titleblock.png');
+  });
+
   it('does not take an address, or a file the folder does not hold', () => {
     expect(findInFolder('https://example.org/images/page-1/titleblock.png', RUN)).toBeNull();
     expect(findInFolder('file:///C:/runs/images/page-1/titleblock.png', RUN)).toBeNull();
@@ -87,8 +105,18 @@ describe('resolveAgainstUrl', () => {
     expect(resolveAgainstUrl('runs/run-0001/images/Plans%20%26%20Sections/Issue%20%233/a%3Fb.png', PART)).toBe('https://example.org/data/runs/run-0001/images/Plans%20%26%20Sections/Issue%20%233/a%3Fb.png');
   });
 
-  it('keeps an http address, and gives nothing for another scheme', () => {
+  it('keeps an http address, and gives nothing for another scheme, or a path on a drive of a machine', () => {
     expect(resolveAgainstUrl('https://img.example.org/a.png', PART)).toBe('https://img.example.org/a.png');
     expect(resolveAgainstUrl('file:///C:/a.png', PART)).toBeNull();
+    expect(resolveAgainstUrl('C:\\data\\a.png', PART)).toBeNull();
+  });
+
+  it('resolves a path starting with ../ above the data file, as written (#240 review)', () => {
+    expect(resolveAgainstUrl('../images/a.png', 'https://h.org/data/run/part.ttl')).toBe('https://h.org/data/images/a.png');
+    expect(resolveAgainstUrl('..\\..\\images\\Issue #3\\a.png', 'https://h.org/data/run/part.ttl')).toBe('https://h.org/images/Issue%20%233/a.png');
+  });
+
+  it('encodes a # written plain in a name', () => {
+    expect(resolveAgainstUrl('images/Issue #3/a.png', PART)).toBe('https://example.org/data/runs/run-0001/images/Issue%20%233/a.png');
   });
 });

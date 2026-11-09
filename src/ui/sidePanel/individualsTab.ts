@@ -17,6 +17,7 @@ import type { IndividualsLayer } from '../../abox/individualsLayer';
 import type { DataImages, ImageFound } from '../../abox/dataImages';
 import { createDataBlock } from './dataBlock';
 import { renderImageProblem } from './imageProblem';
+import { isOpenableUrl } from '../../utils/openableUrls';
 import type { SidePanelTab } from './sidePanelHost';
 
 export interface IndividualsTabDeps {
@@ -232,10 +233,13 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   function imagePreview(value: string, found: ImageFound): HTMLElement {
     if (!('url' in found)) return renderImageProblem(found);
     const link = element('a', 'individual-image');
-    link.href = found.url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.title = `${value}: open the image whole`;
+    // An SVG from a folder is shown, not opened as a page: its scripts would run as the app (#240 review).
+    if (isOpenableUrl(found.url)) {
+      link.href = found.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.title = `${value}: open the image whole`;
+    } else link.title = value;
     const img = element('img');
     img.alt = value;
     img.src = found.url;

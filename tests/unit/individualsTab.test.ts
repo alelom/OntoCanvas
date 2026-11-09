@@ -10,6 +10,7 @@ import { createDataSources } from '../../src/sparql/dataSources';
 import { createDataLoader } from '../../src/sparql/dataLoader';
 import type { DataImages } from '../../src/abox/dataImages';
 import { LONG_PATH_SUMMARY } from '../../src/ui/sidePanel/imageProblem';
+import { forgetUrl, markNotOpenable } from '../../src/utils/openableUrls';
 
 const NS = 'http://example.org/d#';
 const PREFIXES = `
@@ -267,6 +268,20 @@ describe('the detail', () => {
 
       expect(q<HTMLImageElement>('[data-individuals-outgoing] [data-individuals-image]').src).toBe('blob:a.png');
       expect(q('[data-individuals-outgoing] [data-individuals-image-missing]').textContent).toBe('No file here.');
+    });
+
+    it("links an image to open it whole, but not one that must not open as a page: an SVG from a folder (#240 review)", () => {
+      stores = [ONTOLOGY, store(':room101 a :Room ; rdfs:label "Room 101" ; :imagePath "a.png" .')];
+      mountWithImages();
+      click('Room 101');
+      expect(q<HTMLAnchorElement>('[data-individuals-outgoing] a.individual-image').getAttribute('href')).toBe('blob:a.png');
+
+      markNotOpenable('blob:a.png');
+      click('Room 101');
+      const link = q<HTMLAnchorElement>('[data-individuals-outgoing] a.individual-image');
+      expect(link.hasAttribute('href')).toBe(false);
+      expect(link.querySelector<HTMLImageElement>('img')!.src).toBe('blob:a.png');
+      forgetUrl('blob:a.png');
     });
 
     it("shows the images of the frames it is drawn from under their own heading, each with the image individual it comes from", () => {

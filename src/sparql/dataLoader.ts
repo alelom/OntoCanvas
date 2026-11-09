@@ -21,7 +21,7 @@ import {
 } from './dataSources';
 import { estimateDataBytes, isGzipName } from './readDataBytes';
 import { DATA_EXTENSIONS, folderSummary, type FolderLister } from './dataFolder';
-import { findInFolder, indexFolder, isImagePath } from '../abox/imagePaths';
+import { findInFolder, indexFolder, isAddress, isImagePath } from '../abox/imagePaths';
 import { depictedClasses } from '../abox/dataImages';
 
 /** Data picked or dropped: files, and folders not listed yet (#227). */
@@ -181,11 +181,12 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     return failures;
   }
 
-  async function addFiles(files: DataFile[]): Promise<void> {
-    if (!files.length) return;
+  /** Returns what is left in the status, as `load` does. */
+  async function addFiles(files: DataFile[]): Promise<string> {
+    if (!files.length) return '';
     const one = files.length === 1;
     const labelOf = (i: number) => (one ? `Loading ${files[i].name}…` : `Adding ${i + 1} of ${files.length}: ${files[i].name}…`);
-    await load(labelOf(0), (read) => sources.batch(async () => {
+    return load(labelOf(0), (read) => sources.batch(async () => {
       const { tier, message } = judgeSelection(files);
       if (tier === 'refuse') return message!;
       if (tier === 'confirm' && !(await ask(message!))) return '';
@@ -194,8 +195,9 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
     }));
   }
 
-  async function addFolder(list: FolderLister): Promise<void> {
-    await load('Reading the folder…', (read) => sources.batch(async () => {
+  /** Returns what is left in the status, as `load` does. */
+  async function addFolder(list: FolderLister): Promise<string> {
+    return load('Reading the folder…', (read) => sources.batch(async () => {
       const contents = await list({ signal: read.signal, onCount: (files) => read.progress(`Reading the folder… ${files.toLocaleString('en')} files`) });
       if (!contents) return '';
       if (!contents.data.length) return `${contents.name} holds no data files (${DATA_EXTENSIONS.join(', ')}, compressed with .gz or not).`;
@@ -224,12 +226,18 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
   return {
     status: () => status,
     loading: () => controller !== null,
-    addFile: (file) => addFiles([file]),
-    addFiles,
-    addFolder,
+    addFile: async (file) => void (await addFiles([file])),
+    addFiles: async (files) => void (await addFiles(files)),
+    addFolder: async (list) => void (await addFolder(list)),
     async addPick({ files, folders }) {
-      for (const folder of folders) await addFolder(folder);
-      await addFiles(files);
+      // Each read sets the status to what it leaves: what every one said is kept, as addUrls does (#240 review).
+      const said: string[] = [];
+      for (const add of [...folders.map((folder) => () => addFolder(folder)), () => addFiles(files)]) {
+        const left = await add();
+        if (left) said.push(left);
+        if (left === 'Cancelled.') break;
+      }
+      if (said.length > 1) set(said.join('  '));
     },
     addUrl: async (url) => void (await loadUrl(url)),
     async addUrls(urls) {
@@ -268,7 +276,7 @@ function missingImages(files: DataSource[], folder: DataFolder): { missing: numb
     const dir = file.name.slice(0, Math.max(0, file.name.lastIndexOf('/')));
     for (const quad of file.store.getQuads(null, null, null, null)) {
       const value = quad.object.value;
-      if (quad.object.termType === 'BlankNode' || !isImagePath(value) || /^[a-z][a-z0-9+.-]*:/i.test(value.trim())) continue;
+      if (quad.object.termType === 'BlankNode' || !isImagePath(value) || isAddress(value)) continue;
       if (findInFolder(value, index, dir, folder.name)) continue;
       missing.add(value);
       depictedClasses(stores, quad.subject.value).forEach((c) => classes.add(c));

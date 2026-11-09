@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { pickTooltip, showCanvasTooltip, hideCanvasTooltip, RICH_TOOLTIP_HIDE_DELAY_MS } from '../../src/ui/canvasTooltip';
+import { forgetUrl, markNotOpenable } from '../../src/utils/openableUrls';
 
 /** The canvas shows one tooltip (#109): the most specific thing under the cursor wins. */
 describe('pickTooltip', () => {
@@ -48,6 +49,18 @@ describe('the tooltip with example images', () => {
   afterEach(() => {
     hideCanvasTooltip(true);
     vi.useRealTimers();
+  });
+
+  it("doesn't link an image that must not open as a page: an SVG from a folder (#240 review)", () => {
+    markNotOpenable('blob:svg');
+    showCanvasTooltip({ text: '', images: ['blob:svg', IMAGES[0]] }, 100, 100);
+    settle();
+    const box = tooltip().querySelector('.canvas-tooltip-preview') as HTMLAnchorElement;
+    expect(box.hasAttribute('href')).toBe(false);
+    vi.advanceTimersByTime(2000);
+    settle();
+    expect(box.getAttribute('href')).toBe(IMAGES[0]);
+    forgetUrl('blob:svg');
   });
 
   it('shows the comment, then the first image in a fixed box, with a 1/3 counter', () => {
