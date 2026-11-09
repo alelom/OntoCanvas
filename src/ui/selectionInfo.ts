@@ -7,6 +7,11 @@ import { type ResolvedTerm, resolveNodeTerm, resolveEdgeTerm } from '../lib/term
 import { session } from '../state/appState';
 import { updateSelectedTerm as updateStatusBarSelectedTerm, updateSelectionInfo as updateStatusBarSelection } from './statusBar';
 import { Network } from 'vis-network/esnext';
+import { INDIVIDUAL_CLASS_PREFIX, INDIVIDUAL_PREFIX } from '../abox/individualsLayer';
+
+/** The label a node is drawn with: an individual or a class of the data is not in the ontology's nodes. */
+const drawnLabel = (net: Network, id: string): string | undefined =>
+  (net as unknown as { body?: { data: { nodes: { get(id: string): { label?: string } | null } } } }).body?.data.nodes.get(id)?.label;
 
 export function resolveTerm(kind: 'node' | 'edge', id: string): ResolvedTerm | null {
   return kind === 'node' ? resolveNodeTerm(id, getTermLookup()) : resolveEdgeTerm(id, getTermLookup());
@@ -24,6 +29,11 @@ export function updateSelectionInfoDisplay(net: Network): void {
     } else {
       updateStatusBarSelection('');
     }
+  } else if (nodeIds.length === 1 && (nodeIds[0].startsWith(INDIVIDUAL_PREFIX) || nodeIds[0].startsWith(INDIVIDUAL_CLASS_PREFIX))) {
+    // An individual (#217: the search selects one it finds), or a class of the data drawn for them: by its label, with its IRI.
+    const individual = nodeIds[0].startsWith(INDIVIDUAL_PREFIX);
+    const iri = nodeIds[0].slice((individual ? INDIVIDUAL_PREFIX : INDIVIDUAL_CLASS_PREFIX).length);
+    updateStatusBarSelectedTerm(drawnLabel(net, nodeIds[0]) ?? iri, getTermLink(iri), individual ? ' (individual)' : ' (class of the data)');
   } else if (nodeIds.length === 1) {
     const node = session.rawData.nodes.find((n) => n.id === nodeIds[0]);
     const term = resolveTerm('node', nodeIds[0]);

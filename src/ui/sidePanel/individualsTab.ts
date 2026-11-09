@@ -5,7 +5,7 @@
  */
 
 import { DataFactory, type Store } from 'n3';
-import { countIndividuals, createIndividualIndex, NO_CLASS, type DescribedLink, type DescribedTerm, type IndividualDetail, type IndividualIndex } from '../../abox/individualIndex';
+import { countIndividuals, createIndividualIndex, NO_CLASS, type IndividualIndex } from '../../abox/individualIndex';
 import { formatTerm } from '../../sparql/formatTerm';
 import { extractLocalName } from '../../utils/localName';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
@@ -14,15 +14,17 @@ import type { DataSources } from '../../sparql/dataSources';
 import type { GraphMatch } from '../../sparql/graphMatches';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
-import type { DataImages, ImageFound } from '../../abox/dataImages';
+import type { DataImages } from '../../abox/dataImages';
 import { createDataBlock } from './dataBlock';
-import { renderImageProblem } from './imageProblem';
-import { isOpenableUrl } from '../../utils/openableUrls';
+import { atLimit, limitReached, renderIndividualCard } from './individualCard';
+import { createCardHistory } from '../../abox/recordCard';
 import type { SidePanelTab } from './sidePanelHost';
 
 export interface IndividualsTabDeps {
   /** The ontology's store and the stores of the data added to it. */
   getStores: () => Store[];
+  /** The index of their individuals, shared with the search of the graph (#217); built from `getStores` when not given. */
+  getIndex?: () => IndividualIndex;
   /** The prefixes the open file declares. */
   getPrefixes: () => Record<string, string>;
   /** The label a class has in the graph, or null. */
@@ -45,6 +47,8 @@ export interface IndividualsTabDeps {
 export interface IndividualsTab extends SidePanelTab {
   /** The ontology or the data changed: recount, and keep what is still there. */
   refresh(): void;
+  /** Shows the card of an individual (#217: one found by the search of the graph). */
+  show(iri: string): void;
 }
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -58,19 +62,14 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
   return el;
 }
 
-const toStoreTerm = (term: DescribedTerm) =>
-  term.termType === 'NamedNode'
-    ? DataFactory.namedNode(term.value)
-    : term.termType === 'BlankNode'
-      ? DataFactory.blankNode(term.value)
-      : DataFactory.literal(term.value, term.language || (term.datatype ? DataFactory.namedNode(term.datatype) : undefined));
 
 export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   const pageSize = deps.pageSize ?? DEFAULT_PAGE_SIZE;
   let index: IndividualIndex = createIndividualIndex([]);
   let drawn = false;
   let search = '';
-  let selected: string | null = null;
+  /** The cards visited, the one shown last (#229). */
+  const history = createCardHistory();
   /** The groups the user opened or closed; the others are closed, unless a filter is typed. */
   let toggled = new Map<string, boolean>();
   /** How many rows of each group are listed; a page more at a time. */
@@ -95,19 +94,6 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     const name = nameOf(iri);
     return name.startsWith('<') ? extractLocalName(iri) || name : name;
   };
-
-  /** A button that selects a class or a property in the graph, when it is there; null otherwise (#216). */
-  function schemaButton(iri: string, text: string, title: string): HTMLButtonElement | null {
-    const links = deps.schemaLinks;
-    const match = links?.match(iri);
-    if (!links || !match) return null;
-    const button = element('button', 'schema-follow', text);
-    button.type = 'button';
-    button.title = `${title}: select it in the graph`;
-    button.setAttribute('data-individuals-schema-link', '');
-    button.addEventListener('click', () => links.show(match));
-    return button;
-  }
 
   function renderList(): void {
     const { total: allTotal } = index.classCounts();
@@ -195,12 +181,13 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   /** How many of the type's individuals the next click draws, and how many are drawn of all of them. */
   function classButton(layer: IndividualsLayer, classIri: string): HTMLButtonElement {
-    const { adds, displayed, total } = layer.previewClass(classIri);
+    const preview = layer.previewClass(classIri);
+    const { adds, displayed, total } = preview;
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-class', '');
-    if (displayed < total && adds === 0) {
-      limitReached(button);
+    if (atLimit(preview)) {
+      limitReached(button, layer.limit);
     } else if (displayed < total) {
       button.textContent = `Show ${adds}${displayed > 0 ? ' more' : ''} (${displayed} displayed/${total} total)`;
       button.title = `Draw ${adds}${displayed > 0 ? ' more' : ''} of the individuals of this type in the graph`;
@@ -212,122 +199,27 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     return button;
   }
 
-  function renderTerm(term: DescribedTerm, isIndividual: boolean): HTMLElement {
-    const formatted = formatTerm(toStoreTerm(term), prefixes());
-    if (term.termType === 'NamedNode' && isIndividual) {
-      const follow = element('button', 'individual-follow', formatted.text);
-      follow.type = 'button';
-      follow.title = `${term.value}: show this individual`;
-      follow.setAttribute('data-individuals-follow', '');
-      follow.addEventListener('click', () => select(term.value));
-      return follow;
-    }
-    const schema = term.termType === 'NamedNode' ? schemaButton(term.value, formatted.text, formatted.title) : null;
-    if (schema) return schema;
-    const span = element('span', `term-${formatted.kind}`, formatted.text);
-    span.title = formatted.title;
-    return span;
-  }
-
-  /** The image a value names, opening whole in a new tab when clicked; or the reason it is not shown. */
-  function imagePreview(value: string, found: ImageFound): HTMLElement {
-    if (!('url' in found)) return renderImageProblem(found);
-    const link = element('a', 'individual-image');
-    // An SVG from a folder is shown, not opened as a page: its scripts would run as the app (#240 review).
-    if (isOpenableUrl(found.url)) {
-      link.href = found.url;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.title = `${value}: open the image whole`;
-    } else link.title = value;
-    const img = element('img');
-    img.alt = value;
-    img.src = found.url;
-    img.setAttribute('data-individuals-image', '');
-    // An image that does not load: why, in its place (a path too long, a file that cannot be read, one that is no image).
-    img.addEventListener('error', () => {
-      const why = deps.images?.diagnose(found.url) ?? Promise.resolve({ hint: `No image could be read at ${found.url}.` });
-      void why.then((problem) => link.replaceWith(renderImageProblem(problem)));
-    });
-    link.append(img);
-    return link;
-  }
-
-  function renderLinks(title: string, attribute: string, links: DescribedLink[], total: number, side: 'object' | 'subject'): HTMLElement {
-    const section = element('div', 'individual-links');
-    section.setAttribute(attribute, '');
-    section.append(element('h5', undefined, `${title} (${total})`));
-    const rows = element('ul');
-    for (const link of links) {
-      const row = element('li');
-      const property = element('span', 'individual-predicate', nameOf(link.predicate));
-      property.title = link.predicate;
-      row.append(
-        ...(side === 'object'
-          ? [property, ' ', renderTerm(link.object, link.objectIsIndividual)]
-          : [renderTerm({ termType: 'NamedNode', value: link.subject }, true), ' ', property])
-      );
-      // A value naming an image (#228): the image under it, or why it cannot be shown.
-      const image = side === 'object' && link.object.termType !== 'BlankNode' ? deps.images?.find(link.object.value, selected ?? undefined, link.predicate) : null;
-      if (image) row.append(imagePreview(link.object.value, image));
-      rows.append(row);
-    }
-    if (total > links.length) rows.append(element('li', 'individual-more', `…and ${total - links.length} more`));
-    section.append(rows);
-    return section;
-  }
-
-  /** The images of the frames an individual is drawn from (#241), such as a title block's crop: each with the image individual it is kept on. */
-  function renderLinkedImages(iri: string): HTMLElement[] {
-    const linked = deps.images?.linkedImages(iri) ?? [];
-    if (!linked.length) return [];
-    const section = element('div', 'individual-links');
-    section.setAttribute('data-individuals-linked-images', '');
-    section.append(element('h5', undefined, `Images of it (${linked.length})`));
-    const rows = element('ul');
-    for (const { image, value, found } of linked) {
-      const row = element('li');
-      row.append(renderTerm({ termType: 'NamedNode', value: image }, true), imagePreview(value, found));
-      rows.append(row);
-    }
-    section.append(rows);
-    return [section];
-  }
-
   function renderDetail(): void {
+    const selected = history.current();
     if (selected === null) {
       detail.hidden = true;
       detail.replaceChildren();
       return;
     }
-    const described: IndividualDetail = index.describe(selected);
     detail.hidden = false;
-    const heading = element('h4', undefined, described.labels[0] ?? nameOf(selected));
-    const iri = element('p', 'individual-iri', selected);
-    iri.setAttribute('data-individuals-iri', '');
-    const types = element('p', 'individual-types', described.types.length ? 'Class: ' : 'No class');
-    described.types.forEach((type, i) => {
-      if (i > 0) types.append(', ');
-      types.append(schemaButton(type, classTitle(type), type) ?? classTitle(type));
-    });
-    const otherLabels = described.labels.slice(1);
     detail.replaceChildren(
-      heading,
-      iri,
-      types,
-      ...(otherLabels.length ? [element('p', 'individual-labels', `Also labelled: ${otherLabels.join(', ')}`)] : []),
-      ...(deps.layer ? neighboursButton(deps.layer, selected) : []),
-      ...renderLinkedImages(selected),
-      renderLinks('Points to', 'data-individuals-outgoing', described.outgoing, described.outgoingTotal, 'object'),
-      renderLinks('Pointed to by', 'data-individuals-incoming', described.incoming, described.incomingTotal, 'subject')
+      ...renderIndividualCard(index.describe(selected), {
+        prefixes,
+        nameOf,
+        classTitle,
+        follow: select,
+        back: history.canBack() ? () => (history.back(), renderDetail()) : null,
+        forward: history.canForward() ? () => (history.forward(), renderDetail()) : null,
+        layer: deps.layer,
+        schemaLinks: deps.schemaLinks,
+        images: deps.images,
+      })
     );
-  }
-
-  /** A button that cannot add any more: the graph holds as many individuals as it will draw. */
-  function limitReached(button: HTMLButtonElement): void {
-    button.textContent = 'Limit reached';
-    button.title = 'The graph shows as many individuals as it will draw: use Clear individuals to start again, or filter for a narrower set';
-    button.disabled = true;
   }
 
   /** Next to an individual's row: draws that individual alone, and says whether it is drawn. */
@@ -336,8 +228,8 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     const button = element('button', 'individual-graph');
     button.type = 'button';
     button.setAttribute('data-individuals-show-in-graph', '');
-    if (displayed < total && adds === 0) {
-      limitReached(button);
+    if (atLimit(preview)) {
+      limitReached(button, layer.limit);
     } else if (displayed < total) {
       button.textContent = `Show ${adds} (${displayed} displayed/${total} total)`;
       button.title = 'Draw this individual in the graph';
@@ -350,26 +242,6 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
     return button;
   }
 
-  /** In the detail of an individual: draws its neighbours, a batch at a time, with how many are drawn of all of them. */
-  function neighboursButton(layer: IndividualsLayer, iri: string): HTMLElement[] {
-    const { adds, displayed, total } = layer.previewNeighbours(iri);
-    if (total === 0) return [];
-    const button = element('button', 'individual-graph');
-    button.type = 'button';
-    button.setAttribute('data-individuals-show-neighbours', '');
-    if (displayed < total && adds === 0) {
-      limitReached(button);
-    } else if (displayed < total) {
-      button.textContent = `Show ${adds}${displayed > 0 ? ' more' : ''} ${adds === 1 ? 'neighbour' : 'neighbours'} (${displayed} displayed/${total} total)`;
-      button.title = 'Draw this individual and the individuals linked to it, both ways, in the graph';
-      button.addEventListener('click', () => layer.showNeighbours(iri));
-    } else {
-      button.textContent = `All ${total} ${total === 1 ? 'neighbour' : 'neighbours'} displayed`;
-      button.disabled = true;
-    }
-    return [button];
-  }
-
   /** What is drawn in the graph: how many individuals, and Clear. */
   function renderDrawn(): void {
     const layer = deps.layer;
@@ -379,7 +251,8 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
       return;
     }
     const view = layer.build(new Map());
-    const text = element('span', undefined, `Drawn in the graph: ${view.nodes.length} individual${view.nodes.length === 1 ? '' : 's'}.${view.warning ? ` ${view.warning}` : ''}`);
+    // The limit is said before it is reached (#217).
+    const text = element('span', undefined, `Drawn in the graph: ${view.nodes.length} of ${layer.limit} individuals (the most it draws).${view.warning ? ` ${view.warning}` : ''}`);
     const clear = element('button', undefined, 'Clear individuals');
     clear.type = 'button';
     clear.setAttribute('data-individuals-clear', '');
@@ -403,8 +276,9 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
   }
 
   function select(iri: string): void {
-    selected = iri;
-    renderDetail();
+    history.visit(iri);
+    // Before the tab is drawn, the card is shown when it is.
+    if (drawn) renderDetail();
   }
 
   /** A new filter starts the groups over: closed, or open where something matches. */
@@ -469,18 +343,18 @@ export function createIndividualsTab(deps: IndividualsTabDeps): IndividualsTab {
 
   function refresh(): void {
     if (!drawn) return;
-    index = createIndividualIndex(deps.getStores());
+    index = deps.getIndex?.() ?? createIndividualIndex(deps.getStores());
     resetGroups();
     renderList();
-    if (selected !== null) {
-      // The individual chosen is gone when nothing is known of it any more.
-      const known = index.describe(selected);
-      if (known.types.length === 0 && known.outgoingTotal === 0 && known.incomingTotal === 0) selected = null;
-    }
+    // The individuals of the cards visited are gone when nothing is known of them any more.
+    history.keep((iri) => {
+      const known = index.describe(iri, { maxRows: 0 });
+      return known.types.length > 0 || known.outgoingTotal > 0 || known.incomingTotal > 0;
+    });
     renderDetail();
     renderDrawn();
     renderOrigin();
   }
 
-  return { id: 'individuals', title: 'Individuals', render, refresh };
+  return { id: 'individuals', title: 'Individuals', render, refresh, show: select };
 }

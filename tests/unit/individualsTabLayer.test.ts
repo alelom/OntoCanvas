@@ -56,7 +56,7 @@ describe('the button on the row of an individual', () => {
     expect(row('a').disabled).toBe(true);
     expect(row('b').textContent).toBe('Show 1 (0 displayed/1 total)');
     expect(drawn().hidden).toBe(false);
-    expect(drawn().textContent).toContain('1 individual.');
+    expect(drawn().textContent).toContain('Drawn in the graph: 1 of 300 individuals (the most it draws).');
   });
 
   it('is not there without a layer (an ontology alone)', () => {

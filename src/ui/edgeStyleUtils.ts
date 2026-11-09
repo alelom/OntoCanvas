@@ -2,6 +2,19 @@ import type { GraphData, GraphEdge, BorderLineType, ObjectPropertyInfo } from '.
 import type { ExternalOntologyReference } from '../storage/types';
 import { getAllRelationshipTypes, getRelationshipLabel, colourableRelationshipTypes } from './relationshipUtils';
 import { getDefaultEdgeColors, getDefaultColor, getEdgeTypes } from '../graph';
+import { pickRelationshipName, type SuggestionControls } from './individualSuggestions';
+import { relationshipIri } from './searchVocabulary';
+
+/** A relationship's instances drawn from the list of edges (#214): a search typed before would hide them, so it is emptied. */
+const legendControls: SuggestionControls = {
+  close: () => document.getElementById('searchAutocomplete')?.classList.remove('visible'),
+  clearSearch: () => {
+    const input = document.getElementById('searchQuery') as HTMLInputElement | null;
+    if (!input?.value) return;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  },
+};
 
 /**
  * Border line type options for edge and annotation property styling
@@ -274,6 +287,9 @@ export function updateEdgeColorsLegend(
       const el = link as HTMLElement;
       // Prefer the concise search term; fall back to the full type.
       const term = el.getAttribute('data-search-term') || el.getAttribute('data-edge-type');
+      // While names select the instances, the individuals linked by it are drawn and those links selected (#214).
+      const type = el.getAttribute('data-edge-type');
+      if (type && pickRelationshipName(relationshipIri(type, objectProperties), legendControls)) return;
       if (term) {
         const searchInput = document.getElementById('searchQuery') as HTMLInputElement;
         if (searchInput) {

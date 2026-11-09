@@ -70,7 +70,7 @@ describe('individuals in the graph', () => {
   it('draws few individuals by themselves, clears them, and draws one with its neighbours on request', async () => {
     // Four individuals are few: all are drawn at once.
     expect((await nodeIds()).filter((id) => id.startsWith('__individual__'))).toHaveLength(4);
-    expect(await page.locator('[data-individuals-drawn]').innerText()).toContain('4 individuals');
+    expect(await page.locator('[data-individuals-drawn]').innerText()).toContain('4 of 300 individuals');
 
     await page.click('[data-individuals-clear]');
     await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
@@ -83,7 +83,7 @@ describe('individuals in the graph', () => {
     const drawn = (await nodeIds()).filter((id) => id.startsWith('__individual__')).sort();
     expect(drawn).toEqual(['__individual__http://example.org/o#alice', '__individual__http://example.org/o#red']);
     expect(await edgeCount()).toBeGreaterThan(edgesBefore);
-    expect(await page.locator('[data-individuals-drawn]').innerText()).toContain('2 individuals');
+    expect(await page.locator('[data-individuals-drawn]').innerText()).toContain('2 of 300 individuals');
 
     await page.click('[data-individuals-clear]');
     await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
@@ -328,4 +328,30 @@ describe('individuals in the graph', () => {
     expect(await many.evaluate(() => (window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')))).toBe(false);
     await many.close();
   });
+
+  it('finds an individual that is not drawn from the search box, draws it selected, and opens its card (#217, #229)', async () => {
+    await page.click('[data-individuals-clear]').catch(() => {});
+    await page.waitForFunction(() => !(window as any).__EDITOR_TEST__.getNetwork().body.data.nodes.getIds().some((id: string) => id.startsWith('__individual__')));
+
+    await page.click('#searchQuery');
+    await page.keyboard.type('caro');
+    await page.locator('#searchAutocomplete .suggestion-individual .suggestion-text', { hasText: /^Carol$/ }).click();
+
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().getSelectedNodes().includes('__individual__http://example.org/o#carol'));
+    expect(await page.inputValue('#searchQuery')).toBe('');
+    expect(await page.locator('[data-individuals-detail] h4').innerText()).toBe('Carol');
+    expect(await page.locator('#selectionInfo').innerText()).toContain('Carol (individual)');
+  });
+
+  it('draws the instances of a relationship from its name in the bottom bar, with their links selected, when names select the instances (#214)', async () => {
+    await page.click('[data-individuals-clear]').catch(() => {});
+    await page.check('input[name="relationshipNameMode"][value="instances"]');
+
+    await page.locator('#edgeColorsLegend .edge-legend-link', { hasText: 'memberOf' }).click();
+
+    await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().getSelectedEdges().length === 2);
+    expect(await page.inputValue('#searchQuery')).toBe('');
+    await page.check('input[name="relationshipNameMode"][value="definition"]');
+  });
 });
+

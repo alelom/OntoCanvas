@@ -131,6 +131,7 @@ export function renderApp(): void {
       <span id="ontologyInfoDisplay" class="info-seg" style="font-size: 11px; display: none;"></span>
       <span id="graphCounts" class="info-seg">Nodes: <span id="nodeCount">0</span> / Edges: <span id="edgeCount">0</span></span>
       <span id="edgeColorsLegend" style="margin-left: 24px; font-size: 11px;"></span>
+      <span id="relationshipNameMode" hidden></span>
       <span id="selectionInfo"></span>
     </div>
     <div id="renameModal" class="modal" style="display: none;">

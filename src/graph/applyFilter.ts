@@ -27,7 +27,7 @@ import { forgetNodePositions } from '../workflows/nodePositions';
 import { openExternalOntology } from '../workflows/openExternalTab';
 import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
-import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds } from './individualsOverlay';
+import { addIndividualsToNetworkData, classNodesByUri, viewAfterDraw, type DrawRequest } from './individualsOverlay';
 import { addIndividualCounts } from './classIndividuals';
 import { setNotice } from '../ui/statusNotices';
 import { INDIVIDUAL_PREFIX, isIndividualNodeId } from '../abox/individualsLayer';
@@ -39,14 +39,14 @@ import { withThingNode } from './thingNode';
 import { Network } from 'vis-network/esnext';
 
 /**
- * `fitTo`: the IRIs of individuals the user has just drawn (#216). With the view preserved, the view then fits them and the
- * classes they are joined to, in place of staying where it was: a batch drawn past the viewport is seen. A redraw that is not
- * a draw (a search, a filter, the individuals drawn by themselves when a file opens) leaves the view alone.
- * `anchor`: the IRI of the individual whose neighbours were just drawn (#239): it stays where it was, the view fits it with them,
- * and it is selected, so it is found again after the redraw.
+ * `draw`: what the user has just drawn of the individuals. With the view preserved, the view then fits it (`fitTo`, #216), in
+ * place of staying where it was: a batch drawn past the viewport is seen. A redraw that is not a draw (a search, a filter, the
+ * individuals drawn by themselves when a file opens) leaves the view alone. Its `anchor` (#239), the individual whose neighbours
+ * were drawn, stays where it was and is selected, so it is found again after the redraw; an individual found by name (`focus`,
+ * #217) is selected and brought into view; a relationship's instances (`selectEdgeType`, #214) have their edges selected.
  */
-export function applyFilter(preserveView = false, fitTo?: string[], anchor?: string): void {
-  const anchorId = anchor ? INDIVIDUAL_PREFIX + anchor : null;
+export function applyFilter(preserveView = false, draw?: DrawRequest): void {
+  const anchorId = draw?.anchor ? INDIVIDUAL_PREFIX + draw.anchor : null;
   const anchorAt = anchorId ? canvasState.network?.getPositions([anchorId])[anchorId] : undefined;
   // Don't return early - we need to initialize the network even with no nodes
   // so that Add node/Add edge buttons and double-click work
@@ -309,9 +309,7 @@ export function applyFilter(preserveView = false, fitTo?: string[], anchor?: str
     const h = networkContainer.clientHeight;
     if (w > 0 && h > 0) canvasState.network.setSize(`${w}px`, `${h}px`);
     if (preserveView && savedScale !== null && savedPosition !== null) {
-      const focus = fitTo ? focusNodeIds(data, fitTo) : [];
-      const keep = anchorId && data.nodes.get(anchorId) ? anchorId : null;
-      if (keep && focus.length && !focus.includes(keep)) focus.push(keep);
+      const { selectNodes, selectEdges, fit: focus } = draw ? viewAfterDraw(data, draw) : { selectNodes: [], selectEdges: [], fit: [] };
       requestAnimationFrame(() => {
         const net = canvasState.network;
         net?.moveTo({
@@ -320,8 +318,8 @@ export function applyFilter(preserveView = false, fitTo?: string[], anchor?: str
           animation: false,
         });
         // Selecting from code raises no select event: the selection line in the bottom bar is updated here.
-        if (net && keep) {
-          net.selectNodes([keep]);
+        if (net && selectNodes.length + selectEdges.length > 0) {
+          net.setSelection({ nodes: selectNodes, edges: selectEdges }, { unselectAll: true, highlightEdges: false });
           updateSelectionInfoDisplay(net);
         }
         if (net && focus.length > 0) {

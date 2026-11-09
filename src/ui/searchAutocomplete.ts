@@ -8,6 +8,7 @@ import { canvasState } from '../state/appState';
 import { initAnnotationPropsMenu } from './annotationPropertiesMenu';
 import { getAnnotationPropsMenuDeps } from './annotationPropertyModal';
 import { initEdgeStylesMenu } from './relationshipTypeModal';
+import { individualSuggestionRows, pickRelationshipName, relationshipSuggestionActions, type SuggestionControls } from './individualSuggestions';
 
 /** Re-render the property menus after the declarations of the imports were merged in (#104). The edge
  * styles already set are kept; the annotation menu keeps its own. */
@@ -36,6 +37,14 @@ export function updateSearchAutocomplete(): void {
   list.innerHTML = '';
   list.classList.remove('visible');
   list.dataset.highlight = '-1';
+  // What picking an individual, or a relationship's instances, does to the search: it found them, so it is emptied (#217).
+  const controls: SuggestionControls = {
+    close: () => list.classList.remove('visible'),
+    clearSearch: () => {
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+  };
   suggestions.forEach((s) => {
     const div = document.createElement('div');
     div.className = 'suggestion';
@@ -47,12 +56,17 @@ export function updateSearchAutocomplete(): void {
     hint.className = 'hint';
     hint.textContent = `(${s.hint})`;
     div.appendChild(hint);
+    // A relationship the data uses offers its instances (#214); picking its name draws them while names select the instances.
+    if (s.hint === 'relationship') div.append(...relationshipSuggestionActions(s.title, controls));
     div.addEventListener('click', () => {
+      if (s.hint === 'relationship' && pickRelationshipName(s.title, controls)) return;
       input.value = s.value;
       list.classList.remove('visible');
       actions.applyFilter();
     });
     list.appendChild(div);
   });
+  // The individuals whose label or name matches, drawn or not (#217).
+  list.append(...individualSuggestionRows(query, controls));
   list.classList.add('visible');
 }

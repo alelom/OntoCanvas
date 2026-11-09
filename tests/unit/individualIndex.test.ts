@@ -268,3 +268,18 @@ describe('groups() and listGroup()', () => {
     expect(index().listGroup({ group: NO_CLASS, offset: 0, limit: 10 }).items.map((i) => i.iri)).toEqual([NS + 'loose']);
   });
 });
+
+describe('describe: the graph of each statement (#229)', () => {
+  it('says the named graph a link comes from, and the default graph as empty', () => {
+    const quads = new Parser({ format: 'application/trig' }).parse(`
+      @prefix : <${NS}> .
+      :g1 { :a a :Room ; :hasPart :b . }
+      :g2 { :c :hasPart :a . }
+      :a :note "plain" .
+      :b a :Wall . :c a :Room .`);
+    const detail = createIndividualIndex([new Store(quads)]).describe(NS + 'a');
+
+    expect(detail.outgoing.map((l) => [l.predicate.slice(NS.length), l.graph])).toEqual([['hasPart', NS + 'g1'], ['note', '']]);
+    expect(detail.incoming.map((l) => [l.subject.slice(NS.length), l.graph])).toEqual([['c', NS + 'g2']]);
+  });
+});
