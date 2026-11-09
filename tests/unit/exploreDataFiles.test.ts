@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { Parser } from 'n3';
-import { exploreDataFiles, WORKSPACE_NAME, WORKSPACE_NOTE, WORKSPACE_TTL } from '../../src/workflows/exploreDataFiles';
+import { exploreDataFiles, WORKSPACE_IRI, WORKSPACE_NAME, WORKSPACE_NOTE, WORKSPACE_TTL } from '../../src/workflows/exploreDataFiles';
 
 describe('exploreDataFiles', () => {
   it('opens the workspace first, then says what it is, then adds the files, in that order', async () => {
@@ -48,9 +48,14 @@ describe('exploreDataFiles', () => {
 });
 
 describe('the note (#240)', () => {
-  it("says no ontology is open for editing, and that the data's own ontologies are read as context only: not a contradiction", () => {
-    expect(WORKSPACE_NOTE).toMatch(/^Exploring data files with no ontology open for editing\./);
-    expect(WORKSPACE_NOTE).toContain('read as context only');
-    expect(WORKSPACE_NOTE).not.toContain('on their own');
+  it('says no ontology is open, and how to see the individuals in their full context; the note on the data ontologies says the rest', () => {
+    expect(WORKSPACE_NOTE).toBe(
+      'Exploring data files with no ontology open. Open an ontology first, and the data after it, to see the individuals in their full ontology context.'
+    );
+  });
+
+  it('the workspace is told apart by its IRI', () => {
+    const quads = new Parser().parse(WORKSPACE_TTL);
+    expect(quads[0].subject.value).toBe(WORKSPACE_IRI);
   });
 });

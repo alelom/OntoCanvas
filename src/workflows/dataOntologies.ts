@@ -14,6 +14,7 @@ import { loadOntologies } from '../lib/importedDeclarations';
 import { getMainOntologyBase } from '../ontology/ontologyBase';
 import { fetchExternalOntologyTtl } from '../externalOntologySearch';
 import { applyImportedOntologies, IMPORT_READ_MAX_BYTES, IMPORT_READ_TIMEOUT_MS } from './loadOntologyFlow';
+import { WORKSPACE_IRI } from './exploreDataFiles';
 
 const OWL_VERSION_IRI = 'http://www.w3.org/2002/07/owl#versionIRI';
 const bare = (iri: string): string => iri.replace(/[#/]+$/, '');
@@ -63,7 +64,10 @@ export function openOntologiesOfData(dataStores: Store[]): Promise<void> {
       if (store !== session.ttlStore) return;
       opened.push(...found.filter((o) => outcome.opened.includes(o.iri)));
       failed.push(...found.filter((o) => outcome.failed.includes(o.iri)));
-      setNotice('data-ontologies', dataOntologiesNote(opened, failed));
+      // Data files explored with no ontology open (#234): the note on what was loaded takes the place of the workspace's (#240).
+      const noOntologyOpen = getMainOntologyBase(store) === `${WORKSPACE_IRI}#`;
+      if (noOntologyOpen && opened.length) setNotice('workspace', null);
+      setNotice('data-ontologies', dataOntologiesNote(opened, failed, { noOntologyOpen }));
     })
     .catch((error) => debugWarn('Could not read the ontologies the data names:', error));
   return reading;

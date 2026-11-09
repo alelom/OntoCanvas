@@ -375,6 +375,16 @@ describe('addFolder (#227)', () => {
     expect(sources.folders().map((f) => [f.missingImages, f.unreadable])).toEqual([[2, 1]]);
   });
 
+  it('records the classes of what the missing images show, once each, for the warning to name them (#240)', async () => {
+    const data = loader();
+    const named = `@prefix : <http://example.org/d#> .
+:b a :Titleblock ; :image "images/b.png" . :c a :Titleblock ; :image "images/c.png" . :e a :Sheet ; :image "images/e.png" . :a a :Room ; :image "images/a.png" .`;
+
+    await data.addFolder(async () => contents([['part-0001.ttl', named]], ['images/a.png']));
+
+    expect(sources.folders()[0].missingImageClasses).toEqual(['http://example.org/d#Titleblock', 'http://example.org/d#Sheet']);
+  });
+
   it('adds each data file under its path in the folder, keeps the images, and says what it found', async () => {
     const data = loader();
 

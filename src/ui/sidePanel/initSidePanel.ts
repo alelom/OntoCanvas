@@ -53,7 +53,10 @@ export interface SidePanel {
   openIndividuals(): void;
   /** Opens the panel on the Individuals tab and adds the folders, then the files as one selection (#234, #227). */
   addData(pick: DataPick): Promise<void>;
-  /** What is known of the classes changed (imports read in the background, #235): the Individuals tab names them again. Keeps the data. */
+  /**
+   * What is known of the classes changed (imports read in the background, #235): the Individuals tab names them again, and so
+   * does a folder's warning about images not loaded (#240). Keeps the data.
+   */
   schemaChanged(): void;
   /** Called with the progress of adding data ("Adding 2 of 3: …") and whether it goes on, for the loading screen (#239). */
   onDataStatus(listener: (status: string, loading: boolean) => void): void;
@@ -156,7 +159,8 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   };
   updateIndividualsButton();
   // What a folder could not show, as a warning in the bottom bar that pops up on Windows (#240).
-  if (deps.dataSources) syncFolderNotices(deps.dataSources, setNotice);
+  // It names the classes of the images not loaded, by their labels once the ontologies the data names are read (schemaChanged).
+  const sayFolderNotices = deps.dataSources ? syncFolderNotices(deps.dataSources, setNotice, { classLabel: deps.getClassLabel }) : () => {};
   deps.dataSources?.onChange(() => {
     deps.individualsLayer?.invalidate();
     individualsTab.refresh();
@@ -183,6 +187,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     schemaChanged() {
       deps.individualsLayer?.invalidate();
       individualsTab.refresh();
+      sayFolderNotices();
     },
     async addData(pick) {
       if ((!pick.files.length && !pick.folders.length) || !dataLoader) return;

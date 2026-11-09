@@ -3,7 +3,7 @@
  * folder whose images the browser could not see, is noticed even with the bottom bar out of sight. One modal at a time: a notice
  * set while it is open is added to it. ×, Escape or a click beside it dismisses it; the notice stays in the bottom bar.
  */
-import type { Notice } from './statusNotices';
+import { getNotices, type Notice } from './statusNotices';
 import { renderLongPathSteps } from './sidePanel/imageProblem';
 
 let open: { modal: HTMLElement; list: HTMLElement; title: HTMLElement; close: () => void } | null = null;
@@ -51,10 +51,16 @@ function afterLoading(then: () => void): void {
   observer.observe(screen, { attributes: true, attributeFilter: ['style'] });
 }
 
-/** Shows a notice that pops up, once the loading is over, unless the user turned its pop-up off for what it is about. */
+/**
+ * Shows a notice that pops up, once the loading is over, unless the user turned its pop-up off for what it is about. It is shown
+ * as it is by then: its message may have changed meanwhile (a class named by its label), or it may be gone.
+ */
 export function popUpNotice(notice: Notice): void {
   if (notice.mute && isNoticeMuted(notice.mute.key)) return;
-  afterLoading(() => showNoticeModal(notice));
+  afterLoading(() => {
+    const now = getNotices().find((n) => n.key === notice.key);
+    if (now) showNoticeModal(now);
+  });
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {

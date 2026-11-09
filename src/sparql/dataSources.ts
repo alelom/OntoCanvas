@@ -76,6 +76,8 @@ export interface DataFolder {
   unreadable: number;
   /** How many image paths its data names that it does not hold: perhaps files the browser left out, their path being too long. */
   missingImages: number;
+  /** The classes of what those images show (a title block, for its crop), for the warning to name them (#240). */
+  missingImageClasses: string[];
 }
 
 export interface AddDataOptions extends SlicedParseOptions {
@@ -131,8 +133,8 @@ export interface DataSources {
   folders(): DataFolder[];
   /** Keeps a folder's images, before its files are added with its id. */
   addFolder(name: string, images: ReadonlyMap<string, Blob>, skipped: number, unreadable?: number): DataFolder;
-  /** Records how many image paths a folder's data names that it does not hold, once its files are added. */
-  setMissingImages(id: number, missing: number): void;
+  /** Records how many image paths a folder's data names that it does not hold, and the classes of what they show, once its files are added. */
+  setMissingImages(id: number, missing: number, classes?: string[]): void;
   /** Takes out a folder and every file added from it. A folder is also taken out with the last of its files. */
   removeFolder(id: number): void;
   clear(): void;
@@ -306,12 +308,12 @@ export function createDataSources(): DataSources {
     },
     folders: () => [...folders],
     addFolder(name, images, skipped, unreadable = 0) {
-      const folder: DataFolder = { id: nextFolderId++, name, images, skipped, unreadable, missingImages: 0 };
+      const folder: DataFolder = { id: nextFolderId++, name, images, skipped, unreadable, missingImages: 0, missingImageClasses: [] };
       folders = [...folders, folder];
       return folder;
     },
-    setMissingImages(id, missing) {
-      folders = folders.map((f) => (f.id === id ? { ...f, missingImages: missing } : f));
+    setMissingImages(id, missing, classes = []) {
+      folders = folders.map((f) => (f.id === id ? { ...f, missingImages: missing, missingImageClasses: classes } : f));
       changed();
     },
     removeFolder(id) {

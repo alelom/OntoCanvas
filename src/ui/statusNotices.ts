@@ -19,6 +19,11 @@ export interface NoticeOptions {
   level?: NoticeLevel;
   /** A warning that pops up as an error does. */
   alert?: boolean;
+  /**
+   * What makes it pop up again when it changes; defaults to the message. A folder's warning is the counts: a class named by its
+   * label once the ontologies are read is not news.
+   */
+  alertKey?: string;
   help?: NoticeHelp;
   /**
    * What the notice is about, for its pop-up to be turned off for that only, for the session: `key` names it (a folder by its
@@ -40,7 +45,12 @@ const changed = () => listeners.forEach((listener) => listener());
 /** Whether a notice pops up: an error, or a warning marked to. */
 export const popsUp = (notice: NoticeOptions): boolean => notice.level === 'error' || (notice.level === 'warning' && !!notice.alert);
 
-/** Sets the message of `key`, or removes it with null. A notice that pops up asks for it when it is new or its message changed. */
+const alertKeyOf = (notice: Notice | undefined): string | undefined => notice && (notice.alertKey ?? notice.message);
+
+/**
+ * Sets the message of `key`, or removes it with null. A notice that pops up asks for it when it is new or its `alertKey` (its
+ * message, by default) changed.
+ */
 export function setNotice(key: string, message: string | null, options: NoticeOptions = {}): void {
   if (message === null) {
     if (notices.delete(key)) changed();
@@ -51,7 +61,7 @@ export function setNotice(key: string, message: string | null, options: NoticeOp
   if (before && JSON.stringify(before) === JSON.stringify(notice)) return;
   notices.set(key, notice);
   changed();
-  if (popsUp(notice) && before?.message !== message) alertListeners.forEach((listener) => listener(notice));
+  if (popsUp(notice) && alertKeyOf(before) !== alertKeyOf(notice)) alertListeners.forEach((listener) => listener(notice));
 }
 
 export function clearNotices(): void {

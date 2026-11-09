@@ -386,13 +386,30 @@ describe("a folder's images it couldn't see, in the bottom bar (#240)", () => {
 
     await panel.addData({
       files: [],
-      folders: [async () => ({ name: 'run-0001', data: [{ path: 'part-0001.ttl', file: { name: 'part-0001.ttl', size: 100, text: async () => `${PREFIXES}:a :image "images/a.png" .` } as unknown as File }], images: [], skipped: 0, unreadable: [] })],
+      folders: [async () => ({ name: 'run-0001', data: [{ path: 'part-0001.ttl', file: { name: 'part-0001.ttl', size: 100, text: async () => `${PREFIXES}:a a :Titleblock ; :image "images/a.png" .` } as unknown as File }], images: [], skipped: 0, unreadable: [] })],
     });
 
     const [notice] = getNotices();
-    expect(notice).toMatchObject({ key: expect.stringMatching(/^folder-images:/), level: 'warning', message: expect.stringMatching(/^run-0001: 1 image its data names isn't in the folder\./) });
+    expect(notice).toMatchObject({ key: expect.stringMatching(/^folder-images:/), level: 'warning', message: expect.stringMatching(/^run-0001: 1 image \(of class "Titleblock"\) (could not|cannot) be loaded/) });
 
     dataSources.removeFolder(dataSources.folders()[0].id);
     expect(getNotices()).toEqual([]);
+  });
+
+  it("names the class by its label once the ontologies are read (schemaChanged)", async () => {
+    clearNotices();
+    const dataSources = createDataSources();
+    let label: string | null = null;
+    const panel = initSidePanel({ getStore: () => ontology, getPrefixes: () => ({ '': 'http://example.org/d#' }), dataSources, getClassLabel: () => label, embedded: false });
+    await panel.addData({
+      files: [],
+      folders: [async () => ({ name: 'run-0001', data: [{ path: 'part-0001.ttl', file: { name: 'part-0001.ttl', size: 100, text: async () => `${PREFIXES}:a a :DrawingSheet ; :image "images/a.png" .` } as unknown as File }], images: [], skipped: 0, unreadable: [] })],
+    });
+    expect(getNotices()[0].message).toContain('(of class "DrawingSheet")');
+
+    label = 'Drawing Sheet';
+    panel.schemaChanged();
+
+    expect(getNotices()[0].message).toContain('(of class "Drawing Sheet")');
   });
 });

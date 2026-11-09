@@ -6,24 +6,26 @@
  * The workspace is what the ontologies the data was made with can later be added to as imports (#236).
  */
 import type { DataPick } from '../sparql/dataLoader';
+import { OPEN_ONTOLOGY_FIRST } from '../abox/dataOntologies';
 
 /** The name the workspace is opened under: what the status bar and the Individuals tab call it. */
 export const WORKSPACE_NAME = 'Data files (no ontology)';
 
+/** The workspace's IRI: what tells it apart from an ontology that was opened. */
+export const WORKSPACE_IRI = 'urn:ontocanvas:workspace';
+
 export const WORKSPACE_TTL = `@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
-<urn:ontocanvas:workspace> a owl:Ontology ;
+<${WORKSPACE_IRI}> a owl:Ontology ;
     rdfs:label "Data files, no ontology" .
 `;
 
 /**
- * Says what "no ontology" means beside the note on the data's ontologies (#240): none is open for editing, while the ones the
- * data names may still be read, as context only. "Exploring data files with no ontology" next to "Loaded the ontologies the data
- * was made with" read as a contradiction.
+ * The note on the workspace. When the ontologies the data names are loaded, the note on them takes its place and says the same
+ * after what was loaded (#240): the two side by side read as a contradiction.
  */
-export const WORKSPACE_NOTE =
-  "Exploring data files with no ontology open for editing. The ontologies the data names, when they can be found, are read as context only, to name its classes: they can't be edited or saved. Opening an ontology from the toolbar clears the data.";
+export const WORKSPACE_NOTE = `Exploring data files with no ontology open. ${OPEN_ONTOLOGY_FIRST}`;
 
 export interface ExploreDataDeps {
   /** Opens an ontology from its text, as a file of that name would be. */

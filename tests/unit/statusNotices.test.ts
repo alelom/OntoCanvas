@@ -64,6 +64,19 @@ describe('levels, and the ones that pop up (#240)', () => {
 
     expect(popped).toEqual(['error', 'folder', 'folder']);
   });
+
+  it('with an alertKey, pops up again only when that changes: a class named by its label once known is not news', () => {
+    clearNotices();
+    const popped: string[] = [];
+    onNoticeAlert((notice) => popped.push(notice.message));
+
+    setNotice('folder', '13 images (of class "DrawingSheet")', { level: 'warning', alert: true, alertKey: '13:0' });
+    setNotice('folder', '13 images (of class "Drawing Sheet")', { level: 'warning', alert: true, alertKey: '13:0' });
+    setNotice('folder', '14 images (of class "Drawing Sheet")', { level: 'warning', alert: true, alertKey: '14:0' });
+
+    expect(popped).toEqual(['13 images (of class "DrawingSheet")', '14 images (of class "Drawing Sheet")']);
+    expect(getNotices().find((n) => n.key === 'folder')!.message).toBe('14 images (of class "Drawing Sheet")');
+  });
 });
 
 describe('the notices in the bottom bar', () => {
@@ -113,6 +126,23 @@ describe('the notices in the bottom bar', () => {
 
     expect(document.querySelectorAll('[data-notice-modal]')).toHaveLength(0);
     expect(popup().querySelector('[data-status-notice="folder"]')!.textContent).toContain('More missing images.');
+  });
+
+  it('a pop-up waiting for the loading screen shows the notice as it is once loading ends, or nothing if it was dropped', async () => {
+    sessionStorage.clear();
+    document.body.insertAdjacentHTML('beforeend', '<div id="loadingModal" style="display: flex"></div>');
+    const loading = document.getElementById('loadingModal')!;
+    setNotice('folder', '2 images (of class "DrawingSheet")', { level: 'warning', alert: true, alertKey: '2:0' });
+    setNotice('folder', '2 images (of class "Drawing Sheet")', { level: 'warning', alert: true, alertKey: '2:0' });
+    setNotice('gone', 'Something failed.', { level: 'error' });
+    setNotice('gone', null);
+    expect(document.querySelectorAll('[data-notice-modal]')).toHaveLength(0);
+
+    loading.style.display = 'none';
+
+    await vi.waitFor(() => expect(document.querySelectorAll('[data-notice-modal-item]')).toHaveLength(1));
+    expect(document.querySelector('[data-notice-modal-item="folder"]')!.textContent).toContain('"Drawing Sheet"');
+    document.querySelector<HTMLButtonElement>('[data-notice-modal-close]')!.click();
   });
 
   it('hides it again when the notices are cleared', () => {

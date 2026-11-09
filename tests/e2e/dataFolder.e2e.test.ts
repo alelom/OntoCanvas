@@ -60,7 +60,9 @@ describe('a folder of data, with its images', () => {
 
   it("warns in the bottom bar of the image its data names that the folder doesn't hold, popped up on Windows only (#240)", async () => {
     const warning = page.locator('#ontologyIssuesPopup [data-status-notice^="folder-images:"]');
-    expect(await warning.textContent()).toContain("run-0001: 1 image its data names isn't in the folder.");
+    // The class of what the image shows: sheet 4's title block, through ADIRO's frame links.
+    expect(await warning.textContent()).toMatch(/run-0001: 1 image \(of class "Titleblock"\) (could not|cannot) be loaded/);
+    expect(await warning.textContent()).toContain('This only affects the preview of the image in OntoCanvas.');
     expect(await page.locator('#ontologyIssuesBtn').textContent()).toContain('warnings (');
 
     const onWindows = await page.evaluate(() => /Win/i.test(navigator.platform));

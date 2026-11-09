@@ -69,6 +69,27 @@ const IMAGE_OF = `${GEOM}imageOf`;
 const COVERS_REGION = `${GEOM}coversRegion`;
 const HAS_BOUNDING_BOX = `${GEOM}hasBoundingBox`;
 
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+
+/**
+ * The classes of what the image `holder` names shows, for a warning that says which images could not be loaded (#240). Followed
+ * as `linkedImages` follows it, the other way: what the image is `geom:imageOf`, or the individuals with a `geom:hasBoundingBox`
+ * that frame `geom:coversRegion` (a title block, for its crop). When nothing is, the class of `holder` itself.
+ */
+export function depictedClasses(stores: Store[], holder: string): string[] {
+  const objectsOf = (subject: string, predicate: string) => stores.flatMap((s) => s.getObjects(subject, predicate, null).map((t) => t.value));
+  const subjectsOf = (predicate: string, object: string) => stores.flatMap((s) => s.getSubjects(predicate, object, null).map((t) => t.value));
+  const classesOf = (iris: string[]) => [...new Set(iris.flatMap((iri) => objectsOf(iri, RDF_TYPE)))];
+  const frames = objectsOf(holder, IMAGE_OF);
+  // What the frames cover, else the frames themselves: an image may be of an individual directly.
+  const owners = frames.flatMap((frame) => objectsOf(frame, COVERS_REGION).flatMap((box) => subjectsOf(HAS_BOUNDING_BOX, box)));
+  for (const shown of [owners, frames]) {
+    const classes = classesOf(shown);
+    if (classes.length) return classes;
+  }
+  return classesOf([holder]);
+}
+
 const DEFAULT_MAX_IMAGES = 4;
 
 const dirOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));

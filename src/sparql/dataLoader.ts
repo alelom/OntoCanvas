@@ -22,6 +22,7 @@ import {
 import { estimateDataBytes, isGzipName } from './readDataBytes';
 import { DATA_EXTENSIONS, folderSummary, type FolderLister } from './dataFolder';
 import { findInFolder, indexFolder, isImagePath } from '../abox/imagePaths';
+import { depictedClasses } from '../abox/dataImages';
 
 /** Data picked or dropped: files, and folders not listed yet (#227). */
 export interface DataPick {
@@ -214,8 +215,8 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
       // With none of its files, the folder is not kept: its images would be of no use.
       if (!fromFolder.length) sources.removeFolder(folder.id);
       if (failures === 'Cancelled.') return failures;
-      const missing = fromFolder.length ? missingImages(fromFolder, folder) : 0;
-      if (missing) sources.setMissingImages(folder.id, missing);
+      const { missing, classes } = fromFolder.length ? missingImages(fromFolder, folder) : { missing: 0, classes: [] };
+      if (missing) sources.setMissingImages(folder.id, missing, classes);
       return [fromFolder.length ? folderSummary(contents, fromFolder.length, missing) : '', ...failures].filter(Boolean).join('  ');
     }));
   }
@@ -255,20 +256,25 @@ export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps)
 
 /**
  * How many image paths the folder's data files name that the folder does not hold (addresses aside): on Windows, perhaps files
- * the browser left out of the folder, their path being longer than 260 characters.
+ * the browser left out of the folder, their path being longer than 260 characters. With the classes of what they show, for the
+ * warning to name them (#240).
  */
-function missingImages(files: DataSource[], folder: DataFolder): number {
+function missingImages(files: DataSource[], folder: DataFolder): { missing: number; classes: string[] } {
   const index = indexFolder(folder.images.keys());
+  const stores = files.map((f) => f.store);
   const missing = new Set<string>();
+  const classes = new Set<string>();
   for (const file of files) {
     const dir = file.name.slice(0, Math.max(0, file.name.lastIndexOf('/')));
     for (const quad of file.store.getQuads(null, null, null, null)) {
       const value = quad.object.value;
       if (quad.object.termType === 'BlankNode' || !isImagePath(value) || /^[a-z][a-z0-9+.-]*:/i.test(value.trim())) continue;
-      if (!findInFolder(value, index, dir, folder.name)) missing.add(value);
+      if (findInFolder(value, index, dir, folder.name)) continue;
+      missing.add(value);
+      depictedClasses(stores, quad.subject.value).forEach((c) => classes.add(c));
     }
   }
-  return missing.size;
+  return { missing: missing.size, classes: [...classes] };
 }
 
 /** "Cancelled" is the user's Cancel, or a no to the question about a large file (nothing to say then). */

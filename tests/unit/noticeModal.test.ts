@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { isNoticeMuted, popUpNotice, showNoticeModal } from '../../src/ui/noticeModal';
 import { LONG_PATH_SUMMARY } from '../../src/ui/sidePanel/imageProblem';
+import { getNotices, setNotice } from '../../src/ui/statusNotices';
 
 const modal = () => document.querySelector<HTMLElement>('[data-notice-modal]');
 const items = () => [...document.querySelectorAll('[data-notice-modal-item]')].map((i) => i.textContent ?? '');
@@ -60,7 +61,9 @@ describe('showNoticeModal', () => {
   it('waits for the loading screen to go before popping up, so it is seen once the load is over', async () => {
     document.body.innerHTML = '<div id="loadingModal" style="display: flex"></div>';
 
-    popUpNotice({ key: 'a', message: 'Missing images.', level: 'warning', alert: true });
+    // Shown as it is once loading ends (#240): a notice that was set.
+    setNotice('a', 'Missing images.', { level: 'warning', alert: true });
+    popUpNotice(getNotices().find((n) => n.key === 'a')!);
     expect(modal()).toBeNull();
 
     document.getElementById('loadingModal')!.style.display = 'none';

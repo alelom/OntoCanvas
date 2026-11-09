@@ -7,6 +7,7 @@ import { Parser, Store } from 'n3';
 import { createDataSources } from '../../src/sparql/dataSources';
 import {
   createDataImages,
+  depictedClasses,
   EMPTY_HINT,
   MOVED_HINT,
   NOT_AN_IMAGE_HINT,
@@ -209,6 +210,30 @@ describe('createDataImages', () => {
       expect(images.linkedImages(`${NS}page`)).toEqual([]);
       // The image individual shows its own value, not itself again.
       expect(images.linkedImages(`${NS}image`)).toEqual([]);
+    });
+
+    describe('depictedClasses: the classes of what an image shows, for a warning about images not loaded (#240)', () => {
+      const parsed = (text: string) => new Store(new Parser().parse(text));
+
+      it("the title block whose box the image's frame covers: not the image's own class, nor the frame's", () => {
+        const frameTyped = run.replace(':frame geom:coversRegion', `:frame a geom:CoordinateFrame ; geom:coversRegion`);
+        expect(depictedClasses([parsed(frameTyped)], `${NS}image`)).toEqual([`${NS}Titleblock`]);
+      });
+
+      it('an image of an individual itself: its class', () => {
+        const direct = `@prefix : <${NS}> . @prefix geom: <${GEOM}> .\n:sheet a :Sheet . :image a :File ; geom:imageOf :sheet .`;
+        expect(depictedClasses([parsed(direct)], `${NS}image`)).toEqual([`${NS}Sheet`]);
+      });
+
+      it("with nothing it is an image of: the class of the individual that names it, across the files", () => {
+        const named = parsed(`@prefix : <${NS}> .\n:sheet1 :imagePath "${PATH}" .`);
+        const typed = parsed(`@prefix : <${NS}> .\n:sheet1 a :Sheet .`);
+        expect(depictedClasses([named, typed], `${NS}sheet1`)).toEqual([`${NS}Sheet`]);
+      });
+
+      it('nothing when no class is stated', () => {
+        expect(depictedClasses([parsed(`@prefix : <${NS}> .\n:sheet1 :imagePath "${PATH}" .`)], `${NS}sheet1`)).toEqual([]);
+      });
     });
   });
 
