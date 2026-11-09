@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { Parser, Store } from 'n3';
 import { individualsOf } from '../../src/lib/instanceData';
 import { createIndividualsLayer } from '../../src/abox/individualsLayer';
+import { createIndividualIndex } from '../../src/abox/individualIndex';
+import { graphsOf, groupByPredicate } from '../../src/abox/recordCard';
 
 const load = (name: string): Store => new Store(new Parser().parse(readFileSync(join(__dirname, '../../examples/sparql', name), 'utf8')));
 const NS = (name: string) => `http://example.org/examples/individuals-${name}#`;
@@ -131,5 +133,37 @@ describe('individuals-vocabulary.ttl (#216)', () => {
     expect(quads('SensorField', 'expects')).toEqual([`${ns}Sensor`]);
     expect(quads('SensorField', 'mapsTo')).toEqual([`${ns}installedIn`]);
     expect(quads('NameField', 'mapsTo')).toEqual([`${ns}name`]);
+  });
+});
+
+describe('individuals-records.ttl with individuals-records-data.trig (#229, #217, #214)', () => {
+  const ontology = load('individuals-records.ttl');
+  const data = new Store(new Parser({ format: 'application/trig' }).parse(readFileSync(join(__dirname, '../../examples/sparql/individuals-records-data.trig'), 'utf8')));
+  const ns = NS('records');
+
+  it('has 39 individuals, more than are drawn by themselves', () => {
+    expect(individualsOf(data).size).toBe(39);
+    expect(createIndividualsLayer({ getStores: () => [ontology, data] }).isEmpty()).toBe(true);
+  });
+
+  it('finds the four individuals of "room 01" by label, and 10 of the 38 for "room"', () => {
+    const index = createIndividualIndex([ontology, data]);
+
+    expect(index.list({ search: 'room 01', offset: 0, limit: 10 }).items.map((i) => i.label)).toEqual(['Inspection of Room 01', 'Room 01', 'Room 01 north wall', 'Room 01 south wall']);
+    expect(index.list({ search: 'room', offset: 0, limit: 10 })).toMatchObject({ total: 38 });
+  });
+
+  it('gives Room 01 the properties, graphs and references its header promises', () => {
+    const card = createIndividualIndex([ontology, data]).describe(`${ns}room01`);
+    const outgoing = groupByPredicate(card.outgoing).map((g) => [g.predicate.slice(ns.length), g.links.length]);
+
+    expect(outgoing).toEqual([['area', 1], ['condition', 1], ['hasWall', 2], ['tag', 2]]);
+    expect(graphsOf([...card.outgoing, ...card.incoming]).sort()).toEqual([`${ns}inspection`, `${ns}survey`]);
+    expect(groupByPredicate(card.incoming).map((g) => [g.predicate.slice(ns.length), g.links.length])).toEqual([['hasRoom', 1], ['inspects', 1]]);
+  });
+
+  it('draws the 12 rooms and 24 walls of hasWall, 36 at once', () => {
+    const layer = createIndividualsLayer({ getStores: () => [ontology, data] });
+    expect(layer.previewRelationship(`${ns}hasWall`)).toEqual({ adds: 36, displayed: 0, total: 36 });
   });
 });

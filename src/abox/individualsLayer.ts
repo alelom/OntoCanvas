@@ -24,6 +24,11 @@ export const isIndividualEdgeId = (id: string): boolean => id.startsWith(INDIVID
 
 export const DEFAULT_MAX_PER_EXPANSION = 50;
 export const DEFAULT_MAX_TOTAL = 300;
+const individualsCount = (n: number): string => `${n} ${n === 1 ? 'individual' : 'individuals'}`;
+/** The limit, by its number (#217): "the graph draws up to 300 individuals". */
+export const limitPhrase = (limit: number): string => `the graph draws up to ${individualsCount(limit)}`;
+/** What is said where the limit stops a request. */
+export const limitTitle = (limit: number): string => `The graph draws up to ${individualsCount(limit)}: use Clear individuals to start again, or filter for a narrower set`;
 /** Up to this many individuals in all, every one is drawn without being asked. */
 export const DEFAULT_AUTO_MAX = 30;
 /**
@@ -77,6 +82,17 @@ export interface LayerChange {
   drawn: string[];
   /** The individual whose neighbours a draw added (#239): the canvas keeps it where it was, and selected. */
   anchor?: string;
+  /** The individual the user found by name (#217): selected and brought into view, though it was drawn already. */
+  focus?: string;
+  /** The relationship whose instances a draw added (#214): its edges between individuals are selected. */
+  selectEdgeType?: string;
+}
+
+/** What a request draws: how many it `adds`, how many are `displayed` now, of the `total` it asks for. */
+export interface DrawPreview {
+  adds: number;
+  displayed: number;
+  total: number;
 }
 
 export interface LayerView {
@@ -94,10 +110,18 @@ export interface LayerView {
 }
 
 export interface IndividualsLayer {
-  /** Draws the individual, on its own. */
-  show(iri: string): void;
+  /** The most individuals drawn at once. */
+  readonly limit: number;
+  /** How many individuals are drawn now. */
+  drawnCount(): number;
+  /** Draws the individual, on its own. `focus`: it is selected and brought into view, drawn already or not (#217). */
+  show(iri: string, options?: { focus?: boolean }): void;
   /** Draws up to the cap of the neighbours of the individual that are not drawn yet, and the individual with them; asked again, the next ones. */
-  showNeighbours(iri: string): void;
+  showNeighbours(iri: string, options?: { focus?: boolean }): void;
+  /** Draws up to the cap of the individuals a relationship links, both ends of each link, and selects the links (#214). */
+  showRelationship(propertyIri: string): void;
+  /** Of the individuals a relationship links (either end): `total`, how many are `displayed`, how many the next request `adds`. */
+  previewRelationship(propertyIri: string): DrawPreview;
   /** Hides what is drawn, what was drawn by itself included, until the data changes. */
   clear(): void;
   /** Another ontology was opened: forgets what was asked for and the clearing, without telling the listeners (a redraw follows). */
@@ -106,11 +130,11 @@ export interface IndividualsLayer {
   /** Draws up to the cap of the individuals of a class that are not drawn yet, by label, without their neighbours. */
   showClass(classIri: string): void;
   /** Of the individuals of a class: `total`, how many are `displayed` now (however they came to be drawn), and how many the next request `adds` (up to the cap). */
-  previewClass(classIri: string): { adds: number; displayed: number; total: number };
+  previewClass(classIri: string): DrawPreview;
   /** Whether the individual is drawn now, however it came to be. */
   preview(iri: string): { shown: boolean; adds: number; displayed: number; total: number };
   /** Of the neighbours of the individual: `total`, how many are `displayed` now, and how many the next request `adds` (up to the cap). */
-  previewNeighbours(iri: string): { adds: number; displayed: number; total: number };
+  previewNeighbours(iri: string): DrawPreview;
   /** The data changed (another ontology, data added or removed): what is drawn is read again, and what is gone is dropped. */
   invalidate(): void;
   /** `classNodeByUri`: the node id of each class that is drawn, by the class's IRI. */
@@ -139,10 +163,10 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
   let hidden = false;
   const auto = (): boolean => !hidden && known().size > 0 && known().size <= autoMax;
   /** Tells the listeners; `before` is what was drawn before a draw, to say what it added. */
-  const changed = (kind: LayerChange['kind'], before?: ReadonlySet<string>, anchor?: string): void => {
+  const changed = (kind: LayerChange['kind'], before?: ReadonlySet<string>, extra: Pick<LayerChange, 'anchor' | 'focus' | 'selectEdgeType'> = {}): void => {
     shownCache = null;
     const drawn = before ? [...computeShown().shown].filter((iri) => !before.has(iri)) : [];
-    listeners.forEach((listener) => listener({ kind, drawn, ...(anchor ? { anchor } : {}) }));
+    listeners.forEach((listener) => listener({ kind, drawn, ...extra }));
   };
 
   const known = (): Set<string> => {
@@ -244,6 +268,31 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     return classCounts;
   };
 
+  /** The individuals a relationship links, link by link (both ends, by the label of the subject); kept until the data changes. */
+  const relationshipCache = new Map<string, string[]>();
+  const membersOfRelationship = (propertyIri: string): string[] => {
+    let members = relationshipCache.get(propertyIri);
+    if (!members) {
+      const all = known();
+      const links: Array<[string, string]> = [];
+      for (const store of getStores()) {
+        for (const q of store.getQuads(null, propertyIri, null, null)) {
+          if (q.object.termType === 'NamedNode' && all.has(q.subject.value) && all.has(q.object.value)) links.push([q.subject.value, q.object.value]);
+        }
+      }
+      const texts = new Map<string, string>();
+      const textOf = (iri: string): string => {
+        let text = texts.get(iri);
+        if (text === undefined) texts.set(iri, (text = labelOf(iri)));
+        return text;
+      };
+      links.sort((a, b) => byText(textOf(a[0]), textOf(b[0])) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) || byText(textOf(a[1]), textOf(b[1])));
+      members = [...new Set(links.flat())];
+      relationshipCache.set(propertyIri, members);
+    }
+    return members;
+  };
+
   /** The individuals of a class, sorted by what is shown for them; kept until the data changes. */
   const memberCache = new Map<string, string[]>();
   const membersOf = (classIri: string): string[] => {
@@ -257,14 +306,29 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     return members;
   };
 
+  /** Of `members`: how many are drawn, and how many the next request adds. */
+  const previewOf = (members: string[]): DrawPreview => {
+    const { shown } = computeShown();
+    const displayed = members.filter((m) => shown.has(m)).length;
+    return { adds: Math.min(members.length - displayed, batch()), displayed, total: members.length };
+  };
+
   return {
-    show(iri) {
+    limit: maxTotal,
+    drawnCount: () => computeShown().shown.size,
+    show(iri, { focus = false } = {}) {
       const before = new Set(computeShown().shown);
       if (!before.has(iri) && room() === 0) return;
       picked.add(iri);
-      changed('draw', before);
+      changed('draw', before, focus ? { focus: iri } : {});
     },
-    showNeighbours(iri) {
+    showRelationship(propertyIri) {
+      const before = new Set(computeShown().shown);
+      for (const iri of membersOfRelationship(propertyIri).filter((m) => !before.has(m)).slice(0, batch())) picked.add(iri);
+      changed('draw', before, { selectEdgeType: propertyIri });
+    },
+    previewRelationship: (propertyIri) => previewOf(membersOfRelationship(propertyIri)),
+    showNeighbours(iri, { focus = false } = {}) {
       const fit = room();
       const before = new Set(computeShown().shown);
       const shown = before;
@@ -273,7 +337,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       if (places < 0) return;
       picked.add(iri);
       for (const neighbour of neighboursOf(iri).filter((n) => !picked.has(n)).slice(0, Math.min(maxPerExpansion, places))) picked.add(neighbour);
-      changed('draw', before, iri);
+      changed('draw', before, { anchor: iri, ...(focus ? { focus: iri } : {}) });
     },
     clear() {
       if (picked.size === 0 && !auto()) return;
@@ -288,6 +352,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       shownCache = null;
       neighbourCache.clear();
       memberCache.clear();
+      relationshipCache.clear();
       classCounts = null;
     },
     showClass(classIri) {
@@ -295,28 +360,19 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       for (const iri of membersOf(classIri).filter((m) => !before.has(m)).slice(0, batch())) picked.add(iri);
       changed('draw', before);
     },
-    previewClass(classIri) {
-      const members = membersOf(classIri);
-      const { shown } = computeShown();
-      const displayed = members.filter((m) => shown.has(m)).length;
-      return { adds: Math.min(members.length - displayed, batch()), displayed, total: members.length };
-    },
+    previewClass: (classIri) => previewOf(membersOf(classIri)),
     preview(iri) {
       const shown = computeShown().shown.has(iri);
       return { shown, adds: shown || room() === 0 ? 0 : 1, displayed: shown ? 1 : 0, total: 1 };
     },
-    previewNeighbours(iri) {
-      const neighbours = neighboursOf(iri);
-      const { shown } = computeShown();
-      const displayed = neighbours.filter((n) => shown.has(n)).length;
-      return { adds: Math.min(neighbours.length - displayed, batch()), displayed, total: neighbours.length };
-    },
+    previewNeighbours: (iri) => previewOf(neighboursOf(iri)),
     isEmpty: () => picked.size === 0 && !auto(),
     invalidate() {
       individuals = null;
       shownCache = null;
       neighbourCache.clear();
       memberCache.clear();
+      relationshipCache.clear();
       classCounts = null;
       hidden = false;
       for (const iri of [...picked]) if (!known().has(iri)) picked.delete(iri);

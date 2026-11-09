@@ -1,0 +1,52 @@
+# The data of individuals-records.ttl (issues #229, #217, #214): a survey of a building and two inspections, each in a named
+# graph. Open the ontology with this file added (see the ontology for what to look for). Room 01 has statements in both graphs.
+@prefix : <http://example.org/examples/individuals-records#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:survey {
+  :building a :Building ; rdfs:label "Main building" ;
+    :hasRoom :room01 , :room02 , :room03 , :room04 , :room05 , :room06 , :room07 , :room08 , :room09 , :room10 , :room11 , :room12 .
+  :room01 a :Room ; rdfs:label "Room 01" ; :area "13.5"^^xsd:decimal ; :tag "survey" ; :hasWall :room01-north , :room01-south .
+  :room01-north a :Wall ; rdfs:label "Room 01 north wall" .
+  :room01-south a :Wall ; rdfs:label "Room 01 south wall" .
+  :room02 a :Room ; rdfs:label "Room 02" ; :area "15.0"^^xsd:decimal ; :tag "survey" ; :hasWall :room02-north , :room02-south .
+  :room02-north a :Wall ; rdfs:label "Room 02 north wall" .
+  :room02-south a :Wall ; rdfs:label "Room 02 south wall" .
+  :room03 a :Room ; rdfs:label "Room 03" ; :area "16.5"^^xsd:decimal ; :tag "survey" ; :hasWall :room03-north , :room03-south .
+  :room03-north a :Wall ; rdfs:label "Room 03 north wall" .
+  :room03-south a :Wall ; rdfs:label "Room 03 south wall" .
+  :room04 a :Room ; rdfs:label "Room 04" ; :area "18.0"^^xsd:decimal ; :tag "survey" ; :hasWall :room04-north , :room04-south .
+  :room04-north a :Wall ; rdfs:label "Room 04 north wall" .
+  :room04-south a :Wall ; rdfs:label "Room 04 south wall" .
+  :room05 a :Room ; rdfs:label "Room 05" ; :area "19.5"^^xsd:decimal ; :tag "survey" ; :hasWall :room05-north , :room05-south .
+  :room05-north a :Wall ; rdfs:label "Room 05 north wall" .
+  :room05-south a :Wall ; rdfs:label "Room 05 south wall" .
+  :room06 a :Room ; rdfs:label "Room 06" ; :area "21.0"^^xsd:decimal ; :tag "survey" ; :hasWall :room06-north , :room06-south .
+  :room06-north a :Wall ; rdfs:label "Room 06 north wall" .
+  :room06-south a :Wall ; rdfs:label "Room 06 south wall" .
+  :room07 a :Room ; rdfs:label "Room 07" ; :area "22.5"^^xsd:decimal ; :tag "survey" ; :hasWall :room07-north , :room07-south .
+  :room07-north a :Wall ; rdfs:label "Room 07 north wall" .
+  :room07-south a :Wall ; rdfs:label "Room 07 south wall" .
+  :room08 a :Room ; rdfs:label "Room 08" ; :area "24.0"^^xsd:decimal ; :tag "survey" ; :hasWall :room08-north , :room08-south .
+  :room08-north a :Wall ; rdfs:label "Room 08 north wall" .
+  :room08-south a :Wall ; rdfs:label "Room 08 south wall" .
+  :room09 a :Room ; rdfs:label "Room 09" ; :area "25.5"^^xsd:decimal ; :tag "survey" ; :hasWall :room09-north , :room09-south .
+  :room09-north a :Wall ; rdfs:label "Room 09 north wall" .
+  :room09-south a :Wall ; rdfs:label "Room 09 south wall" .
+  :room10 a :Room ; rdfs:label "Room 10" ; :area "27.0"^^xsd:decimal ; :tag "survey" ; :hasWall :room10-north , :room10-south .
+  :room10-north a :Wall ; rdfs:label "Room 10 north wall" .
+  :room10-south a :Wall ; rdfs:label "Room 10 south wall" .
+  :room11 a :Room ; rdfs:label "Room 11" ; :area "28.5"^^xsd:decimal ; :tag "survey" ; :hasWall :room11-north , :room11-south .
+  :room11-north a :Wall ; rdfs:label "Room 11 north wall" .
+  :room11-south a :Wall ; rdfs:label "Room 11 south wall" .
+  :room12 a :Room ; rdfs:label "Room 12" ; :area "30.0"^^xsd:decimal ; :tag "survey" ; :hasWall :room12-north , :room12-south .
+  :room12-north a :Wall ; rdfs:label "Room 12 north wall" .
+  :room12-south a :Wall ; rdfs:label "Room 12 south wall" .
+}
+
+:inspection {
+  :inspection1 a :Inspection ; rdfs:label "Inspection of Room 01" ; :inspects :room01 .
+  :inspection2 a :Inspection ; rdfs:label "Inspection of Rooms 02 and 03" ; :inspects :room02 , :room03 .
+  :room01 :tag "inspected" ; :condition "good" .
+}

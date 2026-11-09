@@ -1,0 +1,35 @@
+# The ontology of a building survey, to open with its data, individuals-records-data.trig (issues #229, #217, #214). The data
+# has 39 individuals, more than the 30 drawn by themselves, so on opening the graph shows only the classes. Then:
+#   - type "room 01" in the search box above the graph: under the classes and relationships, an "Individuals" group lists the four
+#     individuals whose label holds it, by label: Inspection of Room 01, Room 01, Room 01 north wall, Room 01 south wall ("room"
+#     alone lists 10 of the 38 it matches, and says "28 more match: filter them in the Individuals tab"). Pick "Room 01": the search empties,
+#     Room 01 is drawn, selected and brought into view, and its card opens in the Individuals tab. "with neighbours" on its row
+#     draws its walls, the building and the inspection with it
+#   - the card of Room 01: Back and Forward, its label and IRI with "Copy IRI", its class, "Draw in graph" (or "Show in graph"
+#     once it is drawn), and its properties, one row each: area, condition, hasWall (its two walls) and tag ("survey" and
+#     "inspected"). Its statements come from two named graphs, so each value says its graph (:survey or :inspection).
+#     "Referenced by (2)", collapsed: hasRoom (1) from the building, inspects (1) from the first inspection. Follow a wall, then Back
+#   - the bottom bar: "Relationship names select: definitions / instances". With "instances", click "hasWall" in its list of edges:
+#     the 12 rooms and their 24 walls are drawn and the 24 hasWall links between them selected. With "definitions" (the default)
+#     it searches for the relationship between the classes, as before. The search's suggestion for hasWall has a button
+#     "Draw 36 instances (0 displayed/36 total)" whichever is chosen
+#   - the Individuals tab says "Drawn in the graph: N of 300 individuals (the most it draws)"
+@prefix : <http://example.org/examples/individuals-records#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/examples/individuals-records> a owl:Ontology ; rdfs:label "Individuals as records" .
+
+:Building a owl:Class ; rdfs:label "Building" .
+:Room a owl:Class ; rdfs:label "Room" .
+:Wall a owl:Class ; rdfs:label "Wall" .
+:Inspection a owl:Class ; rdfs:label "Inspection" .
+
+:hasRoom a owl:ObjectProperty ; rdfs:label "hasRoom" ; rdfs:domain :Building ; rdfs:range :Room .
+:hasWall a owl:ObjectProperty ; rdfs:label "hasWall" ; rdfs:domain :Room ; rdfs:range :Wall .
+:inspects a owl:ObjectProperty ; rdfs:label "inspects" ; rdfs:domain :Inspection ; rdfs:range :Room .
+
+:area a owl:DatatypeProperty ; rdfs:label "area" ; rdfs:domain :Room ; rdfs:range xsd:decimal .
+:tag a owl:DatatypeProperty ; rdfs:label "tag" ; rdfs:range xsd:string .
+:condition a owl:DatatypeProperty ; rdfs:label "condition" ; rdfs:domain :Room ; rdfs:range xsd:string .

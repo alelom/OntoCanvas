@@ -49,10 +49,16 @@ export interface DescribedTerm {
 
 export interface DescribedLink {
   subject: string;
+  /** What refers to an individual can be a blank node, such as a restriction. */
+  subjectType: 'NamedNode' | 'BlankNode';
+  /** The subject is an individual, so it can be followed (a class or a property that refers to one is not). */
+  subjectIsIndividual: boolean;
   predicate: string;
   object: DescribedTerm;
   /** The object is an individual, so it can be followed. */
   objectIsIndividual: boolean;
+  /** The named graph the statement is in (#224), or '' for the default graph. */
+  graph: string;
 }
 
 export interface IndividualDetail {
@@ -221,11 +227,14 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
         ...(term.termType === 'Literal' && term.datatype ? { datatype: term.datatype.value } : {}),
         ...(term.termType === 'Literal' && term.language ? { language: term.language } : {}),
       });
-      const link = (subject: string, predicate: string, object: Parameters<typeof describedTerm>[0]): DescribedLink => ({
-        subject,
+      const link = (subject: { termType: string; value: string }, predicate: string, object: Parameters<typeof describedTerm>[0], graph: { termType: string; value: string }): DescribedLink => ({
+        subject: subject.value,
+        subjectType: subject.termType === 'BlankNode' ? 'BlankNode' : 'NamedNode',
+        subjectIsIndividual: subject.termType === 'NamedNode' && individuals.has(subject.value),
         predicate,
         object: describedTerm(object),
         objectIsIndividual: object.termType === 'NamedNode' && individuals.has(object.value),
+        graph: graph.termType === 'DefaultGraph' ? '' : graph.value,
       });
       const order = (a: DescribedLink, b: DescribedLink) => byText(a.predicate, b.predicate) || byText(a.subject, b.subject) || byText(a.object.value, b.object.value);
       const outgoing: DescribedLink[] = [];
@@ -236,10 +245,10 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
           if (quad.predicate.value === RDF_TYPE) {
             if (quad.object.termType === 'NamedNode') types.add(quad.object.value);
           } else if (quad.predicate.value !== RDFS_LABEL) {
-            outgoing.push(link(iri, quad.predicate.value, quad.object));
+            outgoing.push(link(quad.subject, quad.predicate.value, quad.object, quad.graph));
           }
         }
-        for (const quad of store.getQuads(null, null, iri, null)) incoming.push(link(quad.subject.value, quad.predicate.value, quad.object));
+        for (const quad of store.getQuads(null, null, iri, null)) incoming.push(link(quad.subject, quad.predicate.value, quad.object, quad.graph));
       }
       outgoing.sort(order);
       incoming.sort(order);

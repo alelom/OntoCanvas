@@ -39,6 +39,7 @@ describe('classIndividualsAction', () => {
     classIndividualsAction(layer, `${NS}Person`)!.run();
 
     expect(classIndividualsAction(layer, `${NS}Person`)).toMatchObject({ label: 'Limit reached', disabled: true });
+    expect(classIndividualsAction(layer, `${NS}Person`)!.title).toMatch(/^The graph draws up to 10 individuals: /);
   });
 });
 

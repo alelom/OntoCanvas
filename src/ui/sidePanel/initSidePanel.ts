@@ -3,14 +3,14 @@
  * exists, and `refresh()` when another ontology is opened.
  */
 
-import type { Store } from 'n3';
+import { DataFactory, type Store } from 'n3';
 import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
 import { createIndividualsTab } from './individualsTab';
 import { mountPanelButtons } from './panelButtons';
 import { createDataLoader, type DataPick } from '../../sparql/dataLoader';
 import { attachDataDrop } from '../dataDrop';
-import { countIndividuals } from '../../abox/individualIndex';
+import { countIndividuals, createIndividualIndex, type IndividualIndex } from '../../abox/individualIndex';
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
@@ -18,6 +18,10 @@ import type { IndividualsLayer } from '../../abox/individualsLayer';
 import type { DataImages } from '../../abox/dataImages';
 import { syncFolderNotices } from '../folderNotices';
 import { setNotice } from '../statusNotices';
+import { setIndividualSearchProvider } from '../individualSuggestions';
+import { mountRelationshipNameMode } from '../relationshipNameMode';
+import { formatTerm } from '../../sparql/formatTerm';
+import { withStandardPrefixes } from '../../sparql/prefixHeader';
 
 export interface SidePanelDeps {
   getStore: () => Store | null;
@@ -51,6 +55,8 @@ export interface SidePanel {
   addDataUrls(urls: string[]): Promise<void>;
   /** Opens the panel on the Individuals tab (#211). */
   openIndividuals(): void;
+  /** Opens the panel on the card of an individual (#217). */
+  openIndividual(iri: string): void;
   /** Opens the panel on the Individuals tab and adds the folders, then the files as one selection (#234, #227). */
   addData(pick: DataPick): Promise<void>;
   /**
@@ -68,6 +74,7 @@ const NO_PANEL: SidePanel = {
   refresh: () => {},
   addDataUrls: async () => {},
   openIndividuals: () => {},
+  openIndividual: () => {},
   addData: async () => {},
   schemaChanged: () => {},
   onDataStatus: () => {},
@@ -90,6 +97,13 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     const store = deps.getStore();
     return store ? [store, ...(deps.dataSources?.visibleStores() ?? [])] : [];
   };
+  // The individuals of those stores, looked up by the Individuals tab and the search of the graph (#217): built when first asked
+  // for after a change of the data, not on every keystroke.
+  let index: IndividualIndex | null = null;
+  const individualIndex = (): IndividualIndex => (index ??= createIndividualIndex(stores()));
+  const dataChanged = (): void => {
+    index = null;
+  };
   // The reading of added data is the loader's, apart from any tab: the Individuals tab shows it beside the controls to add
   // data, and the Query tab shows it when an address (?data=) loads files while that is the tab shown (#211).
   const dataLoader = deps.dataSources ? createDataLoader({ sources: deps.dataSources, getStore: deps.getStore }) : undefined;
@@ -110,6 +124,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   // The Individuals tab (#208) reads the ontology's store and the data added to it, and is where data is added (#211).
   const individualsTab = createIndividualsTab({
     getStores: stores,
+    getIndex: individualIndex,
     getPrefixes: deps.getPrefixes,
     getClassLabel: deps.getClassLabel,
     dataSources: deps.dataSources,
@@ -131,6 +146,21 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
         : undefined,
   });
   host.registerTab(individualsTab);
+  const openIndividual = (iri: string): void => {
+    host.open(individualsTab.id);
+    individualsTab.show(iri);
+  };
+  // The search of the graph finds the individuals that are not drawn, and opens the card of the one picked (#217).
+  if (deps.individualsLayer) {
+    setIndividualSearchProvider({
+      find: (query, limit) => individualIndex().list({ search: query, offset: 0, limit }),
+      nameOf: (iri) => formatTerm(DataFactory.namedNode(iri), withStandardPrefixes(deps.getPrefixes())).text,
+      layer: deps.individualsLayer,
+      open: openIndividual,
+    });
+  }
+  // What a relationship's name selects, its definition or its instances (#214): a choice only when there are individuals.
+  const relationshipNameMode = mountRelationshipNameMode();
 
   const buttons = mountPanelButtons(wrapper, [
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },
@@ -154,6 +184,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     // The option for how individuals are laid out only means something when there are some.
     const relaxToggle = document.getElementById('relaxIndividualsWrap');
     if (relaxToggle) relaxToggle.style.display = count > 0 ? 'flex' : 'none';
+    relationshipNameMode?.setVisible(count > 0);
     buttons.setLabel('individualsPanelBtn', label);
     buttons.setTitle('individualsPanelBtn', title);
   };
@@ -162,6 +193,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   // It names the classes of the images not loaded, by their labels once the ontologies the data names are read (schemaChanged).
   const sayFolderNotices = deps.dataSources ? syncFolderNotices(deps.dataSources, setNotice, { classLabel: deps.getClassLabel }) : () => {};
   deps.dataSources?.onChange(() => {
+    dataChanged();
     deps.individualsLayer?.invalidate();
     individualsTab.refresh();
     updateIndividualsButton();
@@ -169,6 +201,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
 
   return {
     refresh: () => {
+      dataChanged();
       deps.individualsLayer?.reset();
       queryTab.refresh();
       individualsTab.refresh();
@@ -180,6 +213,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       await dataLoader.addUrls(urls);
     },
     openIndividuals: () => host.open(individualsTab.id),
+    openIndividual,
     cancelData: () => dataLoader?.cancel(),
     onDataStatus(listener) {
       dataLoader?.onChange(() => listener(dataLoader.status(), dataLoader.loading()));

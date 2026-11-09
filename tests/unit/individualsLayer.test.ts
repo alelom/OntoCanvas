@@ -520,3 +520,94 @@ describe('the individual whose neighbours are drawn (#239)', () => {
     expect(changes).toEqual([{ kind: 'draw', anchor: undefined }, { kind: 'draw', anchor: ex('a') }]);
   });
 });
+
+describe('the limit, said where it applies (#217)', () => {
+  it('names the total it draws, and how many are drawn now', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, maxTotal: 5, getStores: () => [hub(10)] });
+    expect(layer.limit).toBe(5);
+    expect(layer.drawnCount()).toBe(0);
+
+    layer.showNeighbours(ex('h'));
+
+    expect(layer.drawnCount()).toBe(5);
+  });
+});
+
+describe('show(iri, { focus }): an individual found by name (#217)', () => {
+  const s = store(':a a :Room . :b a :Room .');
+
+  it('draws it and asks for it to be selected and brought into view', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
+    const changes: unknown[] = [];
+    layer.onChange((change) => changes.push(change));
+
+    layer.show(ex('a'), { focus: true });
+
+    expect(changes).toEqual([{ kind: 'draw', drawn: [ex('a')], focus: ex('a') }]);
+  });
+
+  it('asks for it to be brought into view though it is drawn already', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
+    layer.show(ex('a'));
+    const changes: unknown[] = [];
+    layer.onChange((change) => changes.push(change));
+
+    layer.show(ex('a'), { focus: true });
+
+    expect(changes).toEqual([{ kind: 'draw', drawn: [], focus: ex('a') }]);
+  });
+
+  it('asks for nothing when the limit leaves no room for it', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, maxTotal: 1, getStores: () => [s] });
+    layer.show(ex('b'));
+    const changes: unknown[] = [];
+    layer.onChange((change) => changes.push(change));
+
+    layer.show(ex('a'), { focus: true });
+
+    expect(changes).toEqual([]);
+  });
+
+  it('brings the individual into view with its neighbours, when they are asked for', () => {
+    const linked = store(':a a :Room ; :next :b . :b a :Room .');
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [linked] });
+    const changes: unknown[] = [];
+    layer.onChange((change) => changes.push(change));
+
+    layer.showNeighbours(ex('a'), { focus: true });
+
+    expect(changes[0]).toMatchObject({ kind: 'draw', drawn: [ex('a'), ex('b')], focus: ex('a') });
+  });
+});
+
+describe('the instances of a relationship (#214)', () => {
+  const pairs = (n: number) =>
+    store(Array.from({ length: n }, (_, i) => `:r${String(i).padStart(3, '0')} a :Room ; :hasWall :w${String(i).padStart(3, '0')} . :w${String(i).padStart(3, '0')} a :Wall .`).join('\n') + '\n:loose a :Room ; :area "3" .');
+
+  it('counts the individuals the relationship links, both ends, and draws none until asked', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [pairs(3)] });
+
+    expect(layer.previewRelationship(ex('hasWall'))).toEqual({ adds: 6, displayed: 0, total: 6 });
+    expect(layer.previewRelationship(ex('area'))).toEqual({ adds: 0, displayed: 0, total: 0 });
+    expect(layer.isEmpty()).toBe(true);
+  });
+
+  it('draws both ends of each link, a batch at a time, and asks for the links to be selected', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, maxPerExpansion: 4, getStores: () => [pairs(3)] });
+    const changes: Array<{ drawn: string[]; selectEdgeType?: string }> = [];
+    layer.onChange((change) => changes.push(change));
+
+    layer.showRelationship(ex('hasWall'));
+
+    expect(changes[0].drawn.sort()).toEqual([ex('r000'), ex('r001'), ex('w000'), ex('w001')]);
+    expect(changes[0].selectEdgeType).toBe(ex('hasWall'));
+    expect(layer.previewRelationship(ex('hasWall'))).toEqual({ adds: 2, displayed: 4, total: 6 });
+  });
+
+  it('draws nothing more at the total limit', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, maxTotal: 2, getStores: () => [pairs(3)] });
+    layer.showRelationship(ex('hasWall'));
+
+    expect(layer.previewRelationship(ex('hasWall'))).toEqual({ adds: 0, displayed: 2, total: 6 });
+  });
+});

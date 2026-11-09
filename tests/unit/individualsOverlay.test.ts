@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { DataSet } from 'vis-data';
 import { Parser, Store } from 'n3';
 import { createIndividualsLayer, INDIVIDUAL_PREFIX, INDIVIDUAL_CLASS_PREFIX, isIndividualEdgeId } from '../../src/abox/individualsLayer';
-import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds } from '../../src/graph/individualsOverlay';
+import { addIndividualsToNetworkData, classNodesByUri, focusNodeIds, viewAfterDraw } from '../../src/graph/individualsOverlay';
 import { parseEdgeId } from '../../src/utils/edgeId';
 
 const NS = 'http://example.org/d#';
@@ -242,5 +242,46 @@ describe('the individual whose neighbours are drawn, kept where it was (#239)', 
       const node = data.nodes.get(id(n)) as any;
       expect(Math.hypot(node.x - 900, node.y + 400)).toBeLessThan(600);
     }
+  });
+});
+
+describe('viewAfterDraw: what is selected and fitted after a draw (#217, #214)', () => {
+  const ind = (n: string) => INDIVIDUAL_PREFIX + n;
+  const data = () => ({
+    nodes: new DataSet<any>([{ id: 'Room', x: 0, y: 0 }, { id: ind('a') }, { id: ind('b') }, { id: ind('c') }]),
+    edges: new DataSet<any>([
+      { id: 'e1', from: ind('a'), to: 'Room' },
+      { id: 'e2', from: ind('a'), to: ind('b'), property: `${NS}hasWall` },
+      { id: 'e3', from: ind('c'), to: ind('b'), property: `${NS}next` },
+    ]),
+  });
+
+  it('selects the individual found by name and fits it with its class, though nothing new was drawn', () => {
+    expect(viewAfterDraw(data(), { fitTo: [], focus: 'a' })).toEqual({ selectNodes: [ind('a')], selectEdges: [], fit: [ind('a'), 'Room'] });
+  });
+
+  it('selects nothing for an individual a search hides', () => {
+    expect(viewAfterDraw(data(), { fitTo: [], focus: 'gone' })).toEqual({ selectNodes: [], selectEdges: [], fit: [] });
+  });
+
+  it('keeps the anchor of a neighbours draw selected, and fits it with what was drawn (#239)', () => {
+    expect(viewAfterDraw(data(), { fitTo: ['b'], anchor: 'a' })).toEqual({ selectNodes: [ind('a')], selectEdges: [], fit: [ind('b'), ind('a')] });
+  });
+
+  it('selects the edges of a relationship whose instances were drawn, and fits their ends when nothing new was drawn', () => {
+    const view = viewAfterDraw(data(), { fitTo: [], selectEdgeType: `${NS}hasWall` });
+
+    expect(view.selectEdges).toEqual(['e2']);
+    expect(view.fit.sort()).toEqual([ind('a'), ind('b')].sort());
+  });
+
+  it('marks each edge between individuals with its relationship, for that selection', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [store] });
+    layer.showNeighbours(`${NS}a`);
+    const network2 = network();
+
+    addIndividualsToNetworkData(network2, layer, classNodesByUri(classNodes));
+
+    expect(network2.edges.get().find((e: any) => e.label === 'next').property).toBe(`${NS}next`);
   });
 });

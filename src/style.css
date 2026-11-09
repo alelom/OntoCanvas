@@ -267,9 +267,11 @@ body.embed-no-menu #ontologyIssuesPopup {
   position: absolute;
   top: 100%;
   left: 0;
-  right: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 420px;
   margin-top: 2px;
-  max-height: 200px;
+  max-height: 320px;
   overflow-y: auto;
   background: #fff;
   border: 1px solid #ccc;
@@ -298,6 +300,25 @@ body.embed-no-menu #ontologyIssuesPopup {
   font-size: 11px;
   color: #888;
   margin-left: 6px;
+}
+/* The individuals the search finds (#217), and the second action of a row (with neighbours, a relationship's instances). */
+#searchAutocomplete .suggestion-group {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #555;
+  background: #f6f6f6;
+  border-bottom: 1px solid #eee;
+}
+#searchAutocomplete .suggestion-more {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #666;
+}
+#searchAutocomplete .suggestion-action {
+  margin-left: 8px;
+  font-size: 11px;
+  cursor: pointer;
 }
 #fileInput {
   display: none;
@@ -754,6 +775,45 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 }
 .individual-more {
   color: #666;
+}
+/* The record card of an individual (#229). */
+.individual-card-nav,
+.individual-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 4px;
+}
+.individual-links li.individual-property {
+  display: grid;
+  grid-template-columns: minmax(7em, max-content) 1fr;
+  column-gap: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+.individual-links > summary {
+  margin: 8px 0 2px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.individual-graph-tag {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #eef0fa;
+  color: #555;
+  font-family: Consolas, monospace;
+  font-size: 10px;
+}
+#relationshipNameMode {
+  margin-left: 16px;
+  font-size: 11px;
+}
+#relationshipNameMode[hidden] {
+  display: none;
+}
+#relationshipNameMode label {
+  margin-left: 6px;
+  cursor: pointer;
 }
 .query-note {
   margin: 0;

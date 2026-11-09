@@ -143,6 +143,16 @@ describe('describe', () => {
     expect(detail.incoming.map((t) => [t.subject, t.predicate])).toEqual([[NS + 'room101', NS + 'hasPart']]);
   });
 
+  it('says whether what points to the individual is an individual, and keeps a blank node blank (#242 review)', () => {
+    const refs = store(':w a :Wall . :r a :Room ; :hasPart :w . :Room :example :w . [ :mentions :w ] .');
+    const incoming = createIndividualIndex([ONTOLOGY, refs]).describe(NS + 'w').incoming;
+    const by = (p: string) => incoming.find((l) => l.predicate === NS + p)!;
+
+    expect(by('hasPart')).toMatchObject({ subject: NS + 'r', subjectType: 'NamedNode', subjectIsIndividual: true });
+    expect(by('example')).toMatchObject({ subject: NS + 'Room', subjectType: 'NamedNode', subjectIsIndividual: false });
+    expect(by('mentions')).toMatchObject({ subjectType: 'BlankNode', subjectIsIndividual: false });
+  });
+
   it('keeps the language of a label, and shows every label', () => {
     expect(index().describe(NS + 'room102').labels.sort()).toEqual(['Raum 102', 'Room 102']);
   });
@@ -266,5 +276,20 @@ describe('groups() and listGroup()', () => {
   it('lists an individual of two classes only in the group it is under', () => {
     expect(index().listGroup({ group: NS + 'Room', offset: 0, limit: 10 }).items.map((i) => i.iri)).toEqual([NS + 'room101', NS + 'room102']);
     expect(index().listGroup({ group: NO_CLASS, offset: 0, limit: 10 }).items.map((i) => i.iri)).toEqual([NS + 'loose']);
+  });
+});
+
+describe('describe: the graph of each statement (#229)', () => {
+  it('says the named graph a link comes from, and the default graph as empty', () => {
+    const quads = new Parser({ format: 'application/trig' }).parse(`
+      @prefix : <${NS}> .
+      :g1 { :a a :Room ; :hasPart :b . }
+      :g2 { :c :hasPart :a . }
+      :a :note "plain" .
+      :b a :Wall . :c a :Room .`);
+    const detail = createIndividualIndex([new Store(quads)]).describe(NS + 'a');
+
+    expect(detail.outgoing.map((l) => [l.predicate.slice(NS.length), l.graph])).toEqual([['hasPart', NS + 'g1'], ['note', '']]);
+    expect(detail.incoming.map((l) => [l.subject.slice(NS.length), l.graph])).toEqual([['c', NS + 'g2']]);
   });
 });

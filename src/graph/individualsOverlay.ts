@@ -112,6 +112,8 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
       to: edge.to,
       arrows: 'to',
       label: edge.type === 'rdf:type' ? '' : extractLocalName(edge.type),
+      // The relationship's IRI, for its instances to be selected (#214).
+      ...(edge.type === 'rdf:type' ? {} : { property: edge.type }),
       dashes: edge.type === 'rdf:type',
       color: { color: '#e67e22', highlight: '#d35400' },
       font: { size: 11, align: 'middle' },
@@ -191,6 +193,34 @@ export function focusNodeIds(data: NetworkData, drawn: string[]): string[] {
     if (individuals.has(edge.from) && !edge.to.startsWith(INDIVIDUAL_PREFIX) && data.nodes.get(edge.to)) ids.add(edge.to);
   }
   return [...ids];
+}
+
+/** What a draw asks of the view, by IRI: see `viewAfterDraw`. */
+export interface DrawRequest {
+  /** The individuals the draw added: fitted, with their classes (`focusNodeIds`). */
+  fitTo?: string[];
+  /** The individual whose neighbours were drawn (#239): selected, and fitted with them when they were drawn. */
+  anchor?: string;
+  /** The individual found by name (#217): selected and fitted, though it was drawn already. */
+  focus?: string;
+  /** The relationship whose instances were drawn (#214): its edges between individuals are selected. */
+  selectEdgeType?: string;
+}
+
+/**
+ * What to select and what to fit after a draw, of what is in the data (a search may have hidden some): node and edge ids. With
+ * nothing new drawn, a focus is fitted with its classes, and a relationship by the ends of its edges, so the view still goes there.
+ */
+export function viewAfterDraw(data: NetworkData, { fitTo, anchor, focus, selectEdgeType }: DrawRequest): { selectNodes: string[]; selectEdges: string[]; fit: string[] } {
+  const present = (iri: string | undefined): string | null => (iri && data.nodes.get(INDIVIDUAL_PREFIX + iri) ? INDIVIDUAL_PREFIX + iri : null);
+  const fit = fitTo ? focusNodeIds(data, fitTo) : [];
+  const keep = present(anchor);
+  if (keep && fit.length && !fit.includes(keep)) fit.push(keep);
+  const found = present(focus);
+  if (found) for (const id of focusNodeIds(data, [focus!])) if (!fit.includes(id)) fit.push(id);
+  const edges = selectEdgeType ? (data.edges.get() as Array<{ id: string; from: string; to: string; property?: string }>).filter((e) => e.property === selectEdgeType) : [];
+  if (edges.length && !fit.length) for (const e of edges) for (const id of [e.from, e.to]) if (!fit.includes(id)) fit.push(id);
+  return { selectNodes: [...new Set([keep, found].filter((id): id is string => !!id))], selectEdges: edges.map((e) => e.id), fit };
 }
 
 /** Moves the individuals by force relaxation, anchored to the nodes the layout already placed; the rest are left to the canvas. */

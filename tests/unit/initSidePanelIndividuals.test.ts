@@ -9,6 +9,8 @@ import { Parser, Store } from 'n3';
 import { initSidePanel } from '../../src/ui/sidePanel/initSidePanel';
 import { createDataSources } from '../../src/sparql/dataSources';
 import { clearNotices, getNotices } from '../../src/ui/statusNotices';
+import { createIndividualsLayer } from '../../src/abox/individualsLayer';
+import { individualSuggestionRows } from '../../src/ui/individualSuggestions';
 
 const PREFIXES = '@prefix : <http://example.org/d#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .\n';
 const store = (turtle: string) => new Store(new Parser().parse(PREFIXES + turtle));
@@ -411,5 +413,47 @@ describe("a folder's images it couldn't see, in the bottom bar (#240)", () => {
     panel.schemaChanged();
 
     expect(getNotices()[0].message).toContain('(of class "Drawing Sheet")');
+  });
+});
+
+describe('the search of the graph and the Individuals tab (#217, #214)', () => {
+  const mountWithLayer = () => {
+    const dataSources = createDataSources();
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => (ontology ? [ontology, ...dataSources.visibleStores()] : []) });
+    document.body.insertAdjacentHTML('beforeend', '<span id="relationshipNameMode"></span>');
+    const panel = initSidePanel({ getStore: () => ontology, getPrefixes: () => ({ '': 'http://example.org/d#' }), dataSources, individualsLayer: layer, embedded: false });
+    return { dataSources, layer, panel };
+  };
+  const controls = { clearSearch: () => {}, close: () => {} };
+  const found = (query: string) => individualSuggestionRows(query, controls).filter((r) => r.classList.contains('suggestion')).map((r) => r.title);
+
+  it('opens the panel on the card of an individual', () => {
+    const { panel } = mountWithLayer();
+
+    panel.openIndividual('http://example.org/d#room1');
+
+    expect(panelEl().hidden).toBe(false);
+    expect(document.querySelector('[data-individuals-detail] h4')!.textContent).toBe(':room1');
+  });
+
+  it('gives the search the individuals of the ontology and of the data, and those added later', async () => {
+    const { dataSources } = mountWithLayer();
+    expect(found('room')).toEqual(['http://example.org/d#room1']);
+
+    await dataSources.addText('more.ttl', PREFIXES + ':room2 a :Room .', { path: 'more.ttl' });
+
+    expect(found('room')).toEqual(['http://example.org/d#room1', 'http://example.org/d#room2']);
+  });
+
+  it('shows the choice of what a relationship name selects only when there are individuals', () => {
+    ontology = store(':Room a owl:Class .');
+    const { panel } = mountWithLayer();
+    const choice = document.getElementById('relationshipNameMode')!;
+    expect(choice.hidden).toBe(true);
+
+    ontology = store(':Room a owl:Class . :room1 a :Room .');
+    panel.refresh();
+
+    expect(choice.hidden).toBe(false);
   });
 });

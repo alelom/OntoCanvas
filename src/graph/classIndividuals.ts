@@ -3,7 +3,7 @@
  * class in batches like the type header of the Individuals tab, and the count of individuals the node carries. Display only.
  */
 import type { DataSet } from 'vis-data';
-import { INDIVIDUAL_CLASS_PREFIX, isIndividualNodeId, type IndividualsLayer } from '../abox/individualsLayer';
+import { INDIVIDUAL_CLASS_PREFIX, isIndividualNodeId, limitTitle, type IndividualsLayer } from '../abox/individualsLayer';
 
 export interface ClassIndividualsAction {
   label: string;
@@ -22,7 +22,7 @@ export function classIndividualsAction(layer: IndividualsLayer, classIri: string
   const run = (): void => layer.showClass(classIri);
   if (displayed >= total) return { label: `All ${total} individuals displayed`, title: 'Every individual of this class is drawn', disabled: true, adds, displayed, run };
   if (adds === 0) {
-    return { label: 'Limit reached', title: 'The graph shows as many individuals as it will draw: use Clear individuals to start again, or filter for a narrower set', disabled: true, adds, displayed, run };
+    return { label: 'Limit reached', title: limitTitle(layer.limit), disabled: true, adds, displayed, run };
   }
   const more = displayed > 0 ? ' more' : '';
   return { label: `Show ${adds}${more} individuals (${displayed} displayed/${total} total)`, title: `Draw ${adds}${more} of the individuals of this class in the graph`, disabled: false, adds, displayed, run };

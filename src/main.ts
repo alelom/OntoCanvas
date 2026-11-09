@@ -110,7 +110,6 @@ setImportVersionLookup((url) => {
 
 document.addEventListener('keydown', (e) => {
   const list = document.getElementById('searchAutocomplete');
-  const input = document.getElementById('searchQuery');
   if (!list?.classList.contains('visible')) return;
   const items = list.querySelectorAll('.suggestion');
   let idx = parseInt(list.dataset.highlight || '-1', 10);
@@ -126,11 +125,9 @@ document.addEventListener('keydown', (e) => {
     list.dataset.highlight = String(idx);
     items.forEach((el, i) => el.classList.toggle('highlight', i === idx));
   } else if (e.key === 'Enter' && idx >= 0 && items[idx]) {
+    // Enter does what a click does: a class or a relationship is searched for, an individual drawn and opened (#217).
     e.preventDefault();
-    (input as HTMLInputElement).value = (items[idx] as HTMLElement).dataset
-      .value!;
-    list.classList.remove('visible');
-    applyFilter();
+    (items[idx] as HTMLElement).click();
   } else if (e.key === 'Escape') {
     list.classList.remove('visible');
   }
@@ -171,7 +168,7 @@ session.individualsLayer = createIndividualsLayer({
   imagesOf: (iri) => dataImages.imagesOf(iri),
 });
 // Drawing or clearing individuals redraws the graph where it is; after a draw the user started, the view fits what was drawn (#216).
-session.individualsLayer.onChange((change) => applyFilter(true, change.kind === 'draw' ? change.drawn : undefined, change.anchor));
+session.individualsLayer.onChange(({ kind, drawn, ...asked }) => applyFilter(true, kind === 'draw' ? { fitTo: drawn, ...asked } : undefined));
 session.sidePanel = initSidePanel({
   getStore: () => session.ttlStore,
   getPrefixes: () => session.currentPrefixMap,

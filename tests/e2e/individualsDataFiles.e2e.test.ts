@@ -109,8 +109,8 @@ describe('adding data files: several, dropped, compressed', () => {
       return { position: net.getPositions([nodeId])[nodeId], selected: net.getSelectedNodes().map(String) };
     }, id);
     expect(after.selected).toEqual([id]);
-    // The selection line in the bottom bar follows it (selecting from code raises no select event).
-    expect(await page.locator('#info').innerText()).toContain('reading15');
+    // The selection line in the bottom bar follows it (selecting from code raises no select event), by its label (#217).
+    expect(await page.locator('#info').innerText()).toContain('Selected: Reading 15 (individual)');
     expect(Math.round(after.position.x)).toBe(Math.round(before.x));
     expect(Math.round(after.position.y)).toBe(Math.round(before.y));
   });

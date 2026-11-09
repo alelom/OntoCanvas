@@ -30,6 +30,10 @@ export interface SearchVocabulary {
 
 const isIri = (s: string) => /^https?:\/\//.test(s);
 
+/** The IRI of a relationship drawn as `type`: a local name for a property of the main namespace, else the IRI itself. */
+export const relationshipIri = (type: string, objectProperties: ObjectPropertyInfo[]): string =>
+  isIri(type) ? type : objectProperties.find((p) => p.uri === type || p.name === type)?.uri ?? type;
+
 export function buildSearchVocabulary(input: SearchVocabularyInput): SearchVocabulary {
   const { nodes, edgeTypes, objectProperties, dataProperties, externalOntologyReferences: refs, mainOntologyBase } = input;
   const prefixOf = (iri: string, isDefinedBy?: string | null) => getPrefixForUri(iri, isDefinedBy ?? null, refs, mainOntologyBase);
@@ -38,7 +42,7 @@ export function buildSearchVocabulary(input: SearchVocabularyInput): SearchVocab
   const edgeNameMap = new Map<string, string[]>();
   const relationshipSources: SuggestionSource[] = edgeTypes.map((type) => {
     const op = objectProperties.find((p) => p.uri === type || p.name === type);
-    const iri = isIri(type) ? type : op?.uri ?? type;
+    const iri = relationshipIri(type, objectProperties);
     const display = isIri(type) ? prefixedName(type, prefixOf(type, op?.isDefinedBy)) : type;
     const names = [display, type, iri, getRelationshipLabel(type, objectProperties, refs)];
     edgeNameMap.set(type, names);
