@@ -143,6 +143,16 @@ describe('describe', () => {
     expect(detail.incoming.map((t) => [t.subject, t.predicate])).toEqual([[NS + 'room101', NS + 'hasPart']]);
   });
 
+  it('says whether what points to the individual is an individual, and keeps a blank node blank (#242 review)', () => {
+    const refs = store(':w a :Wall . :r a :Room ; :hasPart :w . :Room :example :w . [ :mentions :w ] .');
+    const incoming = createIndividualIndex([ONTOLOGY, refs]).describe(NS + 'w').incoming;
+    const by = (p: string) => incoming.find((l) => l.predicate === NS + p)!;
+
+    expect(by('hasPart')).toMatchObject({ subject: NS + 'r', subjectType: 'NamedNode', subjectIsIndividual: true });
+    expect(by('example')).toMatchObject({ subject: NS + 'Room', subjectType: 'NamedNode', subjectIsIndividual: false });
+    expect(by('mentions')).toMatchObject({ subjectType: 'BlankNode', subjectIsIndividual: false });
+  });
+
   it('keeps the language of a label, and shows every label', () => {
     expect(index().describe(NS + 'room102').labels.sort()).toEqual(['Raum 102', 'Room 102']);
   });

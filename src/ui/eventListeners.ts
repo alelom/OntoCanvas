@@ -25,6 +25,7 @@ import { restoreNodePositions, forgetNodePositions } from '../workflows/nodePosi
 import { saveTtl } from '../workflows/saveTtlFlow';
 import { performUndo, performRedo } from '../workflows/undoRedo';
 import { handleHistoryShortcut } from './historyShortcuts';
+import { SEARCH_CLEARED } from './searchBox';
 import { handleExternalClassSearch } from './addNodeModal';
 import { initAnnotationPropsMenu } from './annotationPropertiesMenu';
 import { getAnnotationPropsMenuDeps } from './annotationPropertyModal';
@@ -960,6 +961,8 @@ export function setupEventListeners(): void {
       actions.applyFilter();
       suggestionsUpdate.schedule();
     });
+    // Emptied by a pick (#217, #214): the pick's draw redraws, so only the highlight goes.
+    searchInput.addEventListener(SEARCH_CLEARED, updateSearchBarStyle);
     searchInput.addEventListener('focus', () => {
       updateSearchBarStyle();
       if ((searchInput as HTMLInputElement).value.trim()) updateSearchAutocomplete();

@@ -8,6 +8,7 @@ import { canvasState } from '../state/appState';
 import { initAnnotationPropsMenu } from './annotationPropertiesMenu';
 import { getAnnotationPropsMenuDeps } from './annotationPropertyModal';
 import { initEdgeStylesMenu } from './relationshipTypeModal';
+import { clearSearchBox } from './searchBox';
 import { individualSuggestionRows, pickRelationshipName, relationshipSuggestionActions, type SuggestionControls } from './individualSuggestions';
 
 /** Re-render the property menus after the declarations of the imports were merged in (#104). The edge
@@ -40,10 +41,8 @@ export function updateSearchAutocomplete(): void {
   // What picking an individual, or a relationship's instances, does to the search: it found them, so it is emptied (#217).
   const controls: SuggestionControls = {
     close: () => list.classList.remove('visible'),
-    clearSearch: () => {
-      input.value = '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    },
+    clearSearch: clearSearchBox,
+    redraw: () => actions.applyFilter(true),
   };
   suggestions.forEach((s) => {
     const div = document.createElement('div');
@@ -68,5 +67,5 @@ export function updateSearchAutocomplete(): void {
   });
   // The individuals whose label or name matches, drawn or not (#217).
   list.append(...individualSuggestionRows(query, controls));
-  list.classList.add('visible');
+  list.classList.toggle('visible', list.children.length > 0);
 }

@@ -26,6 +26,7 @@ let changes: LayerChange[];
 const open = vi.fn();
 const clearSearch = vi.fn();
 const close = vi.fn();
+const redraw = vi.fn();
 
 function provide(ttl: string, options: { maxTotal?: number } = {}): void {
   const stores = [store(ttl)];
@@ -41,13 +42,14 @@ function provide(ttl: string, options: { maxTotal?: number } = {}): void {
   });
 }
 
-const rows = (query: string) => individualSuggestionRows(query, { clearSearch, close });
+const rows = (query: string) => individualSuggestionRows(query, { clearSearch, close, redraw });
 const picks = (query: string) => rows(query).filter((r) => r.classList.contains('suggestion'));
 
 beforeEach(() => {
   open.mockClear();
   clearSearch.mockClear();
   close.mockClear();
+  redraw.mockClear();
   setRelationshipNameMode('definition');
   setIndividualSearchProvider(null);
 });
@@ -94,6 +96,8 @@ describe('picking an individual', () => {
     expect(close).toHaveBeenCalled();
     expect(changes).toEqual([{ kind: 'draw', drawn: [NS + 'room01'], focus: NS + 'room01' }]);
     expect(open).toHaveBeenCalledWith(NS + 'room01');
+    // The draw redraws the graph: emptying the search does not redraw it a second time (#242 review).
+    expect(redraw).not.toHaveBeenCalled();
   });
 
   it('draws its neighbours too with the second action of the row', () => {
@@ -118,6 +122,8 @@ describe('picking an individual', () => {
 
     expect(changes).toEqual([]);
     expect(open).toHaveBeenCalledWith(NS + 'room01');
+    // Nothing is drawn, so the emptied search is redrawn on its own.
+    expect(redraw).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -125,7 +131,7 @@ describe('a relationship name (#214)', () => {
   it('offers to draw its instances, with how many there are, when the data uses it', () => {
     provide(rooms(3));
 
-    const [action] = relationshipSuggestionActions(NS + 'hasWall', { clearSearch, close });
+    const [action] = relationshipSuggestionActions(NS + 'hasWall', { clearSearch, close, redraw });
     expect(action.textContent).toBe('Draw 6 instances (0 displayed/6 total)');
     action.click();
 
@@ -135,15 +141,15 @@ describe('a relationship name (#214)', () => {
 
   it('offers nothing for a relationship the data does not use, or with no provider', () => {
     provide(rooms(1));
-    expect(relationshipSuggestionActions(NS + 'unused', { clearSearch, close })).toEqual([]);
+    expect(relationshipSuggestionActions(NS + 'unused', { clearSearch, close, redraw })).toEqual([]);
     setIndividualSearchProvider(null);
-    expect(relationshipSuggestionActions(NS + 'hasWall', { clearSearch, close })).toEqual([]);
+    expect(relationshipSuggestionActions(NS + 'hasWall', { clearSearch, close, redraw })).toEqual([]);
   });
 
   it('is left to the search while names select the definitions', () => {
     provide(rooms(1));
 
-    expect(pickRelationshipName(NS + 'hasWall', { clearSearch, close })).toBe(false);
+    expect(pickRelationshipName(NS + 'hasWall', { clearSearch, close, redraw })).toBe(false);
     expect(changes).toEqual([]);
   });
 
@@ -151,7 +157,7 @@ describe('a relationship name (#214)', () => {
     provide(rooms(1));
     setRelationshipNameMode('instances');
 
-    expect(pickRelationshipName(NS + 'hasWall', { clearSearch, close })).toBe(true);
+    expect(pickRelationshipName(NS + 'hasWall', { clearSearch, close, redraw })).toBe(true);
 
     expect(clearSearch).toHaveBeenCalled();
     expect(changes).toEqual([{ kind: 'draw', drawn: [NS + 'room00', NS + 'wall0'], selectEdgeType: NS + 'hasWall' }]);
@@ -161,6 +167,6 @@ describe('a relationship name (#214)', () => {
     provide(rooms(1));
     setRelationshipNameMode('instances');
 
-    expect(pickRelationshipName(NS + 'unused', { clearSearch, close })).toBe(false);
+    expect(pickRelationshipName(NS + 'unused', { clearSearch, close, redraw })).toBe(false);
   });
 });

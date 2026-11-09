@@ -4,16 +4,14 @@ import { getAllRelationshipTypes, getRelationshipLabel, colourableRelationshipTy
 import { getDefaultEdgeColors, getDefaultColor, getEdgeTypes } from '../graph';
 import { pickRelationshipName, type SuggestionControls } from './individualSuggestions';
 import { relationshipIri } from './searchVocabulary';
+import { clearSearchBox } from './searchBox';
+import { actions } from '../state/actions';
 
 /** A relationship's instances drawn from the list of edges (#214): a search typed before would hide them, so it is emptied. */
 const legendControls: SuggestionControls = {
   close: () => document.getElementById('searchAutocomplete')?.classList.remove('visible'),
-  clearSearch: () => {
-    const input = document.getElementById('searchQuery') as HTMLInputElement | null;
-    if (!input?.value) return;
-    input.value = '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  },
+  clearSearch: clearSearchBox,
+  redraw: () => actions.applyFilter(true),
 };
 
 /**

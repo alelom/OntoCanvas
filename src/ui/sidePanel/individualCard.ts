@@ -14,6 +14,7 @@ import { formatTerm } from '../../sparql/formatTerm';
 import type { GraphMatch } from '../../sparql/graphMatches';
 import { renderImageProblem } from './imageProblem';
 import { isOpenableUrl } from '../../utils/openableUrls';
+import { copyTextToClipboard } from '../../utils/clipboard';
 
 export interface IndividualCardDeps {
   prefixes: () => Record<string, string>;
@@ -138,7 +139,7 @@ export function renderIndividualCard(detail: IndividualDetail, deps: IndividualC
       for (const link of values) {
         const item = element('li');
         item.setAttribute('data-individuals-value', '');
-        item.append(side === 'object' ? renderTerm(link.object, link.objectIsIndividual) : renderTerm({ termType: 'NamedNode', value: link.subject }, true), ...graphTag(link.graph));
+        item.append(side === 'object' ? renderTerm(link.object, link.objectIsIndividual) : renderTerm({ termType: link.subjectType, value: link.subject }, link.subjectIsIndividual), ...graphTag(link.graph));
         // A value naming an image (#228): the image under it, or why it cannot be shown.
         const image = side === 'object' && link.object.termType !== 'BlankNode' ? deps.images?.find(link.object.value, iri, link.predicate) : null;
         if (image) item.append(imagePreview(link.object.value, image));
@@ -202,8 +203,9 @@ export function renderIndividualCard(detail: IndividualDetail, deps: IndividualC
   function copyIri(): HTMLButtonElement {
     const copy = button('individual-copy', 'data-individuals-copy-iri', 'Copy IRI', 'Copy the IRI of this individual');
     copy.addEventListener('click', () => {
-      void navigator.clipboard?.writeText(iri).then(() => {
-        copy.textContent = 'Copied';
+      // The app's copy: it falls back where the Clipboard API is missing or refused (#242 review).
+      void copyTextToClipboard(iri).then((copied) => {
+        copy.textContent = copied ? 'Copied' : 'Copy failed';
         setTimeout(() => (copy.textContent = 'Copy IRI'), COPIED_MS);
       });
     });

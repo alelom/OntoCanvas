@@ -24,8 +24,11 @@ export interface IndividualSearchProvider {
 
 /** What a pick does to the search box: empty it, and close the suggestions. */
 export interface SuggestionControls {
+  /** Empties the search box without redrawing: the draw that follows redraws, keeping the view (#242 review). */
   clearSearch: () => void;
   close: () => void;
+  /** Redraws the graph keeping the view: the emptied search, when the pick draws nothing. */
+  redraw: () => void;
 }
 
 export const MAX_INDIVIDUAL_SUGGESTIONS = 10;
@@ -63,10 +66,9 @@ export function individualSuggestionRows(query: string, controls: SuggestionCont
     const pick = (neighbours: boolean): void => {
       controls.close();
       controls.clearSearch();
-      if (!full) {
-        if (neighbours) layer.showNeighbours(iri, { focus: true });
-        else layer.show(iri, { focus: true });
-      }
+      if (full) controls.redraw();
+      else if (neighbours) layer.showNeighbours(iri, { focus: true });
+      else layer.show(iri, { focus: true });
       search.open(iri);
     };
     row.addEventListener('click', () => pick(false));

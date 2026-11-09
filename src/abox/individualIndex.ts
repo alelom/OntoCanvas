@@ -49,6 +49,10 @@ export interface DescribedTerm {
 
 export interface DescribedLink {
   subject: string;
+  /** What refers to an individual can be a blank node, such as a restriction. */
+  subjectType: 'NamedNode' | 'BlankNode';
+  /** The subject is an individual, so it can be followed (a class or a property that refers to one is not). */
+  subjectIsIndividual: boolean;
   predicate: string;
   object: DescribedTerm;
   /** The object is an individual, so it can be followed. */
@@ -223,8 +227,10 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
         ...(term.termType === 'Literal' && term.datatype ? { datatype: term.datatype.value } : {}),
         ...(term.termType === 'Literal' && term.language ? { language: term.language } : {}),
       });
-      const link = (subject: string, predicate: string, object: Parameters<typeof describedTerm>[0], graph: { termType: string; value: string }): DescribedLink => ({
-        subject,
+      const link = (subject: { termType: string; value: string }, predicate: string, object: Parameters<typeof describedTerm>[0], graph: { termType: string; value: string }): DescribedLink => ({
+        subject: subject.value,
+        subjectType: subject.termType === 'BlankNode' ? 'BlankNode' : 'NamedNode',
+        subjectIsIndividual: subject.termType === 'NamedNode' && individuals.has(subject.value),
         predicate,
         object: describedTerm(object),
         objectIsIndividual: object.termType === 'NamedNode' && individuals.has(object.value),
@@ -239,10 +245,10 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
           if (quad.predicate.value === RDF_TYPE) {
             if (quad.object.termType === 'NamedNode') types.add(quad.object.value);
           } else if (quad.predicate.value !== RDFS_LABEL) {
-            outgoing.push(link(iri, quad.predicate.value, quad.object, quad.graph));
+            outgoing.push(link(quad.subject, quad.predicate.value, quad.object, quad.graph));
           }
         }
-        for (const quad of store.getQuads(null, null, iri, null)) incoming.push(link(quad.subject.value, quad.predicate.value, quad.object, quad.graph));
+        for (const quad of store.getQuads(null, null, iri, null)) incoming.push(link(quad.subject, quad.predicate.value, quad.object, quad.graph));
       }
       outgoing.sort(order);
       incoming.sort(order);

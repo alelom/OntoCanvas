@@ -64,10 +64,38 @@ describe('the header', () => {
     tab.show(NS + 'room1');
 
     q<HTMLButtonElement>('[data-individuals-copy-iri]')!.click();
-    await Promise.resolve();
-
+    await vi.waitFor(() => expect(q('[data-individuals-copy-iri]')!.textContent).toBe('Copied'));
     expect(writeText).toHaveBeenCalledWith(NS + 'room1');
-    expect(q('[data-individuals-copy-iri]')!.textContent).toBe('Copied');
+  });
+
+  it('copies the IRI without the Clipboard API, and says so when it cannot (#242 review)', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    const execCommand = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    mount([TWO_GRAPHS]);
+    tab.show(NS + 'room1');
+    const copy = () => q<HTMLButtonElement>('[data-individuals-copy-iri]')!;
+
+    copy().click();
+    await vi.waitFor(() => expect(copy().textContent).toBe('Copied'));
+    expect(execCommand).toHaveBeenCalledWith('copy');
+
+    execCommand.mockReturnValue(false);
+    tab.show(NS + 'wall2');
+    copy().click();
+    await vi.waitFor(() => expect(copy().textContent).toBe('Copy failed'));
+  });
+
+  it('does not leave a rejected copy unhandled', async () => {
+    const writeText = vi.fn(async () => Promise.reject(new Error('denied')));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    Object.defineProperty(document, 'execCommand', { value: vi.fn(() => true), configurable: true });
+    mount([TWO_GRAPHS]);
+    tab.show(NS + 'room1');
+
+    q<HTMLButtonElement>('[data-individuals-copy-iri]')!.click();
+
+    await vi.waitFor(() => expect(q('[data-individuals-copy-iri]')!.textContent).toBe('Copied'));
   });
 });
 
@@ -113,6 +141,21 @@ describe('what refers to it', () => {
     expect(incoming.querySelector('summary')!.textContent).toBe('Referenced by (2)');
     const groups = [...incoming.querySelectorAll('[data-individuals-property]')];
     expect(groups.map((g) => g.querySelector('.individual-predicate')!.textContent)).toEqual([':partOf (2)']);
+  });
+
+  it('follows only what is an individual: a blank node or a class that refers to it is shown, not followed (#242 review)', () => {
+    mount([trig(':w a :Wall . :r a :Room ; :hasPart :w . :Room :example :w . [ :mentions :w ] .')]);
+
+    tab.show(NS + 'w');
+
+    const incoming = q('details[data-individuals-incoming]')!;
+    const valueOf = (p: string) =>
+      [...incoming.querySelectorAll('[data-individuals-property]')].find((g) => g.querySelector('.individual-predicate')!.textContent!.startsWith(p))!.querySelector('[data-individuals-value]')!;
+    expect(valueOf(':hasPart').querySelector('[data-individuals-follow]')!.textContent).toBe(':r');
+    expect(valueOf(':example').querySelector('[data-individuals-follow]')).toBeNull();
+    expect(valueOf(':example').textContent).toBe(':Room');
+    expect(valueOf(':mentions').querySelector('[data-individuals-follow]')).toBeNull();
+    expect(valueOf(':mentions').textContent).toMatch(/^_:/);
   });
 });
 
