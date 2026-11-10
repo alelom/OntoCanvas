@@ -3,7 +3,7 @@
  * Individuals the result names that are not drawn are drawn by the button, within the limit, then selected with the rest: a
  * query alone never draws them (drawing changes the canvas).
  */
-import { describeMatch, irisInTable, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
+import { describeMatch, irisInTable, matchQuadsToGraph, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import type { ResultView } from '../../sparql/resultView';
 import { limitTitle } from '../../abox/individualsLayer';
 import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
@@ -27,6 +27,29 @@ export interface SelectInGraphDeps {
 
 type Table = Extract<ResultView, { kind: 'table' }>;
 
+/** What a result names: how to match it against what is drawn, and the IRIs in it (for the individuals not drawn). */
+export interface ResultFound {
+  matchOf: (graph: GraphIndex) => GraphMatch;
+  iris: string[];
+}
+
+/** A SELECT result: its rows (#203). */
+export const foundInTable = (view: Table): ResultFound => ({ matchOf: (graph) => matchTableToGraph(view, graph), iris: irisInTable(view) });
+
+/** How many triples of a CONSTRUCT or DESCRIBE result the graph draws something for: "; 12 of 40 are in the graph", or nothing. */
+export function triplesInGraph(quads: Parameters<typeof matchQuadsToGraph>[0], graph: GraphIndex | null | undefined): string {
+  if (!graph) return '';
+  const { total, inGraph } = matchQuadsToGraph(quads, graph).triples;
+  return total ? `; ${inGraph} of ${total} ${total === 1 ? 'is' : 'are'} in the graph` : '';
+}
+
+/** A CONSTRUCT or DESCRIBE result: its triples (#207). */
+export function foundInQuads(quads: Parameters<typeof matchQuadsToGraph>[0] & Iterable<{ subject: { termType: string; value: string }; object: { termType: string; value: string } }>): ResultFound {
+  const iris = new Set<string>();
+  for (const { subject, object } of quads) for (const term of [subject, object]) if (term.termType === 'NamedNode') iris.add(term.value);
+  return { matchOf: (graph) => matchQuadsToGraph(quads, graph), iris: [...iris] };
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -37,12 +60,12 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
 }
 
 /** The button, or a line saying why the individuals of the result cannot be shown; nothing when it names nothing to show. */
-export function selectInGraphRow(view: Table, deps: SelectInGraphDeps): HTMLElement[] {
+export function selectInGraphRow(found: ResultFound, deps: SelectInGraphDeps): HTMLElement[] {
   const graph = deps.getGraph?.();
   if (!graph || !deps.showInGraph) return [];
-  const match = matchTableToGraph(view, graph);
+  const match = found.matchOf(graph);
   const people = deps.individuals;
-  const undrawn = people ? irisInTable(view).filter((iri) => people.isIndividual(iri) && !people.isDrawn(iri)) : [];
+  const undrawn = people ? found.iris.filter((iri) => people.isIndividual(iri) && !people.isDrawn(iri)) : [];
   const drawable = people ? Math.min(undrawn.length, people.room()) : 0;
   const drawnPart = describeMatch(match, graph);
   if (!drawnPart && drawable === 0) {
@@ -72,7 +95,7 @@ export function selectInGraphRow(view: Table, deps: SelectInGraphDeps): HTMLElem
     // The graph is redrawn with them; the selection follows the redraw's own view change, so it lands on what is drawn now.
     requestAnimationFrame(() => {
       const now = deps.getGraph?.();
-      if (now) deps.showInGraph!(matchTableToGraph(view, now));
+      if (now) deps.showInGraph!(found.matchOf(now));
     });
   });
   return [button];

@@ -10,9 +10,8 @@ import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
-import { createResultShowing, selectInGraphRow, type ResultIndividuals } from './selectInGraph';
+import { createResultShowing, foundInQuads, foundInTable, selectInGraphRow, triplesInGraph, type ResultIndividuals } from './selectInGraph';
 import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
-import { matchTableToGraph } from '../../sparql/graphMatches';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
@@ -378,8 +377,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
-          result.replaceChildren(...selectInGraphRow(view, deps), renderTable(view, deps.images));
-          showing.show((graph) => matchTableToGraph(view, graph));
+          const found = foundInTable(view);
+          result.replaceChildren(...selectInGraphRow(found, deps), renderTable(view, deps.images));
+          showing.show(found.matchOf);
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;
@@ -387,10 +387,14 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
           result.replaceChildren(element('p', 'query-boolean', String(view.value)));
           status.textContent = `Answered in ${took}`;
         } else {
-          result.replaceChildren(element('pre', 'query-turtle', view.text));
+          // A CONSTRUCT or DESCRIBE result is triples: the graph shows the edges they stand for (#207).
+          const found = rows.kind === 'quads' ? foundInQuads(rows.quads) : null;
+          result.replaceChildren(...(found ? selectInGraphRow(found, deps) : []), element('pre', 'query-turtle', view.text));
+          if (found) showing.show(found.matchOf);
+          const inGraph = rows.kind === 'quads' ? triplesInGraph(rows.quads, deps.getGraph?.()) : '';
           status.textContent = view.truncated
-            ? `The first ${plural(view.count, 'triple', 'triples')} in ${took}; there are more`
-            : `${plural(view.count, 'triple', 'triples')} in ${took}`;
+            ? `The first ${plural(view.count, 'triple', 'triples')} in ${took}; there are more${inGraph}`
+            : `${plural(view.count, 'triple', 'triples')} in ${took}${inGraph}`;
         }
       } catch (error) {
         if (error instanceof QueryStopped) status.textContent = 'Stopped.';

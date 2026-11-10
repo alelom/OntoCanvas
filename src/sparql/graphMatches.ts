@@ -109,3 +109,56 @@ export function describeMatch(match: GraphMatch, graph?: GraphIndex): string {
   if (match.edgeIds.length) parts.push(plural(match.edgeIds.length, 'relationship', 'relationships'));
   return parts.join(', ');
 }
+
+const RDFS_DOMAIN = 'http://www.w3.org/2000/01/rdf-schema#domain';
+const RDFS_RANGE = 'http://www.w3.org/2000/01/rdf-schema#range';
+
+/** A triple of a CONSTRUCT or DESCRIBE result, as far as matching needs it. */
+interface TripleLike {
+  subject: { termType: string; value: string };
+  predicate: { value: string };
+  object: { termType: string; value: string };
+}
+
+/**
+ * What a CONSTRUCT or DESCRIBE result names in the graph (#207): each triple `s p o` is the drawn edge from `s` to `o` of
+ * relationship `p` and its two ends. The canvas draws some triples otherwise: `p rdfs:domain A` and `p rdfs:range B` are the
+ * edge of `p` from A, or to B. A triple counts as in the graph when it matched an edge or a node; `triples` says how many did.
+ */
+export function matchQuadsToGraph(quads: Iterable<TripleLike>, graph: GraphIndex): GraphMatch & { triples: { total: number; inGraph: number } } {
+  const nodesByUri = new Map<string, string[]>();
+  for (const node of graph.nodes) if (node.uri) nodesByUri.set(node.uri, [...(nodesByUri.get(node.uri) ?? []), node.id]);
+  const uriOfNode = new Map(graph.nodes.map((n) => [n.id, n.uri] as const));
+  const nodeIds = new Set<string>();
+  const edgeIds = new Set<string>();
+  let total = 0;
+  let inGraph = 0;
+  for (const { subject, predicate, object } of quads) {
+    total++;
+    const s = subject.termType === 'NamedNode' ? subject.value : null;
+    const o = object.termType === 'NamedNode' ? object.value : null;
+    const p = predicate.value;
+    let found = false;
+    for (const edge of graph.edges) {
+      const property = edgeIri(edge, graph.objectProperties);
+      const from = uriOfNode.get(edge.from);
+      const to = uriOfNode.get(edge.to);
+      const hit =
+        (property === p && from === s && to === o && s !== null) ||
+        (p === RDFS_DOMAIN && property === s && from === o) ||
+        (p === RDFS_RANGE && property === s && to === o);
+      if (hit) {
+        edgeIds.add(edgeId(edge));
+        found = true;
+      }
+    }
+    for (const iri of [s, o]) {
+      for (const id of (iri && nodesByUri.get(iri)) || []) {
+        nodeIds.add(id);
+        found = true;
+      }
+    }
+    if (found) inGraph++;
+  }
+  return { nodeIds: [...nodeIds], edgeIds: [...edgeIds], triples: { total, inGraph } };
+}
