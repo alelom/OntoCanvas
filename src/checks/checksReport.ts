@@ -63,3 +63,15 @@ export function pathText(path: PathStep[], nameOf: (iri: string) => string): str
     })
     .join('/');
 }
+
+/**
+ * The results a capped report shows: the worst first (violations, then warnings, then infos), keeping the order they were found
+ * in within a severity, so a shape with many warnings cannot hide the violations of the next (#243 review). `hidden` counts the
+ * rest by severity.
+ */
+export function capResults(results: CheckResult[], max: number): { shown: CheckResult[]; hidden: Record<Severity, number> } {
+  const ordered = ORDER.flatMap((severity) => results.filter((r) => r.severity === severity));
+  const hidden = zero();
+  for (const result of ordered.slice(max)) hidden[result.severity]++;
+  return { shown: ordered.slice(0, max), hidden };
+}

@@ -17,10 +17,13 @@ import { mergedTriples } from '../sparql/unionSource';
 import { QueryStopped } from '../sparql/readCapped';
 
 const SH = 'http://www.w3.org/ns/shacl#';
-const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+const RDF_NS = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+const RDF_TYPE = RDF_NS + 'type';
 const TARGETS = ['targetClass', 'targetNode', 'targetSubjectsOf', 'targetObjectsOf', 'target'].map((t) => SH + t);
 const CLASSES = ['http://www.w3.org/2000/01/rdf-schema#Class', 'http://www.w3.org/2002/07/owl#Class'];
 const SPARQL_KEYS = [SH + 'sparql', SH + 'target', SH + 'select'];
+/** What names another shape, or a list of them (rdf:first: the members; rdf:rest: the rest of the list). */
+const SHAPE_VALUED = [...['node', 'property', 'and', 'or', 'xone', 'not', 'qualifiedValueShape'].map((p) => SH + p), RDF_NS + 'first', RDF_NS + 'rest'];
 
 export type Severity = 'Violation' | 'Warning' | 'Info';
 
@@ -117,7 +120,11 @@ export function mergedDataset(stores: Store[]): RDF.DatasetCore {
   };
 }
 
-/** Whether anything reachable from the shape (its property shapes, its lists) is SPARQL-based. */
+/**
+ * Whether anything reachable from the shape is SPARQL-based: its blank nodes, and the shapes it uses by name (sh:node,
+ * sh:property, the members of sh:and, sh:or, sh:xone, sh:not, sh:qualifiedValueShape), as a shared constraint usually is (#243
+ * review). shacl-engine without its SPARQL plug-in skips such a constraint silently, so the shape must be said not checked.
+ */
 function usesSparql(shapes: Store, shape: RDF.Term): boolean {
   const seen = new Set<string>();
   const visit = (node: RDF.Term): boolean => {
@@ -126,7 +133,8 @@ function usesSparql(shapes: Store, shape: RDF.Term): boolean {
     seen.add(key);
     for (const quad of shapes.getQuads(node as never, null, null, null)) {
       if (SPARQL_KEYS.includes(quad.predicate.value)) return true;
-      if (quad.object.termType === 'BlankNode' && visit(quad.object)) return true;
+      const follow = quad.object.termType === 'BlankNode' || (quad.object.termType === 'NamedNode' && SHAPE_VALUED.includes(quad.predicate.value));
+      if (follow && visit(quad.object)) return true;
     }
     return false;
   };

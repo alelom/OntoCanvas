@@ -6,6 +6,7 @@
 import { Parser, Store } from 'n3';
 import { checkFileKind, fileName, parseManifest, queryTitle, resolvePath, type ManifestEntry } from './manifest';
 import { shapesToRun } from './validateShapes';
+import { isPrivateAddress } from '../abox/dataOntologies';
 
 export interface SavedQuery {
   /** Where it was read from: its address, or its path among the files picked. Loading it again replaces it. */
@@ -75,6 +76,23 @@ async function fetchText(url: string): Promise<string> {
 /** In a folder with no manifest, the files that are shapes by their name: a folder of data holds Turtle that is not. */
 const looksLikeShapes = (path: string): boolean => /(\.shacl\.|shapes?[^/]*\.[^/]+$)/i.test(fileName(path));
 
+/** Why an address a manifest names was not fetched (as the data's own addresses are not, #239). */
+const PRIVATE_ADDRESS = 'not loaded: the address is on this machine or a private network, and the manifest, not you, names it';
+
+/**
+ * Whether a manifest names an address on this machine or a private network that is not on its own server (#243 review): someone
+ * else's manifest, opened by a link, must not make the page reach such hosts, and the answer would tell which ones respond. A
+ * manifest served from such a host (a local server) still reads its own files.
+ */
+function namedPrivately(address: string, manifest: string): boolean {
+  if (!/^https?:\/\//i.test(address) || !isPrivateAddress(address)) return false;
+  try {
+    return new URL(address).origin !== new URL(manifest).origin;
+  } catch {
+    return true;
+  }
+}
+
 const problemOf = (source: string, error: unknown): string => `${fileName(source) || source}: ${error instanceof Error ? error.message : String(error)}`;
 
 export function createChecksLibrary(deps: ChecksLibraryDeps = {}): ChecksLibrary {
@@ -124,7 +142,12 @@ export function createChecksLibrary(deps: ChecksLibraryDeps = {}): ChecksLibrary
       ...manifest.shapes.map((entry) => ({ kind: 'shapes' as const, entry })),
     ];
     // Read together, kept in the manifest's order.
-    const texts = await Promise.allSettled(jobs.map(({ entry }) => get(resolvePath(entry.path, base))));
+    const texts = await Promise.allSettled(
+      jobs.map(({ entry }) => {
+        const source = resolvePath(entry.path, base);
+        return namedPrivately(source, base) ? Promise.reject(new Error(PRIVATE_ADDRESS)) : get(source);
+      })
+    );
     jobs.forEach(({ kind, entry }, i) => {
       const source = resolvePath(entry.path, base);
       listed.add(source);

@@ -35,7 +35,8 @@ function mount(validate?: Validate, stores: Store[] = [DATA]): void {
 const loadShapes = () => library.addFiles([{ path: 'readings.shacl.ttl', text: async () => SHAPES }]);
 const runChecks = async () => {
   q<HTMLButtonElement>('[data-checks-run]').click();
-  await vi.waitFor(() => expect(q<HTMLButtonElement>('[data-checks-stop]').hidden).toBe(true));
+  // The first run imports shacl-engine: under the load of the whole suite that takes more than waitFor's default second.
+  await vi.waitFor(() => expect(q<HTMLButtonElement>('[data-checks-stop]').hidden).toBe(true), { timeout: 5000 });
 };
 
 beforeEach(() => {
@@ -122,7 +123,48 @@ describe('Run checks', () => {
     await runChecks();
 
     expect(container.querySelectorAll('[data-checks-result]')).toHaveLength(MAX_RESULTS_SHOWN);
-    expect(container.textContent).toContain(`The first ${MAX_RESULTS_SHOWN} of ${MAX_RESULTS_SHOWN + 5} results are shown.`);
+    expect(container.textContent).toContain(`The first ${MAX_RESULTS_SHOWN} of ${MAX_RESULTS_SHOWN + 5} results are shown, violations first: 5 violations are not.`);
+  });
+
+  it('shows the violations first when the report is capped, and says how many are not shown (#243 review)', async () => {
+    const result = (shape: string, severity: CheckResult['severity'], i: number): CheckResult => ({
+      shape: { termType: 'NamedNode', value: NS + shape },
+      severity,
+      focusNode: { termType: 'NamedNode', value: `${NS}x${i}` },
+      path: null,
+      value: null,
+      message: 'm',
+      constraint: 'MinCountConstraintComponent',
+    });
+    const results = [
+      ...Array.from({ length: MAX_RESULTS_SHOWN }, (_, i) => result('Warnings', 'Warning', i)),
+      ...Array.from({ length: 3 }, (_, i) => result('Violations', 'Violation', i)),
+    ];
+    mount(async () => ({ results, checked: 2, notChecked: [], conforms: false }));
+    await loadShapes();
+
+    await runChecks();
+
+    expect(container.querySelectorAll('[data-checks-result][data-severity="Violation"]')).toHaveLength(3);
+    expect(q('[data-checks-shape] summary').textContent).toBe(':Violations (3 violations)');
+    expect(container.textContent).toContain(`The first ${MAX_RESULTS_SHOWN} of ${MAX_RESULTS_SHOWN + 3} results are shown, violations first: 3 warnings are not.`);
+  });
+
+  it('stops a run when another ontology is opened, so its report is not shown under the new one (#243 review)', async () => {
+    const tab = createChecksTab({
+      library,
+      getStores: () => [DATA],
+      getPrefixes: () => ({ '': NS }),
+      validate: (_shapes, _data, options) => new Promise((_, reject) => options!.signal!.addEventListener('abort', () => reject(new QueryStopped()))),
+    });
+    tab.render(container);
+    await loadShapes();
+    q<HTMLButtonElement>('[data-checks-run]').click();
+
+    tab.refresh();
+
+    await vi.waitFor(() => expect(q<HTMLButtonElement>('[data-checks-stop]').hidden).toBe(true));
+    expect(container.querySelectorAll('[data-checks-result]')).toHaveLength(0);
   });
 
   it('can be stopped', async () => {

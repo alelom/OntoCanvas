@@ -84,6 +84,40 @@ describe('loading a manifest by its address', () => {
   });
 });
 
+describe('addresses a manifest names (#243 review)', () => {
+  it('skips one on this machine or a private network, unless it is on the manifest\'s own server', async () => {
+    const fetched: string[] = [];
+    const files: Record<string, string> = {
+      'https://example.org/c/manifest.json': JSON.stringify({ queries: ['http://localhost:8080/q.rq', 'http://192.168.1.4/q.rq', 'q.rq'] }),
+      'https://example.org/c/q.rq': Q2,
+      'http://localhost:5173/c/manifest.json': JSON.stringify({ queries: ['q.rq', 'http://localhost:5173/other/q.rq', 'http://localhost:8080/q.rq'] }),
+      'http://localhost:5173/c/q.rq': Q2,
+      'http://localhost:5173/other/q.rq': Q2,
+    };
+    const library = createChecksLibrary({
+      fetchText: async (url) => {
+        fetched.push(url);
+        return files[url] ?? Promise.reject(new Error('the server answered 404'));
+      },
+    });
+
+    const outcome = await library.addUrl('https://example.org/c/manifest.json');
+
+    expect(outcome.queries).toBe(1);
+    expect(outcome.problems).toEqual([
+      'q.rq: not loaded: the address is on this machine or a private network, and the manifest, not you, names it',
+      'q.rq: not loaded: the address is on this machine or a private network, and the manifest, not you, names it',
+    ]);
+    expect(fetched).not.toContain('http://localhost:8080/q.rq');
+    expect(fetched).not.toContain('http://192.168.1.4/q.rq');
+
+    fetched.length = 0;
+    const local = await library.addUrl('http://localhost:5173/c/manifest.json');
+    expect(local.queries).toBe(2);
+    expect(fetched).not.toContain('http://localhost:8080/q.rq');
+  });
+});
+
 describe('loading files', () => {
   it('takes queries and shapes by their extension, and names a file that is neither', async () => {
     const library = createChecksLibrary();

@@ -91,6 +91,22 @@ describe('validateShapes', () => {
     expect(report.results).toEqual([]);
   });
 
+  it('lists as not checked a shape whose SPARQL constraint is on a named shape it uses (#243 review)', async () => {
+    const shapes = store(`
+:Top a sh:NodeShape ; sh:targetClass :TextReading ; sh:node :Inner .
+:Inner a sh:NodeShape ; sh:sparql [ a sh:SPARQLConstraint ; sh:select "SELECT $this WHERE { }" ] .
+:ByProperty a sh:NodeShape ; sh:targetClass :TextReading ; sh:property :PropShape .
+:PropShape a sh:PropertyShape ; sh:path :readText ; sh:sparql [ sh:select "SELECT $this WHERE { }" ] .
+:ByList a sh:NodeShape ; sh:targetClass :TextReading ; sh:or ( :Plain :Inner ) .
+:Plain a sh:NodeShape ; sh:property [ sh:path :readText ; sh:minCount 1 ] .
+:Clean a sh:NodeShape ; sh:targetClass :TextReading ; sh:node :Plain .`);
+
+    const report = await validateShapes(shapes, [store(':r a :TextReading ; :readText "x" .')]);
+
+    expect(report.notChecked.map((t) => t.value).sort()).toEqual([NS + 'ByList', NS + 'ByProperty', NS + 'Top']);
+    expect(report.checked).toBe(1);
+  });
+
   it('says its progress shape by shape, and stops at the next shape', async () => {
     const progress = vi.fn();
     const stopper = new AbortController();

@@ -5,7 +5,7 @@
 import { DataFactory, type Store } from 'n3';
 import type { ChecksLibrary } from '../../checks/checksLibrary';
 import { validateShapes, type CheckReport, type CheckResult, type CheckTerm, type ValidateOptions } from '../../checks/validateShapes';
-import { countsText, groupByShape, pathText, reportSummary } from '../../checks/checksReport';
+import { capResults, countsText, groupByShape, pathText, reportSummary } from '../../checks/checksReport';
 import { QueryStopped } from '../../sparql/readCapped';
 import { formatTerm } from '../../sparql/formatTerm';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
@@ -54,6 +54,8 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
   const run = deps.validate ?? validateShapes;
   let result: HTMLElement | null = null;
   let status: HTMLElement | null = null;
+  /** The run going on: opening another ontology stops it, so its report is not shown under the new one (#243 review). */
+  let stopper: AbortController | null = null;
 
   // The shapes are named with their own prefixes too (shapes:Reading), the open file's winning a prefix both declare.
   const formatted = (term: CheckTerm) => formatTerm(toStoreTerm(term), withStandardPrefixes({ ...deps.library.shapesPrefixes(), ...deps.getPrefixes() }));
@@ -104,22 +106,25 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
       );
       parts.push(note);
     }
-    let shown = 0;
-    for (const group of groupByShape(report.results)) {
-      if (shown >= MAX_RESULTS_SHOWN) break;
+    // The worst first under the cap (#243 review); each shape's line counts all its results, shown or not.
+    const { shown, hidden } = capResults(report.results, MAX_RESULTS_SHOWN);
+    const keyOf = (term: CheckTerm) => `${term.termType}:${term.value}`;
+    const allCounts = new Map(groupByShape(report.results).map((g) => [keyOf(g.shape), g.counts]));
+    for (const group of groupByShape(shown)) {
       const section = element('details', 'checks-shape');
       section.open = true;
       section.setAttribute('data-checks-shape', '');
       const summary = element('summary');
-      summary.append(renderTerm(group.shape), ` (${countsText(group.counts)})`);
+      summary.append(renderTerm(group.shape), ` (${countsText(allCounts.get(keyOf(group.shape)) ?? group.counts)})`);
       const list = element('ul', 'checks-results');
-      const take = group.results.slice(0, MAX_RESULTS_SHOWN - shown);
-      shown += take.length;
-      list.append(...take.map(renderResult));
+      list.append(...group.results.map(renderResult));
       section.append(summary, list);
       parts.push(section);
     }
-    if (report.results.length > shown) parts.push(element('p', 'query-note', `The first ${MAX_RESULTS_SHOWN} of ${report.results.length} results are shown.`));
+    const notShown = report.results.length - shown.length;
+    if (notShown > 0) {
+      parts.push(element('p', 'query-note', `The first ${MAX_RESULTS_SHOWN} of ${report.results.length} results are shown, violations first: ${countsText(hidden)} ${notShown === 1 ? 'is' : 'are'} not.`));
+    }
     return parts;
   }
 
@@ -183,7 +188,6 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
     });
     enable();
 
-    let stopper: AbortController | null = null;
     stopButton.addEventListener('click', () => stopper?.abort());
     runButton.addEventListener('click', async () => {
       const stores = deps.getStores();
@@ -220,6 +224,7 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
     title: 'Checks',
     render,
     refresh() {
+      stopper?.abort();
       result?.replaceChildren();
       if (status) status.textContent = '';
     },
