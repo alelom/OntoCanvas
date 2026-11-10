@@ -13,6 +13,7 @@ import { createDataImages } from './abox/dataImages';
 import { getDataUrlsFromParams, getChecksUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 import { currentGraphIndex } from './graph/drawnGraphIndex';
+import { showResultInGraph, clearResultInGraph } from './graph/showResultInGraph';
 
 import { isDebugMode, debugLog } from './utils/debug';
 import {
@@ -176,6 +177,8 @@ session.sidePanel = initSidePanel({
   getHistoryKey: () => historyKeyOf(session.ttlStore, fileState.loadedFilePath ?? fileState.loadedFileName),
   // The class graph and the individuals drawn over it (#207).
   getGraph: currentGraphIndex,
+  showResult: showResultInGraph,
+  clearResult: clearResultInGraph,
   showInGraph: (match) => {
     const network = canvasState.network;
     if (!network) return;

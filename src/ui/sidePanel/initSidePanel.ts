@@ -16,6 +16,7 @@ import { countIndividuals, createIndividualIndex, type IndividualIndex } from '.
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
+import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 import type { DataImages } from '../../abox/dataImages';
 import { syncFolderNotices } from '../folderNotices';
@@ -35,6 +36,9 @@ export interface SidePanelDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects what a query result names in the graph and brings it into view (#203). */
   showInGraph?: (match: GraphMatch) => void;
+  /** Outlines a query result in the graph by itself, and brings it into view (#207); and removes that outline. */
+  showResult?: (matcher: ResultMatcher) => ShowDecision;
+  clearResult?: () => void;
   /** The data added to the open ontology, queried with it (#205). */
   dataSources?: DataSources;
   /** The label a class has in the graph, for the Individuals tab (#208). */
@@ -123,6 +127,8 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getHistoryKey: deps.getHistoryKey,
     getGraph: deps.getGraph,
     showInGraph: deps.showInGraph,
+    showResult: deps.showResult,
+    clearResult: deps.clearResult,
     dataSources: deps.dataSources,
     dataLoader,
     images: deps.dataImages,

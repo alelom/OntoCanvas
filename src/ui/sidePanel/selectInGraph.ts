@@ -6,6 +6,7 @@
 import { describeMatch, irisInTable, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import type { ResultView } from '../../sparql/resultView';
 import { limitTitle } from '../../abox/individualsLayer';
+import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
 
 /** The individuals of the open data, for a result to draw those it names (#207). */
 export interface ResultIndividuals {
@@ -75,4 +76,78 @@ export function selectInGraphRow(view: Table, deps: SelectInGraphDeps): HTMLElem
     });
   });
   return [button];
+}
+
+const SHOW_RESULTS_KEY = 'ontocanvas.showResultsInGraph';
+
+function readShowResults(): boolean {
+  try {
+    return localStorage.getItem(SHOW_RESULTS_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function writeShowResults(on: boolean): void {
+  try {
+    localStorage.setItem(SHOW_RESULTS_KEY, String(on));
+  } catch {
+    // A browser that keeps nothing: the choice lasts for the page.
+  }
+}
+
+export interface ShowResultDeps {
+  getGraph?: () => GraphIndex | null;
+  /** Outlines a result in the graph and brings it into view, when the rule allows (#207). */
+  showResult?: (matcher: ResultMatcher) => ShowDecision;
+  clearResult?: () => void;
+}
+
+/**
+ * A result shown in the graph by itself after each Run (#207): the checkbox that turns it off (remembered in the browser), and
+ * the line that says what was outlined, with a Clear.
+ */
+export function createResultShowing(deps: ShowResultDeps): { toggle: HTMLElement; line: HTMLElement; show(matcher: ResultMatcher): void; clear(): void } {
+  let on = readShowResults();
+  const line = element('span', 'query-status query-shown-line');
+  const toggle = element('label', 'query-show-results');
+  const box = element('input');
+  box.type = 'checkbox';
+  box.checked = on;
+  box.setAttribute('data-query-show-results', '');
+  toggle.title = 'After each run, outline in the graph what the result names, and bring it into view. It selects nothing.';
+  toggle.append(box, ' Show results in the graph');
+
+  function clear(): void {
+    line.replaceChildren();
+    deps.clearResult?.();
+  }
+  box.addEventListener('change', () => {
+    on = box.checked;
+    writeShowResults(on);
+    if (!on) clear();
+  });
+
+  function show(matcher: ResultMatcher): void {
+    line.replaceChildren();
+    const graph = deps.getGraph?.();
+    if (!on || !deps.showResult || !graph) return;
+    const decision = deps.showResult(matcher);
+    if (decision.kind !== 'show' && decision.kind !== 'tooMany') return;
+    const said = element('span');
+    said.setAttribute('data-query-shown', '');
+    if (decision.kind === 'tooMany') {
+      said.textContent = `${decision.count} matches in the graph: too many to outline.`;
+    } else {
+      const clearButton = element('button', 'link-button', 'Clear');
+      clearButton.type = 'button';
+      clearButton.title = 'Remove the outline';
+      clearButton.setAttribute('data-query-shown-clear', '');
+      clearButton.addEventListener('click', clear);
+      said.append(`${describeMatch(matcher(graph), graph)} outlined in the graph. `, clearButton);
+    }
+    line.append(said);
+  }
+
+  return { toggle, line, show, clear };
 }

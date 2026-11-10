@@ -10,7 +10,9 @@ import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
 import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
-import { selectInGraphRow, type ResultIndividuals } from './selectInGraph';
+import { createResultShowing, selectInGraphRow, type ResultIndividuals } from './selectInGraph';
+import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
+import { matchTableToGraph } from '../../sparql/graphMatches';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
@@ -41,6 +43,10 @@ export interface QueryTabDeps {
   showInGraph?: (match: GraphMatch) => void;
   /** The individuals of the data: "Select in graph" draws those a result names that are not drawn (#207). */
   individuals?: ResultIndividuals;
+  /** Outlines a result in the graph by itself after a run, and brings it into view (#207). */
+  showResult?: (matcher: ResultMatcher) => ShowDecision;
+  /** Removes that outline. */
+  clearResult?: () => void;
   /** The data added to the open ontology (#205): queries run over it too, and a line says so. */
   dataSources?: DataSources;
   /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
@@ -143,6 +149,8 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   let edited = false;
   let prefixNote: HTMLElement | null = null;
   let stop: (() => void) | null = null;
+  // A result shown in the graph by itself (#207): what was outlined, and the checkbox that turns it off.
+  const showing = createResultShowing(deps);
   /** The prefixes the query's text was written with (the starter's header); the note compares the open file's to them. */
   let headerPrefixes = JSON.stringify(deps.getPrefixes());
 
@@ -327,7 +335,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     status.setAttribute('data-query-status', '');
     status.setAttribute('aria-live', 'polite');
     const actions = element('div', 'query-actions');
-    actions.append(runButton, stopButton, status);
+    actions.append(runButton, stopButton, status, showing.line, showing.toggle);
 
     const result = element('div', 'query-result');
     result.setAttribute('data-query-result', '');
@@ -349,6 +357,8 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         return;
       }
 
+      // The last result's outline goes: it belonged to the query before.
+      showing.clear();
       recordRun(editor!.getText());
       runButton.disabled = true;
       stopButton.hidden = false;
@@ -369,6 +379,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
 
         if (view.kind === 'table') {
           result.replaceChildren(...selectInGraphRow(view, deps), renderTable(view, deps.images));
+          showing.show((graph) => matchTableToGraph(view, graph));
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;
@@ -410,6 +421,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       // The data belongs to the ontology it was added to.
       deps.dataLoader?.reset();
       deps.dataSources?.clear();
+      showing.clear();
       if (!editor) return;
       if (!edited) editor.setText(starterText());
       updatePrefixNote();
