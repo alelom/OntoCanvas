@@ -210,11 +210,11 @@ describe('individuals in the graph', () => {
 
     await clickEdge("e.id.startsWith('__individual_edge__') && e.label === 'memberOf'");
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().getSelectedEdges().length > 0);
-    expect(await toolbar()).toEqual(['vis-add', 'vis-connect', 'queryPanelBtn', 'individualsPanelBtn']);
+    expect(await toolbar()).toEqual(['vis-add', 'vis-connect', 'queryPanelBtn', 'individualsPanelBtn', 'checksPanelBtn']);
 
     await clickEdge("!e.id.startsWith('__individual') && /memberOf$/.test(String(e.id))");
     await page.waitForFunction(() => (window as any).__EDITOR_TEST__.getNetwork().getSelectedEdges().some((id: string) => !id.startsWith('__individual')));
-    expect(await toolbar()).toEqual(['vis-add', 'vis-connect', 'vis-edit', 'queryPanelBtn', 'individualsPanelBtn']);
+    expect(await toolbar()).toEqual(['vis-add', 'vis-connect', 'vis-edit', 'queryPanelBtn', 'individualsPanelBtn', 'checksPanelBtn']);
   });
 
   it('leaves a drawn individual alone on Delete, and the ontology unchanged', async () => {

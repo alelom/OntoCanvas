@@ -944,6 +944,10 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
   align-items: center;
   gap: 12px;
 }
+.query-actions > button {
+  flex: none;
+  white-space: nowrap;
+}
 .query-status {
   color: #666;
   font-size: 11px;
