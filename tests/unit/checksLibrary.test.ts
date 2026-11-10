@@ -88,7 +88,7 @@ describe('addresses a manifest names (#243 review)', () => {
   it('skips one on this machine or a private network, unless it is on the manifest\'s own server', async () => {
     const fetched: string[] = [];
     const files: Record<string, string> = {
-      'https://example.org/c/manifest.json': JSON.stringify({ queries: ['http://localhost:8080/q.rq', 'http://192.168.1.4/q.rq', 'q.rq'] }),
+      'https://example.org/c/manifest.json': JSON.stringify({ queries: ['http://localhost:8080/q.rq', 'http://100.64.0.1/q.rq', 'q.rq'] }),
       'https://example.org/c/q.rq': Q2,
       'http://localhost:5173/c/manifest.json': JSON.stringify({ queries: ['q.rq', 'http://localhost:5173/other/q.rq', 'http://localhost:8080/q.rq'] }),
       'http://localhost:5173/c/q.rq': Q2,
@@ -109,7 +109,7 @@ describe('addresses a manifest names (#243 review)', () => {
       'q.rq: not loaded: the address is on this machine or a private network, and the manifest, not you, names it',
     ]);
     expect(fetched).not.toContain('http://localhost:8080/q.rq');
-    expect(fetched).not.toContain('http://192.168.1.4/q.rq');
+    expect(fetched).not.toContain('http://100.64.0.1/q.rq');
 
     fetched.length = 0;
     const local = await library.addUrl('http://localhost:5173/c/manifest.json');
