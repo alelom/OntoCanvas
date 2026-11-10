@@ -1,3 +1,15 @@
+# [2.9.0](https://github.com/alelom/OntoCanvas/compare/v2.8.0...v2.9.0) (2026-11-10)
+
+
+### Bug Fixes
+
+* **checks:** the [#243](https://github.com/alelom/OntoCanvas/issues/243) review: a SPARQL constraint on a named shape is said not checked, violations shown first under the cap ([336f36a](https://github.com/alelom/OntoCanvas/commit/336f36a09903d0cf4600b94cbe04d0dff83dcb11)), closes [#239](https://github.com/alelom/OntoCanvas/issues/239)
+
+
+### Features
+
+* **checks:** saved SPARQL queries and SHACL validation from files, a folder, an address or a manifest ([9ee662f](https://github.com/alelom/OntoCanvas/commit/9ee662f10928c8a3ba2feefc3da9337ecf859799))
+
 # [2.8.0](https://github.com/alelom/OntoCanvas/compare/v2.7.0...v2.8.0) (2026-11-09)
 
 
