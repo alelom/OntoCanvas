@@ -17,6 +17,8 @@ import type { DataImages } from '../../abox/dataImages';
 import { isImagePath } from '../../abox/imagePaths';
 import type { SidePanelTab } from './sidePanelHost';
 import { loadCodeMirrorEditor, mountTextarea, type LoadEditor, type QueryEditor } from './queryEditor';
+import type { ChecksLibrary } from '../../checks/checksLibrary';
+import { renderSavedQueries } from './savedQueries';
 
 export type RunQuery = (stores: Store[], query: string, options?: RunOptions) => Promise<QueryResult>;
 
@@ -44,6 +46,8 @@ export interface QueryTabDeps {
   images?: DataImages;
   /** Opens the Individuals tab, where the data is added and removed (#211). */
   openIndividuals?: () => void;
+  /** The saved queries of the session (#230): picking one puts it in the editor. */
+  library?: ChecksLibrary;
 }
 
 export interface QueryTab extends SidePanelTab {
@@ -288,6 +292,19 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     syncHistory();
     renderHistory();
 
+    // A saved query, like one from the history, is put in the editor as the user's own; it is not run.
+    const savedQueries = deps.library
+      ? [
+          renderSavedQueries(deps.library, (query) => {
+            if (!editor) return;
+            edited = true;
+            editor.setText(query.text);
+            updatePrefixNote();
+            editor.focus();
+          }),
+        ]
+      : [];
+
     const editorHost = element('div', 'query-editor');
     editorHost.setAttribute('data-query-editor', '');
     const hooks = {
@@ -390,7 +407,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     runButton.addEventListener('click', () => void execute());
     stopButton.addEventListener('click', () => stop?.());
     const dataSummary = renderDataSummary();
-    container.append(note, ...(dataSummary ? [dataSummary] : []), prefixNote, historyRow, editorHost, actions, result);
+    container.append(note, ...(dataSummary ? [dataSummary] : []), prefixNote, ...savedQueries, historyRow, editorHost, actions, result);
   }
 
   /** An edited query keeps its own PREFIX lines; say so when the open file's differ from them. */

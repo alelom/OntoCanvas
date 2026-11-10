@@ -95,6 +95,14 @@ Data as batch processes produce it, one folder per dataset, with a README of its
 | [adiro-run](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fw3id.org%2Fadiro%2Fadiro_drawing_metadata%2F7.0.1&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Fadiro-run%2Fpart-0001.nq.gz) | A run that names the ontology versions it was made with (`prov:used`): they are read on their own, and then name the classes of its individuals, drawn as class nodes "defined by" their module with the count of their individuals. Start from the file on its own (Explore data files…) to see all three read | #235, #236 | [folder](datasets/adiro-run/) |
 | [run-folder](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-folder%2Fruns%2Frun-0001%2Frun.ttl&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-folder%2Fruns%2Frun-0001%2Fpart-0001.nq.gz&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-folder%2Fruns%2Frun-0001%2Fpart-0002.nq.gz&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fdatasets%2Frun-folder%2Fruns%2Frun-0001%2Fpart-0003.nq.gz) | The folder of a run: three compressed parts in two named graphs, a Turtle file, titleblock crops kept as ADIRO models them (an image of the frame that covers the titleblock's box) under drawing paths with `&`, `#` and commas, and a README. Opened as a folder (Explore a folder…, From a folder…, or dropped), every data file is added and each titleblock shows its crop in its detail and tooltip, and a query result shows it on hover over its path, though the data names it relative to the folder above `runs/`, percent-encoded. The link opens it by address, where the paths resolve next to the parts | #226, #227, #228, #241 | [folder](datasets/run-folder/) |
 
+## Checks
+
+A manifest (JSON) that lists saved SPARQL queries and SHACL shapes, next to the ontology and data they check. The link adds `?checks=<manifest>`.
+
+| Example (opens in OntoCanvas) | Shows | Issue | Source |
+|---|---|---|---|
+| [readings](https://alelom.github.io/OntoCanvas/?onto=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fchecks%2Freadings.ttl&data=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fchecks%2Freadings-data.ttl&checks=https%3A%2F%2Fraw.githubusercontent.com%2Falelom%2FOntoCanvas%2Fmain%2Fexamples%2Fchecks%2Fmanifest.json) | Saved queries in the Query tab, titled by the manifest or by their first comment; SHACL shapes in the Checks tab, whose report groups 4 violations and 1 warning by shape, opens the card of a reading, and lists a SPARQL-based shape as not checked | #230, #231 | [folder](checks/) |
+
 ## Term URIs
 
 | Example (opens in OntoCanvas) | Shows | Issue | Source |

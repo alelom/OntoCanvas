@@ -386,3 +386,15 @@ describe('the data parameter (#205): ?data=<url>, once per data file, next to ?o
     expect(new URLSearchParams(window.location.search).get('onto')).toBe('https://example.org/other.ttl');
   });
 });
+
+describe('the checks parameter (#230): ?checks=<url>, a manifest, a query or shapes', () => {
+  const at = (search: string) => window.history.replaceState(null, '', '/' + search);
+  afterEach(() => at(''));
+
+  it('lists every checks parameter, plain or percent-encoded, http and https only', async () => {
+    const { getChecksUrlsFromParams } = await import('../../src/utils/urlParams');
+    at('?checks=' + encodeURIComponent('https://example.org/checks/manifest.json') + '&checks=javascript:alert(1)&checks=https://example.org/q.rq');
+
+    expect(getChecksUrlsFromParams()).toEqual(['https://example.org/checks/manifest.json', 'https://example.org/q.rq']);
+  });
+});

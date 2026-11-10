@@ -1,0 +1,11 @@
+{
+  "title": "Readings checks",
+  "queries": [
+    "queries/readings-by-region.rq",
+    { "path": "queries/unread.rq", "title": "The readings with no text", "description": "Those with an outcome, or with nothing" }
+  ],
+  "shapes": [
+    "shapes/readings.shacl.ttl",
+    "shapes/no-web-addresses.shacl.ttl"
+  ]
+}

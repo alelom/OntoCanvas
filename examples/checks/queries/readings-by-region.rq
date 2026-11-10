@@ -1,0 +1,10 @@
+PREFIX : <http://example.org/examples/readings#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+# The readings of each region, with what they read
+SELECT ?region ?reading ?text ?outcome WHERE {
+  ?reading a :TextReading ; :isReadingOf ?region .
+  OPTIONAL { ?reading :readText ?text }
+  OPTIONAL { ?reading :hasOutcome ?outcome }
+}
+ORDER BY ?region ?reading

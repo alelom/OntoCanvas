@@ -76,6 +76,8 @@ export interface IndividualIndex {
   /** `groupTotals`: how many matches each group has (all of them, not just this page); empty unless `grouped`. */
   list(options: ListOptions): { items: IndividualItem[]; total: number; groupTotals: Map<string, number> };
   describe(iri: string, options?: { maxRows?: number }): IndividualDetail;
+  /** Whether the IRI is an individual: a SHACL result's focus node opens its card only then (#231). */
+  has(iri: string): boolean;
   /** The groups the matches fall in, in the order of `list` with `grouped`: the biggest class first, those with no class last. */
   groups(options: { search?: string }): Array<{ group: string; total: number }>;
   /** The rows of one group, by label, a page at a time. */
@@ -219,6 +221,8 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
       const inGroup = matchesOf(search).filter((item) => item.group === group);
       return { items: inGroup.slice(offset, offset + limit).map(({ iri, label, group: g }) => ({ iri, label, group: g })), total: inGroup.length };
     },
+
+    has: (iri) => individuals.has(iri),
 
     describe(iri, { maxRows = DEFAULT_MAX_ROWS } = {}) {
       const describedTerm = (term: { termType: string; value: string; datatype?: { value: string }; language?: string }): DescribedTerm => ({

@@ -1,0 +1,19 @@
+# The data for readings.ttl (issues #230, #231): six text readings, of which four break a rule of shapes/readings.shacl.ttl.
+@prefix : <http://example.org/examples/readings#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:region1 a :Region ; rdfs:label "Title block" .
+:region2 a :Region ; rdfs:label "Notes" .
+
+# Read, with a text.
+:reading1 a :TextReading ; rdfs:label "Reading 1" ; :isReadingOf :region1 ; :readText "Project 042" .
+# Read nothing: an outcome.
+:reading2 a :TextReading ; rdfs:label "Reading 2" ; :isReadingOf :region2 ; :hasOutcome :Empty .
+# Both a text and an outcome.
+:reading3 a :TextReading ; rdfs:label "Reading 3" ; :isReadingOf :region1 ; :readText "Rev C" ; :hasOutcome :Illegible .
+# Neither, and of no region.
+:reading4 a :TextReading ; rdfs:label "Reading 4" .
+# A text that is a number.
+:reading5 a :TextReading ; rdfs:label "Reading 5" ; :isReadingOf :region2 ; :readText 42 .
+# An outcome that is not one of the three.
+:reading6 a :TextReading ; rdfs:label "Reading 6" ; :isReadingOf :region2 ; :hasOutcome :Smudged .

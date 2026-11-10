@@ -53,8 +53,20 @@ export function getLocalFileTokenFromParams(): string | null {
  * https addresses are taken; a value that is not one is dropped. Plain or percent-encoded, as `?onto=` is.
  */
 export function getDataUrlsFromParams(): string[] {
+  return httpUrlsOfParam('data');
+}
+
+/**
+ * The checks named by `?checks=<url>` (#230): a manifest, a query or shapes, loaded into the library of the session. The same rules
+ * as `?data=`.
+ */
+export function getChecksUrlsFromParams(): string[] {
+  return httpUrlsOfParam('checks');
+}
+
+function httpUrlsOfParam(name: string): string[] {
   const urls: string[] = [];
-  for (const value of new URLSearchParams(window.location.search).getAll('data')) {
+  for (const value of new URLSearchParams(window.location.search).getAll(name)) {
     for (const candidate of [value, safeDecode(value)]) {
       if (!/^https?:\/\//i.test(candidate)) continue;
       try {

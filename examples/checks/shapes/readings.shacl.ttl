@@ -1,0 +1,34 @@
+# The rules of a text reading (issues #231): one region, at most one text (a string) and at most one outcome (Empty, Illegible
+# or Failed), and exactly one of a text or an outcome. A text that is not a string is a warning.
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix : <http://example.org/examples/readings#> .
+@prefix shapes: <http://example.org/examples/readings-shapes#> .
+
+shapes:Reading a sh:NodeShape ;
+    sh:targetClass :TextReading ;
+    sh:property [
+        sh:path :isReadingOf ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "A reading reads exactly one region." ;
+    ] , [
+        sh:path :readText ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:severity sh:Warning ;
+        sh:message "A reading's text is a string." ;
+    ] , [
+        sh:path :hasOutcome ;
+        sh:maxCount 1 ;
+        sh:in ( :Empty :Illegible :Failed ) ;
+        sh:message "A reading's outcome is Empty, Illegible or Failed." ;
+    ] .
+
+shapes:TextOrOutcome a sh:NodeShape ;
+    sh:targetClass :TextReading ;
+    sh:message "A reading has a text or an outcome, never both and never neither." ;
+    sh:xone (
+        [ sh:property [ sh:path :readText ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path :hasOutcome ; sh:minCount 1 ] ]
+    ) .

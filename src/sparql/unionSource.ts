@@ -25,7 +25,8 @@ function* allQuads(stores: Store[], s: RDF.Term | null, p: RDF.Term | null, o: R
   for (const store of stores) yield* store.readQuads(s as never, p as never, o as never, g as never) as Iterable<RDF.Quad>;
 }
 
-function* mergedTriples(stores: Store[], s: RDF.Term | null, p: RDF.Term | null, o: RDF.Term | null, factory: RDF.DataFactory): Generator<RDF.Quad> {
+/** The triples matching a pattern in every graph of every store, each once: the RDF merge (also what SHACL checks, #231). */
+export function* mergedTriples(stores: Store[], s: RDF.Term | null, p: RDF.Term | null, o: RDF.Term | null, factory: RDF.DataFactory): Generator<RDF.Quad> {
   const seen = new Set<string>();
   for (const quad of allQuads(stores, s, p, o, null)) {
     const key = `${keyOf(quad.subject)} ${keyOf(quad.predicate)} ${keyOf(quad.object)}`;
