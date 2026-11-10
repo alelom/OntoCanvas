@@ -29,6 +29,8 @@ import { pushUndoable } from '../workflows/undoRedo';
 import { buildNetworkData } from './buildNetworkData';
 import { addIndividualsToNetworkData, classNodesByUri, viewAfterDraw, type DrawRequest } from './individualsOverlay';
 import { addIndividualCounts } from './classIndividuals';
+import { graphIndexOf } from './drawnGraphIndex';
+import { refreshResultHighlight } from './resultHighlight';
 import { setNotice } from '../ui/statusNotices';
 import { INDIVIDUAL_PREFIX, isIndividualNodeId } from '../abox/individualsLayer';
 import { setupDragCoupling } from './dataPropertyDragCoupling';
@@ -297,6 +299,9 @@ export function applyFilter(preserveView = false, draw?: DrawRequest): void {
 
   // The view keeps moving until this render's fit (or restored position) is applied (#93).
   const settleToken = beginViewSettle();
+  // A query result shown in the graph is matched again against what is drawn now (#207): the ids of links between individuals change.
+  const index = graphIndexOf(data);
+  if (index) refreshResultHighlight(index);
   if (canvasState.network) {
     canvasState.network.setData(data);
     canvasState.network.setOptions({

@@ -128,6 +128,16 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     images: deps.dataImages,
     openIndividuals: () => host.open('individuals'),
     library,
+    // A result's individuals that are not drawn are drawn by its "Select in graph", within the limit (#207).
+    individuals: deps.individualsLayer
+      ? {
+          isIndividual: (iri) => individualIndex().has(iri),
+          isDrawn: (iri) => deps.individualsLayer!.preview(iri).shown,
+          draw: (iris) => deps.individualsLayer!.showMany(iris),
+          room: () => deps.individualsLayer!.limit - deps.individualsLayer!.drawnCount(),
+          limit: deps.individualsLayer.limit,
+        }
+      : undefined,
   });
   host.registerTab(queryTab);
 

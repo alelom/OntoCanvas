@@ -21,22 +21,40 @@ import {
 } from '../graph/searchOutline';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const OVERLAY_ID = 'searchOutlineOverlay';
-const STYLE_ID = 'searchOutlineStyle';
+/** An outline's look: its own SVG layer and stylesheet, which styles .oc-halo and .oc-mark under the layer's id. */
+export interface OutlineLook {
+  overlayId: string;
+  css: (overlayId: string) => string;
+}
 /** Gap between a node box and its outline, in graph units. */
 const NODE_PAD = 5;
 /** Samples along a relationship's curve. */
 const EDGE_SAMPLES = 48;
 
-const CSS = `
-#${OVERLAY_ID} { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
-#${OVERLAY_ID} .oc-outline { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
-#${OVERLAY_ID} .oc-halo { stroke: rgba(255, 255, 255, 0.9); stroke-width: 7px; animation: oc-search-halo 1.1s ease-in-out infinite alternate; }
-#${OVERLAY_ID} .oc-mark { stroke: #e53935; stroke-width: 3px; animation: oc-search-mark 1.1s ease-in-out infinite alternate; }
+const LAYER_CSS = (id: string, zIndex: number) => `
+#${id} { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: ${zIndex}; }
+#${id} .oc-outline { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }`;
+
+/** The search (#84): a pulsing red outline. */
+export const SEARCH_LOOK: OutlineLook = {
+  overlayId: 'searchOutlineOverlay',
+  css: (id) => `${LAYER_CSS(id, 2)}
+#${id} .oc-halo { stroke: rgba(255, 255, 255, 0.9); stroke-width: 7px; animation: oc-search-halo 1.1s ease-in-out infinite alternate; }
+#${id} .oc-mark { stroke: #e53935; stroke-width: 3px; animation: oc-search-mark 1.1s ease-in-out infinite alternate; }
 @keyframes oc-search-mark { from { stroke-width: 2px; opacity: 0.6; } to { stroke-width: 5px; opacity: 1; } }
 @keyframes oc-search-halo { from { stroke-width: 5px; } to { stroke-width: 9px; } }
-@media (prefers-reduced-motion: reduce) { #${OVERLAY_ID} .oc-outline { animation: none; } }
-`;
+@media (prefers-reduced-motion: reduce) { #${id} .oc-outline { animation: none; } }
+`,
+};
+
+/** A query result (#207): a steady blue outline, under the search's, so the two are told apart when both are on. */
+export const RESULT_LOOK: OutlineLook = {
+  overlayId: 'resultOutlineOverlay',
+  css: (id) => `${LAYER_CSS(id, 1)}
+#${id} .oc-halo { stroke: rgba(255, 255, 255, 0.9); stroke-width: 8px; }
+#${id} .oc-mark { stroke: #1a73e8; stroke-width: 4px; }
+`,
+};
 
 /** The parts of a vis Network the overlay reads. */
 interface OutlineNet {
@@ -49,11 +67,12 @@ interface OutlineNet {
   };
 }
 
-function ensureStyle(): void {
-  if (document.getElementById(STYLE_ID)) return;
+function ensureStyle(look: OutlineLook): void {
+  const styleId = `${look.overlayId}Style`;
+  if (document.getElementById(styleId)) return;
   const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = CSS;
+  style.id = styleId;
+  style.textContent = look.css(look.overlayId);
   document.head.appendChild(style);
 }
 
@@ -102,11 +121,16 @@ function dataPropertyBoxIds(net: OutlineNet, name: string): string[] {
 
 /** Attach the search outline to `net` (its container `container`); `getTargets` is read on every redraw. */
 export function attachSearchOutline(net: OutlineNet, container: HTMLElement, getTargets: () => OutlineTargets): void {
-  ensureStyle();
-  let svg = container.querySelector<SVGSVGElement>(`#${OVERLAY_ID}`);
+  attachOutline(net, container, getTargets, SEARCH_LOOK);
+}
+
+/** Attach an outline in `look` to `net` (its container `container`); `getTargets` is read on every redraw. */
+export function attachOutline(net: OutlineNet, container: HTMLElement, getTargets: () => OutlineTargets, look: OutlineLook): void {
+  ensureStyle(look);
+  let svg = container.querySelector<SVGSVGElement>(`#${look.overlayId}`);
   if (!svg) {
     svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement;
-    svg.id = OVERLAY_ID;
+    svg.id = look.overlayId;
     svg.appendChild(document.createElementNS(SVG_NS, 'g'));
     if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
     container.appendChild(svg);

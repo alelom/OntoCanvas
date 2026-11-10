@@ -41,11 +41,14 @@ export function withDrawnIndividuals(base: GraphIndex, drawn: { nodes: DrawnNode
 
 type DataSetLike<T> = { get(): T[] };
 
-/** What is drawn now; null before anything is. */
-export function currentGraphIndex(): GraphIndex | null {
+/** The class graph built last, with the data about to be (or being) drawn: `drawn`, or else what the canvas holds. */
+export function graphIndexOf(drawn?: { nodes: DataSetLike<DrawnNode>; edges: DataSetLike<DrawnEdge> }): GraphIndex | null {
   const built = session.currentGraphDataForBuild;
   if (!built) return null;
   const base: GraphIndex = { nodes: built.nodes, edges: built.edges, objectProperties: session.objectProperties };
-  const data = (canvasState.network as unknown as { body?: { data: { nodes: DataSetLike<DrawnNode>; edges: DataSetLike<DrawnEdge> } } } | null)?.body?.data;
+  const data = drawn ?? (canvasState.network as unknown as { body?: { data: { nodes: DataSetLike<DrawnNode>; edges: DataSetLike<DrawnEdge> } } } | null)?.body?.data;
   return data ? withDrawnIndividuals(base, { nodes: data.nodes.get(), edges: data.edges.get() }) : base;
 }
+
+/** What is drawn now; null before anything is. */
+export const currentGraphIndex = (): GraphIndex | null => graphIndexOf();

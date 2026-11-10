@@ -14,7 +14,8 @@ import { hideEdgeLinesUnderNodes } from '../ui/edgeNodeClipping';
 import { openEditModalForNode, openEditModalForEdge } from '../ui/editModals';
 import { isIndividualNodeId } from '../abox/individualsLayer';
 import { showMultiEditModal } from '../ui/nodeModalHelpers';
-import { attachSearchOutline } from '../ui/searchOutlineOverlay';
+import { attachSearchOutline, attachOutline, RESULT_LOOK } from '../ui/searchOutlineOverlay';
+import { resultOutlineTargets } from './resultHighlight';
 import { updateSelectionInfoDisplay } from '../ui/selectionInfo';
 import { isEmbedded } from '../utils/embedMode';
 import { getEdgeIdAtLabelPoint } from './canvasHelpers';
@@ -40,6 +41,8 @@ export function setupNetworkSelectionAndNavigation(
   hideEdgeLinesUnderNodes(net);
   // A pulsing outline around what the search matched, in an SVG layer that follows the view (#84).
   attachSearchOutline(net as unknown as Parameters<typeof attachSearchOutline>[0], container, () => canvasState.searchOutlineTargets);
+  // A query result shown in the graph (#207): a steady outline of its own.
+  attachOutline(net as unknown as Parameters<typeof attachOutline>[0], container, resultOutlineTargets, RESULT_LOOK);
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;
   let rightPanStart: { x: number; y: number; viewPos: { x: number; y: number }; scale: number } | null = null;

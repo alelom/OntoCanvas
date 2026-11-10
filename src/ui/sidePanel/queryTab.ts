@@ -9,7 +9,8 @@ import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
-import { describeMatch, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
+import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
+import { selectInGraphRow, type ResultIndividuals } from './selectInGraph';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
@@ -38,6 +39,8 @@ export interface QueryTabDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects these nodes and edges in the graph and brings them into view. */
   showInGraph?: (match: GraphMatch) => void;
+  /** The individuals of the data: "Select in graph" draws those a result names that are not drawn (#207). */
+  individuals?: ResultIndividuals;
   /** The data added to the open ontology (#205): queries run over it too, and a line says so. */
   dataSources?: DataSources;
   /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
@@ -191,22 +194,6 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     const starter = store && individualsOf(store).size > 0 ? INDIVIDUALS_STARTER_QUERY : CLASSES_STARTER_QUERY;
     return `${prefixHeader(deps.getPrefixes())}\n\n${starter}`;
   };
-
-  /** The "Show in graph" button above a table that names drawn classes or relationships; nothing when it names none (#203). */
-  function showInGraphRow(view: Extract<ResultView, { kind: 'table' }>): HTMLElement[] {
-    const graph = deps.getGraph?.();
-    if (!graph || !deps.showInGraph) return [];
-    const match = matchTableToGraph(view, graph);
-    if (!match.nodeIds.length && !match.edgeIds.length) return [];
-    const button = element('button', undefined, `Show in graph (${describeMatch(match, graph)})`);
-    button.type = 'button';
-    button.title = match.allEdgesOfAProperty
-      ? 'Select these in the graph and bring them into view. A property named without the two ends of an edge selects every edge that uses it.'
-      : 'Select these in the graph and bring them into view';
-    button.setAttribute('data-query-show-in-graph', '');
-    button.addEventListener('click', () => deps.showInGraph!(match));
-    return [button];
-  }
 
   /**
    * One line about the data added to the ontology (#211): the queries run over it, where it is managed, and the status of a
@@ -381,7 +368,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
-          result.replaceChildren(...showInGraphRow(view), renderTable(view, deps.images));
+          result.replaceChildren(...selectInGraphRow(view, deps), renderTable(view, deps.images));
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;
