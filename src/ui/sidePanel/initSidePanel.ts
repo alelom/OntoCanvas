@@ -7,6 +7,8 @@ import { DataFactory, type Store } from 'n3';
 import { createSidePanelHost } from './sidePanelHost';
 import { createQueryTab } from './queryTab';
 import { createIndividualsTab } from './individualsTab';
+import { createChecksTab } from './checksTab';
+import { createChecksLibrary, describeOutcome } from '../../checks/checksLibrary';
 import { mountPanelButtons } from './panelButtons';
 import { createDataLoader, type DataPick } from '../../sparql/dataLoader';
 import { attachDataDrop } from '../dataDrop';
@@ -68,6 +70,8 @@ export interface SidePanel {
   onDataStatus(listener: (status: string, loading: boolean) => void): void;
   /** Stops adding data, as the Cancel of the Individuals tab does: for the loading screen that covers it (#239). */
   cancelData(): void;
+  /** Loads the checks an address names (?checks=<url>, #230): a manifest, a query or shapes; opens the Checks tab when it has shapes. */
+  loadChecks(url: string): Promise<void>;
 }
 
 const NO_PANEL: SidePanel = {
@@ -79,6 +83,7 @@ const NO_PANEL: SidePanel = {
   schemaChanged: () => {},
   onDataStatus: () => {},
   cancelData: () => {},
+  loadChecks: async () => {},
 };
 
 export function initSidePanel(deps: SidePanelDeps): SidePanel {
@@ -108,6 +113,10 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   // data, and the Query tab shows it when an address (?data=) loads files while that is the tab shown (#211).
   const dataLoader = deps.dataSources ? createDataLoader({ sources: deps.dataSources, getStore: deps.getStore }) : undefined;
 
+  // The checks of the session (#230, #231): saved queries for the Query tab, SHACL shapes for the Checks tab. Kept when another
+  // ontology is opened: the checks of a domain apply to all of its files.
+  const library = createChecksLibrary();
+
   const queryTab = createQueryTab({
     getStore: deps.getStore,
     getPrefixes: deps.getPrefixes,
@@ -118,6 +127,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     dataLoader,
     images: deps.dataImages,
     openIndividuals: () => host.open('individuals'),
+    library,
   });
   host.registerTab(queryTab);
 
@@ -146,10 +156,24 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
         : undefined,
   });
   host.registerTab(individualsTab);
+
   const openIndividual = (iri: string): void => {
     host.open(individualsTab.id);
     individualsTab.show(iri);
   };
+
+  // SHACL over the ontology and every graph of the data, as queries see it (a graph hidden from the Individuals tab is still checked).
+  const checksTab = createChecksTab({
+    library,
+    getStores: () => {
+      const store = deps.getStore();
+      return store ? [store, ...(deps.dataSources?.stores() ?? [])] : [];
+    },
+    getPrefixes: deps.getPrefixes,
+    isIndividual: (iri) => individualIndex().has(iri),
+    openIndividual,
+  });
+  host.registerTab(checksTab);
   // The search of the graph finds the individuals that are not drawn, and opens the card of the one picked (#217).
   if (deps.individualsLayer) {
     setIndividualSearchProvider({
@@ -165,6 +189,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   const buttons = mountPanelButtons(wrapper, [
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },
     { id: 'individualsPanelBtn', label: '', title: '', onClick: () => host.toggle(individualsTab.id) },
+    { id: 'checksPanelBtn', label: 'SHACL checks', title: 'Check the open ontology and its data against SHACL shapes (read-only)', onClick: () => host.toggle(checksTab.id) },
   ], { hideEdit: deps.isIndividualSelection });
   // Data files and folders dropped on the panel or the graph while the Individuals tab is open are added (#222, #227).
   if (dataLoader) {
@@ -175,6 +200,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   host.onChange((activeId) => {
     buttons.setPressed('queryPanelBtn', activeId === queryTab.id);
     buttons.setPressed('individualsPanelBtn', activeId === individualsTab.id);
+    buttons.setPressed('checksPanelBtn', activeId === checksTab.id);
   });
 
   /** The label of the Individuals button follows what there is: an invitation to add some, or the count. */
@@ -205,6 +231,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
       deps.individualsLayer?.reset();
       queryTab.refresh();
       individualsTab.refresh();
+      checksTab.refresh();
       updateIndividualsButton();
     },
     async addDataUrls(urls) {
@@ -215,6 +242,13 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     openIndividuals: () => host.open(individualsTab.id),
     openIndividual,
     cancelData: () => dataLoader?.cancel(),
+    async loadChecks(url) {
+      const outcome = await library.addUrl(url);
+      // The shapes are what is not seen elsewhere: their tab opens. Queries alone wait in the Query tab's list.
+      if (outcome.shapes) host.open(checksTab.id);
+      else if (outcome.queries) host.open(queryTab.id);
+      if (outcome.problems.length) setNotice('checks', describeOutcome(outcome));
+    },
     onDataStatus(listener) {
       dataLoader?.onChange(() => listener(dataLoader.status(), dataLoader.loading()));
     },

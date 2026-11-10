@@ -10,7 +10,7 @@ import { selectInGraph } from './graph/selectResults';
 import { createDataSources, whenSourceListChanges } from './sparql/dataSources';
 import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from './abox/individualsLayer';
 import { createDataImages } from './abox/dataImages';
-import { getDataUrlsFromParams } from './utils/urlParams';
+import { getDataUrlsFromParams, getChecksUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
 
 import { isDebugMode, debugLog } from './utils/debug';
@@ -235,7 +235,8 @@ if (isDebugMode()) {
 setTimeout(() => {
   // The data files named next to the ontology (?data=<url>, #205), read before the load rewrites the address bar.
   const dataUrls = getDataUrlsFromParams();
-  void openOnStartup({
+  const checksUrls = getChecksUrlsFromParams();
+  const opened = openOnStartup({
     loadFromUrlParameter: async () => {
       const loaded = await handleUrlParameterLoad(
         loadFromUrl,
@@ -253,6 +254,11 @@ setTimeout(() => {
     },
     hasOntology: () => session.ttlStore !== null,
     showOpenOntologyModal,
+  });
+  // The checks named by the address (?checks=<url>, #230), in order, once the ontology and its data are read: their tab is the one
+  // left open. They need no ontology, so they are loaded whether one opened or not.
+  void opened.catch(() => {}).then(async () => {
+    for (const url of checksUrls) await session.sidePanel?.loadChecks(url);
   });
 }, 100);
 

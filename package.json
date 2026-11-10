@@ -38,6 +38,7 @@
     "rdf-parse": "^5.0.0",
     "rdflib": "^2.2.0",
     "readable-stream": "^4.7.0",
+    "shacl-engine": "^1.1.3",
     "vis-data": "^7.1.9",
     "vis-network": "^9.1.9"
   },

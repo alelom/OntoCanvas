@@ -1,0 +1,18 @@
+# A SPARQL-based rule (issue #231): a reading's text names no web address. OntoCanvas lists it as not checked: shacl-engine runs
+# one SPARQL query per focus node, too slow in the browser.
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix : <http://example.org/examples/readings#> .
+@prefix shapes: <http://example.org/examples/readings-shapes#> .
+
+shapes:NoWebAddresses a sh:NodeShape ;
+    sh:targetClass :TextReading ;
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "A reading's text names no web address." ;
+        sh:select """
+            SELECT $this ?value WHERE {
+                $this <http://example.org/examples/readings#readText> ?value .
+                FILTER (REGEX(STR(?value), "^https?:"))
+            }
+        """ ;
+    ] .

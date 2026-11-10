@@ -179,6 +179,11 @@ describe('describe', () => {
     expect(rows.find((t) => t.predicate === NS + 'note')!.object).toMatchObject({ termType: 'Literal', value: 'hello', language: 'en' });
   });
 
+  it('says whether an IRI is an individual (#231)', () => {
+    expect(index().has(NS + 'wall1')).toBe(true);
+    expect(index().has(NS + 'Room')).toBe(false);
+  });
+
   it('describes an IRI that is not an individual as having nothing', () => {
     expect(index().describe(NS + 'nothing')).toMatchObject({ labels: [], types: [], outgoing: [], incoming: [] });
   });

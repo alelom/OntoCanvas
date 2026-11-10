@@ -1,0 +1,29 @@
+# Saved queries and SHACL checks from a manifest (issues #230, #231). Open with its data, readings-data.ttl, and the checks,
+# manifest.json (the link of the examples README does: ?onto=…&data=…&checks=…). Then:
+#   - the Checks tab opens: "readings.shacl.ttl 2 shapes (Readings checks)" and "no-web-addresses.shacl.ttl 1 shape". Run checks:
+#     "4 violations, 1 warning: 2 shapes checked in … ms; 1 shape not checked (below)":
+#       shapes:Reading (2 violations, 1 warning): :reading4 reads no region; :reading6 has the outcome :Smudged; :reading5's text
+#         is the number 42 (a warning)
+#       shapes:TextOrOutcome (2 violations): :reading3 has both a text and an outcome; :reading4 has neither
+#     and shapes:NoWebAddresses is listed as not checked: it is SPARQL-based. Click a reading to open its card
+#   - the Query tab: "Saved queries (2)" under "Readings checks": "The readings of each region, with what they read" (its title
+#     is the query's first comment) and "The readings with no text" (titled by the manifest). Picking one puts it in the editor;
+#     Run runs it
+#   - to load checks by hand: "Load saved queries…" (Query tab) or "Load shapes…" (Checks tab) take files, a folder, or an address
+@prefix : <http://example.org/examples/readings#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/examples/readings> a owl:Ontology ; rdfs:label "Text readings, with checks" .
+
+:Region a owl:Class ; rdfs:label "Region" .
+:TextReading a owl:Class ; rdfs:label "Text reading" .
+:ReadingOutcome a owl:Class ; rdfs:label "Reading outcome" .
+
+:isReadingOf a owl:ObjectProperty ; rdfs:label "isReadingOf" ; rdfs:domain :TextReading ; rdfs:range :Region .
+:hasOutcome a owl:ObjectProperty ; rdfs:label "hasOutcome" ; rdfs:domain :TextReading ; rdfs:range :ReadingOutcome .
+:readText a owl:DatatypeProperty ; rdfs:label "readText" ; rdfs:domain :TextReading .
+
+:Empty a :ReadingOutcome ; rdfs:label "Empty" .
+:Illegible a :ReadingOutcome ; rdfs:label "Illegible" .
+:Failed a :ReadingOutcome ; rdfs:label "Failed" .

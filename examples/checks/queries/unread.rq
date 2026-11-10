@@ -1,0 +1,7 @@
+PREFIX : <http://example.org/examples/readings#>
+
+SELECT ?reading WHERE {
+  ?reading a :TextReading .
+  FILTER NOT EXISTS { ?reading :readText ?text }
+}
+ORDER BY ?reading
