@@ -12,6 +12,7 @@ import { createIndividualsLayer, isIndividualNodeId, isIndividualEdgeId } from '
 import { createDataImages } from './abox/dataImages';
 import { getDataUrlsFromParams, getChecksUrlsFromParams } from './utils/urlParams';
 import { updateSelectionInfoDisplay } from './ui/selectionInfo';
+import { currentGraphIndex } from './graph/drawnGraphIndex';
 
 import { isDebugMode, debugLog } from './utils/debug';
 import {
@@ -173,10 +174,8 @@ session.sidePanel = initSidePanel({
   getStore: () => session.ttlStore,
   getPrefixes: () => session.currentPrefixMap,
   getHistoryKey: () => historyKeyOf(session.ttlStore, fileState.loadedFilePath ?? fileState.loadedFileName),
-  getGraph: () => {
-    const drawn = session.currentGraphDataForBuild;
-    return drawn ? { nodes: drawn.nodes, edges: drawn.edges, objectProperties: session.objectProperties } : null;
-  },
+  // The class graph and the individuals drawn over it (#207).
+  getGraph: currentGraphIndex,
   showInGraph: (match) => {
     const network = canvasState.network;
     if (!network) return;

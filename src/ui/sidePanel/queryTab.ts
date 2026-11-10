@@ -198,7 +198,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     if (!graph || !deps.showInGraph) return [];
     const match = matchTableToGraph(view, graph);
     if (!match.nodeIds.length && !match.edgeIds.length) return [];
-    const button = element('button', undefined, `Show in graph (${describeMatch(match)})`);
+    const button = element('button', undefined, `Show in graph (${describeMatch(match, graph)})`);
     button.type = 'button';
     button.title = match.allEdgesOfAProperty
       ? 'Select these in the graph and bring them into view. A property named without the two ends of an edge selects every edge that uses it.'
