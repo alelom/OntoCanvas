@@ -188,6 +188,17 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getPrefixes: deps.getPrefixes,
     isIndividual: (iri) => individualIndex().has(iri),
     openIndividual,
+    // The focus nodes of a report, outlined as a query result is (#207): individuals not drawn are drawn first, within the limit.
+    showInGraph: deps.showResult
+      ? (iris) => {
+          const show = (): void => void deps.showResult!((graph) => matchIrisToGraph(iris, graph));
+          const layer = deps.individualsLayer;
+          const drawn = layer ? layer.showMany(iris.filter((iri) => individualIndex().has(iri))) : 0;
+          // A draw redraws the graph: the outline is matched once it holds them.
+          if (drawn) requestAnimationFrame(show);
+          else show();
+        }
+      : undefined,
   });
   host.registerTab(checksTab);
   // The search of the graph finds the individuals that are not drawn, and opens the card of the one picked (#217).

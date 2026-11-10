@@ -19,6 +19,7 @@ const DATA = new Store(new Parser().parse(`@prefix : <${NS}> . :r1 a :TextReadin
 let container: HTMLElement;
 let library: ChecksLibrary;
 const openIndividual = vi.fn();
+const showInGraph = vi.fn();
 const q = <T extends HTMLElement>(selector: string) => container.querySelector<T>(selector)!;
 const status = () => q('[data-checks-status]').textContent;
 
@@ -29,6 +30,7 @@ function mount(validate?: Validate, stores: Store[] = [DATA]): void {
     getPrefixes: () => ({ '': NS }),
     isIndividual: (iri) => iri.startsWith(NS + 'r'),
     openIndividual,
+    showInGraph,
     ...(validate ? { validate } : {}),
   }).render(container);
 }
@@ -44,6 +46,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   openIndividual.mockReset();
+  showInGraph.mockReset();
   library = createChecksLibrary();
 });
 
@@ -79,12 +82,25 @@ describe('Run checks', () => {
     await runChecks();
 
     expect(status()).toMatch(/^1 violation: 1 shape checked in \d+ ms; 1 shape not checked \(below\)\.$/);
-    expect(q('[data-checks-shape] summary').textContent).toBe(':Reading (1 violation)');
+    expect(q('[data-checks-shape] summary').textContent).toBe(':Reading (1 violation) Show in graph');
     const result = q('[data-checks-result]');
     expect(result.getAttribute('data-severity')).toBe('Violation');
     expect(result.querySelector('.checks-path')!.textContent).toBe(':isReadingOf');
     expect(result.querySelector('.checks-message')!.textContent).toBe('A reading reads one region.');
     expect(q('[data-checks-not-checked]').textContent).toContain(':NoHttp');
+  });
+
+  it('shows the focus nodes of a shape, or of the whole report, in the graph (#207)', async () => {
+    mount();
+    await loadShapes();
+    await runChecks();
+
+    q<HTMLButtonElement>('[data-checks-shape] [data-checks-show-in-graph]').click();
+    expect(showInGraph).toHaveBeenLastCalledWith([NS + 'r1']);
+
+    q<HTMLButtonElement>('[data-checks-show-all]').click();
+    expect(showInGraph).toHaveBeenLastCalledWith([NS + 'r1']);
+    expect(q('[data-checks-show-all]').textContent).toBe('Show all in graph (1 focus node)');
   });
 
   it('opens the card of a focus node that is an individual', async () => {
@@ -146,7 +162,7 @@ describe('Run checks', () => {
     await runChecks();
 
     expect(container.querySelectorAll('[data-checks-result][data-severity="Violation"]')).toHaveLength(3);
-    expect(q('[data-checks-shape] summary').textContent).toBe(':Violations (3 violations)');
+    expect(q('[data-checks-shape] summary').textContent).toBe(':Violations (3 violations) Show in graph');
     expect(container.textContent).toContain(`The first ${MAX_RESULTS_SHOWN} of ${MAX_RESULTS_SHOWN + 3} results are shown, violations first: 3 warnings are not.`);
   });
 

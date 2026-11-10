@@ -22,6 +22,8 @@ export interface ChecksTabDeps {
   /** Whether a focus node is an individual, whose card it then opens (#229). */
   isIndividual?: (iri: string) => boolean;
   openIndividual?: (iri: string) => void;
+  /** Outlines these focus nodes in the graph and brings them into view, drawing those not drawn (#207). */
+  showInGraph?: (iris: string[]) => void;
   /** Defaults to shacl-engine, loaded on the first run. */
   validate?: Validate;
 }
@@ -95,8 +97,27 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
     return item;
   }
 
+  /** The IRIs of the focus nodes of some results, each once (a blank node cannot be found in the graph). */
+  const focusIris = (results: CheckResult[]): string[] => [...new Set(results.filter((r) => r.focusNode.termType === 'NamedNode').map((r) => r.focusNode.value))];
+
+  /** "Show in graph" for the focus nodes of some results (#207); nothing without a graph or with no IRI to show. */
+  function showButton(results: CheckResult[], attribute: string, label: (count: number) => string): HTMLButtonElement[] {
+    const iris = focusIris(results);
+    if (!deps.showInGraph || !iris.length) return [];
+    const button = element('button', 'checks-show', label(iris.length));
+    button.type = 'button';
+    button.title = 'Outline these focus nodes in the graph and bring them into view; individuals not drawn are drawn first. Nothing is selected.';
+    button.setAttribute(attribute, '');
+    button.addEventListener('click', (event) => {
+      // In a summary, a click would also open or close the group.
+      event.preventDefault();
+      deps.showInGraph!(iris);
+    });
+    return [button];
+  }
+
   function renderReport(report: CheckReport): HTMLElement[] {
-    const parts: HTMLElement[] = [];
+    const parts: HTMLElement[] = [...showButton(report.results, 'data-checks-show-all', (n) => `Show all in graph (${plural(n, 'focus node', 'focus nodes')})`)];
     if (report.notChecked.length) {
       const note = element('div', 'query-note checks-not-checked');
       note.setAttribute('data-checks-not-checked', '');
@@ -115,7 +136,7 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
       section.open = true;
       section.setAttribute('data-checks-shape', '');
       const summary = element('summary');
-      summary.append(renderTerm(group.shape), ` (${countsText(allCounts.get(keyOf(group.shape)) ?? group.counts)})`);
+      summary.append(renderTerm(group.shape), ` (${countsText(allCounts.get(keyOf(group.shape)) ?? group.counts)}) `, ...showButton(report.results.filter((r) => keyOf(r.shape) === keyOf(group.shape)), 'data-checks-show-in-graph', () => 'Show in graph'));
       const list = element('ul', 'checks-results');
       list.append(...group.results.map(renderResult));
       section.append(summary, list);
