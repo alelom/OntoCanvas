@@ -49,7 +49,7 @@ describe('the library of checks', () => {
     await page.waitForFunction(() => /checked in/.test(document.querySelector('[data-checks-status]')?.textContent ?? ''));
 
     expect(await page.locator('[data-checks-status]').innerText()).toMatch(/^4 violations, 1 warning: 2 shapes checked in \d+ ms; 1 shape not checked \(below\)\.$/);
-    expect(await page.locator('[data-checks-shape] > summary').allInnerTexts()).toEqual(['shapes:Reading (2 violations, 1 warning)', 'shapes:TextOrOutcome (2 violations)']);
+    expect(await page.locator('[data-checks-shape] > summary').allInnerTexts()).toEqual(['shapes:Reading (2 violations, 1 warning) Show in graph', 'shapes:TextOrOutcome (2 violations) Show in graph']);
     expect(await page.locator('[data-checks-not-checked]').innerText()).toContain('shapes:NoWebAddresses');
   });
 
