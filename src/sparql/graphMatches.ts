@@ -133,22 +133,26 @@ export function matchQuadsToGraph(quads: Iterable<TripleLike>, graph: GraphIndex
   const edgeIds = new Set<string>();
   let total = 0;
   let inGraph = 0;
+  // Each edge's relationship and ends, worked out once, by relationship: a triple then looks at the edges of its own (#244 review:
+  // testing every triple against every edge took about 1 s for 5,000 triples).
+  const edgesByProperty = new Map<string, Array<{ id: string; from: string | undefined; to: string | undefined }>>();
+  for (const edge of graph.edges) {
+    const property = edgeIri(edge, graph.objectProperties);
+    if (property === null) continue;
+    edgesByProperty.set(property, [...(edgesByProperty.get(property) ?? []), { id: edgeId(edge), from: uriOfNode.get(edge.from), to: uriOfNode.get(edge.to) }]);
+  }
   for (const { subject, predicate, object } of quads) {
     total++;
     const s = subject.termType === 'NamedNode' ? subject.value : null;
     const o = object.termType === 'NamedNode' ? object.value : null;
     const p = predicate.value;
     let found = false;
-    for (const edge of graph.edges) {
-      const property = edgeIri(edge, graph.objectProperties);
-      const from = uriOfNode.get(edge.from);
-      const to = uriOfNode.get(edge.to);
-      const hit =
-        (property === p && from === s && to === o && s !== null) ||
-        (p === RDFS_DOMAIN && property === s && from === o) ||
-        (p === RDFS_RANGE && property === s && to === o);
+    // \`s p o\` is an edge of p from s to o; \`p rdfs:domain A\` (or range) is an edge of the property s from A (or to it).
+    const candidates = p === RDFS_DOMAIN || p === RDFS_RANGE ? (s ? edgesByProperty.get(s) ?? [] : []) : edgesByProperty.get(p) ?? [];
+    for (const edge of candidates) {
+      const hit = p === RDFS_DOMAIN ? edge.from === o : p === RDFS_RANGE ? edge.to === o : s !== null && edge.from === s && edge.to === o;
       if (hit) {
-        edgeIds.add(edgeId(edge));
+        edgeIds.add(edge.id);
         found = true;
       }
     }

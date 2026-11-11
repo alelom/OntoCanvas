@@ -124,13 +124,16 @@ export interface ShowResultDeps {
   /** Outlines a result in the graph and brings it into view, when the rule allows (#207). */
   showResult?: (matcher: ResultMatcher) => ShowDecision;
   clearResult?: () => void;
+  /** Called when the outline changes from elsewhere (a draw or a clear of individuals drops it); `hasResult` says whether one is on. */
+  onResultChange?: (listener: () => void) => void;
+  hasResult?: () => boolean;
 }
 
 /**
  * A result shown in the graph by itself after each Run (#207): the checkbox that turns it off (remembered in the browser), and
  * the line that says what was outlined, with a Clear.
  */
-export function createResultShowing(deps: ShowResultDeps): { toggle: HTMLElement; line: HTMLElement; show(matcher: ResultMatcher): void; clear(): void } {
+export function createResultShowing(deps: ShowResultDeps): { toggle: HTMLElement; line: HTMLElement; show(matcher: ResultMatcher, from?: string): void; clear(): void } {
   let on = readShowResults();
   const line = element('span', 'query-status query-shown-line');
   const toggle = element('label', 'query-show-results');
@@ -145,13 +148,18 @@ export function createResultShowing(deps: ShowResultDeps): { toggle: HTMLElement
     line.replaceChildren();
     deps.clearResult?.();
   }
+  // The outline dropped elsewhere: the line that says it goes too.
+  deps.onResultChange?.(() => {
+    if (deps.hasResult && !deps.hasResult()) line.replaceChildren();
+  });
   box.addEventListener('change', () => {
     on = box.checked;
     writeShowResults(on);
     if (!on) clear();
   });
 
-  function show(matcher: ResultMatcher): void {
+  /** `from`: what part of the result the outline comes from, when it was read only in part ("the first 500 rows"). */
+  function show(matcher: ResultMatcher, from?: string): void {
     line.replaceChildren();
     const graph = deps.getGraph?.();
     if (!on || !deps.showResult || !graph) return;
@@ -167,7 +175,7 @@ export function createResultShowing(deps: ShowResultDeps): { toggle: HTMLElement
       clearButton.title = 'Remove the outline';
       clearButton.setAttribute('data-query-shown-clear', '');
       clearButton.addEventListener('click', clear);
-      said.append(`${describeMatch(matcher(graph), graph)} outlined in the graph. `, clearButton);
+      said.append(`${describeMatch(matcher(graph), graph)} outlined in the graph${from ? ` (from ${from})` : ''}. `, clearButton);
     }
     line.append(said);
   }

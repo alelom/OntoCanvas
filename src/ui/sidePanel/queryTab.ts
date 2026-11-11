@@ -46,6 +46,9 @@ export interface QueryTabDeps {
   showResult?: (matcher: ResultMatcher) => ShowDecision;
   /** Removes that outline. */
   clearResult?: () => void;
+  /** Called when the outline changes from elsewhere, and whether one is on (#244 review). */
+  onResultChange?: (listener: () => void) => void;
+  hasResult?: () => boolean;
   /** The data added to the open ontology (#205): queries run over it too, and a line says so. */
   dataSources?: DataSources;
   /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
@@ -379,7 +382,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         if (view.kind === 'table') {
           const found = foundInTable(view);
           result.replaceChildren(...selectInGraphRow(found, deps), renderTable(view, deps.images));
-          showing.show(found.matchOf);
+          showing.show(found.matchOf, view.truncated ? `the first ${MAX_ROWS_SHOWN} rows` : undefined);
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;
@@ -390,7 +393,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
           // A CONSTRUCT or DESCRIBE result is triples: the graph shows the edges they stand for (#207).
           const found = rows.kind === 'quads' ? foundInQuads(rows.quads) : null;
           result.replaceChildren(...(found ? selectInGraphRow(found, deps) : []), element('pre', 'query-turtle', view.text));
-          if (found) showing.show(found.matchOf);
+          if (found) showing.show(found.matchOf, view.truncated ? `the first ${plural(view.count, 'triple', 'triples')}` : undefined);
           const inGraph = rows.kind === 'quads' ? triplesInGraph(rows.quads, deps.getGraph?.()) : '';
           status.textContent = view.truncated
             ? `The first ${plural(view.count, 'triple', 'triples')} in ${took}; there are more${inGraph}`

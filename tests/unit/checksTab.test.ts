@@ -19,7 +19,7 @@ const DATA = new Store(new Parser().parse(`@prefix : <${NS}> . :r1 a :TextReadin
 let container: HTMLElement;
 let library: ChecksLibrary;
 const openIndividual = vi.fn();
-const showInGraph = vi.fn();
+const showInGraph = vi.fn(async () => ({ decision: { kind: 'none' as const }, notDrawn: 0, limit: 300 }));
 const q = <T extends HTMLElement>(selector: string) => container.querySelector<T>(selector)!;
 const status = () => q('[data-checks-status]').textContent;
 
@@ -46,7 +46,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   openIndividual.mockReset();
-  showInGraph.mockReset();
+  showInGraph.mockClear();
   library = createChecksLibrary();
 });
 

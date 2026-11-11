@@ -10,6 +10,7 @@ import { QueryStopped } from '../../sparql/readCapped';
 import { formatTerm } from '../../sparql/formatTerm';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
 import type { SidePanelTab } from './sidePanelHost';
+import type { ShowDecision } from '../../graph/resultHighlight';
 import { renderChecksLoader } from './checksLoader';
 
 export type Validate = (shapes: Store, data: Store[], options?: ValidateOptions) => Promise<CheckReport>;
@@ -22,10 +23,31 @@ export interface ChecksTabDeps {
   /** Whether a focus node is an individual, whose card it then opens (#229). */
   isIndividual?: (iri: string) => boolean;
   openIndividual?: (iri: string) => void;
-  /** Outlines these focus nodes in the graph and brings them into view, drawing those not drawn (#207). */
-  showInGraph?: (iris: string[]) => void;
+  /** Outlines these focus nodes in the graph and brings them into view, drawing those not drawn (#207); says what it did. */
+  showInGraph?: (iris: string[]) => Promise<FocusShown>;
   /** Defaults to shacl-engine, loaded on the first run. */
   validate?: Validate;
+}
+
+/** What "Show in graph" did with some focus nodes: whether they were outlined, and how many individuals the limit left out. */
+export interface FocusShown {
+  decision: ShowDecision;
+  notDrawn: number;
+  limit: number;
+}
+
+/** What "Show in graph" did, in one line: a click that moves nothing says why (#244 review). */
+export function focusShownText(shown: FocusShown): string {
+  const { decision } = shown;
+  const what =
+    decision.kind === 'show'
+      ? `${plural(decision.nodes, 'focus node', 'focus nodes')} outlined in the graph.`
+      : decision.kind === 'everything'
+        ? 'These focus nodes are all that is drawn: there is nothing to single out.'
+        : decision.kind === 'tooMany'
+          ? `${decision.count} matches in the graph: too many to outline.`
+          : 'None of these focus nodes is drawn.';
+  return shown.notDrawn ? `${what} ${shown.notDrawn} not drawn: the graph draws up to ${plural(shown.limit, 'individual', 'individuals')}.` : what;
 }
 
 export interface ChecksTab extends SidePanelTab {
@@ -101,7 +123,7 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
   const focusIris = (results: CheckResult[]): string[] => [...new Set(results.filter((r) => r.focusNode.termType === 'NamedNode').map((r) => r.focusNode.value))];
 
   /** "Show in graph" for the focus nodes of some results (#207); nothing without a graph or with no IRI to show. */
-  function showButton(results: CheckResult[], attribute: string, label: (count: number) => string): HTMLButtonElement[] {
+  function showButton(results: CheckResult[], attribute: string, label: (count: number) => string, said: HTMLElement): HTMLButtonElement[] {
     const iris = focusIris(results);
     if (!deps.showInGraph || !iris.length) return [];
     const button = element('button', 'checks-show', label(iris.length));
@@ -111,13 +133,16 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
     button.addEventListener('click', (event) => {
       // In a summary, a click would also open or close the group.
       event.preventDefault();
-      deps.showInGraph!(iris);
+      void deps.showInGraph!(iris).then((shown) => (said.textContent = focusShownText(shown)));
     });
     return [button];
   }
 
   function renderReport(report: CheckReport): HTMLElement[] {
-    const parts: HTMLElement[] = [...showButton(report.results, 'data-checks-show-all', (n) => `Show all in graph (${plural(n, 'focus node', 'focus nodes')})`)];
+    // What the last "Show in graph" did, under the report's own button.
+    const said = element('p', 'query-note');
+    said.setAttribute('data-checks-shown', '');
+    const parts: HTMLElement[] = [...showButton(report.results, 'data-checks-show-all', (n) => `Show all in graph (${plural(n, 'focus node', 'focus nodes')})`, said), said];
     if (report.notChecked.length) {
       const note = element('div', 'query-note checks-not-checked');
       note.setAttribute('data-checks-not-checked', '');
@@ -136,7 +161,7 @@ export function createChecksTab(deps: ChecksTabDeps): ChecksTab {
       section.open = true;
       section.setAttribute('data-checks-shape', '');
       const summary = element('summary');
-      summary.append(renderTerm(group.shape), ` (${countsText(allCounts.get(keyOf(group.shape)) ?? group.counts)}) `, ...showButton(report.results.filter((r) => keyOf(r.shape) === keyOf(group.shape)), 'data-checks-show-in-graph', () => 'Show in graph'));
+      summary.append(renderTerm(group.shape), ` (${countsText(allCounts.get(keyOf(group.shape)) ?? group.counts)}) `, ...showButton(report.results.filter((r) => keyOf(r.shape) === keyOf(group.shape)), 'data-checks-show-in-graph', () => 'Show in graph', said));
       const list = element('ul', 'checks-results');
       list.append(...group.results.map(renderResult));
       section.append(summary, list);
