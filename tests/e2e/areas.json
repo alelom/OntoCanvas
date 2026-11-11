@@ -28,6 +28,7 @@
     "tests/e2e/testHelpers.ts",
     "tests/e2e/globalSetup.ts"
   ],
+  "wiring": ["src/main.ts"],
   "typeOnly": [
     "src/types.ts",
     "src/storage/types.ts"

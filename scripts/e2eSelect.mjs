@@ -59,6 +59,103 @@ const IMPORT_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)
 // to the module they name cannot reach the page through them (#198). An import that brings a value (`import { a, type B }`) stays.
 const TYPE_ONLY_IMPORT = /\b(?:import|export)\s+type\s+(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*from\s*['"][^'"]+['"]/g;
 
+/** The module a relative specifier names, among the known modules; null for a package or one not found. */
+function resolveSpecifier(file, spec, known) {
+  if (!spec.startsWith('.')) return null;
+  const base = posix.normalize(posix.join(posix.dirname(file), spec));
+  return [`${base}.ts`, `${base}/index.ts`, base].find((c) => known.has(c)) ?? null;
+}
+
+/** The names a file imports values under (its local names: `b` of `a as b`), each with the module it comes from. */
+function importedNames(text, file, known) {
+  const names = new Map();
+  for (const match of text.matchAll(/\bimport\s+(?!type\s)([^;]*?)\s+from\s*['"]([^'"]+)['"]/g)) {
+    const module = resolveSpecifier(file, match[2], known);
+    if (!module) continue;
+    const clause = match[1];
+    const braces = /\{([^}]*)\}/.exec(clause);
+    const outside = clause.replace(/\{[^}]*\}/, '');
+    const locals = [
+      ...(braces ? braces[1].split(',') : []).map((part) => part.trim()).filter((part) => part && !part.startsWith('type ')).map((part) => part.split(/\s+as\s+/).pop()),
+      ...outside.split(',').map((part) => part.trim().replace(/^\*\s+as\s+/, '')).filter(Boolean),
+    ];
+    for (const local of locals) if (/^[A-Za-z_$][\w$]*$/.test(local)) names.set(local, module);
+  }
+  return names;
+}
+
+const identifiers = (line) => [...line.matchAll(/[A-Za-z_$][\w$]*/g)].map((m) => m[0]);
+const neutral = (line) => !line || line.startsWith('//') || line.startsWith('*') || line.startsWith('/*') || !/[A-Za-z_$]/.test(line);
+
+/**
+ * The line that opens the bracket a line of `lines` (at `index`) sits in, then the one around that, outwards: for each, its index.
+ * Brackets in strings and comments are counted too, which can only make a line be given to a call it is not in, or to none.
+ */
+function* enclosingLines(lines, index) {
+  let depth = 0;
+  for (let i = index - 1; i >= 0; i--) {
+    const line = lines[i];
+    for (let c = line.length - 1; c >= 0; c--) {
+      const ch = line[c];
+      if (ch === ')' || ch === '}' || ch === ']') depth++;
+      else if (ch === '(' || ch === '{' || ch === '[') {
+        depth--;
+        if (depth < 0) {
+          yield i;
+          depth = 0;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * The modules the changed lines of a wiring file use (#198). An import line names its module (a type-only import, none). Any
+ * other line, the modules its names were imported from (in the file before or after the change), leaving out shared state
+ * (`isHub`: `session.x` says nothing about which feature changed). A line left with none is given to the call it is inside
+ * (`getGraph: () => {` in `initSidePanel({ … })`), outwards to the top level. Blank lines, comments and punctuation use nothing.
+ * A line given to nothing is `untraced`.
+ * @param {{ added: string[], removed: string[], before: string, after: string }} change
+ * @param {{ isHub?: (module: string) => boolean }} options
+ */
+export function wiringModules(file, change, known, { isHub = () => false } = {}) {
+  const names = new Map([...importedNames(change.before, file, known), ...importedNames(change.after, file, known)]);
+  const modules = new Set();
+  const untraced = [];
+  /** The feature modules a line names. */
+  const featuresOf = (line) => [...new Set(identifiers(line).filter((n) => names.has(n)).map((n) => names.get(n)))].filter((m) => !isHub(m));
+  /** The feature modules of the calls around a line of `text`, the nearest that names one. */
+  function enclosingFeatures(raw, text) {
+    const lines = text.split(/\r?\n/);
+    const index = lines.indexOf(raw);
+    if (index < 0) return [];
+    for (const i of enclosingLines(lines, index)) {
+      const found = featuresOf(lines[i]);
+      if (found.length) return found;
+    }
+    return [];
+  }
+  const consider = (raw, text) => {
+    const line = raw.trim();
+    if (neutral(line)) return;
+    const imported = /^import\s+(type\s)?[^;]*?from\s*['"]([^'"]+)['"]/.exec(line);
+    if (imported) {
+      if (imported[1]) return;
+      const module = resolveSpecifier(file, imported[2], known);
+      if (module) modules.add(module);
+      else untraced.push(raw);
+      return;
+    }
+    const found = featuresOf(line);
+    const given = found.length ? found : enclosingFeatures(raw, text);
+    if (given.length) for (const module of given) modules.add(module);
+    else untraced.push(raw);
+  };
+  for (const raw of change.added) consider(raw, change.after);
+  for (const raw of change.removed) consider(raw, change.before);
+  return { modules: [...modules], untraced };
+}
+
 function sourceFiles(dir, root) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
@@ -159,7 +256,12 @@ export function buildPackageImporters(root = ROOT) {
  * @returns {{ all: boolean, areas: string[], reasons: Record<string, string[]>, notes: Record<string, string>, ignored: string[], unplaced: string[] }}
  *   `reasons` says, per area (or `*` for everything), which files selected it; `notes` explains a file that selected everything.
  */
-export function selectAreas(changedFiles, config, importersOf = () => [], packages = null) {
+/**
+ * @param lineChangesOf for a wiring file (`config.wiring`, #198), its changed lines and its text before and after; without it, a
+ *   wiring file is a hub like any other
+ * @param known the modules under src/, to resolve a wiring file's imports
+ */
+export function selectAreas(changedFiles, config, importersOf = () => [], packages = null, lineChangesOf = null, known = new Set()) {
   const reasons = {};
   const notes = {};
   const add = (key, file) => (reasons[key] ??= []).push(file);
@@ -198,6 +300,23 @@ export function selectAreas(changedFiles, config, importersOf = () => [], packag
       if (owner) add(owner, file);
       else { all = true; unplaced.push(file); add('*', file); }
       continue;
+    }
+    // A wiring file (src/main.ts): the areas of the modules its changed lines use, when every line is traced to a module an area
+    // places (#198). Otherwise it is the hub it is listed as.
+    if (lineChangesOf && matchesAny(file, config.wiring ?? [])) {
+      const change = lineChangesOf(file);
+      if (change) {
+        const { modules, untraced } = wiringModules(file, change, known, { isHub: (module) => matchesAny(module, config.everything) });
+        const placed = modules.map((module) => [module, matchesAny(module, config.everything) ? new Map() : ownersThroughImports(module)]);
+        if (!untraced.length && placed.every(([, owners]) => owners.size)) {
+          if (!modules.length) ignored.push(file);
+          for (const [module, owners] of placed) for (const [area] of owners) add(area, `${file} (wires ${module})`);
+          continue;
+        }
+        notes[file] = untraced.length
+          ? `a changed line uses nothing it imports: ${untraced[0].trim()}`
+          : `it wires ${placed.find(([, owners]) => !owners.size)[0]}, a shared hub or a module no area places`;
+      }
     }
     if (matchesAny(file, config.everything)) { all = true; add('*', file); continue; }
     const owners = ownersThroughImports(file);
@@ -304,6 +423,27 @@ function git(args) {
   return r.status === 0 ? r.stdout.split('\n').map((l) => l.trim()).filter(Boolean) : null;
 }
 
+/**
+ * The changed lines of a file since where the branch left `base`, and its text then and now (#198: for a wiring file), from git.
+ * Null when git cannot say.
+ */
+function gitLineChanges(base, includeWorkingTree) {
+  const mergeBase = git(['merge-base', base, 'HEAD'])?.[0];
+  return (file) => {
+    if (!mergeBase) return null;
+    const diff = git(['diff', '-U0', mergeBase, ...(includeWorkingTree ? [] : ['HEAD']), '--', file]);
+    if (diff === null) return null;
+    const lines = diff.filter((l) => !l.startsWith('+++') && !l.startsWith('---'));
+    const now = includeWorkingTree ? (() => { try { return readFileSync(join(ROOT, file), 'utf8'); } catch { return ''; } })() : gitShow('HEAD', file) ?? '';
+    return {
+      added: lines.filter((l) => l.startsWith('+')).map((l) => l.slice(1)),
+      removed: lines.filter((l) => l.startsWith('-')).map((l) => l.slice(1)),
+      before: gitShow(mergeBase, file) ?? '',
+      after: now,
+    };
+  };
+}
+
 /** A file as it was at `ref`, or null. */
 function gitShow(ref, path) {
   const r = spawnSync('git', ['show', `${ref}:${path}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -380,7 +520,9 @@ function main(argv) {
   } else if (flag('--changed') || value('--base')) {
     const base = value('--base') ?? 'origin/main';
     const changed = changedFiles(base, { includeWorkingTree: !flag('--no-worktree') });
-    selection = selectAreas(changed, config, buildImporterGraph(ROOT), packagesOf(changed, base, config));
+    const includeWorkingTree = !flag('--no-worktree');
+    const known = new Set(sourceFiles(join(ROOT, 'src'), ROOT));
+    selection = selectAreas(changed, config, buildImporterGraph(ROOT), packagesOf(changed, base, config), gitLineChanges(base, includeWorkingTree), known);
   } else {
     console.error('Use --list, --all, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI, --summary for Markdown.');
     return 2;
