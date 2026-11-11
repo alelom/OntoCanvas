@@ -55,6 +55,10 @@ export function areaOfTest(name, config) {
 // select an area too many, never one too few.
 const IMPORT_SPECIFIER = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\bimport\s*['"]([^'"]+)['"]/g;
 
+// `import type { A } from '...'` and `export type { A } from '...'`, on one line or several: the build removes them, so a change
+// to the module they name cannot reach the page through them (#198). An import that brings a value (`import { a, type B }`) stays.
+const TYPE_ONLY_IMPORT = /\b(?:import|export)\s+type\s+(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*from\s*['"][^'"]+['"]/g;
+
 function sourceFiles(dir, root) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
@@ -72,7 +76,7 @@ export function buildImporterGraph(root = ROOT) {
   const known = new Set(files);
   const importers = new Map();
   for (const file of files) {
-    const text = readFileSync(join(root, file), 'utf8');
+    const text = readFileSync(join(root, file), 'utf8').replace(TYPE_ONLY_IMPORT, '');
     for (const match of text.matchAll(IMPORT_SPECIFIER)) {
       const spec = match[1] ?? match[2] ?? match[3];
       if (!spec.startsWith('.')) continue;
