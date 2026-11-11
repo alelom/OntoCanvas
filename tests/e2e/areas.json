@@ -53,7 +53,11 @@
     "tests/unitGlobalSetup.ts",
     "tests/storageShim.ts",
     "tests/e2e/areas.json",
-    "tests/e2e/README.md"
+    "tests/e2e/README.md",
+    "tests/engineSetup.ts",
+    "tests/unitSelect.json",
+    "**/*.test.ts",
+    ".gitignore"
   ],
   "areas": {
     "loading": {
@@ -80,7 +84,8 @@
       "sources": [
         "src/layouts/", "src/graph.ts", "src/graph/asyncLayout.ts", "src/graph/persistNodePositions.ts", "src/graph/nodeClip.ts",
         "src/graph/unattachedDataPropertyLayout.ts", "src/graph/visibleSpan.ts",
-        "src/workflows/nodePositions.ts", "src/workflows/layoutOptions.ts", "src/ui/layoutModeHint.ts", "src/ui/edgeNodeClipping.ts"
+        "src/workflows/nodePositions.ts", "src/workflows/layoutOptions.ts", "src/ui/layoutModeHint.ts", "src/ui/edgeNodeClipping.ts",
+        "src/lib/definitionParents.ts"
       ]
     },
     "display-config": {
@@ -168,12 +173,12 @@
     "shell": {
       "description": "The bottom bar and what it shows about the selection.",
       "tests": ["statusBar"],
-      "sources": ["src/ui/statusBar.ts", "src/ui/selectionInfo.ts"]
+      "sources": ["src/ui/statusBar.ts", "src/ui/selectionInfo.ts", "src/utils/siteInfo.ts"]
     },
     "sparql": {
       "description": "SPARQL queries over the loaded ontology.",
       "tests": ["sparqlQuery", "sparqlPanel", "sparqlDataParam", "individualsGraph", "individualsSchema", "individualsDataFiles", "exploreDataFiles", "dataOntologies", "dataFolder", "checksPanel", "resultsInGraph"],
-      "sources": ["src/sparql/", "src/checks/", "src/ui/sidePanel/", "src/ui/exploreDataStart.ts", "src/ui/dataDrop.ts", "src/ui/folderPicker.ts", "src/ui/lastFolder.ts", "src/workflows/exploreDataFiles.ts", "src/workflows/dataOntologies.ts", "src/abox/", "src/ui/historyShortcuts.ts", "src/utils/textEditing.ts"]
+      "sources": ["src/sparql/", "src/checks/", "src/graph/classIndividuals.ts", "src/graph/individualsOverlay.ts", "src/graph/individualsRelax.ts", "src/graph/individualDoubleClick.ts", "src/ui/individualCountBadges.ts", "src/graph/drawnGraphIndex.ts", "src/graph/resultHighlight.ts", "src/graph/showResultInGraph.ts", "src/graph/selectResults.ts", "src/ui/sidePanel/", "src/ui/exploreDataStart.ts", "src/ui/dataDrop.ts", "src/ui/folderPicker.ts", "src/ui/lastFolder.ts", "src/workflows/exploreDataFiles.ts", "src/workflows/dataOntologies.ts", "src/abox/", "src/ui/historyShortcuts.ts", "src/utils/textEditing.ts"]
     }
   }
 }

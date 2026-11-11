@@ -5,9 +5,11 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildImporterGraph } from '../../scripts/e2eSelect.mjs';
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const root = mkdtempSync(join(tmpdir(), 'e2e-select-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -35,5 +37,33 @@ describe('buildImporterGraph and type-only imports', () => {
 
   it('keeps an import that brings a value, with types or not', () => {
     expect(importersOf('src/values.ts').sort()).toEqual(['src/mixed.ts', 'src/plain.ts']);
+  });
+});
+
+describe('the real area map places every module (#198)', () => {
+  it('a change to any module under src/ selects areas, never everything because no area places it', async () => {
+    const { loadConfig, selectAreas } = await import('../../scripts/e2eSelect.mjs');
+    const { readdirSync } = await import('node:fs');
+    const config = loadConfig();
+    const importersOf = buildImporterGraph();
+    const walk = (dir: string): string[] =>
+      readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(`${dir}/${e.name}`) : e.name.endsWith('.ts') && !e.name.endsWith('.test.ts') && !e.name.endsWith('.d.ts') ? [`${dir}/${e.name}`] : []
+      );
+
+    const unplaced = walk('src').filter((file) => selectAreas([file], config, importersOf).unplaced.includes(file));
+
+    // A new module: list it under the area whose E2E tests exercise it, in tests/e2e/areas.json.
+    expect(unplaced).toEqual([]);
+  });
+
+  it('a unit test file, or .gitignore, selects no E2E area: the unit job runs the first, and the second runs nothing', async () => {
+    const { loadConfig, selectAreas } = await import('../../scripts/e2eSelect.mjs');
+    const config = loadConfig();
+
+    const selection = selectAreas(['src/parser.test.ts', 'src/main.test.ts', 'tests/unit/checksTab.test.ts', '.gitignore'], config, buildImporterGraph());
+
+    expect(selection.all).toBe(false);
+    expect(selection.areas).toEqual([]);
   });
 });
