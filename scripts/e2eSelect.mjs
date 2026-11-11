@@ -146,6 +146,15 @@ export function wiringModules(file, change, known, { isHub = () => false } = {})
       else untraced.push(raw);
       return;
     }
+    // A multi-line import: its first line uses nothing; its last line names the module (its names are traced as usual).
+    if (/^import\s+(type\s+)?\{$/.test(line)) return;
+    const closing = /^\}\s*from\s*['"]([^'"]+)['"]/.exec(line);
+    if (closing) {
+      const module = resolveSpecifier(file, closing[1], known);
+      if (module) modules.add(module);
+      else untraced.push(raw);
+      return;
+    }
     const found = featuresOf(line);
     const given = found.length ? found : enclosingFeatures(raw, text);
     if (given.length) for (const module of given) modules.add(module);

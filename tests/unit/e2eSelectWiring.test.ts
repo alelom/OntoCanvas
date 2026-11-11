@@ -116,3 +116,12 @@ session.ready = true;
     expect(wiringModules('src/main.ts', change([], ['session.ready = true;']), knownHere, { isHub })).toEqual({ modules: [], untraced: ['session.ready = true;'] });
   });
 });
+
+describe('wiringModules: a multi-line import (#198)', () => {
+  it('its first line uses nothing, its names are traced by the module the import names', () => {
+    const text = "import {\n  showResultInGraph,\n  clearResultInGraph,\n} from './graph/showResultInGraph';\n";
+    const found = wiringModules('src/main.ts', { added: ['import {', '  showResultInGraph,', "} from './graph/showResultInGraph';"], removed: [], before: '', after: text }, known);
+
+    expect(found).toEqual({ modules: ['src/graph/showResultInGraph.ts'], untraced: [] });
+  });
+});
