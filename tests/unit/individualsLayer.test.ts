@@ -611,3 +611,29 @@ describe('the instances of a relationship (#214)', () => {
     expect(layer.previewRelationship(ex('hasWall'))).toEqual({ adds: 0, displayed: 2, total: 6 });
   });
 });
+
+describe('showMany(iris): the individuals a query result names (#207)', () => {
+  it('draws those not drawn yet in one change, and says how many it drew', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(3)] });
+    layer.show(ex('p000'));
+    const changes: unknown[] = [];
+    layer.onChange((change) => changes.push(change));
+
+    const drawn = layer.showMany([ex('p000'), ex('p001'), ex('p002')]);
+
+    expect(drawn).toBe(2);
+    expect(changes).toEqual([{ kind: 'draw', drawn: [ex('p001'), ex('p002')] }]);
+    expect(layer.drawnCount()).toBe(3);
+  });
+
+  it('draws up to the limit, and nothing (no change) when there is no room or nothing new', () => {
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [hub(3)], maxTotal: 2 });
+    const changes: unknown[] = [];
+    layer.onChange((change) => changes.push(change));
+
+    expect(layer.showMany([ex('p000'), ex('p001'), ex('p002')])).toBe(2);
+    expect(layer.showMany([ex('p002')])).toBe(0);
+    expect(layer.showMany([ex('p000')])).toBe(0);
+    expect(changes).toHaveLength(1);
+  });
+});

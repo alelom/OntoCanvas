@@ -62,7 +62,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # The system packages come from Ubuntu's mirror. When it cannot be reached (it went down for hours on 2026-11-11, and apt retries
+      # for minutes before it gives up), Chromium is installed alone: the runner image already has the libraries it needs.
+      - run: timeout 180 npx playwright install --with-deps chromium || npx playwright install chromium
       - run: npm run test:e2e:full
       - name: Record the result
         if: always()

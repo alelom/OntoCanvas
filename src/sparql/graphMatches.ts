@@ -1,17 +1,23 @@
 /**
  * Which drawn nodes and edges a query result names (#203): a class by its IRI, a relationship by the IRI of its property,
- * and rdfs:subClassOf by its own IRI. Pure: no DOM, no graph library. Data properties, individuals and blank nodes are not
- * matched (see the issue).
+ * and rdfs:subClassOf by its own IRI; the drawn individuals by their IRI and the links between them by their relationship (#207).
+ * Pure: no DOM, no graph library. Data properties and blank nodes are not matched.
  */
 
 import type { ResultView } from './resultView';
 
 const RDFS_SUBCLASS_OF = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 
 /** What the graph draws, as far as matching needs it. */
 export interface GraphIndex {
-  nodes: Array<{ id: string; uri?: string }>;
-  edges: Array<{ from: string; to: string; type: string }>;
+  /** `kind` tells an individual (#209) from a class, which is the default. */
+  nodes: Array<{ id: string; uri?: string; kind?: 'class' | 'individual' }>;
+  /**
+   * A class edge is known by `from->to:type`; a link between individuals (#209) has an `id` of its own, and its relationship's
+   * IRI in `property` (rdf:type for the link to its class).
+   */
+  edges: Array<{ from: string; to: string; type: string; id?: string; property?: string }>;
   objectProperties: Array<{ name: string; uri?: string }>;
 }
 
@@ -24,9 +30,17 @@ export interface GraphMatch {
 
 const isIri = (value: string): boolean => /^[a-z][a-z\d+.-]*:\/\//i.test(value);
 
+type Edge = GraphIndex['edges'][number];
+
+/** The vis id of an edge: its own, or the one a class edge is drawn under. */
+const edgeId = (edge: Edge): string => edge.id ?? `${edge.from}->${edge.to}:${edge.type}`;
+
 /** The IRI an edge stands for: its property's, `rdfs:subClassOf` for the hierarchy, or its type when that already is one. */
-function edgeIri(type: string, objectProperties: GraphIndex['objectProperties']): string | null {
+function edgeIri(edge: Edge, objectProperties: GraphIndex['objectProperties']): string | null {
+  if (edge.property) return edge.property;
+  const { type } = edge;
   if (type === 'subClassOf') return RDFS_SUBCLASS_OF;
+  if (type === 'rdf:type') return RDF_TYPE;
   const property = objectProperties.find((p) => p.name === type || p.uri === type);
   return property?.uri ?? (isIri(type) ? type : null);
 }
@@ -37,10 +51,10 @@ export function matchIrisToGraph(iris: Iterable<string>, graph: GraphIndex): Gra
   const nodeIds = graph.nodes.filter((n) => n.uri && wanted.has(n.uri)).map((n) => n.id);
   const edgeIds = graph.edges
     .filter((e) => {
-      const iri = edgeIri(e.type, graph.objectProperties);
+      const iri = edgeIri(e, graph.objectProperties);
       return iri !== null && wanted.has(iri);
     })
-    .map((e) => `${e.from}->${e.to}:${e.type}`);
+    .map(edgeId);
   return { nodeIds: [...new Set(nodeIds)], edgeIds: [...new Set(edgeIds)] };
 }
 
@@ -60,14 +74,14 @@ export function matchTableToGraph(view: Extract<ResultView, { kind: 'table' }>, 
     for (const id of matchIrisToGraph(iris, graph).nodeIds) nodeIds.add(id);
     const endsNamed = graph.nodes.filter((n) => n.uri && iris.has(n.uri)).length;
     for (const edge of graph.edges) {
-      const property = edgeIri(edge.type, graph.objectProperties);
+      const property = edgeIri(edge, graph.objectProperties);
       if (property === null || !iris.has(property)) continue;
       const from = uriOfNode.get(edge.from);
       const to = uriOfNode.get(edge.to);
       if (endsNamed >= 2) {
-        if (from && to && iris.has(from) && iris.has(to)) edgeIds.add(`${edge.from}->${edge.to}:${edge.type}`);
+        if (from && to && iris.has(from) && iris.has(to)) edgeIds.add(edgeId(edge));
       } else {
-        edgeIds.add(`${edge.from}->${edge.to}:${edge.type}`);
+        edgeIds.add(edgeId(edge));
         allEdgesOfAProperty = true;
       }
     }
@@ -84,10 +98,71 @@ export function irisInTable(view: Extract<ResultView, { kind: 'table' }>): strin
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** What selecting a match does, for the button: "2 classes, 1 relationship". */
-export function describeMatch(match: GraphMatch): string {
+/** What selecting a match does, for the button: "2 individuals, 1 class, 1 relationship". Without the graph, every node is a class. */
+export function describeMatch(match: GraphMatch, graph?: GraphIndex): string {
   const parts: string[] = [];
-  if (match.nodeIds.length) parts.push(plural(match.nodeIds.length, 'class', 'classes'));
+  const individual = new Set(graph?.nodes.filter((n) => n.kind === 'individual').map((n) => n.id) ?? []);
+  const individuals = match.nodeIds.filter((id) => individual.has(id)).length;
+  const classes = match.nodeIds.length - individuals;
+  if (individuals) parts.push(plural(individuals, 'individual', 'individuals'));
+  if (classes) parts.push(plural(classes, 'class', 'classes'));
   if (match.edgeIds.length) parts.push(plural(match.edgeIds.length, 'relationship', 'relationships'));
   return parts.join(', ');
+}
+
+const RDFS_DOMAIN = 'http://www.w3.org/2000/01/rdf-schema#domain';
+const RDFS_RANGE = 'http://www.w3.org/2000/01/rdf-schema#range';
+
+/** A triple of a CONSTRUCT or DESCRIBE result, as far as matching needs it. */
+interface TripleLike {
+  subject: { termType: string; value: string };
+  predicate: { value: string };
+  object: { termType: string; value: string };
+}
+
+/**
+ * What a CONSTRUCT or DESCRIBE result names in the graph (#207): each triple `s p o` is the drawn edge from `s` to `o` of
+ * relationship `p` and its two ends. The canvas draws some triples otherwise: `p rdfs:domain A` and `p rdfs:range B` are the
+ * edge of `p` from A, or to B. A triple counts as in the graph when it matched an edge or a node; `triples` says how many did.
+ */
+export function matchQuadsToGraph(quads: Iterable<TripleLike>, graph: GraphIndex): GraphMatch & { triples: { total: number; inGraph: number } } {
+  const nodesByUri = new Map<string, string[]>();
+  for (const node of graph.nodes) if (node.uri) nodesByUri.set(node.uri, [...(nodesByUri.get(node.uri) ?? []), node.id]);
+  const uriOfNode = new Map(graph.nodes.map((n) => [n.id, n.uri] as const));
+  const nodeIds = new Set<string>();
+  const edgeIds = new Set<string>();
+  let total = 0;
+  let inGraph = 0;
+  // Each edge's relationship and ends, worked out once, by relationship: a triple then looks at the edges of its own (#244 review:
+  // testing every triple against every edge took about 1 s for 5,000 triples).
+  const edgesByProperty = new Map<string, Array<{ id: string; from: string | undefined; to: string | undefined }>>();
+  for (const edge of graph.edges) {
+    const property = edgeIri(edge, graph.objectProperties);
+    if (property === null) continue;
+    edgesByProperty.set(property, [...(edgesByProperty.get(property) ?? []), { id: edgeId(edge), from: uriOfNode.get(edge.from), to: uriOfNode.get(edge.to) }]);
+  }
+  for (const { subject, predicate, object } of quads) {
+    total++;
+    const s = subject.termType === 'NamedNode' ? subject.value : null;
+    const o = object.termType === 'NamedNode' ? object.value : null;
+    const p = predicate.value;
+    let found = false;
+    // \`s p o\` is an edge of p from s to o; \`p rdfs:domain A\` (or range) is an edge of the property s from A (or to it).
+    const candidates = p === RDFS_DOMAIN || p === RDFS_RANGE ? (s ? edgesByProperty.get(s) ?? [] : []) : edgesByProperty.get(p) ?? [];
+    for (const edge of candidates) {
+      const hit = p === RDFS_DOMAIN ? edge.from === o : p === RDFS_RANGE ? edge.to === o : s !== null && edge.from === s && edge.to === o;
+      if (hit) {
+        edgeIds.add(edge.id);
+        found = true;
+      }
+    }
+    for (const iri of [s, o]) {
+      for (const id of (iri && nodesByUri.get(iri)) || []) {
+        nodeIds.add(id);
+        found = true;
+      }
+    }
+    if (found) inGraph++;
+  }
+  return { nodeIds: [...nodeIds], edgeIds: [...edgeIds], triples: { total, inGraph } };
 }

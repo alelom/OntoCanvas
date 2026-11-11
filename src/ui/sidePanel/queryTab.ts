@@ -9,7 +9,9 @@ import { QueryStopped } from '../../sparql/readCapped';
 import { prefixHeader, withStandardPrefixes } from '../../sparql/prefixHeader';
 import { individualsOf } from '../../lib/instanceData';
 import { describeResult, MAX_ROWS_SHOWN, type ResultView } from '../../sparql/resultView';
-import { describeMatch, matchTableToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
+import type { GraphIndex, GraphMatch } from '../../sparql/graphMatches';
+import { createResultShowing, foundInQuads, foundInTable, selectInGraphRow, triplesInGraph, type ResultIndividuals } from './selectInGraph';
+import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
 import type { DataLoader } from '../../sparql/dataLoader';
@@ -38,6 +40,15 @@ export interface QueryTabDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects these nodes and edges in the graph and brings them into view. */
   showInGraph?: (match: GraphMatch) => void;
+  /** The individuals of the data: "Select in graph" draws those a result names that are not drawn (#207). */
+  individuals?: ResultIndividuals;
+  /** Outlines a result in the graph by itself after a run, and brings it into view (#207). */
+  showResult?: (matcher: ResultMatcher) => ShowDecision;
+  /** Removes that outline. */
+  clearResult?: () => void;
+  /** Called when the outline changes from elsewhere, and whether one is on (#244 review). */
+  onResultChange?: (listener: () => void) => void;
+  hasResult?: () => boolean;
   /** The data added to the open ontology (#205): queries run over it too, and a line says so. */
   dataSources?: DataSources;
   /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
@@ -140,6 +151,8 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
   let edited = false;
   let prefixNote: HTMLElement | null = null;
   let stop: (() => void) | null = null;
+  // A result shown in the graph by itself (#207): what was outlined, and the checkbox that turns it off.
+  const showing = createResultShowing(deps);
   /** The prefixes the query's text was written with (the starter's header); the note compares the open file's to them. */
   let headerPrefixes = JSON.stringify(deps.getPrefixes());
 
@@ -191,22 +204,6 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     const starter = store && individualsOf(store).size > 0 ? INDIVIDUALS_STARTER_QUERY : CLASSES_STARTER_QUERY;
     return `${prefixHeader(deps.getPrefixes())}\n\n${starter}`;
   };
-
-  /** The "Show in graph" button above a table that names drawn classes or relationships; nothing when it names none (#203). */
-  function showInGraphRow(view: Extract<ResultView, { kind: 'table' }>): HTMLElement[] {
-    const graph = deps.getGraph?.();
-    if (!graph || !deps.showInGraph) return [];
-    const match = matchTableToGraph(view, graph);
-    if (!match.nodeIds.length && !match.edgeIds.length) return [];
-    const button = element('button', undefined, `Show in graph (${describeMatch(match)})`);
-    button.type = 'button';
-    button.title = match.allEdgesOfAProperty
-      ? 'Select these in the graph and bring them into view. A property named without the two ends of an edge selects every edge that uses it.'
-      : 'Select these in the graph and bring them into view';
-    button.setAttribute('data-query-show-in-graph', '');
-    button.addEventListener('click', () => deps.showInGraph!(match));
-    return [button];
-  }
 
   /**
    * One line about the data added to the ontology (#211): the queries run over it, where it is managed, and the status of a
@@ -340,7 +337,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     status.setAttribute('data-query-status', '');
     status.setAttribute('aria-live', 'polite');
     const actions = element('div', 'query-actions');
-    actions.append(runButton, stopButton, status);
+    actions.append(runButton, stopButton, status, showing.line, showing.toggle);
 
     const result = element('div', 'query-result');
     result.setAttribute('data-query-result', '');
@@ -362,6 +359,8 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         return;
       }
 
+      // The last result's outline goes: it belonged to the query before.
+      showing.clear();
       recordRun(editor!.getText());
       runButton.disabled = true;
       stopButton.hidden = false;
@@ -381,7 +380,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         const took = `${Math.round(performance.now() - started)} ms`;
 
         if (view.kind === 'table') {
-          result.replaceChildren(...showInGraphRow(view), renderTable(view, deps.images));
+          const found = foundInTable(view);
+          result.replaceChildren(...selectInGraphRow(found, deps), renderTable(view, deps.images));
+          showing.show(found.matchOf, view.truncated ? `the first ${MAX_ROWS_SHOWN} rows` : undefined);
           status.textContent = view.truncated
             ? `The first ${MAX_ROWS_SHOWN} rows in ${took}; there are more`
             : `${plural(view.rows.length, 'row', 'rows')} in ${took}`;
@@ -389,10 +390,14 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
           result.replaceChildren(element('p', 'query-boolean', String(view.value)));
           status.textContent = `Answered in ${took}`;
         } else {
-          result.replaceChildren(element('pre', 'query-turtle', view.text));
+          // A CONSTRUCT or DESCRIBE result is triples: the graph shows the edges they stand for (#207).
+          const found = rows.kind === 'quads' ? foundInQuads(rows.quads) : null;
+          result.replaceChildren(...(found ? selectInGraphRow(found, deps) : []), element('pre', 'query-turtle', view.text));
+          if (found) showing.show(found.matchOf, view.truncated ? `the first ${plural(view.count, 'triple', 'triples')}` : undefined);
+          const inGraph = rows.kind === 'quads' ? triplesInGraph(rows.quads, deps.getGraph?.()) : '';
           status.textContent = view.truncated
-            ? `The first ${plural(view.count, 'triple', 'triples')} in ${took}; there are more`
-            : `${plural(view.count, 'triple', 'triples')} in ${took}`;
+            ? `The first ${plural(view.count, 'triple', 'triples')} in ${took}; there are more${inGraph}`
+            : `${plural(view.count, 'triple', 'triples')} in ${took}${inGraph}`;
         }
       } catch (error) {
         if (error instanceof QueryStopped) status.textContent = 'Stopped.';
@@ -423,6 +428,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       // The data belongs to the ontology it was added to.
       deps.dataLoader?.reset();
       deps.dataSources?.clear();
+      showing.clear();
       if (!editor) return;
       if (!edited) editor.setText(starterText());
       updatePrefixNote();

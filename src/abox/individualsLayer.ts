@@ -116,6 +116,8 @@ export interface IndividualsLayer {
   drawnCount(): number;
   /** Draws the individual, on its own. `focus`: it is selected and brought into view, drawn already or not (#217). */
   show(iri: string, options?: { focus?: boolean }): void;
+  /** Draws the individuals not drawn yet, on their own, in one change, up to the limit (#207: those a query result names). Returns how many it drew. */
+  showMany(iris: string[]): number;
   /** Draws up to the cap of the neighbours of the individual that are not drawn yet, and the individual with them; asked again, the next ones. */
   showNeighbours(iri: string, options?: { focus?: boolean }): void;
   /** Draws up to the cap of the individuals a relationship links, both ends of each link, and selects the links (#214). */
@@ -321,6 +323,14 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       if (!before.has(iri) && room() === 0) return;
       picked.add(iri);
       changed('draw', before, focus ? { focus: iri } : {});
+    },
+    showMany(iris) {
+      const before = new Set(computeShown().shown);
+      const adds = [...new Set(iris)].filter((iri) => !before.has(iri)).slice(0, room());
+      if (!adds.length) return 0;
+      for (const iri of adds) picked.add(iri);
+      changed('draw', before);
+      return adds.length;
     },
     showRelationship(propertyIri) {
       const before = new Set(computeShown().shown);

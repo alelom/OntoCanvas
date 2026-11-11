@@ -172,7 +172,7 @@
     },
     "sparql": {
       "description": "SPARQL queries over the loaded ontology.",
-      "tests": ["sparqlQuery", "sparqlPanel", "sparqlDataParam", "individualsGraph", "individualsSchema", "individualsDataFiles", "exploreDataFiles", "dataOntologies", "dataFolder", "checksPanel"],
+      "tests": ["sparqlQuery", "sparqlPanel", "sparqlDataParam", "individualsGraph", "individualsSchema", "individualsDataFiles", "exploreDataFiles", "dataOntologies", "dataFolder", "checksPanel", "resultsInGraph"],
       "sources": ["src/sparql/", "src/checks/", "src/ui/sidePanel/", "src/ui/exploreDataStart.ts", "src/ui/dataDrop.ts", "src/ui/folderPicker.ts", "src/ui/lastFolder.ts", "src/workflows/exploreDataFiles.ts", "src/workflows/dataOntologies.ts", "src/abox/", "src/ui/historyShortcuts.ts", "src/utils/textEditing.ts"]
     }
   }

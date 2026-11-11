@@ -16,6 +16,7 @@ import { countIndividuals, createIndividualIndex, type IndividualIndex } from '.
 import { individualsButtonText } from '../../abox/individualsLabel';
 import { matchIrisToGraph, type GraphIndex, type GraphMatch } from '../../sparql/graphMatches';
 import type { DataSources } from '../../sparql/dataSources';
+import { hasResultHighlight, onResultHighlightChange, type ResultMatcher, type ShowDecision } from '../../graph/resultHighlight';
 import type { IndividualsLayer } from '../../abox/individualsLayer';
 import type { DataImages } from '../../abox/dataImages';
 import { syncFolderNotices } from '../folderNotices';
@@ -35,6 +36,9 @@ export interface SidePanelDeps {
   getGraph?: () => GraphIndex | null;
   /** Selects what a query result names in the graph and brings it into view (#203). */
   showInGraph?: (match: GraphMatch) => void;
+  /** Outlines a query result in the graph by itself, and brings it into view (#207); and removes that outline. */
+  showResult?: (matcher: ResultMatcher) => ShowDecision;
+  clearResult?: () => void;
   /** The data added to the open ontology, queried with it (#205). */
   dataSources?: DataSources;
   /** The label a class has in the graph, for the Individuals tab (#208). */
@@ -123,11 +127,25 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getHistoryKey: deps.getHistoryKey,
     getGraph: deps.getGraph,
     showInGraph: deps.showInGraph,
+    showResult: deps.showResult,
+    clearResult: deps.clearResult,
+    onResultChange: onResultHighlightChange,
+    hasResult: hasResultHighlight,
     dataSources: deps.dataSources,
     dataLoader,
     images: deps.dataImages,
     openIndividuals: () => host.open('individuals'),
     library,
+    // A result's individuals that are not drawn are drawn by its "Select in graph", within the limit (#207).
+    individuals: deps.individualsLayer
+      ? {
+          isIndividual: (iri) => individualIndex().has(iri),
+          isDrawn: (iri) => deps.individualsLayer!.preview(iri).shown,
+          draw: (iris) => deps.individualsLayer!.showMany(iris),
+          room: () => deps.individualsLayer!.limit - deps.individualsLayer!.drawnCount(),
+          limit: deps.individualsLayer.limit,
+        }
+      : undefined,
   });
   host.registerTab(queryTab);
 
@@ -172,8 +190,26 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     getPrefixes: deps.getPrefixes,
     isIndividual: (iri) => individualIndex().has(iri),
     openIndividual,
+    // The focus nodes of a report, outlined as a query result is (#207): individuals not drawn are drawn first, within the limit.
+    showInGraph: deps.showResult
+      ? (iris) =>
+          new Promise((resolve) => {
+            const layer = deps.individualsLayer;
+            const individuals = iris.filter((iri) => individualIndex().has(iri));
+            const undrawn = layer ? individuals.filter((iri) => !layer.preview(iri).shown).length : 0;
+            const drawn = layer ? layer.showMany(individuals) : 0;
+            const show = (): void =>
+              resolve({ decision: deps.showResult!((graph) => matchIrisToGraph(iris, graph)), notDrawn: undrawn - drawn, limit: layer?.limit ?? 0 });
+            // A draw redraws the graph: the outline is matched once it holds them.
+            if (drawn) requestAnimationFrame(show);
+            else show();
+          })
+      : undefined,
   });
   host.registerTab(checksTab);
+  // A result's outline is kept as the result and matched again on each redraw; when the individuals drawn change, it could match
+  // other edges than the ones the result named (a row's two ends no longer both drawn), so it goes, as on a new Run (#244 review).
+  deps.individualsLayer?.onChange(() => deps.clearResult?.());
   // The search of the graph finds the individuals that are not drawn, and opens the card of the one picked (#217).
   if (deps.individualsLayer) {
     setIndividualSearchProvider({

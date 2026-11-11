@@ -941,8 +941,28 @@ div.vis-network div.vis-manipulation button.vis-button.vis-query[aria-pressed='t
 }
 .query-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+/* A result shown in the graph (#207): what was outlined, and the checkbox that turns it off. */
+.query-show-results {
+  margin-left: auto;
+  color: #666;
+  font-size: 11px;
+  cursor: pointer;
+}
+.query-shown-line:empty {
+  display: none;
+}
+.link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #1a73e8;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
 }
 .query-actions > button {
   flex: none;
