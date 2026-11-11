@@ -1,3 +1,20 @@
+# [2.10.0](https://github.com/alelom/OntoCanvas/compare/v2.9.0...v2.10.0) (2026-11-11)
+
+
+### Bug Fixes
+
+* **sparql:** "Show in graph" finds the drawn individuals a result names, and the links between them ([b27b134](https://github.com/alelom/OntoCanvas/commit/b27b1349dabb1f07110eb77434a2c87a3e255b08)), closes [#209](https://github.com/alelom/OntoCanvas/issues/209)
+* **sparql:** the [#244](https://github.com/alelom/OntoCanvas/issues/244) review: the report says what "Show in graph" did, a result's outline goes when the individuals change ([32de24f](https://github.com/alelom/OntoCanvas/commit/32de24ffa1b0c4c49c60e32c9af57c6cca4cdfd0))
+
+
+### Features
+
+* **checks:** the SHACL report shows a shape's focus nodes in the graph, or all of them ([dfdd136](https://github.com/alelom/OntoCanvas/commit/dfdd136b089d5856cdf6ed0f35b69f33658b686e))
+* **sparql:** "Select in graph" draws the individuals a result names that are not drawn, then selects them ([46cee42](https://github.com/alelom/OntoCanvas/commit/46cee428147500ed632f2edd7fa3b46ad7991257)), closes [#207](https://github.com/alelom/OntoCanvas/issues/207)
+* **sparql:** a query result is outlined in the graph by itself after each Run, and brought into view ([08c7bf8](https://github.com/alelom/OntoCanvas/commit/08c7bf872dc9ee35b2de0ea3ce4957b29d430121))
+* **sparql:** CONSTRUCT and DESCRIBE results are shown in the graph by their triples ([8709e90](https://github.com/alelom/OntoCanvas/commit/8709e904dfbfa0132ef0e830366d2bec52cab73f))
+* **sparql:** the outline of a query result pulses, as the search's does, in blue ([8348755](https://github.com/alelom/OntoCanvas/commit/8348755e03d25d00867cc11cb59490e306060cd8))
+
 # [2.9.0](https://github.com/alelom/OntoCanvas/compare/v2.8.0...v2.9.0) (2026-11-10)
 
 
