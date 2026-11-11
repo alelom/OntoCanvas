@@ -41,7 +41,7 @@ export function setupNetworkSelectionAndNavigation(
   hideEdgeLinesUnderNodes(net);
   // A pulsing outline around what the search matched, in an SVG layer that follows the view (#84).
   attachSearchOutline(net as unknown as Parameters<typeof attachSearchOutline>[0], container, () => canvasState.searchOutlineTargets);
-  // A query result shown in the graph (#207): a steady outline of its own.
+  // A query result shown in the graph (#207): a pulsing outline of its own, in blue.
   attachOutline(net as unknown as Parameters<typeof attachOutline>[0], container, resultOutlineTargets, RESULT_LOOK);
   const RIGHT_BUTTON = 2;
   const LEFT_BUTTON = 1;

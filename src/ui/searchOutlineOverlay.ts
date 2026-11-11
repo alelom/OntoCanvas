@@ -47,12 +47,15 @@ export const SEARCH_LOOK: OutlineLook = {
 `,
 };
 
-/** A query result (#207): a steady blue outline, under the search's, so the two are told apart when both are on. */
+/** A query result (#207): a pulsing blue outline, under the search's red one, so the two are told apart when both are on. */
 export const RESULT_LOOK: OutlineLook = {
   overlayId: 'resultOutlineOverlay',
   css: (id) => `${LAYER_CSS(id, 1)}
-#${id} .oc-halo { stroke: rgba(255, 255, 255, 0.9); stroke-width: 8px; }
-#${id} .oc-mark { stroke: #1a73e8; stroke-width: 4px; }
+#${id} .oc-halo { stroke: rgba(255, 255, 255, 0.9); stroke-width: 7px; animation: oc-result-halo 1.1s ease-in-out infinite alternate; }
+#${id} .oc-mark { stroke: #1a73e8; stroke-width: 3px; animation: oc-result-mark 1.1s ease-in-out infinite alternate; }
+@keyframes oc-result-mark { from { stroke-width: 2px; opacity: 0.6; } to { stroke-width: 5px; opacity: 1; } }
+@keyframes oc-result-halo { from { stroke-width: 5px; } to { stroke-width: 9px; } }
+@media (prefers-reduced-motion: reduce) { #${id} .oc-outline { animation: none; } }
 `,
 };
 
