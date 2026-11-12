@@ -102,3 +102,45 @@ describe('selectAreas with a file read by usage', () => {
     expect(select(['  x: 1;'], '.filterOnly {\n  x: 1;\n}\n').all).toBe(true);
   });
 });
+
+describe('usageNames: lines that name nothing of their own (#198)', () => {
+  it('an import line of the state or the skeleton names nothing to look up, and is not untraced', () => {
+    const found = usageNames('fields', change(["import type { SidePanel } from '../ui/sidePanel/initSidePanel';", "import { x } from './y';"]));
+
+    expect(found).toEqual({ names: { after: [], before: [] }, untraced: [] });
+  });
+
+  it('gives a line of markup with no id the nearest element above it that has one', () => {
+    const shell = `<div id="displayOptions" class="options">
+  <label>
+    <input type="checkbox">
+    Spread individuals clear of classes
+  </label>
+</div>
+`;
+    const found = usageNames('markup', change(['    Spread individuals clear of classes', '</div>'], [], shell, shell));
+
+    expect(found.names.after.sort()).toEqual(['displayOptions', 'options']);
+    expect(found.untraced).toEqual([]);
+  });
+});
+
+describe('selectAreas: a class built at run time (#198)', () => {
+  it('a name no module spells is looked up by its prefix in a template, `checks-${`', () => {
+    const config = {
+      everything: ['src/style.css'],
+      byUsage: { 'src/style.css': 'css' },
+      ignore: [],
+      areas: { sparql: { description: '', tests: ['checksPanel'], sources: ['src/ui/sidePanel/'] } },
+    };
+    // The CSS file spells the class itself: that is no use of it (#246: the fallback was skipped because of it).
+    const users: Record<string, string[]> = { 'checks-warning': ['src/style.css'], 'checks-${': ['src/ui/sidePanel/checksTab.ts'] };
+    const css = '.checks-warning .checks-severity {\n  color: orange;\n}\n';
+    const selection = selectAreas(['src/style.css'], { ...config }, () => [], null, () => change(['  color: orange;'], [], css, css), new Set(), (name: string) =>
+      name === 'checks-severity' ? ['src/ui/sidePanel/checksTab.ts'] : users[name] ?? []
+    );
+
+    expect(selection.all).toBe(false);
+    expect(selection.areas).toEqual(['sparql']);
+  });
+});

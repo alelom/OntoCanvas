@@ -192,14 +192,28 @@ function cssSelectorOf(lines, index) {
   return null;
 }
 
+/** The ids, classes, label targets and data attributes on a line of markup. */
+function markupNames(line) {
+  const names = [];
+  for (const m of line.matchAll(/\b(?:id|for)="([^"]+)"/g)) names.push(m[1]);
+  for (const m of line.matchAll(/\bclass="([^"]+)"/g)) names.push(...m[1].split(/\s+/).filter(Boolean));
+  for (const m of line.matchAll(/\b(data-[\w-]+)/g)) names.push(m[1]);
+  return [...new Set(names)].filter((name) => !name.includes('${'));
+}
+
 /** The names a changed line of a file read by usage stands for, by its kind. */
 function namesOnLine(kind, raw, text, at) {
   if (kind === 'markup') {
-    const names = [];
-    for (const m of raw.matchAll(/\b(?:id|for)="([^"]+)"/g)) names.push(m[1]);
-    for (const m of raw.matchAll(/\bclass="([^"]+)"/g)) names.push(...m[1].split(/\s+/).filter(Boolean));
-    for (const m of raw.matchAll(/\b(data-[\w-]+)/g)) names.push(m[1]);
-    return [...new Set(names)].filter((name) => !name.includes('${'));
+    const own = markupNames(raw);
+    if (own.length) return own;
+    // A line with no id of its own (a closing tag, a label's text) belongs to the nearest element above it that has one.
+    const lines = text.split(/\r?\n/);
+    const index = at ? at - 1 : lines.indexOf(raw);
+    for (let i = index - 1; i >= 0; i--) {
+      const found = markupNames(lines[i]);
+      if (found.length) return found;
+    }
+    return [];
   }
   if (kind === 'fields') {
     const m = /^\s*(?:get\s+|set\s+|readonly\s+)?([A-Za-z_$][\w$]*)\s*(?:\??:|=|\()/.exec(raw);
@@ -226,6 +240,8 @@ export function usageNames(kind, change) {
   const read = (raw, side, at) => {
     const line = raw.trim();
     if (!line || line.startsWith('/*') || line.startsWith('*') || line.startsWith('//') || !/[A-Za-z]/.test(line)) return;
+    // The file's own imports change no name the app uses: the lines that use what they bring say what changed.
+    if (kind !== 'css' && (/^import\s/.test(line) || /^\}\s*from\s/.test(line))) return;
     const found = namesOnLine(kind, raw, side === 'after' ? change.after : change.before, at);
     if (found.length) for (const name of found) names[side].add(name);
     else untraced.push(raw);
@@ -404,12 +420,24 @@ export function selectAreas(changedFiles, config, importersOf = () => [], packag
       const change = lineChangesOf(file);
       if (change) {
         const { names, untraced } = usageNames(usageKind, change);
+        // A name no module spells may be built at run time (`checks-${severity}`): then its prefix is in a template.
+        // The file itself, and tests, do not count as users (the CSS file spells every class it styles).
+        const usable = (found) => found.filter((user) => user !== file && !user.endsWith('.test.ts'));
+        const usersOfName = (name, side) => {
+          const users = usable(usersOf(name, side));
+          if (users.length) return users;
+          for (let dash = name.lastIndexOf('-'); dash > 0; dash = name.lastIndexOf('-', dash - 1)) {
+            const built = usable(usersOf(`${name.slice(0, dash + 1)}\${`, side));
+            if (built.length) return built;
+          }
+          return [];
+        };
         let stuck = untraced.length ? `a changed line names nothing a module uses: ${untraced[0].trim()}` : null;
         const namesOfModule = new Map();
         for (const [side, list] of Object.entries(names)) {
           for (const name of list) {
             if (stuck) break;
-            const users = usersOf(name, side).filter((user) => user !== file && !user.endsWith('.test.ts'));
+            const users = usersOfName(name, side);
             const features = users.filter((user) => !matchesAny(user, config.everything));
             if (!features.length) stuck = users.length ? `${name} is used only by a shared hub` : `${name} is used by no module`;
             for (const user of features) namesOfModule.set(user, [...new Set([...(namesOfModule.get(user) ?? []), name])]);
