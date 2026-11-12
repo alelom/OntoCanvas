@@ -42,6 +42,10 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
   on the base: a new dependency selects the areas of the modules that import it, a change to the version or to a script that is
   not how the E2E tests are built or run selects nothing, and a dev dependency, a script like `build` or `test:e2e:*`, or any
   other field selects every area. The lock file follows `package.json`, and selects every area when it changed alone.
+- **Some hubs are read line by line (#198).** With the changed lines (`git diff -U0` against the merge base), a hub can select fewer areas; anything it cannot trace still selects every area.
+  - `wiring` (`src/main.ts`): each changed line selects the areas of the modules its names are imported from (an import line, its module). Shared state names no feature, so a line with no other name is given to the call it is inside.
+  - `byUsage`: a changed line selects the areas of the feature modules that use the names on it, found with `git grep` on the side of the change the line is on. `src/style.css` (`css`): the class and id names of the line's rule, found by its line number; a class built at run time (`checks-${severity}`) by its prefix in a template. `src/ui/appShell.ts` (`markup`): the ids, classes, label targets and data attributes on the line, or on the nearest element above it. `src/state/appState.ts` (`fields`): the state field the line declares. A name used by no feature module, or only by a hub, selects every area.
+  - Type-only imports (`import type`) are not followed: the build removes them.
 - **The core of loading an ontology is a hub** (`src/ontology/vocab.ts`, `readOntology.ts`, `buildGraph.ts`, which came out of
   `parser.ts`, #193): every E2E test loads an ontology through `parseRdfToGraph`, so a change to one of them selects every area,
   and a test pins that. The modules that edit the store (`edit*.ts`) and the one that saves (`serialize.ts`) are not hubs: a change
@@ -52,8 +56,8 @@ npx vitest run -c vitest.e2e.config.ts tests/e2e/embedMode.e2e.test.ts   # one f
 - **Adding an E2E test:** put its name (without `.e2e.test.ts`) in exactly one area. A unit test fails if a test file is in no
   area or in two, if a listed path no longer exists, or if the README's table of areas is out of date
   (`node scripts/e2eSelect.mjs --readme` prints the table to paste).
-- **Adding or moving a source module:** list it under the area whose tests exercise it. If you do not, a change to it runs
-  everything, which is safe.
+- **Adding or moving a source module:** list it under the area whose tests exercise it. A unit test fails when a module under
+  `src/` is placed in no area (#198): unplaced, a change to it would run everything.
 
 ## Writing a test
 
