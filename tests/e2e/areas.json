@@ -29,6 +29,7 @@
     "tests/e2e/globalSetup.ts"
   ],
   "wiring": ["src/main.ts"],
+  "byUsage": { "src/style.css": "css", "src/ui/appShell.ts": "markup", "src/state/appState.ts": "fields" },
   "typeOnly": [
     "src/types.ts",
     "src/storage/types.ts"

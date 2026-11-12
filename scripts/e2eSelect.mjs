@@ -165,6 +165,76 @@ export function wiringModules(file, change, known, { isHub = () => false } = {})
   return { modules: [...modules], untraced };
 }
 
+const KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'return', 'const', 'let', 'var', 'function', 'new', 'catch', 'typeof', 'await', 'export', 'import']);
+
+/** The class and id names of a CSS selector. */
+const selectorNames = (selector) => [...selector.matchAll(/[.#](-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1]);
+
+/** The selector of the CSS rule the line at `index` of `lines` belongs to: its own (a selector line), or that of the block it is in. */
+function cssSelectorOf(lines, index) {
+  const line = lines[index].trim();
+  // A selector line: it opens the block, or it is one line of a selector list (`.a,` above `.b {`).
+  if (line.includes('{')) return line.slice(0, line.indexOf('{'));
+  if (line.endsWith(',')) return line;
+  let depth = 0;
+  for (let i = index - 1; i >= 0; i--) {
+    for (const ch of [...lines[i]].reverse()) {
+      if (ch === '}') depth++;
+      else if (ch === '{') depth--;
+    }
+    if (depth < 0) {
+      // The line that opens the block, with the lines of its selector list above it.
+      let selector = lines[i].slice(0, lines[i].indexOf('{'));
+      for (let j = i - 1; j >= 0 && lines[j].trim().endsWith(','); j--) selector = `${lines[j]} ${selector}`;
+      return selector;
+    }
+  }
+  return null;
+}
+
+/** The names a changed line of a file read by usage stands for, by its kind. */
+function namesOnLine(kind, raw, text, at) {
+  if (kind === 'markup') {
+    const names = [];
+    for (const m of raw.matchAll(/\b(?:id|for)="([^"]+)"/g)) names.push(m[1]);
+    for (const m of raw.matchAll(/\bclass="([^"]+)"/g)) names.push(...m[1].split(/\s+/).filter(Boolean));
+    for (const m of raw.matchAll(/\b(data-[\w-]+)/g)) names.push(m[1]);
+    return [...new Set(names)].filter((name) => !name.includes('${'));
+  }
+  if (kind === 'fields') {
+    const m = /^\s*(?:get\s+|set\s+|readonly\s+)?([A-Za-z_$][\w$]*)\s*(?:\??:|=|\()/.exec(raw);
+    return m && !KEYWORDS.has(m[1]) ? [`.${m[1]}`] : [];
+  }
+  // css: the class and id names of the rule the line is in, found by its line number in the file (or, without one, its text).
+  const lines = text.split(/\r?\n/);
+  const index = at ? at - 1 : lines.indexOf(raw);
+  if (index < 0 || index >= lines.length) return [];
+  const selector = cssSelectorOf(lines, index);
+  return selector ? [...new Set(selectorNames(selector))] : [];
+}
+
+/**
+ * The names the changed lines of a file read by usage stand for (#198), each looked up on the side of the change it is on: an
+ * added line in the file after, a removed line in the file before. `kind`: `css` (the class and id names of the line's rule),
+ * `markup` (the ids, classes, label targets and data attributes on the line), `fields` (the state field the line declares, as
+ * `.name`). Blank lines, comments and punctuation name nothing; any other line that names nothing is `untraced`.
+ * @param {{ added: string[], removed: string[], before: string, after: string, addedAt?: number[], removedAt?: number[] }} change
+ */
+export function usageNames(kind, change) {
+  const names = { after: new Set(), before: new Set() };
+  const untraced = [];
+  const read = (raw, side, at) => {
+    const line = raw.trim();
+    if (!line || line.startsWith('/*') || line.startsWith('*') || line.startsWith('//') || !/[A-Za-z]/.test(line)) return;
+    const found = namesOnLine(kind, raw, side === 'after' ? change.after : change.before, at);
+    if (found.length) for (const name of found) names[side].add(name);
+    else untraced.push(raw);
+  };
+  change.added.forEach((raw, i) => read(raw, 'after', change.addedAt?.[i]));
+  change.removed.forEach((raw, i) => read(raw, 'before', change.removedAt?.[i]));
+  return { names: { after: [...names.after], before: [...names.before] }, untraced };
+}
+
 function sourceFiles(dir, root) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
@@ -264,13 +334,13 @@ export function buildPackageImporters(root = ROOT) {
  *   what changed in package.json (packageJsonChange) and who imports each package; without it a change to a package file selects every area
  * @returns {{ all: boolean, areas: string[], reasons: Record<string, string[]>, notes: Record<string, string>, ignored: string[], unplaced: string[] }}
  *   `reasons` says, per area (or `*` for everything), which files selected it; `notes` explains a file that selected everything.
- */
-/**
  * @param lineChangesOf for a wiring file (`config.wiring`, #198), its changed lines and its text before and after; without it, a
  *   wiring file is a hub like any other
  * @param known the modules under src/, to resolve a wiring file's imports
+ * @param usersOf for a file read by usage (`config.byUsage`), the files that use a name, on a side of the change (`after` or
+ *   `before`)
  */
-export function selectAreas(changedFiles, config, importersOf = () => [], packages = null, lineChangesOf = null, known = new Set()) {
+export function selectAreas(changedFiles, config, importersOf = () => [], packages = null, lineChangesOf = null, known = new Set(), usersOf = null) {
   const reasons = {};
   const notes = {};
   const add = (key, file) => (reasons[key] ??= []).push(file);
@@ -325,6 +395,35 @@ export function selectAreas(changedFiles, config, importersOf = () => [], packag
         notes[file] = untraced.length
           ? `a changed line uses nothing it imports: ${untraced[0].trim()}`
           : `it wires ${placed.find(([, owners]) => !owners.size)[0]}, a shared hub or a module no area places`;
+      }
+    }
+    // A file read by usage (style.css, the page skeleton, the shared state): the areas of the feature modules that use the names on
+    // its changed lines (#198). A name used by no feature module, or a line that names nothing, leaves it the hub it is listed as.
+    const usageKind = config.byUsage?.[file];
+    if (usageKind && lineChangesOf && usersOf) {
+      const change = lineChangesOf(file);
+      if (change) {
+        const { names, untraced } = usageNames(usageKind, change);
+        let stuck = untraced.length ? `a changed line names nothing a module uses: ${untraced[0].trim()}` : null;
+        const namesOfModule = new Map();
+        for (const [side, list] of Object.entries(names)) {
+          for (const name of list) {
+            if (stuck) break;
+            const users = usersOf(name, side).filter((user) => user !== file && !user.endsWith('.test.ts'));
+            const features = users.filter((user) => !matchesAny(user, config.everything));
+            if (!features.length) stuck = users.length ? `${name} is used only by a shared hub` : `${name} is used by no module`;
+            for (const user of features) namesOfModule.set(user, [...new Set([...(namesOfModule.get(user) ?? []), name])]);
+          }
+        }
+        const placed = stuck ? [] : [...namesOfModule].map(([module, used]) => [module, used, ownersThroughImports(module)]);
+        const unplacedUser = placed.find(([, , owners]) => !owners.size);
+        if (!stuck && unplacedUser) stuck = `${unplacedUser[0]} is placed in no area`;
+        if (!stuck) {
+          if (!placed.length) ignored.push(file);
+          for (const [module, used, owners] of placed) for (const [area] of owners) add(area, `${file} (${used.join(', ')}: ${module})`);
+          continue;
+        }
+        notes[file] = stuck;
       }
     }
     if (matchesAny(file, config.everything)) { all = true; add('*', file); continue; }
@@ -440,16 +539,46 @@ function gitLineChanges(base, includeWorkingTree) {
   const mergeBase = git(['merge-base', base, 'HEAD'])?.[0];
   return (file) => {
     if (!mergeBase) return null;
-    const diff = git(['diff', '-U0', mergeBase, ...(includeWorkingTree ? [] : ['HEAD']), '--', file]);
-    if (diff === null) return null;
-    const lines = diff.filter((l) => !l.startsWith('+++') && !l.startsWith('---'));
-    const now = includeWorkingTree ? (() => { try { return readFileSync(join(ROOT, file), 'utf8'); } catch { return ''; } })() : gitShow('HEAD', file) ?? '';
-    return {
-      added: lines.filter((l) => l.startsWith('+')).map((l) => l.slice(1)),
-      removed: lines.filter((l) => l.startsWith('-')).map((l) => l.slice(1)),
-      before: gitShow(mergeBase, file) ?? '',
-      after: now,
-    };
+    // Read raw: the lines keep their spaces, and each keeps its number from the hunk header (CSS repeats lines like `display: flex;`).
+    const r = spawnSync('git', ['diff', '-U0', mergeBase, ...(includeWorkingTree ? [] : ['HEAD']), '--', file], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    if (r.status !== 0) return null;
+    const change = { added: [], removed: [], addedAt: [], removedAt: [], before: gitShow(mergeBase, file) ?? '', after: '' };
+    let oldLine = 0;
+    let newLine = 0;
+    for (const line of r.stdout.split(/\r?\n/)) {
+      const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+      if (hunk) {
+        oldLine = Number(hunk[1]);
+        newLine = Number(hunk[2]);
+      } else if (line.startsWith('+') && !line.startsWith('+++')) {
+        change.added.push(line.slice(1));
+        change.addedAt.push(newLine++);
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        change.removed.push(line.slice(1));
+        change.removedAt.push(oldLine++);
+      }
+    }
+    change.after = includeWorkingTree ? (() => { try { return readFileSync(join(ROOT, file), 'utf8'); } catch { return ''; } })() : gitShow('HEAD', file) ?? '';
+    return change;
+  };
+}
+
+/**
+ * Who uses a name (#198: for a file read by usage): the files under src/, and index.html, that contain it, as the change left them
+ * (`after`: the working tree, or HEAD) or as they were where the branch left `base` (`before`).
+ */
+function gitUsersOf(base, includeWorkingTree) {
+  const mergeBase = git(['merge-base', base, 'HEAD'])?.[0];
+  const cache = new Map();
+  return (name, side) => {
+    const key = `${side}:${name}`;
+    if (!cache.has(key)) {
+      const where = side === 'before' ? [mergeBase] : includeWorkingTree ? ['--untracked'] : ['HEAD'];
+      const found = side === 'before' && !mergeBase ? [] : git(['grep', '-l', '-F', '-e', name, ...where, '--', 'src', 'index.html']) ?? [];
+      // A tree's matches are named `<commit>:<path>`.
+      cache.set(key, found.map((path) => path.replace(/^[0-9a-f]{40}:/, '')));
+    }
+    return cache.get(key);
   };
 }
 
@@ -531,7 +660,7 @@ function main(argv) {
     const changed = changedFiles(base, { includeWorkingTree: !flag('--no-worktree') });
     const includeWorkingTree = !flag('--no-worktree');
     const known = new Set(sourceFiles(join(ROOT, 'src'), ROOT));
-    selection = selectAreas(changed, config, buildImporterGraph(ROOT), packagesOf(changed, base, config), gitLineChanges(base, includeWorkingTree), known);
+    selection = selectAreas(changed, config, buildImporterGraph(ROOT), packagesOf(changed, base, config), gitLineChanges(base, includeWorkingTree), known, gitUsersOf(base, includeWorkingTree));
   } else {
     console.error('Use --list, --all, --area <a,b>, or --changed [--base <ref>]; add --run to run, --json to print for CI, --summary for Markdown.');
     return 2;
