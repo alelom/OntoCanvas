@@ -34,8 +34,10 @@ import {
 } from './ui/openOntologyModal';
 import { exploreDataFiles } from './workflows/exploreDataFiles';
 import { importedClassLookup } from './abox/importedClasses';
-import { ontologiesOfDataRead, openOntologiesOfData } from './workflows/dataOntologies';
-import { setLoadingCancel, setLoadingText, underLoadingScreen, withinMs } from './ui/modals';
+import { openOntologiesOfData } from './workflows/dataOntologies';
+import { addDataUnderLoadingScreen } from './workflows/addDataUnderLoadingScreen';
+import { attachSearchSuggestionKeys } from './ui/searchSuggestionKeys';
+import { setLoadingText } from './ui/modals';
 
 import { setNotice } from './ui/statusNotices';
 import { openOnStartup } from './ui/startupOpen';
@@ -69,27 +71,6 @@ import { openEditModalForEdge, openEditModalForNode, showEditEdgeModal } from '.
 import { applyFilter } from './graph/applyFilter';
 import { classIndividualsAction, classIriOfNode } from './graph/classIndividuals';
 
-/** What the loading screen says while the data is added, then while the ontologies it names are read (#239). */
-const ADDING_DATA = 'Adding the data…';
-const READING_DATA_ONTOLOGIES = 'Reading the ontologies the data names…';
-/** The longest the loading screen waits for the ontologies the data names: they name the classes when they come, later. */
-const DATA_ONTOLOGIES_WAIT_MS = 3000;
-
-/**
- * Adds data on an initial load (?data=, Explore data files…) under the loading screen, with a Cancel while the data is read
- * (the screen covers the Individuals tab's), then waits a little for the ontologies the data names, so the classes are
- * usually drawn once, named (#239).
- */
-function addDataUnderLoadingScreen(add: () => Promise<unknown>): Promise<void> {
-  return underLoadingScreen(async () => {
-    setLoadingCancel(() => session.sidePanel?.cancelData());
-    await add();
-    setLoadingCancel(null);
-    setLoadingText(READING_DATA_ONTOLOGIES);
-    await withinMs(ontologiesOfDataRead(), DATA_ONTOLOGIES_WAIT_MS);
-  }, ADDING_DATA);
-}
-
 setTermUriResolver((kind, id) => resolveTerm(kind, id)?.uri ?? null);
 setClassIndividualsProvider((nodeId) => {
   // A class node of the graph, or the node of a class of the data that is not in it (#239).
@@ -110,43 +91,8 @@ setImportVersionLookup((url) => {
   return session.importsBeingRead ? { state: 'reading' } : { state: 'unread' };
 });
 
-document.addEventListener('keydown', (e) => {
-  const list = document.getElementById('searchAutocomplete');
-  if (!list?.classList.contains('visible')) return;
-  const items = list.querySelectorAll('.suggestion');
-  let idx = parseInt(list.dataset.highlight || '-1', 10);
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    idx = Math.min(idx + 1, items.length - 1);
-    list.dataset.highlight = String(idx);
-    items.forEach((el, i) => el.classList.toggle('highlight', i === idx));
-    if (idx >= 0 && items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    idx = Math.max(idx - 1, -1);
-    list.dataset.highlight = String(idx);
-    items.forEach((el, i) => el.classList.toggle('highlight', i === idx));
-  } else if (e.key === 'Enter' && idx >= 0 && items[idx]) {
-    // Enter does what a click does: a class or a relationship is searched for, an individual drawn and opened (#217).
-    e.preventDefault();
-    (items[idx] as HTMLElement).click();
-  } else if (e.key === 'Escape') {
-    list.classList.remove('visible');
-  }
-});
-
-document.addEventListener('click', (e) => {
-  const input = document.getElementById('searchQuery');
-  const list = document.getElementById('searchAutocomplete');
-  if (
-    input &&
-    list &&
-    !input.contains(e.target as Node) &&
-    !list.contains(e.target as Node)
-  ) {
-    list.classList.remove('visible');
-  }
-});
+// The keys of the search suggestions, and closing them on a click elsewhere.
+attachSearchSuggestionKeys();
 
 registerActions({ applyFilter, initDataPropsMenu, deleteDataPropertyWithConfirm });
 renderApp();

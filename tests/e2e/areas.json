@@ -164,7 +164,7 @@
       "tests": ["searchOutline", "searchScope", "searchSuggestions"],
       "sources": [
         "src/ui/searchOptions.ts", "src/ui/searchOutlineOverlay.ts", "src/ui/searchVocabulary.ts", "src/ui/searchAutocomplete.ts",
-        "src/graph/searchOutline.ts", "src/lib/searchHighlight.ts", "src/lib/searchSuggestions.ts"
+        "src/graph/searchOutline.ts", "src/lib/searchHighlight.ts", "src/lib/searchSuggestions.ts", "src/ui/searchSuggestionKeys.ts"
       ]
     },
     "embed": {
@@ -180,7 +180,7 @@
     "sparql": {
       "description": "SPARQL queries over the loaded ontology.",
       "tests": ["sparqlQuery", "sparqlPanel", "sparqlDataParam", "individualsGraph", "individualsSchema", "individualsDataFiles", "exploreDataFiles", "dataOntologies", "dataFolder", "checksPanel", "resultsInGraph"],
-      "sources": ["src/sparql/", "src/checks/", "src/graph/classIndividuals.ts", "src/graph/individualsOverlay.ts", "src/graph/individualsRelax.ts", "src/graph/individualDoubleClick.ts", "src/ui/individualCountBadges.ts", "src/graph/drawnGraphIndex.ts", "src/graph/resultHighlight.ts", "src/graph/showResultInGraph.ts", "src/graph/selectResults.ts", "src/ui/sidePanel/", "src/ui/exploreDataStart.ts", "src/ui/dataDrop.ts", "src/ui/folderPicker.ts", "src/ui/lastFolder.ts", "src/workflows/exploreDataFiles.ts", "src/workflows/dataOntologies.ts", "src/abox/", "src/ui/historyShortcuts.ts", "src/utils/textEditing.ts"]
+      "sources": ["src/sparql/", "src/checks/", "src/graph/classIndividuals.ts", "src/graph/individualsOverlay.ts", "src/graph/individualsRelax.ts", "src/graph/individualDoubleClick.ts", "src/ui/individualCountBadges.ts", "src/graph/drawnGraphIndex.ts", "src/graph/resultHighlight.ts", "src/graph/showResultInGraph.ts", "src/graph/selectResults.ts", "src/ui/sidePanel/", "src/ui/exploreDataStart.ts", "src/ui/dataDrop.ts", "src/ui/folderPicker.ts", "src/ui/lastFolder.ts", "src/workflows/exploreDataFiles.ts", "src/workflows/dataOntologies.ts", "src/workflows/addDataUnderLoadingScreen.ts", "src/abox/", "src/ui/historyShortcuts.ts", "src/utils/textEditing.ts"]
     }
   }
 }
