@@ -144,6 +144,16 @@ describe('the label shown (#249)', () => {
     expect(readLabel(store, 'http://example.org/o#Missing', 'en')).toBeUndefined();
   });
 
+  it('a term with no rdfs:label shows its skos:prefLabel, by the same language order; an rdfs:label always wins (#250)', () => {
+    const store = storeOf(':A a owl:Class ; skos:prefLabel "Ein A"@de, "An A"@en . :B a owl:Class ; skos:prefLabel "Pref"@en ; rdfs:label "Plain" .');
+    expect(readLabel(store, 'http://example.org/o#A', 'de')).toBe('Ein A');
+    expect(readLabel(store, 'http://example.org/o#A', 'it')).toBe('An A');
+    expect(readLabel(store, 'http://example.org/o#B', 'en')).toBe('Plain');
+    const labelOf = (id: string) => quadsToParseResult(store.getQuads(null, null, null, null)).graphData.nodes.find((n) => n.id === id)?.label;
+    expect(labelOf('A')).toBe('An A');
+    expect(labelOf('B')).toBe('Plain');
+  });
+
   it('classes, object properties and data properties are labelled in the browser language, whatever order they are stored in', () => {
     const store = storeOf(body);
     const shown = () => ({

@@ -7,7 +7,7 @@
  * first, then English, then untagged, then any other language, and alphabetical within each. The two properties are
  * ordered separately.
  *
- * A term's label is chosen by the same order (#249): `pickLabel`, `readLabel`.
+ * A term's label is chosen by the same order (#249): `pickLabel`, `readLabel` (an rdfs:label, else a skos:prefLabel, #250).
  *
  * The editing dialogs are untouched: they still edit rdfs:comment (`comment` on the term records).
  */
@@ -15,6 +15,7 @@ import type { Store } from 'n3';
 import { RDFS } from './vocab';
 
 export const SKOS_DEFINITION = 'http://www.w3.org/2004/02/skos/core#definition';
+const SKOS_PREF_LABEL = 'http://www.w3.org/2004/02/skos/core#prefLabel';
 
 export interface TermDescription {
   definitions: string[];
@@ -82,10 +83,11 @@ export function pickLabel(literals: Literal[], preferred: string = displayLangua
   return best?.value;
 }
 
-/** A term's rdfs:label from one store, or from several. */
+/** A term's rdfs:label from one store, or from several; with none, its skos:prefLabel (#250). */
 export function readLabel(store: Store | readonly Store[], subject: string, language: string = displayLanguage()): string | undefined {
   const stores = 'getQuads' in store ? [store] : store;
-  return pickLabel(stores.flatMap((s) => literalsOf(s, subject, RDFS + 'label')), language);
+  const labelOf = (predicate: string) => pickLabel(stores.flatMap((s) => literalsOf(s, subject, predicate)), language);
+  return labelOf(RDFS + 'label') ?? labelOf(SKOS_PREF_LABEL);
 }
 
 /** A term's description from one store, or from several (an individual is described across the data's stores). */

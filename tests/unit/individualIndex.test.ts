@@ -112,6 +112,11 @@ describe('list', () => {
     expect(index().list({ search: 'raum 102', offset: 0, limit: 5 }).items[0].label).toBe('Raum 102');
   });
 
+  it('shows a skos:prefLabel for an individual with no rdfs:label (#250)', () => {
+    const data = store(':pref a :Wall ; <http://www.w3.org/2004/02/skos/core#prefLabel> "Pref name"@en .');
+    expect(createIndividualIndex([ONTOLOGY, data]).list({ search: 'pref name', offset: 0, limit: 5 }).items[0].label).toBe('Pref name');
+  });
+
   afterEach(() => vi.unstubAllGlobals());
 
   it('prefers a label with no language or in English to one in another language', () => {
