@@ -1,0 +1,7 @@
+{
+  "job": "example-job",
+  "runs": [
+    "run-a",
+    "run-b"
+  ]
+}
