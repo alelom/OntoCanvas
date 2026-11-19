@@ -4,6 +4,7 @@
  */
 import type { DataPropertyInfo, GraphNode } from '../types';
 import { OWL, RDFS, isBlankNode } from './vocab';
+import { readLabel } from './termDescription';
 import { DataFactory, Store } from 'n3';
 import { type RdfTerm } from '../rdf/classExpressions';
 import { describeDataRange } from '../rdf/dataRanges';
@@ -47,7 +48,7 @@ export function addDataPropertyRestrictions(store: Store, nodes: GraphNode[], da
     if (!dataProps.some((dp) => dp.name === propName && dp.uri === propUri)) {
       // Try to get label and other info from store, but if not found, use defaults
       const propQuads = store.getQuads(DataFactory.namedNode(propUri), null, null, null);
-      let label = propName;
+      const label = readLabel(store, propUri) ?? propName;
       let comment: string | undefined = undefined;
       let range: string | null = null;
       let rangeExpression: string | undefined;
@@ -56,9 +57,7 @@ export function addDataPropertyRestrictions(store: Store, nodes: GraphNode[], da
       
       for (const q of propQuads) {
         const pred = (q.predicate as { value?: string }).value;
-        if (pred === RDFS + 'label') {
-          label = (q.object as { value?: string }).value ?? propName;
-        } else if (pred === RDFS + 'comment') {
+        if (pred === RDFS + 'comment') {
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'range') {
           range = resolveDatatypeRangeValue(store, q.object as RdfTerm);

@@ -5,6 +5,7 @@
  * bare stub (#216). Pure.
  */
 import type { ImportedOntology } from '../lib/importedDeclarations';
+import { pickLabel } from '../ontology/termDescription';
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const CLASS_TYPES = ['http://www.w3.org/2002/07/owl#Class', 'http://www.w3.org/2000/01/rdf-schema#Class'];
@@ -19,8 +20,8 @@ export interface ImportedClass {
 function labelOf(store: ImportedOntology['store'], iri: string): string | null {
   for (const predicate of LABELS) {
     const labels = store.getObjects(iri, predicate, null).filter((o) => o.termType === 'Literal') as Array<{ value: string; language: string }>;
-    const preferred = labels.find((l) => l.language === 'en' || l.language === '') ?? labels[0];
-    if (preferred) return preferred.value;
+    const picked = pickLabel(labels.map((l) => ({ value: l.value, language: l.language })));
+    if (picked !== undefined) return picked;
   }
   return null;
 }

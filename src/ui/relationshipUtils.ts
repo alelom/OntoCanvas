@@ -4,6 +4,7 @@ import type { ExternalObjectPropertyInfo } from '../externalOntologySearch';
 import { getEdgeTypes } from '../graph';
 import { extractLocalName } from '../utils/localName';
 import { RESTRICTION_GLYPH } from '../rdf/restrictions';
+import { describeTerm } from '../ontology/termDescription';
 
 export const SUBCLASSOF_COMMENT = 'Classification or sub-typing relationship';
 
@@ -134,6 +135,19 @@ export function getRelationshipComment(
 }
 
 /**
+ * What a relationship's tooltip shows (#247): its description (the skos:definition, or the rdfs:comment when there is none)
+ * and the commentary to show after it. `getRelationshipComment` stays the rdfs:comment the dialogs edit.
+ */
+export function getRelationshipDescription(
+  type: string,
+  objectProperties: ObjectPropertyInfo[]
+): { text: string; comment: string } {
+  if (type === 'subClassOf') return { text: SUBCLASSOF_COMMENT, comment: '' };
+  const op = objectProperties.find((p) => p.name === type);
+  return describeTerm(op?.description, op?.comment, true);
+}
+
+/**
  * Get all edge types (from properties and edges)
  */
 export function getAllEdgeTypes(
@@ -177,7 +191,7 @@ export function updateEditEdgeCommentDisplay(
     comment = selectedExternalObjectProperty.comment || null;
   } else {
     const edgeType = selectedEdgeType || typeInputValue.trim();
-    comment = edgeType ? getRelationshipComment(edgeType, objectProperties) : null;
+    comment = edgeType ? getRelationshipDescription(edgeType, objectProperties).text || null : null;
   }
   return comment;
 }

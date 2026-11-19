@@ -23,6 +23,7 @@ import { syncFolderNotices } from '../folderNotices';
 import { setNotice } from '../statusNotices';
 import { setIndividualSearchProvider } from '../individualSuggestions';
 import { mountRelationshipNameMode } from '../relationshipNameMode';
+import { mountShowCommentSetting } from '../showCommentSetting';
 import { formatTerm } from '../../sparql/formatTerm';
 import { withStandardPrefixes } from '../../sparql/prefixHeader';
 
@@ -221,6 +222,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
   }
   // What a relationship's name selects, its definition or its instances (#214): a choice only when there are individuals.
   const relationshipNameMode = mountRelationshipNameMode();
+  mountShowCommentSetting();
 
   const buttons = mountPanelButtons(wrapper, [
     { id: 'queryPanelBtn', label: 'SPARQL query', title: 'Query the open ontology with SPARQL (read-only)', onClick: () => host.toggle(queryTab.id) },

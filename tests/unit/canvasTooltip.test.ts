@@ -169,3 +169,45 @@ describe('the tooltip with example images', () => {
     }
   });
 });
+
+/** A term's rdfs:comment after its definition, under a "Comment" label (#247). */
+describe('the tooltip with a comment', () => {
+  const tooltip = () => document.querySelector('.canvas-tooltip') as HTMLDivElement;
+
+  afterEach(() => hideCanvasTooltip(true));
+
+  it('shows the text, then the comment under a "Comment" label', () => {
+    showCanvasTooltip({ text: 'The definition.', comment: 'The commentary.' }, 10, 10);
+
+    expect(tooltip().querySelector('.canvas-tooltip-text')?.textContent).toBe('The definition.');
+    expect(tooltip().querySelector('.canvas-tooltip-comment-label')?.textContent).toBe('Comment');
+    expect(tooltip().querySelector('.canvas-tooltip-comment-text')?.textContent).toBe('The commentary.');
+    expect(tooltip().style.display).toBe('block');
+  });
+
+  it('shows plain text with no label when there is no comment', () => {
+    showCanvasTooltip({ text: 'Only the definition.' }, 10, 10);
+
+    expect(tooltip().textContent).toBe('Only the definition.');
+    expect(tooltip().querySelector('.canvas-tooltip-comment')).toBeNull();
+  });
+
+  it('clears the comment when the next tooltip has none', () => {
+    showCanvasTooltip({ text: 'A', comment: 'Note' }, 10, 10);
+    showCanvasTooltip({ text: 'B' }, 10, 10);
+
+    expect(tooltip().textContent).toBe('B');
+  });
+
+  it('shows the comment under the text of a tooltip with example images too', () => {
+    showCanvasTooltip({ text: 'Definition', comment: 'Note', images: ['https://example.org/a.png'] }, 10, 10);
+
+    const texts = [...tooltip().children].map((c) => c.className);
+    expect(texts.indexOf('canvas-tooltip-text')).toBeLessThan(texts.indexOf('canvas-tooltip-comment'));
+    expect(tooltip().querySelector('.canvas-tooltip-comment-text')?.textContent).toBe('Note');
+  });
+
+  it('keeps a term that has only a comment', () => {
+    expect(pickTooltip({ node: { text: '', comment: 'Note' } })).toEqual({ text: '', comment: 'Note' });
+  });
+});

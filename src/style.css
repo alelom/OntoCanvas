@@ -157,6 +157,30 @@ body.ontocanvas-embedded #edgeColorsLegend {
   white-space: pre-wrap;
   margin-bottom: 6px;
 }
+/* A term's rdfs:comment after its definition (#247): a small label, a rule and a quieter text. */
+.canvas-tooltip-comment {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid #e3e3e3;
+}
+.canvas-tooltip-comment-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #777;
+}
+.canvas-tooltip-comment-text {
+  white-space: pre-wrap;
+  color: #4a5a6a;
+}
+#showCommentSetting {
+  margin-left: 16px;
+  font-size: 11px;
+}
+#showCommentSetting label {
+  cursor: pointer;
+}
 .canvas-tooltip-preview {
   position: relative;
   display: block;

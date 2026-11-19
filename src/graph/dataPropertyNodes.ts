@@ -19,6 +19,7 @@ import { estimateNodeDimensions, wrapText } from '../graph';
 import { applyOpacityToColor } from './canvasHelpers';
 import { firstDataPropertyRowOffset } from './dataPropertyRows';
 import { layoutUnattachedNodes, boundsOf, rowSpacingFor } from './unattachedDataPropertyLayout';
+import { describeTerm } from '../ontology/termDescription';
 
 export interface DataPropertyNodesInput {
   filteredNodes: GraphNode[];
@@ -289,7 +290,8 @@ export function buildDataPropertyNodes({ filteredNodes, nodePositions, depth, ma
       const nodeLabel = `${dataPropDisplayLabel}${rangeDisplay.labelSuffix}`;
       
       // Build tooltip: include comment if present, and add import hint if imported
-      let tooltip = dp?.comment || '';
+      const description = describeTerm(dp?.description, dp?.comment, true);
+      let tooltip = description.text;
       if (dp?.rangeExpression) {
         tooltip = tooltip ? `${tooltip}\n\nRange: ${dp.rangeExpression}` : `Range: ${dp.rangeExpression}`;
       }
@@ -316,6 +318,7 @@ export function buildDataPropertyNodes({ filteredNodes, nodePositions, depth, ma
         x: finalDataPropPos.x,
         y: finalDataPropPos.y,
         ...(tooltip && { title: tooltip }),
+        ...(description.comment && { commentText: description.comment }),
         ...hoverImages(dp?.exampleImages),
       };
       
@@ -388,7 +391,8 @@ export function buildDataPropertyNodes({ filteredNodes, nodePositions, depth, ma
         UNATTACHED_DOMAIN_NOTE,
         isImported && definingOntologyUrl ? `(Imported from ${definingOntologyUrl})` : null,
       ];
-      const tooltip = [dp.comment || null, ...notes].filter(Boolean).join('\n\n');
+      const description = describeTerm(dp.description, dp.comment, true);
+      const tooltip = [description.text || null, ...notes].filter(Boolean).join('\n\n');
       // These nodes stand outside the class graph, so they have no class to take a search category
       // or an external-ontology fade from - both have to be resolved from the property itself.
       const importedOpacity = isImported
@@ -396,7 +400,7 @@ export function buildDataPropertyNodes({ filteredNodes, nodePositions, depth, ma
         : 1.0;
       const opacity =
         getDataPropertySearchOpacity(dp.name, null, searchSets, searchQuery) * importedOpacity;
-      return { dp, label, tooltip, opacity, note };
+      return { dp, label, tooltip, comment: description.comment, opacity, note };
     });
 
     const classPositions = filteredNodes
@@ -443,6 +447,7 @@ export function buildDataPropertyNodes({ filteredNodes, nodePositions, depth, ma
         y: pos.y,
         ...(faded && { opacity: entry.opacity }),
         ...(entry.tooltip && { title: entry.tooltip }),
+        ...(entry.comment && { commentText: entry.comment }),
         ...hoverImages(entry.dp.exampleImages),
       });
     });

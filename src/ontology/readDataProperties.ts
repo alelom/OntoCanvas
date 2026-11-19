@@ -8,6 +8,7 @@ import { type RdfTerm, resolveExpressionClassUris } from '../rdf/classExpression
 import { describeDataRange } from '../rdf/dataRanges';
 import { extractLocalName } from '../utils/localName';
 import { isDeprecated, withExampleImages } from './termFlags';
+import { readLabel, withDescription } from './termDescription';
 
 /**
  * Resolve an rdfs:range object to a datatype value string.
@@ -43,8 +44,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
     const name = extractLocalName(subjUri);
     if (seen.has(name)) continue;
     seen.add(name);
-    const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
-    const label = labelQuad?.object?.value ?? name;
+    const label = readLabel(store, subjUri) ?? name;
     const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
     // No rdfs:range means the ontology asserts no datatype. Record that as null rather than
@@ -88,6 +88,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
       ...withExampleImages(store, subjUri),
+      ...withDescription(store, subjUri),
       ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }

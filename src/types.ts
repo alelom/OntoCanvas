@@ -1,3 +1,5 @@
+import type { TermDescription } from './ontology/termDescription';
+
 /** Rendered width/height of a node's box, used by the layout algorithms. */
 export interface NodeDimensions {
   width: number;
@@ -23,6 +25,8 @@ export interface GraphNode {
   labellableRoot: boolean | null;
   /** rdfs:comment from the ontology */
   comment?: string | null;
+  /** skos:definition and rdfs:comment values in display order (#247); `comment` stays the one the dialogs edit. */
+  description?: TermDescription;
   annotations?: Record<string, string | boolean | null>;
   /** Data property restrictions (owl:Restriction with owl:onDataRange) on this class */
   dataPropertyRestrictions?: DataPropertyRestriction[];
@@ -70,6 +74,8 @@ export interface ObjectPropertyInfo {
   hasCardinality: boolean;
   /** rdfs:comment from the ontology */
   comment?: string | null;
+  /** skos:definition and rdfs:comment values in display order (#247); `comment` stays the one the dialogs edit. */
+  description?: TermDescription;
   /**
    * Domain class local name (rdfs:domain), or null/undefined when none is asserted.
    * An asserted owl:Thing is reported through `hasGlobalDomain` instead, not here.
@@ -104,6 +110,8 @@ export interface DataPropertyInfo {
   label: string;
   /** rdfs:comment from the ontology */
   comment?: string | null;
+  /** skos:definition and rdfs:comment values in display order (#247); `comment` stays the one the dialogs edit. */
+  description?: TermDescription;
   /**
    * Full URI of the datatype asserted by rdfs:range (e.g. http://www.w3.org/2001/XMLSchema#string).
    * `null` when the ontology asserts no range. Absence is never filled in with a default: a stub

@@ -2,7 +2,7 @@
  * The individuals of the open ontology and of the data added to it (#208): counted per class, listed a page at a time,
  * described. Pure: stores in, plain objects out.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Parser, Store } from 'n3';
 import { createIndividualIndex, NO_CLASS } from '../../src/abox/individualIndex';
 
@@ -106,6 +106,18 @@ describe('list', () => {
   it('filters inside a class', () => {
     expect(index().list({ classIri: NS + 'Room', search: '102', offset: 0, limit: 50 }).items.map((i) => i.iri)).toEqual([NS + 'room102']);
   });
+
+  it('shows the label in the browser language when there is one (#249)', () => {
+    vi.stubGlobal('navigator', { language: 'de-DE' });
+    expect(index().list({ search: 'raum 102', offset: 0, limit: 5 }).items[0].label).toBe('Raum 102');
+  });
+
+  it('shows a skos:prefLabel for an individual with no rdfs:label (#250)', () => {
+    const data = store(':pref a :Wall ; <http://www.w3.org/2004/02/skos/core#prefLabel> "Pref name"@en .');
+    expect(createIndividualIndex([ONTOLOGY, data]).list({ search: 'pref name', offset: 0, limit: 5 }).items[0].label).toBe('Pref name');
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('prefers a label with no language or in English to one in another language', () => {
     expect(index().list({ search: 'room 102', offset: 0, limit: 5 }).items[0].label).toBe('Room 102');

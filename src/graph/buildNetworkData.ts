@@ -17,7 +17,8 @@ import { type AnnotationStyleConfig, SPACING, RELATIONSHIP_LABEL_BG_RGB } from '
 import { getNodeOntologyUrl, getOpacityForExternalOntology } from '../ui/externalRefs';
 import { fontSettingRatios, nodeFontRatio } from '../ui/fontSizeDefaults';
 import { importedNoteForNode, importedNoteFontSize, labelWithImportedNote, importedNoteWrapChars, importedNoteFont, importedNoteForRelationship } from '../ui/importedNote';
-import { getRelationshipComment, getEdgeDisplayLabel } from '../ui/relationshipUtils';
+import { getRelationshipDescription, getEdgeDisplayLabel } from '../ui/relationshipUtils';
+import { describeTerm } from '../ontology/termDescription';
 import { buildSearchVocabulary } from '../ui/searchVocabulary';
 import { debugLog, debugWarn, isDebugMode } from '../utils/debug';
 import { getEdgeTypes, computeNodeDepths, getLayoutAlgorithm, estimateNodeDimensions, SELF_CONTAINED_LAYOUT_MODES, resolveOverlaps, wrapText, getDefaultColor } from '../graph';
@@ -472,8 +473,10 @@ export function buildNetworkData(
       color: { background: backgroundColor, border: borderColor },
       font: { size: fontSize, color: fontColor, ...(importedNote && importedNoteFont(fontSize, fontColor)) },
       ...(style.shapeProperties && { shapeProperties: style.shapeProperties }),
-      ...((): { title?: string } => {
-        // Lead with a source note (like external "(Imported from …)"), then the rdfs:comment.
+      ...((): { title?: string; commentText?: string } => {
+        // Lead with a source note (like external "(Imported from …)"), then the description: the skos:definition, or the
+        // rdfs:comment when there is none (#247). The comment that follows a definition is shown by the tooltip, if the user wants it.
+        const { text, comment } = describeTerm(n.description, n.comment, true);
         const extUrl = (n as GraphNode & { externalOntologyUrl?: string }).externalOntologyUrl;
         const note =
           (n as GraphNode & { isExternal?: boolean }).isExternal && extUrl
@@ -481,10 +484,8 @@ export function buildNetworkData(
             : definedElsewhere && externalUrl
               ? `(Defined by ${externalUrl})`
               : undefined;
-        const title = note
-          ? (n.comment ? `${note}\n\n${n.comment}` : note)
-          : n.comment ?? undefined;
-        return title ? { title } : {};
+        const title = note ? (text ? `${note}\n\n${text}` : note) : text || undefined;
+        return { ...(title ? { title } : {}), ...(comment ? { commentText: comment } : {}) };
       })(),
       ...hoverImages(n.exampleImages),
     };
@@ -520,7 +521,7 @@ export function buildNetworkData(
       color: getDefaultColor(),
       lineType: 'solid' as BorderLineType,
     };
-    const edgeComment = getRelationshipComment(e.type, session.objectProperties);
+    const edgeDescription = getRelationshipDescription(e.type, session.objectProperties);
     // Relationships defined in another ontology carry the same small note as imported classes (#111).
     const importedEdgeNote = style.showLabel ? importedNoteForRelationship(e.type, session.objectProperties, session.externalOntologyReferences, mainBaseForNotes) : null;
     const edgeLabelText = style.showLabel ? getEdgeDisplayLabel(e, session.objectProperties, session.externalOntologyReferences) : '';
@@ -583,7 +584,8 @@ export function buildNetworkData(
       color: { color: edgeColor, highlight: edgeColor },
       dashes,
       width,
-      ...(edgeComment && { title: edgeComment }),
+      ...(edgeDescription.text && { title: edgeDescription.text }),
+      ...(edgeDescription.comment && { commentText: edgeDescription.comment }),
       ...hoverImages(session.objectProperties.find((p) => p.name === e.type)?.exampleImages),
     };
   });

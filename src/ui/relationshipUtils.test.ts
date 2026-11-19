@@ -10,6 +10,7 @@ import {
   getEdgeDisplayLabel,
   getRelationshipComment,
   getAllEdgeTypes,
+  updateEditEdgeCommentDisplay,
   getPropertyHasCardinality,
   SUBCLASSOF_COMMENT,
 } from './relationshipUtils';
@@ -157,6 +158,18 @@ describe('relationshipUtils', () => {
     });
   });
   
+  describe('updateEditEdgeCommentDisplay (#247)', () => {
+    it('shows the definition of a relationship, with the comment as the text only when it has no definition', () => {
+      const props = [
+        { name: 'both', label: 'Both', hasCardinality: true, comment: 'A comment', description: { definitions: ['A definition'], comments: ['A comment'] } },
+        { name: 'onlyComment', label: 'C', hasCardinality: true, comment: 'Just a comment', description: { definitions: [], comments: ['Just a comment'] } },
+      ];
+      expect(updateEditEdgeCommentDisplay('both', null, '', props)).toBe('A definition');
+      expect(updateEditEdgeCommentDisplay('onlyComment', null, '', props)).toBe('Just a comment');
+      expect(updateEditEdgeCommentDisplay(null, null, 'unknown', props)).toBeNull();
+    });
+  });
+
   describe('getAllEdgeTypes', () => {
     it('should return all edge types from properties and edges', () => {
       const types = getAllEdgeTypes(rawData, objectProperties);

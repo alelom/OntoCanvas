@@ -8,7 +8,7 @@ import { editState, session } from '../state/appState';
 import { isDebugMode, debugLog } from '../utils/debug';
 import { updateEditEdgeCommentDisplayLocal } from './edgeModalHelpers';
 import { formatRelationshipLabelWithPrefix } from './externalRefs';
-import { getPropertyHasCardinality, hideRelationshipTooltip, getAllEdgeTypes, getRelationshipLabel, getRelationshipComment, showRelationshipTooltip } from './relationshipUtils';
+import { getPropertyHasCardinality, hideRelationshipTooltip, getAllEdgeTypes, getRelationshipLabel, getRelationshipDescription, showRelationshipTooltip } from './relationshipUtils';
 
 // Wrapper for updateEditEdgeCommentDisplay that updates the DOM
 /**
@@ -51,7 +51,7 @@ export async function updateEditEdgeTypeSearch(query: string): Promise<void> {
            displayLabel.toLowerCase().includes(q) ||
            t.toLowerCase().includes(q);
   }).map((t) => {
-    const comment = getRelationshipComment(t, session.objectProperties);
+    const comment = getRelationshipDescription(t, session.objectProperties).text;
     const op = session.objectProperties.find((p) => p.name === t || p.uri === t);
     const label = getRelationshipLabel(t, session.objectProperties, session.externalOntologyReferences);
     return {

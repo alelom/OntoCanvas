@@ -118,13 +118,14 @@
     },
     "nodes": {
       "description": "Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu.",
-      "tests": ["addNodeMode", "undoDeleteClass", "canvasTooltip", "exampleImageTooltip", "nodeLabelContrast", "contextMenuSelectChildrenParents"],
+      "tests": ["addNodeMode", "undoDeleteClass", "canvasTooltip", "termDescription", "exampleImageTooltip", "nodeLabelContrast", "contextMenuSelectChildrenParents"],
       "sources": [
         "src/ui/addNodeModal.ts", "src/ui/renameModal.ts", "src/ui/nodeConfirms.ts", "src/ui/nodeModalHelpers.ts", "src/ui/nodeModalForm.ts", "src/ui/nodeModalFormUi.ts",
         "src/ui/renameModalHeaderIcons.ts", "src/ui/canvasTooltip.ts", "src/ui/contextMenu.ts",
         "src/workflows/deleteSelection.ts", "src/workflows/undoRedo.ts", "src/workflows/editNodeProperties.ts",
         "src/lib/undo.ts", "src/lib/exampleImageFiles.ts", "src/lib/exampleImageStore.ts", "src/lib/exampleImageUrlValidation.ts", "src/lib/exampleImages.ts",
-        "src/lib/imageCarousel.ts", "src/lib/tooltipLayout.ts", "src/lib/textContrast.ts", "src/lib/identifierFromLabel.ts", "src/lib/termUri.ts"
+        "src/lib/imageCarousel.ts", "src/lib/tooltipLayout.ts", "src/lib/textContrast.ts", "src/lib/identifierFromLabel.ts", "src/lib/termUri.ts",
+        "src/ontology/termDescription.ts", "src/ui/showCommentSetting.ts"
       ]
     },
     "annotations": {
