@@ -1,3 +1,17 @@
+# [2.11.0](https://github.com/alelom/OntoCanvas/compare/v2.10.0...v2.11.0) (2026-11-19)
+
+
+### Bug Fixes
+
+* **#247:** label an individual across stores; show the definition in the edge and data-property dialogs ([ca85c6e](https://github.com/alelom/OntoCanvas/commit/ca85c6ee67ed525bea39d6e8006d40bd50591257)), closes [#247](https://github.com/alelom/OntoCanvas/issues/247)
+
+
+### Features
+
+* **#247:** show skos:definition as a term's description, with rdfs:comment after it as an optional setting ([ef07af3](https://github.com/alelom/OntoCanvas/commit/ef07af35e54aff504970ed692d8e9e25c563d4b2)), closes [#247](https://github.com/alelom/OntoCanvas/issues/247)
+* **#249:** choose a term's label by the display language, as descriptions are ([f08e758](https://github.com/alelom/OntoCanvas/commit/f08e75872f87797e0e0885e36bfd9cddb64e02e6)), closes [#249](https://github.com/alelom/OntoCanvas/issues/249)
+* **#250:** show skos:prefLabel as a term's label when it has no rdfs:label ([a94965f](https://github.com/alelom/OntoCanvas/commit/a94965f6571b2dfda5ac3680317a089aaa1fda7b)), closes [#250](https://github.com/alelom/OntoCanvas/issues/250)
+
 # [2.10.0](https://github.com/alelom/OntoCanvas/compare/v2.9.0...v2.10.0) (2026-11-11)
 
 
