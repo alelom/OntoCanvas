@@ -4,6 +4,7 @@
  */
 import type { GraphEdge, ObjectPropertyInfo } from '../types';
 import { BASE_IRI, OWL, RDF, RDFS, isBlankNode } from './vocab';
+import { readLabel } from './termDescription';
 import { DataFactory, Store } from 'n3';
 import { type RdfTerm, resolveExpressionClassUris } from '../rdf/classExpressions';
 import { debugLog } from '../utils/debug';
@@ -37,7 +38,7 @@ export function buildObjectPropertyEdges(store: Store, edges: GraphEdge[], class
     if (!objectProps.some((op) => op.name === propName || op.uri === propUri)) {
       // Try to get label and other info from store, but if not found, use defaults
       const propQuads = store.getQuads(DataFactory.namedNode(propUri), null, null, null);
-      let label = propName;
+      const label = readLabel(store, propUri) ?? propName;
       let comment: string | undefined = undefined;
       let domain: string | undefined = undefined;
       let range: string | undefined = undefined;
@@ -47,9 +48,7 @@ export function buildObjectPropertyEdges(store: Store, edges: GraphEdge[], class
       
       for (const q of propQuads) {
         const pred = (q.predicate as { value?: string }).value;
-        if (pred === RDFS + 'label') {
-          label = (q.object as { value?: string }).value ?? propName;
-        } else if (pred === RDFS + 'comment') {
+        if (pred === RDFS + 'comment') {
           comment = (q.object as { value?: string }).value ?? undefined;
         } else if (pred === RDFS + 'domain') {
           const domainUri = (q.object as { value?: string }).value;

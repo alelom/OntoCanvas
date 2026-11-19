@@ -8,7 +8,7 @@ import { extractLocalName } from '../utils/localName';
 import { isExternalPropertyUri } from '../rdf/propertyNamespace';
 import { getMainOntologyBase } from './ontologyBase';
 import { isDeprecated, withExampleImages } from './termFlags';
-import { withDescription } from './termDescription';
+import { readLabel, withDescription } from './termDescription';
 
 export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
@@ -30,8 +30,7 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
     if (seen.has(name)) continue;
     seen.add(localName);
     seen.add(name);
-    const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
-    const label = labelQuad?.object?.value ?? name;
+    const label = readLabel(store, subjUri) ?? name;
     const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;
     const hasCardQuad = store.getQuads(subj, DataFactory.namedNode(HAS_CARDINALITY_PROP), null, null)[0];

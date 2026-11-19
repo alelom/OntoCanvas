@@ -2,9 +2,13 @@
  * A term's description (#247): its skos:definition first, its rdfs:comment after it (or alone, when it has no definition),
  * in the user's language, then English, then untagged, then any other; every value, in a stable order.
  */
-import { describe, it, expect } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, vi } from 'vitest';
 import { Parser, Store } from 'n3';
-import { describeTerm, orderLiterals, readTermDescription, setComment } from '../../src/ontology/termDescription';
+import { describeTerm, orderLiterals, pickLabel, readLabel, readTermDescription, setComment } from '../../src/ontology/termDescription';
+import { quadsToParseResult } from '../../src/ontology/buildGraph';
+import { getObjectProperties } from '../../src/ontology/readObjectProperties';
+import { getDataProperties } from '../../src/ontology/readDataProperties';
 
 const PREFIXES = `@prefix : <http://example.org/o#> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . @prefix skos: <http://www.w3.org/2004/02/skos/core#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .`;
 const SUBJECT = 'http://example.org/o#Wall';
@@ -107,5 +111,51 @@ describe('setComment', () => {
     const term: { comment?: string | null } = {};
     setComment(term, 'Note');
     expect(term).toEqual({ comment: 'Note' });
+  });
+});
+
+describe('the label shown (#249)', () => {
+  const body = `:Wall a owl:Class ; rdfs:label "Wand"@de, "Wall"@en, "Plain" .
+    :hasPart a owl:ObjectProperty ; rdfs:label "hat Teil"@de, "has part"@en .
+    :height a owl:DatatypeProperty ; rdfs:label "Höhe"@de, "height"@en .`;
+
+  it('pickLabel takes the first by the description rule: display language, English, untagged, other', () => {
+    const labels = [{ value: 'Mur', language: 'fr' }, { value: 'Plain', language: '' }, { value: 'Wall', language: 'en' }, { value: 'Wand', language: 'de' }];
+    expect(pickLabel(labels, 'de')).toBe('Wand');
+    expect(pickLabel(labels, 'it')).toBe('Wall');
+    expect(pickLabel(labels.filter((l) => l.language !== 'en'), 'it')).toBe('Plain');
+    expect(pickLabel(labels.filter((l) => l.language === 'fr'), 'it')).toBe('Mur');
+    expect(pickLabel([], 'en')).toBeUndefined();
+  });
+
+  it('pickLabel is always the first of orderLiterals, whatever order the labels come in', () => {
+    const labels = [['b', 'fr'], ['a', 'fr'], ['Z', 'DE'], ['y', 'de'], ['Wall', 'en-GB'], ['Wall2', 'en'], ['x', ''], ['w', '']].map(([value, language]) => ({ value, language }));
+    for (const preferred of ['de', 'fr', 'en', 'it']) {
+      for (const order of [labels, [...labels].reverse(), [...labels.slice(3), ...labels.slice(0, 3)]]) {
+        expect(pickLabel(order, preferred)).toBe(orderLiterals(order, preferred)[0]);
+      }
+    }
+  });
+
+  it('readLabel reads it from one store or several, nothing when there is none', () => {
+    const store = storeOf(body);
+    expect(readLabel(store, SUBJECT, 'de')).toBe('Wand');
+    expect(readLabel([storeOf(':Wall a owl:Class .'), store], SUBJECT, 'en')).toBe('Wall');
+    expect(readLabel(store, 'http://example.org/o#Missing', 'en')).toBeUndefined();
+  });
+
+  it('classes, object properties and data properties are labelled in the browser language, whatever order they are stored in', () => {
+    const store = storeOf(body);
+    const shown = () => ({
+      cls: quadsToParseResult(store.getQuads(null, null, null, null)).graphData.nodes.find((n) => n.id === 'Wall')?.label,
+      op: getObjectProperties(store).find((p) => p.uri === 'http://example.org/o#hasPart')?.label,
+      dp: getDataProperties(store).find((p) => p.uri === 'http://example.org/o#height')?.label,
+    });
+    const language = vi.spyOn(navigator, 'language', 'get');
+    language.mockReturnValue('de-DE');
+    expect(shown()).toEqual({ cls: 'Wand', op: 'hat Teil', dp: 'Höhe' });
+    language.mockReturnValue('it');
+    expect(shown()).toEqual({ cls: 'Wall', op: 'has part', dp: 'height' });
+    language.mockRestore();
   });
 });

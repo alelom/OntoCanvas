@@ -20,7 +20,7 @@ import { mergeRestrictionKinds, readObjectRestriction } from '../rdf/restriction
 import { parseRdfToQuadsWithPrefixes } from '../rdf/parseRdfToQuads';
 import { addDataPropertyRestrictions } from './dataPropertyRestrictions';
 import { buildObjectPropertyEdges } from './objectPropertyEdges';
-import { withDescription } from './termDescription';
+import { readLabel, withDescription } from './termDescription';
 
 function parseCardinalityFromRestriction(
   minQual: import('n3').Quad | undefined,
@@ -123,8 +123,7 @@ function buildParseResultFromStore(
     seenClasses.add(localName);
     classUriByName.set(localName, uri);
 
-    const labelQuad = store.getQuads(subj, RDFS + 'label', null, null)[0];
-    const label = labelQuad?.object?.value ?? localName;
+    const label = readLabel(store, uri) ?? localName;
 
     const commentQuad = store.getQuads(subj, RDFS + 'comment', null, null)[0];
     const comment = commentQuad?.object?.value != null ? String(commentQuad.object.value) : null;

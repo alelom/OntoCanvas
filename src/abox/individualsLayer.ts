@@ -9,7 +9,7 @@
 import type { Store } from 'n3';
 import { individualsOf, isClassOfIndividuals } from '../lib/instanceData';
 import { extractLocalName } from '../utils/localName';
-import { describeTerm, displayLanguage, orderLiterals, SKOS_DEFINITION } from '../ontology/termDescription';
+import { describeTerm, displayLanguage, orderLiterals, readLabel, SKOS_DEFINITION } from '../ontology/termDescription';
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
@@ -185,9 +185,8 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
 
   const labelOf = (iri: string): string => {
     for (const store of getStores()) {
-      const labels = store.getQuads(iri, RDFS_LABEL, null, null).filter((q) => q.object.termType === 'Literal');
-      const preferred = labels.find((q) => !(q.object as { language?: string }).language) ?? labels[0];
-      if (preferred) return preferred.object.value;
+      const label = readLabel(store, iri);
+      if (label !== undefined) return label;
     }
     return nameOfIri(iri);
   };

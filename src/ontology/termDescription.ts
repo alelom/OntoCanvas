@@ -7,6 +7,8 @@
  * first, then English, then untagged, then any other language, and alphabetical within each. The two properties are
  * ordered separately.
  *
+ * A term's label is chosen by the same order (#249): `pickLabel`, `readLabel`.
+ *
  * The editing dialogs are untouched: they still edit rdfs:comment (`comment` on the term records).
  */
 import type { Store } from 'n3';
@@ -57,6 +59,33 @@ function literalsOf(store: Store, subject: string, predicate: string): Literal[]
     .getQuads(subject, predicate, null, null)
     .filter((q) => q.object.termType === 'Literal')
     .map((q) => ({ value: q.object.value, language: (q.object as { language?: string }).language ?? '' }));
+}
+
+/** The label shown for a term (#249): the first by the same rule; undefined when it has none. */
+export function pickLabel(literals: Literal[], preferred: string = displayLanguage()): string | undefined {
+  let best: Literal | undefined;
+  let bestRank = 4;
+  for (const l of literals) {
+    const rank = rankOf(l.language, preferred);
+    if (rank > bestRank) continue;
+    const language = l.language.toLowerCase();
+    if (
+      !best ||
+      rank < bestRank ||
+      (rank === 3 && language < best.language.toLowerCase()) ||
+      ((rank !== 3 || language === best.language.toLowerCase()) && (l.value.localeCompare(best.value) || (l.value < best.value ? -1 : 0)) < 0)
+    ) {
+      best = l;
+      bestRank = rank;
+    }
+  }
+  return best?.value;
+}
+
+/** A term's rdfs:label from one store, or from several. */
+export function readLabel(store: Store | readonly Store[], subject: string, language: string = displayLanguage()): string | undefined {
+  const stores = 'getQuads' in store ? [store] : store;
+  return pickLabel(stores.flatMap((s) => literalsOf(s, subject, RDFS + 'label')), language);
 }
 
 /** A term's description from one store, or from several (an individual is described across the data's stores). */

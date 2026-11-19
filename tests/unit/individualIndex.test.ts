@@ -2,7 +2,7 @@
  * The individuals of the open ontology and of the data added to it (#208): counted per class, listed a page at a time,
  * described. Pure: stores in, plain objects out.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Parser, Store } from 'n3';
 import { createIndividualIndex, NO_CLASS } from '../../src/abox/individualIndex';
 
@@ -106,6 +106,13 @@ describe('list', () => {
   it('filters inside a class', () => {
     expect(index().list({ classIri: NS + 'Room', search: '102', offset: 0, limit: 50 }).items.map((i) => i.iri)).toEqual([NS + 'room102']);
   });
+
+  it('shows the label in the browser language when there is one (#249)', () => {
+    vi.stubGlobal('navigator', { language: 'de-DE' });
+    expect(index().list({ search: 'raum 102', offset: 0, limit: 5 }).items[0].label).toBe('Raum 102');
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('prefers a label with no language or in English to one in another language', () => {
     expect(index().list({ search: 'room 102', offset: 0, limit: 5 }).items[0].label).toBe('Room 102');

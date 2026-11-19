@@ -9,6 +9,7 @@
 import type { Store } from 'n3';
 import { individualsOf, isClassOfIndividuals } from '../lib/instanceData';
 import { extractLocalName } from '../utils/localName';
+import { pickLabel } from '../ontology/termDescription';
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
@@ -132,12 +133,8 @@ export function createIndividualIndex(stores: Store[]): IndividualIndex {
     }
     return labels;
   };
-  /** The label shown: one with no language or in English before one in another language; null when there is none. */
-  const labelOf = (iri: string): string | null => {
-    const labels = labelsOf(iri);
-    const preferred = labels.find((l) => !l.language) ?? labels.find((l) => /^en(-|$)/i.test(l.language)) ?? labels[0];
-    return preferred ? preferred.text : null;
-  };
+  /** The label shown: the display language, then English, then untagged, then any other (#249); null when there is none. */
+  const labelOf = (iri: string): string | null => pickLabel(labelsOf(iri).map((l) => ({ value: l.text, language: l.language }))) ?? null;
 
   /** The individuals of a class (or of none, or all), sorted by what is shown for them; kept, since the stores do not change under an index. */
   interface SortedItem extends IndividualItem {
