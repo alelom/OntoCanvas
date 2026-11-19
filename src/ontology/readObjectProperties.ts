@@ -8,6 +8,7 @@ import { extractLocalName } from '../utils/localName';
 import { isExternalPropertyUri } from '../rdf/propertyNamespace';
 import { getMainOntologyBase } from './ontologyBase';
 import { isDeprecated, withExampleImages } from './termFlags';
+import { withDescription } from './termDescription';
 
 export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
   const result: ObjectPropertyInfo[] = [];
@@ -77,6 +78,7 @@ export function getObjectProperties(store: Store): ObjectPropertyInfo[] {
       isDefinedBy: isDefinedBy ?? undefined,
       subPropertyOf: subPropertyOf ?? undefined,
       ...withExampleImages(store, subjUri),
+      ...withDescription(store, subjUri),
       ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }

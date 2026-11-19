@@ -17,10 +17,25 @@ function linkTo(a: HTMLAnchorElement, url: string): void {
   else a.removeAttribute('href');
 }
 
-/** What a tooltip shows: text, then the term's example images (absolute addresses, in display order). */
+/** What a tooltip shows: text, then the term's comment under a "Comment" label (#247), then its example images (absolute addresses, in display order). */
 export interface TooltipContent {
   text: string;
+  comment?: string;
   images?: string[];
+}
+
+/** The comment, under a small "Comment" label. */
+function commentBlock(comment: string): HTMLElement {
+  const block = document.createElement('div');
+  block.className = 'canvas-tooltip-comment';
+  const label = document.createElement('div');
+  label.className = 'canvas-tooltip-comment-label';
+  label.textContent = 'Comment';
+  const body = document.createElement('div');
+  body.className = 'canvas-tooltip-comment-text';
+  body.textContent = comment;
+  block.append(label, body);
+  return block;
 }
 
 /** How long a tooltip with images stays after the cursor leaves the term, so the cursor can reach it. */
@@ -190,7 +205,7 @@ function renderImages(parent: HTMLElement, images: string[], box: { width: numbe
  * content stays where it is (the cursor is still over its term), so its controls can be reached.
  */
 export function showCanvasTooltip(content: string | TooltipContent, clientX: number, clientY: number): void {
-  const { text, images = [] } = typeof content === 'string' ? { text: content } : content;
+  const { text, comment = '', images = [] } = typeof content === 'string' ? { text: content } : content;
   const el = ensureTooltip();
   cancelHide();
 
@@ -198,13 +213,20 @@ export function showCanvasTooltip(content: string | TooltipContent, clientX: num
     if (richKey) teardownCarousel();
     richKey = null;
     el.classList.remove('canvas-tooltip--rich');
-    el.textContent = text;
+    if (comment) {
+      const t = document.createElement('div');
+      t.className = 'canvas-tooltip-text';
+      t.textContent = text;
+      el.replaceChildren(...(text ? [t] : []), commentBlock(comment));
+    } else {
+      el.textContent = text;
+    }
     el.style.display = 'block';
     placeAt(el, clientX, clientY);
     return;
   }
 
-  const key = `${text}\n${images.join('\n')}`;
+  const key = `${text}\n${comment}\n${images.join('\n')}`;
   if (richKey === key && el.style.display === 'block') return;
   teardownCarousel();
   richKey = key;
@@ -218,6 +240,11 @@ export function showCanvasTooltip(content: string | TooltipContent, clientX: num
     // The comment wraps to the image's width, as the plain tooltip does to its own.
     t.style.maxWidth = `${box?.width ?? 300}px`;
     el.appendChild(t);
+  }
+  if (comment) {
+    const block = commentBlock(comment);
+    block.style.maxWidth = `${box?.width ?? 300}px`;
+    el.appendChild(block);
   }
   if (box) {
     stopCarousel = renderImages(el, images, box);
@@ -271,7 +298,7 @@ export interface TooltipCandidates {
 function asContent(c: string | TooltipContent | null | undefined): TooltipContent | null {
   if (!c) return null;
   const content = typeof c === 'string' ? { text: c } : c;
-  return content.text || content.images?.length ? content : null;
+  return content.text || content.comment || content.images?.length ? content : null;
 }
 
 /** The tooltip to show, or null for none. */

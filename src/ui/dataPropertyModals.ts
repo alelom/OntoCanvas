@@ -23,6 +23,7 @@ import { updateSaveButtonVisibility } from './fileBar';
 import { propertySource } from './propertyMenuFacts';
 import { groupMenuEntries } from './propertyMenuGroups';
 import { renderMenuGroups } from './propertyMenuGroupsDom';
+import { setComment } from '../ontology/termDescription';
 
 export function initDataPropsMenu(dataPropsContent: HTMLElement): void {
   dataPropsContent.innerHTML = '';
@@ -175,7 +176,7 @@ export function initEditDataPropertyHandlers(): void {
     }
     if (commentChanged) {
       updateDataPropertyCommentInStore(session.ttlStore, name, newComment || null);
-      dp.comment = newComment || undefined;
+      setComment(dp, newComment);
     }
     if (rangeChanged) {
       updateDataPropertyRangeInStore(session.ttlStore, name, newRange);

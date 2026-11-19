@@ -235,6 +235,7 @@ export function mergeImportedDeclarations(local: PropertyLists, imported: Proper
     existing.uri ??= imp.uri;
     existing.isDefinedBy ??= imp.isDefinedBy;
     existing.comment ??= imp.comment;
+    existing.description ??= imp.description;
     existing.domain ??= imp.domain;
     existing.range ??= imp.range;
     existing.hasGlobalDomain ||= imp.hasGlobalDomain;
@@ -265,6 +266,7 @@ export function mergeImportedDeclarations(local: PropertyLists, imported: Proper
     target.uri ??= imp.uri;
     target.isDefinedBy ??= imp.isDefinedBy;
     target.comment ??= imp.comment;
+    target.description ??= imp.description;
     if (target.range == null) {
       target.range = imp.range;
       if (imp.rangeExpression) target.rangeExpression = imp.rangeExpression;

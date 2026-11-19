@@ -88,6 +88,8 @@ export function addIndividualsToNetworkData(data: NetworkData, layer: Individual
         borderWidth: 1,
         // The images its values name (#228), in the tooltip as the example images of a class are (#142).
         ...(node.images ? { exampleImages: node.images } : {}),
+        // The comment after its definition (#247); the tooltip shows it when the user wants it.
+        ...(node.comment ? { commentText: node.comment } : {}),
       };
       if (pin && node.id === pin.id) return { ...base, x: pin.x, y: pin.y };
       if (pin && aroundPin.has(node.id)) {

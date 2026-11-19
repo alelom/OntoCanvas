@@ -5,6 +5,7 @@
 import { session, canvasState, editState } from '../state/appState';
 import { showAddNodeModal } from '../ui/addNodeModal';
 import { hideCanvasTooltip, pickTooltip, showCanvasTooltip } from '../ui/canvasTooltip';
+import { getShowComment } from '../ui/showCommentSetting';
 import { attachClassExpressionMarks } from '../ui/classExpressionInteraction';
 import { attachIndividualCountBadges } from '../ui/individualCountBadges';
 import { classIndividualsAction, classIriOfNode } from './classIndividuals';
@@ -136,11 +137,17 @@ export function setupNetworkSelectionAndNavigation(
     const titleOf = (item: { options?: { title?: unknown } } | undefined) =>
       typeof item?.options?.title === 'string' ? item.options.title : null;
     // The example images (#142) are kept on the data records, which vis-network does not copy into its options.
-    const records = (net as unknown as { body?: { data?: Record<'nodes' | 'edges', { get(id: string): { exampleImages?: string[] } | null }> } }).body?.data;
-    const contentOf = (kind: 'nodes' | 'edges', id: string) => ({
-      text: titleOf(body?.[kind]?.[id]) ?? '',
-      images: records?.[kind]?.get(id)?.exampleImages,
-    });
+    const records = (net as unknown as { body?: { data?: Record<'nodes' | 'edges', { get(id: string): { exampleImages?: string[]; commentText?: string } | null }> } }).body?.data;
+    const showComment = getShowComment();
+    const contentOf = (kind: 'nodes' | 'edges', id: string) => {
+      const record = records?.[kind]?.get(id);
+      return {
+        text: titleOf(body?.[kind]?.[id]) ?? '',
+        // The rdfs:comment that follows a definition (#247): shown when the user wants it.
+        ...(showComment && record?.commentText ? { comment: record.commentText } : {}),
+        images: record?.exampleImages,
+      };
+    };
     const labelEdgeId = getEdgeIdAtLabelPoint(net, coords);
     const badgeTip = individualBadges.tooltipAt(net.DOMtoCanvas(coords));
     container.style.cursor = badgeTip ? 'pointer' : '';

@@ -9,9 +9,11 @@
 import type { Store } from 'n3';
 import { individualsOf, isClassOfIndividuals } from '../lib/instanceData';
 import { extractLocalName } from '../utils/localName';
+import { describeTerm, displayLanguage, orderLiterals, SKOS_DEFINITION } from '../ontology/termDescription';
 
 const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
+const RDFS_COMMENT = 'http://www.w3.org/2000/01/rdf-schema#comment';
 
 /** Ids of the nodes of individuals start with this, so nothing mistakes one for a class (not editable, not saved). */
 export const INDIVIDUAL_PREFIX = '__individual__';
@@ -53,6 +55,8 @@ export interface LayerNode {
   label: string;
   /** Plain text: the IRI, the classes and the data values. */
   title: string;
+  /** The rdfs:comment that follows its skos:definition (#247), for the tooltip to show if the user wants it. */
+  comment?: string;
   /** The addresses of the images its values name (#228). */
   images?: string[];
 }
@@ -210,23 +214,32 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
     return withLabel.sort((a, b) => byText(a.text, b.text) || (a.iri < b.iri ? -1 : 1)).map((n) => n.iri);
   };
 
-  const tooltipOf = (iri: string): string => {
+  /** The tooltip text, and the comment that follows the definition (#247); one pass over the individual's quads. */
+  const tooltipOf = (iri: string): { title: string; comment: string } => {
     const lines = [iri];
     const classes: string[] = [];
     const values: string[] = [];
+    const definitions: { value: string; language: string }[] = [];
+    const comments: { value: string; language: string }[] = [];
     for (const store of getStores()) {
       for (const q of store.getQuads(iri, null, null, null)) {
         if (q.predicate.value === RDF_TYPE) {
           if (q.object.termType === 'NamedNode' && isClassOfIndividuals(q.object.value)) classes.push(extractLocalName(q.object.value));
         } else if (q.object.termType === 'Literal' && q.predicate.value !== RDFS_LABEL) {
-          values.push(`${extractLocalName(q.predicate.value)}: ${q.object.value}`);
+          // The definition and the comment are the description, shown apart from the data values.
+          if (q.predicate.value === SKOS_DEFINITION) definitions.push({ value: q.object.value, language: q.object.language });
+          else if (q.predicate.value === RDFS_COMMENT) comments.push({ value: q.object.value, language: q.object.language });
+          else values.push(`${extractLocalName(q.predicate.value)}: ${q.object.value}`);
         }
       }
     }
     if (classes.length) lines.push(`Class: ${classes.join(', ')}`);
+    const language = displayLanguage();
+    const { text, comment } = describeTerm({ definitions: orderLiterals(definitions, language), comments: orderLiterals(comments, language) }, null, true);
+    if (text) lines.push(text);
     lines.push(...values.slice(0, TOOLTIP_ROWS));
     if (values.length > TOOLTIP_ROWS) lines.push(`…and ${values.length - TOOLTIP_ROWS} more`);
-    return lines.join('\n');
+    return { title: lines.join('\n'), comment };
   };
 
   /** Which individuals are drawn: those of the auto draw and the ones asked for. Kept until what is asked for changes. */
@@ -403,7 +416,8 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
       };
       const nodes: LayerNode[] = [...shown].map((iri) => {
         const images = imagesOf?.(iri) ?? [];
-        return { id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: tooltipOf(iri) + doubleClickHint(iri), ...(images.length ? { images } : {}) };
+        const { title, comment } = tooltipOf(iri);
+        return { id: INDIVIDUAL_PREFIX + iri, iri, label: labelOf(iri), title: title + doubleClickHint(iri), ...(comment ? { comment } : {}), ...(images.length ? { images } : {}) };
       });
       const classes = new Map<string, LayerClass>();
       const counts = countsOfClasses();

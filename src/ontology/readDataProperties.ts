@@ -8,6 +8,7 @@ import { type RdfTerm, resolveExpressionClassUris } from '../rdf/classExpression
 import { describeDataRange } from '../rdf/dataRanges';
 import { extractLocalName } from '../utils/localName';
 import { isDeprecated, withExampleImages } from './termFlags';
+import { withDescription } from './termDescription';
 
 /**
  * Resolve an rdfs:range object to a datatype value string.
@@ -88,6 +89,7 @@ export function getDataProperties(store: Store): DataPropertyInfo[] {
       uri: subjUri,
       isDefinedBy: isDefinedBy ?? undefined,
       ...withExampleImages(store, subjUri),
+      ...withDescription(store, subjUri),
       ...(isDeprecated(store, subj) ? { deprecated: true } : {}),
     });
   }

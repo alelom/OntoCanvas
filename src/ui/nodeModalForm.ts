@@ -13,6 +13,7 @@ import { addDataPropertyRestrictionToClass, removeDataPropertyRestrictionFromCla
 import { setAnnotationValuesForClass } from '../lib/annotationValues';
 import { exampleImagesOf } from '../lib/exampleImages';
 import type { GraphNode, DataPropertyRestriction, AnnotationPropertyInfo } from '../types';
+import { setComment } from '../ontology/termDescription';
 
 export const ADD_NODE_DUPLICATE_MESSAGE = 'A node with the same identifier already exists.';
 
@@ -93,7 +94,7 @@ export function applyNodeFormToStore(
   baseIri: string,
   annotationProperties: AnnotationPropertyInfo[]
 ): void {
-  node.comment = formData.comment.trim() || undefined;
+  setComment(node, formData.comment.trim());
   updateCommentInStore(store, nodeId, formData.comment.trim() || null);
 
   for (const ap of annotationProperties) {

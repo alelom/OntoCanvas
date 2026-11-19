@@ -26,6 +26,7 @@ import { groupMenuEntries } from './propertyMenuGroups';
 import { renderMenuGroups } from './propertyMenuGroupsDom';
 import { setupClassSelector, setupPropertySelector, updateEditRelTypeIdentifierAndValidation, updateAddRelTypeIdentifierAndValidation } from './relationshipTypeForm';
 import { cleanupUnusedExternalProperties, getAllRelationshipTypes, colourableRelationshipTypes, getRelationshipLabel } from './relationshipUtils';
+import { setComment } from '../ontology/termDescription';
 
 export function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement, onApply: () => void): void {
   if (initFlags.editRelationshipTypeHandlersInitialized) return;
@@ -102,7 +103,7 @@ export function initEditRelationshipTypeHandlers(edgeStylesContent: HTMLElement,
     if (commentChanged) {
       updateObjectPropertyCommentInStore(session.ttlStore, effectiveType, newComment || null);
       const o = session.objectProperties.find((p) => p.name === effectiveType);
-      if (o) o.comment = newComment || undefined;
+      if (o) setComment(o, newComment);
     }
     if (domainChanged || rangeChanged) {
       updateObjectPropertyDomainRangeInStore(

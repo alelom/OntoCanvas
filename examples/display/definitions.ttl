@@ -1,0 +1,65 @@
+@prefix : <http://example.org/examples/definitions#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# A term's description (issue #247). Hover a class, a relationship (its label or its line), a data property
+# box or an individual: the tooltip shows the skos:definition as the description, and the rdfs:comment after it,
+# under a small "Comment" label. Expected tooltips:
+#   Wall      definition "A vertical structure that encloses or divides a space."
+#             then Comment "Corresponds to the wall of the standard this ontology follows." (rdfs:comment)
+#   Door      only an rdfs:comment: it is the description, as before, with no Comment label
+#   Window    only a skos:definition: the description, nothing after it
+#   Roof      two definitions and two comments, in a stable order for a browser set to English:
+#             English first, then untagged, then other languages (each alphabetical)
+#   hasPart   a relationship with both (hover its label or its line)
+#   height    a data property box with both
+#   wall1     an individual with both
+# The bottom bar's "Show comments" box is on by default; turn it off and the Comment sections go, the
+# definitions stay. A term with no definition still shows its comment, whatever the box says.
+
+<http://example.org/examples/definitions> rdf:type owl:Ontology ;
+    rdfs:label "Definitions and comments" .
+
+:Wall rdf:type owl:Class ;
+    rdfs:label "Wall" ;
+    skos:definition "A vertical structure that encloses or divides a space." ;
+    rdfs:comment "Corresponds to the wall of the standard this ontology follows." .
+
+:Door rdf:type owl:Class ;
+    rdfs:label "Door" ;
+    rdfs:comment "An opening in a wall that can be closed." .
+
+:Window rdf:type owl:Class ;
+    rdfs:label "Window" ;
+    skos:definition "An opening in a wall that lets light in." .
+
+:Roof rdf:type owl:Class ;
+    rdfs:label "Roof" ;
+    skos:definition "The covering of the top of a building."@en ,
+        "A covering of a building's top." ,
+        "Das Dach eines Gebäudes."@de ;
+    rdfs:comment "Includes its structure."@en ,
+        "Ohne die Dachhaut."@de ,
+        "Plain note." .
+
+:hasPart rdf:type owl:ObjectProperty ;
+    rdfs:label "has part" ;
+    rdfs:domain :Wall ;
+    rdfs:range :Window ;
+    skos:definition "Relates a whole to one of its parts." ;
+    rdfs:comment "Not transitive here: a wall's window is not a part of the building it stands in." .
+
+:height rdf:type owl:DatatypeProperty ;
+    rdfs:label "height" ;
+    rdfs:domain :Wall ;
+    rdfs:range xsd:decimal ;
+    skos:definition "The vertical extent of the thing, in metres." ;
+    rdfs:comment "Measured from the finished floor." .
+
+:wall1 rdf:type owl:NamedIndividual , :Wall ;
+    rdfs:label "Wall 1" ;
+    skos:definition "The north wall of the hall." ;
+    rdfs:comment "Replaced in the second phase." .

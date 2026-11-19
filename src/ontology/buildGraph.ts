@@ -20,6 +20,7 @@ import { mergeRestrictionKinds, readObjectRestriction } from '../rdf/restriction
 import { parseRdfToQuadsWithPrefixes } from '../rdf/parseRdfToQuads';
 import { addDataPropertyRestrictions } from './dataPropertyRestrictions';
 import { buildObjectPropertyEdges } from './objectPropertyEdges';
+import { withDescription } from './termDescription';
 
 function parseCardinalityFromRestriction(
   minQual: import('n3').Quad | undefined,
@@ -163,6 +164,7 @@ function buildParseResultFromStore(
       label,
       labellableRoot,
       comment: comment || undefined,
+      ...withDescription(store, uri),
       annotations,
       dataPropertyRestrictions: [],
       exampleImages: exampleImages.length > 0 ? exampleImages : undefined,

@@ -16,6 +16,7 @@ import { updateSaveButtonVisibility } from './fileBar';
 import { hideRenameModal } from './modals';
 import { ADD_NODE_DUPLICATE_MESSAGE, type NodeFormData, applyNodeFormToStore } from './nodeModalForm';
 import { hideAddNodeModalWithCleanup } from './nodeModalHelpers';
+import { setComment } from '../ontology/termDescription';
 
 export function confirmAddNode(): void {
   if (!editState.pendingAddNodePosition) return;
@@ -146,7 +147,7 @@ export function confirmRename(): void {
     for (const nodeId of nodeIds) {
       const node = session.rawData.nodes.find((n) => n.id === nodeId);
       if (node && (node.comment ?? '') !== newComment) {
-        node.comment = newComment || undefined;
+        setComment(node, newComment);
         updateCommentInStore(session.ttlStore, nodeId, newComment || null);
         anyChanged = true;
       }
@@ -157,7 +158,7 @@ export function confirmRename(): void {
           oldVals.forEach(({ id, comment }) => {
             const n = session.rawData.nodes.find((x) => x.id === id);
             if (n && session.ttlStore) {
-              n.comment = comment || undefined;
+              setComment(n, comment);
               updateCommentInStore(session.ttlStore, id, comment || null);
             }
           });
@@ -166,7 +167,7 @@ export function confirmRename(): void {
           nodeIds.forEach((id) => {
             const n = session.rawData.nodes.find((x) => x.id === id);
             if (n && session.ttlStore) {
-              n.comment = newComment || undefined;
+              setComment(n, newComment);
               updateCommentInStore(session.ttlStore, id, newComment || null);
             }
           });
@@ -294,7 +295,7 @@ export function confirmRename(): void {
     if (labelChanged) {
       node.label = newLabel;
     }
-    node.comment = newFormData.comment.trim() || undefined;
+    setComment(node, newFormData.comment.trim());
     node.exampleImages = newFormData.textualAnnotationValues?.exampleImage?.length ? [...newFormData.textualAnnotationValues.exampleImage] : undefined;
     node.dataPropertyRestrictions = [...currentDataProps];
   }
@@ -308,7 +309,7 @@ export function confirmRename(): void {
       if (session.ttlStore) {
         applyNodeFormToStore(nodeId, oldFormData, session.ttlStore, node, baseIri, session.annotationProperties);
       } else {
-        node.comment = oldFormData.comment.trim() || undefined;
+        setComment(node, oldFormData.comment.trim());
         node.exampleImages = oldFormData.textualAnnotationValues?.exampleImage?.length ? [...oldFormData.textualAnnotationValues.exampleImage] : undefined;
         node.dataPropertyRestrictions = [...oldDataProps];
       }
@@ -321,7 +322,7 @@ export function confirmRename(): void {
       if (session.ttlStore) {
         applyNodeFormToStore(nodeId, newFormData, session.ttlStore, node, baseIri, session.annotationProperties);
       } else {
-        node.comment = newFormData.comment.trim() || undefined;
+        setComment(node, newFormData.comment.trim());
         node.exampleImages = newFormData.textualAnnotationValues?.exampleImage?.length ? [...newFormData.textualAnnotationValues.exampleImage] : undefined;
         node.dataPropertyRestrictions = [...currentDataProps];
       }
