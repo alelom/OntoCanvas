@@ -184,11 +184,7 @@ export function createIndividualsLayer({ getStores, maxPerExpansion = DEFAULT_MA
   };
 
   const labelOf = (iri: string): string => {
-    for (const store of getStores()) {
-      const label = readLabel(store, iri);
-      if (label !== undefined) return label;
-    }
-    return nameOfIri(iri);
+    return readLabel(getStores(), iri) ?? nameOfIri(iri);
   };
 
   /** The individuals linked to this one by an object property, either way, sorted by what is shown for them; kept until the data changes. */

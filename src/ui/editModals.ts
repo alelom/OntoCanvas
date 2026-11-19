@@ -15,6 +15,7 @@ import { showEditEdgeClassExpressionNotice, findClassExpressionGroupForEdge } fr
 import { showEditEdgeRestrictionNotice } from './editEdgeRestrictionNotice';
 import { formatNodeLabelWithPrefix, formatRelationshipLabelWithPrefix } from './externalRefs';
 import { getRelationshipLabel } from './relationshipUtils';
+import { describeTerm } from '../ontology/termDescription';
 import { showRenameModal } from './renameModal';
 
 /** Open the appropriate edit modal for a node (class rename, data property restriction, or normal data property). */
@@ -176,8 +177,9 @@ export function showEditEdgeModal(edgeFrom: string, edgeTo: string, edgeType: st
     // Hide comment display for data properties (or show data property comment)
     const commentEl = document.getElementById('editEdgeComment') as HTMLElement;
     if (commentEl) {
-      if (dp?.comment) {
-        commentEl.textContent = dp.comment;
+      const dpDescription = describeTerm(dp?.description, dp?.comment, false).text;
+      if (dpDescription) {
+        commentEl.textContent = dpDescription;
         commentEl.style.display = 'block';
       } else {
         commentEl.style.display = 'none';

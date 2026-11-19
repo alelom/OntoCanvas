@@ -191,7 +191,7 @@ export function updateEditEdgeCommentDisplay(
     comment = selectedExternalObjectProperty.comment || null;
   } else {
     const edgeType = selectedEdgeType || typeInputValue.trim();
-    comment = edgeType ? getRelationshipComment(edgeType, objectProperties) : null;
+    comment = edgeType ? getRelationshipDescription(edgeType, objectProperties).text || null : null;
   }
   return comment;
 }

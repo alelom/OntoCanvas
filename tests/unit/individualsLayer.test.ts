@@ -28,6 +28,14 @@ describe('createIndividualsLayer', () => {
     expect(layer.build(classNodes)).toMatchObject({ nodes: [], edges: [], warning: null });
   });
 
+  it('labels an individual by its rdfs:label from any store before a skos:prefLabel from an earlier one (#250)', () => {
+    const a = store(':a a :Room ; <http://www.w3.org/2004/02/skos/core#prefLabel> "Pref"@en .');
+    const b = store(':a rdfs:label "Label" .');
+    const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [a, b] });
+    layer.showNeighbours(ex('a'));
+    expect(layer.build(classNodes).nodes.find((n) => n.iri === ex('a'))!.label).toBe('Label');
+  });
+
   it('draws the individual, its neighbours in both directions, and the links between them', () => {
     const s = store(':a a :Room ; :next :b . :c :next :a . :b a :Room . :c a :Room . :x a :Room .');
     const layer = createIndividualsLayer({ autoMax: 0, getStores: () => [s] });
