@@ -1,0 +1,18 @@
+# For each field of each drawing, take the reading with the highest confidence as the accepted value: the property the
+# ontology says the field fills (ex:mapsToProperty) gets it, and the drawing says which reading it came from. A tie promotes
+# every reading of the highest confidence.
+PREFIX ex: <http://example.org/promotion#>
+
+CONSTRUCT {
+  ?drawing ?property ?value .
+  ?drawing ex:promotedFrom ?reading .
+}
+WHERE {
+  {
+    SELECT ?drawing ?field (MAX(?confidence) AS ?best)
+    WHERE { ?r ex:readingOf ?drawing ; ex:field ?field ; ex:confidence ?confidence . }
+    GROUP BY ?drawing ?field
+  }
+  ?reading ex:readingOf ?drawing ; ex:field ?field ; ex:confidence ?best ; ex:value ?value .
+  ?field ex:mapsToProperty ?property .
+}

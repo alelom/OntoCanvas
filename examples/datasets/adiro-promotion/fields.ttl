@@ -1,0 +1,19 @@
+@prefix ex: <http://example.org/promotion#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# A made-up stand-in for the ontology that says which property of a drawing each field of its title block fills.
+
+<http://example.org/promotion> a owl:Ontology ; rdfs:label "Promotion example fields" .
+
+ex:Drawing a owl:Class ; rdfs:label "Drawing" .
+ex:Reading a owl:Class ; rdfs:label "Reading" .
+
+ex:drawingNumber a owl:DatatypeProperty ; rdfs:label "drawing number" ; rdfs:domain ex:Drawing .
+ex:revision a owl:DatatypeProperty ; rdfs:label "revision" ; rdfs:domain ex:Drawing .
+ex:readingOf a owl:ObjectProperty ; rdfs:label "reading of" ; rdfs:domain ex:Reading ; rdfs:range ex:Drawing .
+ex:promotedFrom a owl:ObjectProperty ; rdfs:label "promoted from" ; rdfs:domain ex:Drawing ; rdfs:range ex:Reading .
+
+ex:DrawingNumberField rdfs:label "Drawing number field" ; ex:mapsToProperty ex:drawingNumber .
+ex:RevisionField rdfs:label "Revision field" ; ex:mapsToProperty ex:revision .
+ex:mapsToProperty a owl:AnnotationProperty .

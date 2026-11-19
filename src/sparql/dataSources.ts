@@ -6,7 +6,7 @@
  * up to 2 MB (some 100k triples) loads, up to 10 MB (some 500k) asks first, up to 50 MB (some 3 million, a whole job of runs, #251)
  * asks first with the memory it takes, above is refused.
  */
-import type { Store } from 'n3';
+import { DataFactory, Store, type Quad } from 'n3';
 import { parseIntoStoreInSlices, type SlicedParseOptions } from '../rdf/parseIntoStore';
 import { filterGraphs, listGraphs, type DataGraph } from './dataGraphs';
 import { DataTooLargeError, isGzipName, GZIP_ESTIMATE_RATIO, nameWithoutGz, readAsText } from './readDataBytes';
@@ -150,6 +150,10 @@ export interface DataSources {
   isGraphHidden(key: string): boolean;
   setGraphHidden(key: string, hidden: boolean): void;
   addText(name: string, content: string, options?: AddDataOptions): Promise<DataSource>;
+  /**
+   * Quads already read (a CONSTRUCT result, #253) as a source of their own. With `graph`, every quad is put in that named graph.
+   */
+  addQuads(name: string, quads: readonly Quad[], options?: { graph?: string }): DataSource;
   /** The size of a file is known before it is read: a file above the limit is refused unread, a large one is asked about first. */
   addFile(file: DataFile, options?: AddDataOptions): Promise<DataSource>;
   /** Downloads a URL (http or https). The Content-Length, when the server gives one, is checked before the body is read. */
@@ -233,6 +237,14 @@ export function createDataSources(): DataSources {
         ...(options.folder !== undefined ? { folder: options.folder } : {}),
         ...(options.url ? { url: options.url } : {}),
       };
+      sources = [...sources, source];
+      changed();
+      return source;
+    },
+    addQuads(name, quads, options = {}) {
+      const graph = options.graph ? DataFactory.namedNode(options.graph) : null;
+      const store = new Store(graph ? quads.map((q) => DataFactory.quad(q.subject, q.predicate, q.object, graph)) : [...quads]);
+      const source: DataSource = { id: nextId++, name, store, triples: store.size, bytes: 0 };
       sources = [...sources, source];
       changed();
       return source;

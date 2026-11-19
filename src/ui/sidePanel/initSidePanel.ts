@@ -42,6 +42,8 @@ export interface SidePanelDeps {
   clearResult?: () => void;
   /** The data added to the open ontology, queried with it (#205). */
   dataSources?: DataSources;
+  /** The ontologies read as context (the modules the data names, the imports): queries run over them too (#253). */
+  getContextStores?: () => Store[];
   /** The label a class has in the graph, for the Individuals tab (#208). */
   getClassLabel?: (classIri: string) => string | null;
   /** What is drawn of the individuals in the graph (#209): the Individuals tab draws into it and clears it. */
@@ -133,6 +135,7 @@ export function initSidePanel(deps: SidePanelDeps): SidePanel {
     onResultChange: onResultHighlightChange,
     hasResult: hasResultHighlight,
     dataSources: deps.dataSources,
+    getContextStores: deps.getContextStores,
     dataLoader,
     images: deps.dataImages,
     openIndividuals: () => host.open('individuals'),

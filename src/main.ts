@@ -186,6 +186,7 @@ session.sidePanel = initSidePanel({
     updateSelectionInfoDisplay(network);
   },
   dataSources,
+  getContextStores: () => session.importedOntologies.map((o) => o.store),
   individualsLayer: session.individualsLayer,
   dataImages,
   getOntologySource: () => (fileState.loadedFileName ? { name: fileState.loadedFileName, title: fileState.loadedFilePath ?? undefined } : null),
