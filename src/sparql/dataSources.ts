@@ -3,7 +3,8 @@
  * saved. Each source has a store of its own, so one can be removed without touching the others or the ontology's store.
  *
  * Size tiers are by size in bytes, the cheap predictor (about 17 bytes and 1.2 KB of heap per triple for this shape of data):
- * up to 2 MB (some 100k triples) loads, up to 10 MB (some 500k) asks first, above is refused.
+ * up to 2 MB (some 100k triples) loads, up to 10 MB (some 500k) asks first, up to 50 MB (some 3 million, a whole job of runs, #251)
+ * asks first with the memory it takes, above is refused.
  */
 import type { Store } from 'n3';
 import { parseIntoStoreInSlices, type SlicedParseOptions } from '../rdf/parseIntoStore';
@@ -11,7 +12,9 @@ import { filterGraphs, listGraphs, type DataGraph } from './dataGraphs';
 import { DataTooLargeError, isGzipName, GZIP_ESTIMATE_RATIO, nameWithoutGz, readAsText } from './readDataBytes';
 
 export const DATA_LOAD_LIMIT_BYTES = 2 * 1024 * 1024;
-export const DATA_REFUSE_LIMIT_BYTES = 10 * 1024 * 1024;
+/** Above this the question says the memory the data takes (#251): what a job of many runs may come to. */
+export const DATA_HEAVY_LIMIT_BYTES = 10 * 1024 * 1024;
+export const DATA_REFUSE_LIMIT_BYTES = 50 * 1024 * 1024;
 
 export type SizeTier = 'load' | 'confirm' | 'refuse';
 
@@ -20,17 +23,36 @@ export const megabytes = (bytes: number): string => `${(bytes / (1024 * 1024)).t
 /** What to do about data too large for the browser (#223). Decompressing it first does not help: the limit is on the data. */
 export const TOO_LARGE_ADVICE = 'Load fewer files (one part, one batch), or use a tool with a database for the whole dataset.';
 
-const SLOW = 'loading it is slow and memory heavy (about 1 GB of memory per 800,000 triples), and queries over it should be selective';
+const BYTES_PER_TRIPLE = 17;
+const HEAP_BYTES_PER_TRIPLE = 1200;
+
+/** What data of this many bytes comes to once read: its triples ("2.5 million", "300,000") and the memory they take. */
+export function dataCost(bytes: number): { triples: string; memory: string } {
+  const triples = bytes / BYTES_PER_TRIPLE;
+  return {
+    triples: triples >= 1_000_000 ? `${(triples / 1_000_000).toFixed(1)} million` : (Math.round(triples / 1000) * 1000).toLocaleString('en'),
+    memory: `${((triples * HEAP_BYTES_PER_TRIPLE) / 1e9).toFixed(1)} GB`,
+  };
+}
+
+/** The question for data past DATA_HEAVY_LIMIT_BYTES: the cost first, then the risk (#251). */
+function heavyQuestion(subject: string, bytes: number): string {
+  const { triples, memory } = dataCost(bytes);
+  return `${subject}: some ${triples} triples, and about ${memory} of memory once loaded, more than many browsers give a page. It may stop responding or crash, and queries over it should be selective. Load it anyway?`;
+}
+
+const SLOW ='loading it is slow and memory heavy (about 1 GB of memory per 800,000 triples), and queries over it should be selective';
 
 /** `subject` says what is measured, with its size: "This file is 5.0 MB" by default, or a selection of files (#222). */
 export function classifyDataSize(bytes: number, subject = `This file is ${megabytes(bytes)}`): { tier: SizeTier; message?: string } {
   if (bytes > DATA_REFUSE_LIMIT_BYTES) {
     return {
       tier: 'refuse',
-      message: `${subject}, too large to load in the browser: the limit is ${megabytes(DATA_REFUSE_LIMIT_BYTES)} (about 500,000 triples). ${TOO_LARGE_ADVICE}`,
+      message: `${subject}, too large to load in the browser: the limit is ${megabytes(DATA_REFUSE_LIMIT_BYTES)} (about ${dataCost(DATA_REFUSE_LIMIT_BYTES).triples} triples).${TOO_LARGE_ADVICE}`,
     };
   }
-  if (bytes > DATA_LOAD_LIMIT_BYTES) return { tier: 'confirm', message: `${subject}: ${SLOW}. Load it?` };
+  if (bytes > DATA_HEAVY_LIMIT_BYTES) return { tier: 'confirm', message: heavyQuestion(subject, bytes) };
+  if (bytes > DATA_LOAD_LIMIT_BYTES) return { tier: 'confirm', message:`${subject}: ${SLOW}. Load it?` };
   return { tier: 'load' };
 }
 
@@ -38,8 +60,12 @@ export function classifyDataSize(bytes: number, subject = `This file is ${megaby
  * The question asked before reading compressed data whose estimate is large (#223). Never a refusal: the estimate may be well
  * above the data, and the read stops at the limit if the data passes it.
  */
-export function compressedDataQuestion(subject: string, limitBytes = DATA_REFUSE_LIMIT_BYTES): string {
-  return `${subject} (an estimate): ${SLOW}, and the read stops if the data passes ${megabytes(limitBytes)}. Load it?`;
+export function compressedDataQuestion(subject: string, limitBytes = DATA_REFUSE_LIMIT_BYTES, estimateBytes = 0): string {
+  if (estimateBytes > DATA_HEAVY_LIMIT_BYTES) {
+    const { triples, memory } = dataCost(estimateBytes);
+    return `${subject} (an estimate): some ${triples} triples, and about ${memory} of memory once loaded, more than many browsers give a page. It may stop responding or crash, and the read stops if the data passes ${megabytes(limitBytes)}. Load it anyway?`;
+  }
+  return`${subject} (an estimate): ${SLOW}, and the read stops if the data passes ${megabytes(limitBytes)}. Load it?`;
 }
 
 /** Why data read in part was not added: it passed the limit (#223). */
@@ -220,7 +246,7 @@ export function createDataSources(): DataSources {
       const estimate = compressed ? file.size * GZIP_ESTIMATE_RATIO : file.size;
       if (estimate > DATA_LOAD_LIMIT_BYTES && options.confirm) {
         const message = compressed
-          ? compressedDataQuestion(`This compressed file is ${megabytes(file.size)}, some ${megabytes(estimate)} of data once decompressed`, limitBytes)
+          ? compressedDataQuestion(`This compressed file is ${megabytes(file.size)}, some ${megabytes(estimate)} of data once decompressed`, limitBytes, estimate)
           : classifyDataSize(file.size).message!;
         if (!(await options.confirm(message))) throw new Error('Cancelled');
       }

@@ -4,6 +4,9 @@
  * engine and fills the table.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { type Browser, type Page } from 'playwright';
 import { launchBrowser } from './browser';
 import { openEditorWithTtl, waitForAppReady } from './testHelpers';
@@ -280,9 +283,18 @@ describe('SPARQL side panel', () => {
 
   it('refuses a data file that is too large without reading it, and says why (#205)', async () => {
     await page.click('[data-tab-button="individuals"]');
-    await page.setInputFiles('[data-add-file-input]', { name: 'huge.ttl', mimeType: 'text/turtle', buffer: Buffer.alloc(10 * 1024 * 1024 + 1, 'a') });
+    // A sparse file one byte over the limit: only its size is read, as the file is refused unread (Playwright takes no buffer over 50 MB).
+    const dir = mkdtempSync(join(tmpdir(), 'ontocanvas-huge-'));
+    const huge = join(dir, 'huge.ttl');
+    try {
+      writeFileSync(huge, '');
+      truncateSync(huge, 50 * 1024 * 1024 + 1);
+      await page.setInputFiles('[data-add-file-input]', huge);
 
-    await page.waitForFunction(() => /too large/i.test(document.querySelector('[data-data-status]')?.textContent ?? ''));
+      await page.waitForFunction(() => /too large/i.test(document.querySelector('[data-data-status]')?.textContent ?? ''));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
     expect(await page.locator('[data-data-list] li').count()).toBe(0);
   });
 
