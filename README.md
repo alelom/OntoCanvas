@@ -190,7 +190,7 @@ imports it**; a file nothing places selects every area, and docs select none. Th
 | `display-config` | The display config: options, edge styles, and loading one with an ontology. | 4 |
 | `data-properties` | Data properties: display on nodes, editing, dragging, owl:Thing and the unattached ones. | 7 |
 | `relationships` | Relationships between classes: object properties, restrictions, class expressions, editing and deleting edges. | 12 |
-| `nodes` | Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu. | 6 |
+| `nodes` | Classes on the canvas: adding, renaming, deleting, undo, tooltips, labels and the context menu. | 7 |
 | `annotations` | Annotation properties: the menu, the modals, their values, and styling nodes by annotation. | 5 |
 | `external-refs` | References to other ontologies: the references modal, prefixes, and the external nodes drawn at half opacity. | 5 |
 | `imports` | owl:imports: reading imported ontologies, their properties and versions. | 6 |
