@@ -1,3 +1,18 @@
+# [2.12.0](https://github.com/alelom/OntoCanvas/compare/v2.11.0...v2.12.0) (2026-11-20)
+
+
+### Bug Fixes
+
+* **#253:** put back the spaces in the size messages; a result added again replaces the earlier one ([43fb465](https://github.com/alelom/OntoCanvas/commit/43fb46592d31189d9f35ee0c6e09fde4209c2651)), closes [#253](https://github.com/alelom/OntoCanvas/issues/253)
+
+
+### Features
+
+* **#251:** let a folder hold up to 50,000 files ([f329b03](https://github.com/alelom/OntoCanvas/commit/f329b033496136118df3f8d62c93812ee4a05545)), closes [#251](https://github.com/alelom/OntoCanvas/issues/251)
+* **#251:** raise the data limit to 50 MB, asking first with the memory it takes ([8318a45](https://github.com/alelom/OntoCanvas/commit/8318a457df8e956356d023ef5adbffdc4a415826)), closes [#251](https://github.com/alelom/OntoCanvas/issues/251)
+* **#253:** add a CONSTRUCT result to the data, and query the ontologies read as context ([804de9e](https://github.com/alelom/OntoCanvas/commit/804de9eafdfb0205d1fbf46813f62b9b253582f4)), closes [#253](https://github.com/alelom/OntoCanvas/issues/253)
+* **#253:** the promotion example uses ADIRO's own rule and assertions ([aa21983](https://github.com/alelom/OntoCanvas/commit/aa21983a243b9222913a2f4a04671a4565968077)), closes [#253](https://github.com/alelom/OntoCanvas/issues/253)
+
 # [2.11.0](https://github.com/alelom/OntoCanvas/compare/v2.10.0...v2.11.0) (2026-11-19)
 
 
