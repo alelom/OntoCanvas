@@ -1,0 +1,19 @@
+@prefix : <https://w3id.org/adiro/adiro_drawing_metadata#> .
+@prefix aprov: <https://w3id.org/adiro/adiro_provenance#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# An excerpt of adiro_drawing_metadata 7.0.1, so the example runs without a network: the field kinds the data uses, and the
+# property each maps to. Open the ontology itself (https://w3id.org/adiro/adiro_drawing_metadata/7.0.1) for all of them.
+
+<https://w3id.org/adiro/adiro_drawing_metadata/excerpt> a owl:Ontology ; rdfs:label "adiro_drawing_metadata, field kinds (excerpt)" .
+
+:ClientField a skos:Concept , aprov:FieldKind ; rdfs:label "Client Field" ; aprov:mapsToFieldProperty :assertsClient .
+:DrawingTitleField a skos:Concept , aprov:FieldKind ; rdfs:label "Drawing Title Field" ; aprov:mapsToFieldProperty :drawingTitle .
+:DrawingNumberField a skos:Concept , aprov:FieldKind ; rdfs:label "Drawing Number Field" ; aprov:mapsToFieldProperty :drawingIdentifier .
+:ProjectNumberField a skos:Concept , aprov:FieldKind ; rdfs:label "Project Number Field" ; aprov:mapsToFieldProperty :projectNumber .
+# The kind of a caption that matched no field kind: it maps to no property, so its assertions are never promoted.
+:UnidentifiedField a skos:Concept , aprov:FieldKind ; rdfs:label "Unidentified Field" .
+
+aprov:mapsToFieldProperty a owl:AnnotationProperty .

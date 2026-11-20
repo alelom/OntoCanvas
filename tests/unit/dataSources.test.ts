@@ -3,31 +3,44 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { gzipSync } from 'node:zlib';
-import { classifyDataSize, createDataSources, DATA_LOAD_LIMIT_BYTES, DATA_REFUSE_LIMIT_BYTES, whenSourceListChanges } from '../../src/sparql/dataSources';
+import { classifyDataSize, createDataSources, DATA_HEAVY_LIMIT_BYTES, DATA_LOAD_LIMIT_BYTES, DATA_REFUSE_LIMIT_BYTES, whenSourceListChanges } from '../../src/sparql/dataSources';
 
 const MB = 1024 * 1024;
 const ttl = (n: number) =>
   '@prefix : <http://example.org/d#> .\n' + Array.from({ length: n }, (_, i) => `:i${i} a :Thing ; :next :i${i + 1} .`).join('\n');
 
 describe('classifyDataSize', () => {
-  it('loads up to 2 MB, asks first up to 10 MB, refuses above, by the limits the issue sets', () => {
+  it('loads up to 2 MB, asks first up to 50 MB, refuses above (#251)', () => {
     expect(DATA_LOAD_LIMIT_BYTES).toBe(2 * MB);
-    expect(DATA_REFUSE_LIMIT_BYTES).toBe(10 * MB);
+    expect(DATA_HEAVY_LIMIT_BYTES).toBe(10 * MB);
+    expect(DATA_REFUSE_LIMIT_BYTES).toBe(50 * MB);
     expect(classifyDataSize(100).tier).toBe('load');
     expect(classifyDataSize(2 * MB).tier).toBe('load');
     expect(classifyDataSize(2 * MB + 1).tier).toBe('confirm');
     expect(classifyDataSize(10 * MB).tier).toBe('confirm');
-    expect(classifyDataSize(10 * MB + 1).tier).toBe('refuse');
+    expect(classifyDataSize(10 * MB + 1).tier).toBe('confirm');
+    expect(classifyDataSize(50 * MB).tier).toBe('confirm');
+    expect(classifyDataSize(50 * MB + 1).tier).toBe('refuse');
+  });
+
+  it('asks as before up to 10 MB; above, says the triples and the memory it takes, and that the page may stop responding (#251)', () => {
+    expect(classifyDataSize(5 * MB).message).toMatch(/5.0 MB.*slow.*memory/i);
+    expect(classifyDataSize(5 * MB).message).toBe(
+      'This file is 5.0 MB: loading it is slow and memory heavy (about 1 GB of memory per 800,000 triples), and queries over it should be selective. Load it?'
+    );
+    const heavy = classifyDataSize(40 * MB).message!;
+    expect(heavy).toMatch(/^This file is 40\.0 MB: some 2\.5 million triples, and about 3\.0 GB of memory/);
+    expect(heavy).toMatch(/may stop responding or crash.*Load it anyway\?$/);
   });
 
   it('gives a message for the two tiers that need one, with the size and the reason', () => {
-    expect(classifyDataSize(5 * MB).message).toMatch(/5\.0 MB.*slow.*memory/i);
-    expect(classifyDataSize(30 * MB).message).toMatch(/30\.0 MB.*too large/i);
+    expect(classifyDataSize(5 * MB).message).toMatch(/5.0 MB.*slow.*memory/i);
+    expect(classifyDataSize(80 * MB).message).toMatch(/80.0 MB.*too large.*the limit is 50.0 MB/i);
     expect(classifyDataSize(10).message).toBeUndefined();
   });
 
   it('says what to do about data that is too large (#223), and speaks of what it is given to (a selection of files)', () => {
-    expect(classifyDataSize(30 * MB).message).toMatch(/Load fewer files \(one part, one batch\), or use a tool with a database/);
+    expect(classifyDataSize(80 * MB).message).toMatch(/triples\)\. Load fewer files \(one part, one batch\), or use a tool with a database/);
     expect(classifyDataSize(5 * MB, 'These 3 files are 5.0 MB together').message).toMatch(/^These 3 files are 5\.0 MB together: loading/);
   });
 });
@@ -81,7 +94,7 @@ describe('createDataSources', () => {
     const sources = createDataSources();
     const progress = vi.fn();
 
-    await expect(sources.addText('huge.ttl', 'x', { path: 'huge.ttl', byteLength: 11 * MB, onProgress: progress })).rejects.toThrow(/too large/i);
+    await expect(sources.addText('huge.ttl', 'x', { path: 'huge.ttl', byteLength: 51 * MB, onProgress: progress })).rejects.toThrow(/too large/i);
 
     expect(progress).not.toHaveBeenCalled();
     expect(sources.list()).toEqual([]);
@@ -139,7 +152,7 @@ describe('addFile', () => {
 
   it('refuses a file above the limit before reading it, by its size', async () => {
     const sources = createDataSources();
-    const huge = file('huge.ttl', 'x', 11 * MB);
+    const huge = file('huge.ttl', 'x', 51 * MB);
 
     await expect(sources.addFile(huge)).rejects.toThrow(/too large/i);
 
@@ -199,11 +212,12 @@ describe('addFile, compressed (#223)', () => {
 
   it('stops a file whose data passes the limit once decompressed, adds nothing, and says what to do', async () => {
     const sources = createDataSources();
-    const bomb = binaryFile('part-0001.ttl.gz', gzipSync(utf8('#'.repeat(10 * MB + 1))));
+    const bomb = binaryFile('part-0001.ttl.gz', gzipSync(utf8('#'.repeat(1 * MB + 1))));
 
-    const error = await sources.addFile(bomb).catch((e) => e);
+    // The limit a selection leaves a file is what the read stops at; 1 MB keeps the test quick.
+    const error = await sources.addFile(bomb, { limitBytes: 1 * MB }).catch((e) => e);
 
-    expect(error.message).toMatch(/part-0001\.ttl\.gz.*more than 10\.0 MB of data once decompressed.*too large/i);
+    expect(error.message).toMatch(/part-0001\.ttl\.gz.*more than 1\.0 MB of data once decompressed.*too large/i);
     expect(error.message).toMatch(/Load fewer files.*database/i);
     expect(sources.list()).toEqual([]);
   });
@@ -239,7 +253,7 @@ describe('addFile, compressed (#223)', () => {
 
   it('refuses unread a compressed file that is above the limit compressed', async () => {
     const sources = createDataSources();
-    const file = binaryFile('part-0001.nq.gz', gzipSync(utf8(nquads(2))), 11 * MB);
+    const file = binaryFile('part-0001.nq.gz', gzipSync(utf8(nquads(2))), 51 * MB);
 
     await expect(sources.addFile(file)).rejects.toThrow(/too large/);
 
@@ -314,7 +328,7 @@ describe('addUrl', () => {
 
   it('refuses a download whose Content-Length is above the limit without reading its body', async () => {
     const sources = createDataSources();
-    const huge = response('x', { 'content-type': 'text/turtle', 'content-length': String(11 * MB) });
+    const huge = response('x', { 'content-type': 'text/turtle', 'content-length': String(51 * MB) });
     const text = vi.spyOn(huge, 'text');
 
     await expect(sources.addUrl('https://example.org/huge.ttl', { fetch: (async () => huge) as never })).rejects.toThrow(/too large/i);
@@ -354,12 +368,12 @@ describe('addUrl', () => {
       expect(sources.list()).toEqual([]);
     });
 
-    it('refuses text over 10 MB though the announced size is small, without parsing it', async () => {
+    it('refuses text over the limit though the announced size is small, without parsing it', async () => {
       const sources = createDataSources();
-      const text = '#'.repeat(10 * MB + 1);
+      const text = '#'.repeat(1 * MB + 1);
 
       await expect(
-        sources.addUrl('https://example.org/huge.ttl', { fetch: (async () => response(text, { 'content-type': 'text/turtle', 'content-length': '300000' })) as never })
+        sources.addUrl('https://example.org/huge.ttl', { limitBytes: 1 * MB, fetch: (async () => response(text, { 'content-type': 'text/turtle', 'content-length': '300000' })) as never })
       ).rejects.toThrow(/too large/i);
 
       expect(sources.list()).toEqual([]);

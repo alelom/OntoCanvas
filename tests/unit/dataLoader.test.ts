@@ -51,7 +51,7 @@ describe('addFile', () => {
   it('says why a file was not added', async () => {
     const data = loader();
 
-    await data.addFile(file('huge.ttl', 'x', 11 * MB));
+    await data.addFile(file('huge.ttl', 'x', 51 * MB));
 
     expect(data.status()).toMatch(/too large/i);
     expect(sources.list()).toEqual([]);
@@ -173,14 +173,46 @@ describe('addFiles (#222)', () => {
 
   it('refuses a selection whose total is above the limit, reading none of it, and says what to do', async () => {
     const data = loader();
-    const files = [file('a.ttl', ttl(2), 6 * MB), file('b.ttl', ttl(2), 6 * MB)];
+    const files = [file('a.ttl', ttl(2), 26 * MB), file('b.ttl', ttl(2), 26 * MB)];
 
     await data.addFiles(files);
 
-    expect(data.status()).toMatch(/These 2 files are 12\.0 MB together, too large.*Load fewer files/);
+    expect(data.status()).toMatch(/These 2 files are 52\.0 MB together, too large.*Load fewer files/);
     expect(files[0].text).not.toHaveBeenCalled();
     expect(confirm).not.toHaveBeenCalled();
     expect(sources.list()).toEqual([]);
+  });
+
+  it('asks, with the triples and the memory it comes to, about a selection past 10 MB (#251), and adds none on no', async () => {
+    confirm.mockResolvedValue(false);
+    const data = loader();
+    const files = [file('a.ttl', ttl(2), 15 * MB), file('b.ttl', ttl(2), 15 * MB)];
+
+    await data.addFiles(files);
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/^These 2 files are 30\.0 MB together: some 1\.9 million triples, and about 2\.2 GB of memory.*Load it anyway\?$/));
+    expect(files[0].text).not.toHaveBeenCalled();
+    expect(sources.list()).toEqual([]);
+  });
+
+  it('loads a selection past 10 MB on yes, each file holding what is left of the limit', async () => {
+    const addFile = vi.spyOn(sources, 'addFile');
+    const data = loader();
+
+    await data.addFiles([file('a.ttl', ttl(2), 15 * MB), file('b.ttl', ttl(2), 15 * MB)]);
+
+    expect(sources.list().map((s) => s.name)).toEqual(['a.ttl', 'b.ttl']);
+    expect(addFile.mock.calls[0][1]!.limitBytes).toBe(50 * MB);
+  });
+
+  it('asks about compressed parts that may hold more than 10 MB, with the cost of the estimate, and does not refuse on an estimate (#251)', async () => {
+    const data = loader();
+
+    // 40 parts of 0.5 MB: 20 MB on disk, some 400 MB of data once decompressed, by the estimate. Asked, not refused: the read stops at the limit.
+    await data.addFiles(Array.from({ length: 40 }, (_, i) => file(`runs/r${i}/part-0001.nq.gz`, '', 0.5 * MB)));
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/^These 40 files are 20\.0 MB, some 400\.0 MB of data once decompressed \(an estimate\): some 24\.7 million triples, and about 29\.6 GB of memory.*the read stops if the data passes 50\.0 MB\. Load it anyway\?$/));
   });
 
   it('estimates what compressed files hold when it asks', async () => {
@@ -198,8 +230,8 @@ describe('addFiles (#222)', () => {
     await data.addFiles([file('a.ttl', ttl(2)), file('b.ttl', ttl(2))]);
 
     const [first, second] = addFile.mock.calls.map((call) => call[1]!.limitBytes!);
-    expect(first).toBe(10 * MB);
-    expect(second).toBe(10 * MB - sources.list()[0].bytes);
+    expect(first).toBe(50 * MB);
+    expect(second).toBe(50 * MB - sources.list()[0].bytes);
   });
 
   it('goes on after a file that fails, keeps the others, and says which failed and why', async () => {
@@ -252,7 +284,7 @@ describe('reset (another ontology is opened)', () => {
 
   it('forgets the failure of the last read', async () => {
     const data = loader();
-    await data.addFile(file('huge.ttl', 'x', 11 * MB));
+    await data.addFile(file('huge.ttl', 'x', 51 * MB));
     expect(data.status()).toMatch(/too large/i);
 
     data.reset();
@@ -268,7 +300,7 @@ describe('reset (another ontology is opened)', () => {
     data.reset();
     expect(changed).not.toHaveBeenCalled();
 
-    await data.addFile(file('huge.ttl', 'x', 11 * MB));
+    await data.addFile(file('huge.ttl', 'x', 51 * MB));
     changed.mockClear();
     data.reset();
     expect(changed).toHaveBeenCalledTimes(1);
@@ -306,8 +338,8 @@ describe('addUrls', () => {
     await data.addUrls(['https://example.org/a.ttl', 'https://example.org/b.ttl']);
 
     const [first, second] = addUrl.mock.calls.map((call) => call[1]!.limitBytes!);
-    expect(first).toBe(10 * MB);
-    expect(second).toBe(10 * MB - sources.list()[0].bytes);
+    expect(first).toBe(50 * MB);
+    expect(second).toBe(50 * MB - sources.list()[0].bytes);
   });
 
   it('adds each URL, in order', async () => {

@@ -81,7 +81,7 @@ export function judgeSelection(files: Array<{ name: string; size: number }>): { 
   if (estimate <= DATA_LOAD_LIMIT_BYTES) return { tier: 'load' };
   if (!compressed) return classifyDataSize(estimate, sizeSubject);
   const estimateSubject = `${one ? 'This compressed file is' : `These ${files.length} files are`} ${megabytes(size)}, some ${megabytes(estimate)} of data once decompressed`;
-  return { tier: 'confirm', message: compressedDataQuestion(estimateSubject) };
+  return { tier: 'confirm', message: compressedDataQuestion(estimateSubject, DATA_REFUSE_LIMIT_BYTES, estimate) };
 }
 
 export function createDataLoader({ sources, getStore, confirm }: DataLoaderDeps): DataLoader {

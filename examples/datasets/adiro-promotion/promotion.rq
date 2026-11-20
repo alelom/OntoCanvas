@@ -1,0 +1,15 @@
+# The promotion rule of the ADIRO checks (adiro-checks 1.0.0, queries/uc01/promotion.rq), as published at
+# https://github.com/BuroHappoldMachineLearning/ADIRO. Run over the data and the ontology that holds the field kinds.
+PREFIX aprov: <https://w3id.org/adiro/adiro_provenance#>
+
+# Promotion: the direct statements that accepted assertions give
+CONSTRUCT { ?subject ?property ?value }
+WHERE {
+  ?assertion a aprov:FieldAssertion ;
+             aprov:assertedAbout   ?subject ;
+             aprov:assertsFieldKind ?kind ;
+             aprov:hasAcceptance   aprov:Accepted .
+  ?kind aprov:mapsToFieldProperty ?property .
+  { ?assertion aprov:hasLiteralValue ?value } UNION { ?assertion aprov:hasValueEntity ?value }
+  FILTER NOT EXISTS { ?newer aprov:supersedes+ ?assertion ; aprov:hasAcceptance aprov:Accepted }
+}

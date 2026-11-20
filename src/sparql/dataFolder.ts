@@ -36,7 +36,7 @@ export const DATA_EXTENSIONS = ['.ttl', '.turtle', '.nt', '.nq', '.trig', '.json
 export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
 
 /** Above this many files the folder is not one dataset (a home folder, a whole drive): it is refused while it is listed. */
-export const MAX_FOLDER_FILES = 20_000;
+export const MAX_FOLDER_FILES = 50_000;
 
 export class FolderTooLargeError extends Error {
   constructor(readonly folderName: string) {

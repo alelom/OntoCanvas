@@ -112,7 +112,7 @@ describe('the controls', () => {
   });
 
   it('show why a file was not added, and list nothing', async () => {
-    pick(file('huge.ttl', 'x', 11 * MB));
+    pick(file('huge.ttl', 'x', 51 * MB));
     await vi.waitFor(() => expect(q('[data-data-status]').textContent).toMatch(/too large/i));
 
     expect(items()).toEqual([]);

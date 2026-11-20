@@ -14,6 +14,7 @@ import { createResultShowing, foundInQuads, foundInTable, selectInGraphRow, trip
 import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
+import { addQueryResult, RESULT_GRAPH, RESULT_SOURCE_NAME } from '../../sparql/addQueryResult';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { DataImages } from '../../abox/dataImages';
 import { isImagePath } from '../../abox/imagePaths';
@@ -51,6 +52,8 @@ export interface QueryTabDeps {
   hasResult?: () => boolean;
   /** The data added to the open ontology (#205): queries run over it too, and a line says so. */
   dataSources?: DataSources;
+  /** The stores of the ontologies read as context (the modules the data names, the imports): queries run over them too, read only (#253). */
+  getContextStores?: () => Store[];
   /** The loading of that data (#211): its status is shown in the same line, as an address's ?data= loads it in this tab. */
   dataLoader?: DataLoader;
   /** Where the images the values name are (#228): a cell naming one shows it on hover. */
@@ -342,6 +345,41 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
     const result = element('div', 'query-result');
     result.setAttribute('data-query-result', '');
 
+    /**
+     * "Add result to the data" (#253): the query of this result runs again over the same stores, with no display limit, and its
+     * triples are kept as data. Only where data can be added.
+     */
+    function addResultRow(queried: Store[], queryText: string): HTMLElement[] {
+      const sources = deps.dataSources;
+      if (!sources) return [];
+      const add = element('button', undefined, 'Add result to the data');
+      add.type = 'button';
+      add.title = 'Keep these triples as data, in a graph of their own: listed in the Individuals tab, queried and drawn with the rest, never saved';
+      add.setAttribute('data-query-add-result', '');
+      const row = element('div', 'query-add-result');
+      row.append(add);
+      add.addEventListener('click', () => {
+        add.disabled = true;
+        result.querySelector('[data-query-add-error]')?.remove();
+        const replacing = sources.list().some((s) => s.name === RESULT_SOURCE_NAME);
+        addQueryResult({ run, sources, stores: queried, query: queryText })
+          .then((source) => {
+            status.textContent = `Added ${plural(source.triples, 'triple', 'triples')} to the data, in the graph ${RESULT_GRAPH}${replacing ? ', replacing the earlier result' : ''}`;
+          })
+          .catch((error) => {
+            const box = element('div', 'query-error', error instanceof Error ? error.message : String(error));
+            box.setAttribute('data-query-error', '');
+            box.setAttribute('data-query-add-error', '');
+            box.setAttribute('role', 'alert');
+            row.after(box);
+          })
+          .finally(() => {
+            add.disabled = false;
+          });
+      });
+      return [row];
+    }
+
     async function execute(): Promise<void> {
       if (runButton.disabled) return;
       result.replaceChildren();
@@ -371,7 +409,9 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       try {
         // Only the rows shown are read from the engine (one more, to know there are more): a forgotten join must not
         // build hundreds of thousands of rows in memory.
-        const rows = await run([store, ...(deps.dataSources?.stores() ?? [])], editor!.getText(), { limit: MAX_ROWS_SHOWN, signal: stopper.signal });
+        const queried = [store, ...(deps.getContextStores?.() ?? []), ...(deps.dataSources?.stores() ?? [])];
+        const queryText = editor!.getText();
+        const rows = await run(queried, queryText, { limit: MAX_ROWS_SHOWN, signal: stopper.signal });
         if (deps.getStore() !== store) {
           status.textContent = 'Another ontology was opened while the query ran, so its result was dropped. Run it again.';
           return;
@@ -392,7 +432,7 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
         } else {
           // A CONSTRUCT or DESCRIBE result is triples: the graph shows the edges they stand for (#207).
           const found = rows.kind === 'quads' ? foundInQuads(rows.quads) : null;
-          result.replaceChildren(...(found ? selectInGraphRow(found, deps) : []), element('pre', 'query-turtle', view.text));
+          result.replaceChildren(...(found ? selectInGraphRow(found, deps) : []), ...addResultRow(queried, queryText), element('pre', 'query-turtle', view.text));
           if (found) showing.show(found.matchOf, view.truncated ? `the first ${plural(view.count, 'triple', 'triples')}` : undefined);
           const inGraph = rows.kind === 'quads' ? triplesInGraph(rows.quads, deps.getGraph?.()) : '';
           status.textContent = view.truncated
