@@ -60,11 +60,11 @@ describe('a job folder', () => {
     const { sources } = await openJob();
 
     const graphs = sources.graphs().map((g) => [g.iri, g.quads]);
-    // run-a: 18 + 13 quads in its two parts, and the same 31 in compacted/.
+    // run-a: 28 + 23 quads in its two parts, and the same 51 in compacted/.
 
     expect(graphs).toEqual([
-      ['urn:example:job:run-a', 31 + 31],
-      ['urn:example:job:run-b', 31],
+      ['urn:example:job:run-a', 51 + 51],
+      ['urn:example:job:run-b', 51],
     ]);
   });
 

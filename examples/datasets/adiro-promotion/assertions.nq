@@ -1,0 +1,55 @@
+<urn:example:promotion/titleblock1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_drawing_metadata#Titleblock> <urn:example:promotion:run-1> .
+<urn:example:promotion/revision1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingRevision> <urn:example:promotion:run-1> .
+<urn:example:promotion/org-acme-ltd> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#Organisation> <urn:example:promotion:run-1> .
+<urn:example:promotion/org-acme-ltd> <http://www.w3.org/2000/01/rdf-schema#label> "Acme Ltd" <urn:example:promotion:run-1> .
+<urn:example:promotion/org-acme-limited> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#Organisation> <urn:example:promotion:run-1> .
+<urn:example:promotion/org-acme-limited> <http://www.w3.org/2000/01/rdf-schema#label> "ACME Limited" <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <http://www.w3.org/2000/01/rdf-schema#label> "Client read by a model" <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/titleblock1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#ClientField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <https://w3id.org/adiro/adiro_provenance#hasValueEntity> <urn:example:promotion/org-acme-ltd> <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "0.62"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .
+<urn:example:promotion/a1> <https://w3id.org/adiro/adiro_provenance#hasAcceptance> <https://w3id.org/adiro/adiro_provenance#Accepted> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <http://www.w3.org/2000/01/rdf-schema#label> "Client corrected by a person" <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/titleblock1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#ClientField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <https://w3id.org/adiro/adiro_provenance#hasValueEntity> <urn:example:promotion/org-acme-limited> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "1.00"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <https://w3id.org/adiro/adiro_provenance#hasAcceptance> <https://w3id.org/adiro/adiro_provenance#Accepted> <urn:example:promotion:run-1> .
+<urn:example:promotion/a2> <https://w3id.org/adiro/adiro_provenance#supersedes> <urn:example:promotion/a1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing title" <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/revision1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingTitleField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <https://w3id.org/adiro/adiro_provenance#hasLiteralValue> "Ground Floor Plan" <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "0.93"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .
+<urn:example:promotion/a3> <https://w3id.org/adiro/adiro_provenance#hasAcceptance> <https://w3id.org/adiro/adiro_provenance#Accepted> <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing title, misread" <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/revision1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingTitleField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <https://w3id.org/adiro/adiro_provenance#hasLiteralValue> "Ground Floor Pian" <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "0.41"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .
+<urn:example:promotion/a4> <https://w3id.org/adiro/adiro_provenance#hasAcceptance> <https://w3id.org/adiro/adiro_provenance#Rejected> <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing number" <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/revision1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingNumberField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <https://w3id.org/adiro/adiro_provenance#hasLiteralValue> "A-101" <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "0.88"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .
+<urn:example:promotion/a5> <https://w3id.org/adiro/adiro_provenance#hasAcceptance> <https://w3id.org/adiro/adiro_provenance#Pending> <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <http://www.w3.org/2000/01/rdf-schema#label> "Unrecognised caption" <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/titleblock1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#UnidentifiedField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <https://w3id.org/adiro/adiro_provenance#hasLiteralValue> "Rev: B" <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "0.55"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .
+<urn:example:promotion/a6> <https://w3id.org/adiro/adiro_provenance#hasAcceptance> <https://w3id.org/adiro/adiro_provenance#Accepted> <urn:example:promotion:run-1> .
+<urn:example:promotion/a7> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <https://w3id.org/adiro/adiro_provenance#FieldAssertion> <urn:example:promotion:run-1> .
+<urn:example:promotion/a7> <http://www.w3.org/2000/01/rdf-schema#label> "Drawing title, a later reading" <urn:example:promotion:run-1> .
+<urn:example:promotion/a7> <https://w3id.org/adiro/adiro_provenance#assertedAbout> <urn:example:promotion/revision1> <urn:example:promotion:run-1> .
+<urn:example:promotion/a7> <https://w3id.org/adiro/adiro_provenance#assertsFieldKind> <https://w3id.org/adiro/adiro_drawing_metadata#DrawingTitleField> <urn:example:promotion:run-1> .
+<urn:example:promotion/a7> <https://w3id.org/adiro/adiro_provenance#hasLiteralValue> "Ground Floor Plan, Rev B" <urn:example:promotion:run-1> .
+<urn:example:promotion/a7> <https://w3id.org/adiro/adiro_provenance#hasConfidence> "0.74"^^<http://www.w3.org/2001/XMLSchema#decimal> <urn:example:promotion:run-1> .

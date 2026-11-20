@@ -41,9 +41,22 @@ function sheetQuads(run, sheet) {
     q(titleblock, RDF_TYPE, `<${ADM}Titleblock>`),
     q(box, RDF_TYPE, `<${GEOM}BoundingBox>`),
   ];
-  for (const [n, field] of ['Project number', 'Drawing number'].entries()) {
+  // The project number is accepted, so it is promoted to a statement on the titleblock; the drawing number is still pending.
+  const fields = [
+    ['Project number', 'ProjectNumberField', 'EX-100', 'Accepted', '0.97'],
+    ['Drawing number', 'DrawingNumberField', `A-10${sheet}`, 'Pending', '0.81'],
+  ];
+  for (const [n, [field, kind, value, acceptance, confidence]] of fields.entries()) {
     const assertion = node(`assertion${sheet}-${n + 1}`);
-    lines.push(q(assertion, RDF_TYPE, `<${APROV}FieldAssertion>`), q(assertion, LABEL, text(`${field}, sheet ${sheet} of ${run}`)));
+    lines.push(
+      q(assertion, RDF_TYPE, `<${APROV}FieldAssertion>`),
+      q(assertion, LABEL, text(`${field}, sheet ${sheet} of ${run}`)),
+      q(assertion, `${APROV}assertedAbout`, titleblock),
+      q(assertion, `${APROV}assertsFieldKind`, `<${ADM}${kind}>`),
+      q(assertion, `${APROV}hasLiteralValue`, text(value)),
+      q(assertion, `${APROV}hasConfidence`, `"${confidence}"^^<http://www.w3.org/2001/XMLSchema#decimal>`),
+      q(assertion, `${APROV}hasAcceptance`, `<${APROV}${acceptance}>`)
+    );
   }
   return lines;
 }

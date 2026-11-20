@@ -1,18 +1,15 @@
-# For each field of each drawing, take the reading with the highest confidence as the accepted value: the property the
-# ontology says the field fills (ex:mapsToProperty) gets it, and the drawing says which reading it came from. A tie promotes
-# every reading of the highest confidence.
-PREFIX ex: <http://example.org/promotion#>
+# The promotion rule of the ADIRO checks (adiro-checks 1.0.0, queries/uc01/promotion.rq), as published at
+# https://github.com/BuroHappoldMachineLearning/ADIRO. Run over the data and the ontology that holds the field kinds.
+PREFIX aprov: <https://w3id.org/adiro/adiro_provenance#>
 
-CONSTRUCT {
-  ?drawing ?property ?value .
-  ?drawing ex:promotedFrom ?reading .
-}
+# Promotion: the direct statements that accepted assertions give
+CONSTRUCT { ?subject ?property ?value }
 WHERE {
-  {
-    SELECT ?drawing ?field (MAX(?confidence) AS ?best)
-    WHERE { ?r ex:readingOf ?drawing ; ex:field ?field ; ex:confidence ?confidence . }
-    GROUP BY ?drawing ?field
-  }
-  ?reading ex:readingOf ?drawing ; ex:field ?field ; ex:confidence ?best ; ex:value ?value .
-  ?field ex:mapsToProperty ?property .
+  ?assertion a aprov:FieldAssertion ;
+             aprov:assertedAbout   ?subject ;
+             aprov:assertsFieldKind ?kind ;
+             aprov:hasAcceptance   aprov:Accepted .
+  ?kind aprov:mapsToFieldProperty ?property .
+  { ?assertion aprov:hasLiteralValue ?value } UNION { ?assertion aprov:hasValueEntity ?value }
+  FILTER NOT EXISTS { ?newer aprov:supersedes+ ?assertion ; aprov:hasAcceptance aprov:Accepted }
 }

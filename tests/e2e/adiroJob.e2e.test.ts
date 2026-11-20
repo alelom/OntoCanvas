@@ -37,16 +37,16 @@ describe('a job folder of several runs', () => {
     expect(await page.locator('[data-data-status]').innerText()).toBe('Added 4 data files from job; 1 image kept for previews; 2 other files skipped.');
     expect(await page.locator('[data-data-list] > li').allInnerTexts()).toEqual([
       expect.stringContaining('📁 job — 4 data files, 1 image'),
-      expect.stringContaining('compacted/part-0001.nq.gz — 31 triples'),
-      expect.stringContaining('runs/run-a/part-0001.nq.gz — 18 triples'),
-      expect.stringContaining('runs/run-a/part-0002.nq.gz — 13 triples'),
-      expect.stringContaining('runs/run-b/part-0001.nq.gz — 31 triples'),
+      expect.stringContaining('compacted/part-0001.nq.gz — 51 triples'),
+      expect.stringContaining('runs/run-a/part-0001.nq.gz — 28 triples'),
+      expect.stringContaining('runs/run-a/part-0002.nq.gz — 23 triples'),
+      expect.stringContaining('runs/run-b/part-0001.nq.gz — 51 triples'),
     ]);
     expect(await page.locator('[data-data-parts]').isHidden()).toBe(true);
   });
 
   it('lists the named graph of each run', async () => {
-    expect(await page.locator('[data-data-graph]').allInnerTexts()).toEqual(['Run run-a — 62 quads', 'Run run-b — 31 quads']);
+    expect(await page.locator('[data-data-graph]').allInnerTexts()).toEqual(['Run run-a — 102 quads', 'Run run-b — 51 quads']);
   });
 
   it("lists the job's individuals by class, each once whatever the sources that hold it", async () => {

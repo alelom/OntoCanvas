@@ -22,7 +22,7 @@ context; each run holds two drawing sheets with their file, page, titleblock, bo
    is its own source, named by its path (`runs/run-a/part-0001.nq.gz`, …).
 3. No "parts may be missing" notice, though `part-0001.nq.gz` is in three folders: the run folder tells them apart. Remove
    `runs/run-a/part-0002.nq.gz` from a copy and the notice names the gap.
-4. The Individuals tab lists the two graphs, "Run run-a — 62 quads" and "Run run-b — 31 quads" (named by the `rdfs:label` of the run's
+4. The Individuals tab lists the two graphs, "Run run-a — 102 quads" and "Run run-b — 51 quads" (named by the `rdfs:label` of the run's
    activity), each with a checkbox that hides or shows it. run-a counts the quads of its two parts and of the compacted copy: the
    same quads, held twice. The individuals are listed once either way.
 5. The individuals (drawings, pages, titleblocks, field assertions) are listed by class, and their classes are on the canvas. With a
