@@ -88,6 +88,18 @@ describe('Add result to the data', () => {
     await vi.waitFor(() => expect(status()).toMatch(/^Added 2 triples to the data/));
   });
 
+  it('replaces the result it added before when it is added again, and says so', async () => {
+    await execute();
+    addButton()!.click();
+    await vi.waitFor(() => expect(sources.list()).toHaveLength(1));
+    await vi.waitFor(() => expect(addButton()!.disabled).toBe(false));
+
+    addButton()!.click();
+
+    await vi.waitFor(() => expect(status()).toMatch(/^Added 2 triples to the data, in the graph urn:ontocanvas:result, replacing the earlier result/));
+    expect(sources.list().map((s) => s.name)).toEqual(['Query result']);
+  });
+
   it('says why when the result cannot be added, and adds nothing', async () => {
     await execute();
     run.mockResolvedValue({ ...construct, truncated: true });

@@ -77,3 +77,52 @@ describe('addQueryResult', () => {
     expect(sources.list()).toEqual([]);
   });
 });
+
+describe('adding a result again (#253 review)', () => {
+  const quadsResult = (...values: string[]): QueryResult => ({ kind: 'quads', quads: values.map((v, i) => triple(`d${i}`, v)), truncated: false });
+
+  it('replaces the earlier result, so the data holds one "Query result" and the triples are not counted twice', async () => {
+    const sources = createDataSources();
+    const run = vi.fn().mockResolvedValueOnce(quadsResult('a', 'b')).mockResolvedValueOnce(quadsResult('a', 'c', 'd'));
+    const changed = vi.fn();
+
+    await addQueryResult({ run, sources, stores: [], query: 'q' });
+    sources.onChange(changed);
+    await addQueryResult({ run, sources, stores: [], query: 'q' });
+
+    expect(sources.list().map((s) => [s.name, s.triples])).toEqual([['Query result', 3]]);
+    expect(sources.graphs().map((g) => [g.iri, g.quads])).toEqual([[RESULT_GRAPH, 3]]);
+    // One notice for the swap, so the graph and the Individuals tab redraw once.
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the query again without the earlier result among the stores it reads, since a result is not an input of itself', async () => {
+    const sources = createDataSources();
+    const run = vi.fn().mockResolvedValue(quadsResult('a'));
+    const own = new Store();
+    const first = await addQueryResult({ run, sources, stores: [own], query: 'q' });
+
+    await addQueryResult({ run, sources, stores: [own, first.store], query: 'q' });
+
+    expect(run.mock.calls[1][0]).toEqual([own]);
+  });
+
+  it('keeps the earlier result when the new one cannot be added', async () => {
+    const sources = createDataSources();
+    await addQueryResult({ run: async () => quadsResult('a'), sources, stores: [], query: 'q' });
+
+    await expect(addQueryResult({ run: async () => ({ ...quadsResult('a', 'b'), truncated: true }), sources, stores: [], query: 'q' })).rejects.toThrow(/not added/);
+
+    expect(sources.list().map((s) => s.triples)).toEqual([1]);
+  });
+
+  it('leaves other sources alone, whatever their name', async () => {
+    const sources = createDataSources();
+    sources.addQuads('Other data', [triple('x', 'y')]);
+
+    await addQueryResult({ run: async () => quadsResult('a'), sources, stores: [], query: 'q' });
+    await addQueryResult({ run: async () => quadsResult('b'), sources, stores: [], query: 'q' });
+
+    expect(sources.list().map((s) => s.name)).toEqual(['Other data', 'Query result']);
+  });
+});

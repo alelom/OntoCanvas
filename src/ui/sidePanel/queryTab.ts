@@ -14,7 +14,7 @@ import { createResultShowing, foundInQuads, foundInTable, selectInGraphRow, trip
 import type { ResultMatcher, ShowDecision } from '../../graph/resultHighlight';
 import { addToHistory, historyLabel, localStorageHistory, type HistoryEntry, type HistoryStore } from '../../sparql/queryHistory';
 import type { DataSources } from '../../sparql/dataSources';
-import { addQueryResult, RESULT_GRAPH } from '../../sparql/addQueryResult';
+import { addQueryResult, RESULT_GRAPH, RESULT_SOURCE_NAME } from '../../sparql/addQueryResult';
 import type { DataLoader } from '../../sparql/dataLoader';
 import type { DataImages } from '../../abox/dataImages';
 import { isImagePath } from '../../abox/imagePaths';
@@ -361,9 +361,10 @@ export function createQueryTab(deps: QueryTabDeps): QueryTab {
       add.addEventListener('click', () => {
         add.disabled = true;
         result.querySelector('[data-query-add-error]')?.remove();
+        const replacing = sources.list().some((s) => s.name === RESULT_SOURCE_NAME);
         addQueryResult({ run, sources, stores: queried, query: queryText })
           .then((source) => {
-            status.textContent = `Added ${plural(source.triples, 'triple', 'triples')} to the data, in the graph ${RESULT_GRAPH}`;
+            status.textContent = `Added ${plural(source.triples, 'triple', 'triples')} to the data, in the graph ${RESULT_GRAPH}${replacing ? ', replacing the earlier result' : ''}`;
           })
           .catch((error) => {
             const box = element('div', 'query-error', error instanceof Error ? error.message : String(error));

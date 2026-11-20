@@ -25,6 +25,9 @@ describe('classifyDataSize', () => {
 
   it('asks as before up to 10 MB; above, says the triples and the memory it takes, and that the page may stop responding (#251)', () => {
     expect(classifyDataSize(5 * MB).message).toMatch(/5.0 MB.*slow.*memory/i);
+    expect(classifyDataSize(5 * MB).message).toBe(
+      'This file is 5.0 MB: loading it is slow and memory heavy (about 1 GB of memory per 800,000 triples), and queries over it should be selective. Load it?'
+    );
     const heavy = classifyDataSize(40 * MB).message!;
     expect(heavy).toMatch(/^This file is 40\.0 MB: some 2\.5 million triples, and about 3\.0 GB of memory/);
     expect(heavy).toMatch(/may stop responding or crash.*Load it anyway\?$/);
@@ -37,7 +40,7 @@ describe('classifyDataSize', () => {
   });
 
   it('says what to do about data that is too large (#223), and speaks of what it is given to (a selection of files)', () => {
-    expect(classifyDataSize(80 * MB).message).toMatch(/Load fewer files \(one part, one batch\), or use a tool with a database/);
+    expect(classifyDataSize(80 * MB).message).toMatch(/triples\)\. Load fewer files \(one part, one batch\), or use a tool with a database/);
     expect(classifyDataSize(5 * MB, 'These 3 files are 5.0 MB together').message).toMatch(/^These 3 files are 5\.0 MB together: loading/);
   });
 });

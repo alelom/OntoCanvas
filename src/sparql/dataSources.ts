@@ -41,18 +41,18 @@ function heavyQuestion(subject: string, bytes: number): string {
   return `${subject}: some ${triples} triples, and about ${memory} of memory once loaded, more than many browsers give a page. It may stop responding or crash, and queries over it should be selective. Load it anyway?`;
 }
 
-const SLOW ='loading it is slow and memory heavy (about 1 GB of memory per 800,000 triples), and queries over it should be selective';
+const SLOW = 'loading it is slow and memory heavy (about 1 GB of memory per 800,000 triples), and queries over it should be selective';
 
 /** `subject` says what is measured, with its size: "This file is 5.0 MB" by default, or a selection of files (#222). */
 export function classifyDataSize(bytes: number, subject = `This file is ${megabytes(bytes)}`): { tier: SizeTier; message?: string } {
   if (bytes > DATA_REFUSE_LIMIT_BYTES) {
     return {
       tier: 'refuse',
-      message: `${subject}, too large to load in the browser: the limit is ${megabytes(DATA_REFUSE_LIMIT_BYTES)} (about ${dataCost(DATA_REFUSE_LIMIT_BYTES).triples} triples).${TOO_LARGE_ADVICE}`,
+      message: `${subject}, too large to load in the browser: the limit is ${megabytes(DATA_REFUSE_LIMIT_BYTES)} (about ${dataCost(DATA_REFUSE_LIMIT_BYTES).triples} triples). ${TOO_LARGE_ADVICE}`,
     };
   }
   if (bytes > DATA_HEAVY_LIMIT_BYTES) return { tier: 'confirm', message: heavyQuestion(subject, bytes) };
-  if (bytes > DATA_LOAD_LIMIT_BYTES) return { tier: 'confirm', message:`${subject}: ${SLOW}. Load it?` };
+  if (bytes > DATA_LOAD_LIMIT_BYTES) return { tier: 'confirm', message: `${subject}: ${SLOW}. Load it?` };
   return { tier: 'load' };
 }
 
@@ -65,7 +65,7 @@ export function compressedDataQuestion(subject: string, limitBytes = DATA_REFUSE
     const { triples, memory } = dataCost(estimateBytes);
     return `${subject} (an estimate): some ${triples} triples, and about ${memory} of memory once loaded, more than many browsers give a page. It may stop responding or crash, and the read stops if the data passes ${megabytes(limitBytes)}. Load it anyway?`;
   }
-  return`${subject} (an estimate): ${SLOW}, and the read stops if the data passes ${megabytes(limitBytes)}. Load it?`;
+  return `${subject} (an estimate): ${SLOW}, and the read stops if the data passes ${megabytes(limitBytes)}. Load it?`;
 }
 
 /** Why data read in part was not added: it passed the limit (#223). */
